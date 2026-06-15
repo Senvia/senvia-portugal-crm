@@ -96,18 +96,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Wire Chatwoot on first successful connection (chatwoot_inbox_id not yet set), and
-    // silently re-apply the config for already-connected channels to heal any broken
-    // Evolution → Chatwoot integrations (e.g. wrong nameInbox applied by update_groups).
-    // autoCreate: true only on first wire — never create duplicate inboxes for existing channels.
+    // Wire Chatwoot on first successful connection (chatwoot_inbox_id not yet set).
+    // Evolution only starts sending events to Chatwoot AFTER /chatwoot/set/ is called,
+    // so delaying until here means no events reach Chatwoot during QR scan or
+    // Baileys reconnect loops.
     if (status === 'connected' && resolved.id) {
       const { data: chRow } = await admin
         .from('messaging_channels')
         .select('chatwoot_inbox_id, label, metadata')
         .eq('id', resolved.id)
         .maybeSingle();
-      if (chRow) {
-        const isFirstWire = !chRow.chatwoot_inbox_id;
+      if (chRow && !chRow.chatwoot_inbox_id) {
         try {
           const { data: orgData } = await admin
             .from('organizations')
@@ -136,19 +135,17 @@ Deno.serve(async (req) => {
               importContacts: false,
               importMessages: false,
               daysLimitImportMessages: 7,
-              autoCreate: isFirstWire,
+              autoCreate: true,
               ignoreGroups: !groupsEnabled,
               organization: orgData.name,
               logo: '',
             });
-            if (isFirstWire) {
-              const inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
-              if (inboxId) {
-                await admin
-                  .from('messaging_channels')
-                  .update({ chatwoot_inbox_id: inboxId })
-                  .eq('id', resolved.id);
-              }
+            const inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
+            if (inboxId) {
+              await admin
+                .from('messaging_channels')
+                .update({ chatwoot_inbox_id: inboxId })
+                .eq('id', resolved.id);
             }
           }
         } catch (e) {

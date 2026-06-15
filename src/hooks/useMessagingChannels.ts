@@ -138,6 +138,22 @@ export function useUpdateChannelAssignment() {
   });
 }
 
+// One-time silent repair: re-wires Evolution → Chatwoot for all connected channels.
+// Runs automatically on first Caixas page load after the wiring-bug deploy.
+// Uses localStorage flag so it only fires once per browser.
+export function useAutoRepairWiring() {
+  const { organization } = useAuth();
+  useEffect(() => {
+    const key = `chatwoot-wiring-repaired-${organization?.id}`;
+    if (!organization?.id || localStorage.getItem(key)) return;
+    supabase.functions.invoke('chatwoot-inbox', {
+      body: { organization_id: organization.id, action: 'repair_wiring' },
+    }).then(({ data }) => {
+      if ((data as any)?.ok) localStorage.setItem(key, '1');
+    }).catch(() => {});
+  }, [organization?.id]);
+}
+
 // Toggle group messages for a WhatsApp channel. Updates metadata in DB and
 // re-applies the setting to the Evolution Chatwoot integration immediately.
 export function useUpdateChannelGroups() {

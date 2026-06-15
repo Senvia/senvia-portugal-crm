@@ -985,6 +985,69 @@ Deno.serve(async (req) => {
       return json({ ok: true, groups_enabled: groupsEnabled });
     }
 
+    // Re-applies the correct Evolution → Chatwoot config for ALL connected WhatsApp channels
+    // in this org. Uses the REAL inbox name from Chatwoot (lookup by chatwoot_inbox_id) instead
+    // of reconstructing it from the label — safe even when labels were renamed.
+    if (action === 'repair_wiring') {
+      const { data: channels } = await auth.admin
+        .from('messaging_channels')
+        .select('id, label, evolution_instance, chatwoot_inbox_id, metadata')
+        .eq('organization_id', organization_id)
+        .eq('channel_type', 'whatsapp')
+        .eq('status', 'connected')
+        .not('chatwoot_inbox_id', 'is', null)
+        .not('evolution_instance', 'is', null);
+      if (!channels?.length) return json({ ok: true, repaired: 0, message: 'Nenhum canal para reparar' });
+
+      const { data: orgRow } = await auth.admin.from('organizations').select('name').eq('id', organization_id).maybeSingle();
+      const results: { channel: string; status: string; inbox?: string; error?: string }[] = [];
+
+      for (const ch of channels as any[]) {
+        // Look up the REAL inbox name in Chatwoot — never reconstruct from label.
+        let inboxName: string | null = null;
+        try {
+          const inboxRes = await chatwootFetch(cfg, cw.token, `${base}/inboxes/${ch.chatwoot_inbox_id}`);
+          if (inboxRes.ok) {
+            const d = await inboxRes.json();
+            inboxName = d?.name ?? d?.payload?.name ?? null;
+          }
+        } catch (_e) { /* ignore */ }
+
+        if (!inboxName) {
+          results.push({ channel: ch.label, status: 'skip', error: `inbox ${ch.chatwoot_inbox_id} não encontrado` });
+          continue;
+        }
+
+        const groupsEnabled = (ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
+        try {
+          const evoRes = await evolutionFetch(cfg, `/chatwoot/set/${ch.evolution_instance}`, 'POST', {
+            enabled: true,
+            accountId: String(cw.accountId),
+            token: cw.token,
+            url: cfg.chatwootUrl,
+            signMsg: true,
+            signDelimiter: '\n',
+            nameInbox: inboxName,
+            reopenConversation: true,
+            conversationPending: false,
+            mergeBrazilContacts: false,
+            importContacts: false,
+            importMessages: false,
+            daysLimitImportMessages: 7,
+            autoCreate: false,
+            ignoreGroups: !groupsEnabled,
+            organization: orgRow?.name ?? '',
+            logo: '',
+          });
+          if (evoRes.ok) results.push({ channel: ch.label, status: 'ok', inbox: inboxName });
+          else results.push({ channel: ch.label, status: 'error', inbox: inboxName, error: `Evolution ${evoRes.status}` });
+        } catch (e) {
+          results.push({ channel: ch.label, status: 'error', error: (e as Error).message });
+        }
+      }
+      return json({ ok: true, repaired: results.filter((r) => r.status === 'ok').length, results });
+    }
+
     return json({ error: 'Ação inválida' }, 400);
   } catch (err) {
     console.error('chatwoot-inbox error:', err);

@@ -135,5 +135,8 @@ verify_jwt = false
 [functions.send-scheduled-messages]
 verify_jwt = false
 
+[functions.repair-whatsapp-wiring]
+verify_jwt = false
+
 [functions.transcribe-audio]
 verify_jwt = true

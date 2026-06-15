@@ -15,7 +15,7 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
@@ -927,6 +927,7 @@ function EditCaixaModal({
 // new one. Phase 1 supports WhatsApp (Evolution + Chatwoot); other channels are
 // surfaced as "em breve" until their providers are wired.
 function InboxesManager() {
+  useAutoRepairWiring(); // silent one-time repair of broken Evolution→Chatwoot wiring
   const { data: channels = [] } = useMessagingChannels();
   const { data: members = [] } = useTeamMembers();
   const deleteChannel = useDeleteChannel();
