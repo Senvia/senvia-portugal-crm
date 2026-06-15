@@ -2926,8 +2926,13 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
   const isHtml = !!m.email_html_body || m.content_type === 'html' || m.content_type === 'text/html' || looksLikeHtml(m.content);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  const failed = m.outgoing && m.status === 'failed';
   return (
-    <div className={cn("my-2 w-full max-w-[92%] rounded-xl border bg-card shadow-sm text-sm", m.outgoing ? "ml-auto" : "mr-auto")}>
+    <div className={cn(
+      "my-2 w-full max-w-[92%] rounded-xl border bg-card shadow-sm text-sm",
+      m.outgoing ? "ml-auto" : "mr-auto",
+      failed && "border-red-300 dark:border-red-500/40",
+    )}>
       <div className="border-b px-4 py-2.5 space-y-1">
         {m.email_subject && <p className="font-semibold text-foreground leading-snug">{m.email_subject}</p>}
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
@@ -2935,7 +2940,14 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
           {m.email_to && <span><span className="font-medium text-foreground/70">Para:</span> {m.email_to}</span>}
           {m.email_cc && <span><span className="font-medium text-foreground/70">CC:</span> {m.email_cc}</span>}
         </div>
-        <p className="text-[10px] text-muted-foreground">{formatTime(m.created_at)}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] text-muted-foreground">{formatTime(m.created_at)}</p>
+          {failed && (
+            <span className="flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+              <X className="h-2.5 w-2.5" /> Falha no envio
+            </span>
+          )}
+        </div>
       </div>
       <div className="p-4">
         {m.attachments?.length > 0 && (
