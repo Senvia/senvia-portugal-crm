@@ -262,6 +262,16 @@ export function EmailComposer({
     }
   };
 
+  const handleDiscard = async () => {
+    // Delete any draft that was auto-created during this compose session.
+    // If editing a pre-existing draft (initialDraft), preserve it — user can reopen from Rascunhos.
+    const sessionDraftId = draftId && !initialDraft ? draftId : null;
+    if (sessionDraftId) {
+      try { await actions.deleteDraft(sessionDraftId); } catch { /* non-critical */ }
+    }
+    onOpenChange(false);
+  };
+
   const handleSend = async () => {
     if (to.length === 0) { toast({ title: 'Indica pelo menos um destinatário', variant: 'destructive' }); return; }
     setSending(true);
@@ -535,7 +545,7 @@ export function EmailComposer({
             <button
               type="button"
               title="Descartar"
-              onClick={() => onOpenChange(false)}
+              onClick={handleDiscard}
               className="ml-auto rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
