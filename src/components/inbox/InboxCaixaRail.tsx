@@ -56,12 +56,14 @@ export function InboxCaixaRail({
   const handleEmailClick = (ch: MessagingChannel) => {
     const wasOpen = isFolderOpen(ch.id);
     if (wasOpen) {
-      // Collapse folders (stays in email mode if already active).
+      // Collapse folder list (keeps email reader active if already selected).
       toggleFolderOpen(ch.id, false);
     } else {
-      // Expand folders and activate email reader.
+      // Expand folder list; only switch caixa if it changed (avoids folderId reset flicker).
       toggleFolderOpen(ch.id, true);
-      onSelectEmail(ch);
+      if (emailChannelId !== ch.id) {
+        onSelectEmail(ch);
+      }
     }
   };
 
