@@ -39,7 +39,35 @@ cp .env.example .env     # preencher TEST_IMAP_PASSWORD (app-password Zoho)
 npm run test:connect     # prova de conectividade (lista pastas + últimas mensagens)
 ```
 
-## Deploy (servidor do Chatwoot)
+## Servidor vivo
 
-Containerizado (Dockerfile a adicionar na Fase 5). Corre como mais um serviço
-Docker na mesma máquina do Chatwoot. Custo extra de infra: 0 €.
+`src/server.js` mantém uma ligação IMAP por caixa em **IDLE** — emails novos são
+sincronizados para o Postgres no instante em que chegam (o frontend atualiza via
+Supabase Realtime). API HTTP (autenticada com `GATEWAY_SHARED_SECRET`):
+
+- `GET  /health` — estado das caixas (sem auth)
+- `POST /caixas/:id/sync` — força resync completo
+- `POST /messages/:id/body` — fetch do corpo on-demand
+
+```bash
+npm start   # precisa de DATABASE_URL + GATEWAY_SHARED_SECRET no .env
+```
+
+## Deploy (servidor do Chatwoot, em Docker)
+
+Corre como **container separado**, ao lado do Chatwoot — **não toca no Chatwoot**.
+
+```bash
+# no servidor, dentro de email-gateway/
+docker build -t senvia-email-gateway .
+docker run -d --name senvia-email-gateway --restart unless-stopped \
+  -e DATABASE_URL="postgresql://...pooler.supabase.com:5432/postgres" \
+  -e GATEWAY_SHARED_SECRET="<segredo-forte>" \
+  -e PORT=8730 \
+  -p 8730:8730 \
+  senvia-email-gateway
+```
+
+Para o frontend/Edge Functions chegarem ao gateway, expor `:8730` num subdomínio
+HTTPS (ex.: `email-gw.senvia.pt`) via o nginx que já serve o Chatwoot. Custo
+extra de infra: 0 €.

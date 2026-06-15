@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEmailMessages, useEmailMessage, type EmailAttachment } from '@/hooks/useEmail';
+import { useEmailMessages, useEmailMessage, useEmailRealtime, type EmailAttachment } from '@/hooks/useEmail';
 import { initials, fmtListDate, fmtFullDate, fmtSize, addrText } from './emailShared';
 
 // HTML body in a sandboxed, auto-sized iframe (consistent fonts).
@@ -46,6 +46,7 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
 export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
   const [messageId, setMessageId] = useState<string | null>(null);
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
+  useEmailRealtime(channelId);
 
   const { data: messages = [], isLoading } = useEmailMessages(folderId);
   const { data: opened } = useEmailMessage(messageId);

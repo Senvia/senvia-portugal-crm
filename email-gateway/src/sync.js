@@ -106,6 +106,33 @@ export async function fetchMessageBody(client, channel, msg) {
   }
 }
 
+// Fetch bodies for messages of a caixa that don't have one yet (eager backfill).
+export async function backfillBodies(client, caixa, cap = 150) {
+  const pending = await q(
+    `SELECT m.id, m.uid, f.path
+       FROM email_messages m JOIN email_folders f ON f.id = m.folder_id
+      WHERE m.channel_id=$1 AND m.body_fetched=false
+      ORDER BY m.date DESC LIMIT $2`,
+    [caixa.id, cap],
+  );
+  let done = 0;
+  for (const msg of pending) {
+    try { await fetchMessageBody(client, caixa, msg); done++; } catch { /* skip */ }
+  }
+  return done;
+}
+
+// Full sync of a caixa: every folder's headers + a body backfill. Used by the
+// live server on startup and by the sync-all script.
+export async function syncCaixaFull(client, caixa, { perFolder = 40, bodyCap = 150 } = {}) {
+  const byPath = await syncFolders(client, caixa);
+  for (const f of byPath.values()) {
+    try { await syncFolderMessages(client, caixa, f, perFolder); } catch { /* non-selectable parent */ }
+  }
+  await backfillBodies(client, caixa, bodyCap);
+  return byPath;
+}
+
 // Sync the most recent `limit` messages (headers only) of one folder into email_messages.
 export async function syncFolderMessages(client, channel, folder, limit = 50) {
   const lock = await client.getMailboxLock(folder.path);

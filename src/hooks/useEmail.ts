@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 // The email_* tables are newer than the generated Supabase types, so we access
@@ -93,6 +94,26 @@ export function useEmailMessages(folderId: string | null) {
     },
     enabled: !!folderId,
   });
+}
+
+// Live updates: when the gateway syncs new mail / flag changes (IDLE), refresh
+// the folder counts and message lists for this caixa without a manual reload.
+export function useEmailRealtime(channelId: string | null) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!channelId) return;
+    const channel = supabase
+      .channel(`email-${channelId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_messages', filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: ['email-messages'] });
+        qc.invalidateQueries({ queryKey: ['email-folders', channelId] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_folders', filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: ['email-folders', channelId] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [channelId, qc]);
 }
 
 // One full message (with body) + its attachments, for the reader pane.
