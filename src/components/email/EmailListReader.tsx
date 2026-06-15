@@ -1,61 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Inbox as InboxIcon, Send, FileText, ShieldAlert, Trash2, Archive, Folder,
-  Paperclip, Star, Loader2, Mail, ChevronDown, Download,
-} from 'lucide-react';
+import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEmailChannels } from '@/hooks/useEmailChannels';
-import {
-  useEmailFolders, useEmailMessages, useEmailMessage,
-  type EmailFolder, type EmailFolderRole, type EmailAddress, type EmailAttachment,
-} from '@/hooks/useEmail';
+import { useEmailMessages, useEmailMessage, type EmailAttachment } from '@/hooks/useEmail';
+import { initials, fmtListDate, fmtFullDate, fmtSize, addrText } from './emailShared';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-const ROLE_META: Record<EmailFolderRole, { label: string; Icon: typeof InboxIcon }> = {
-  inbox: { label: 'Entrada', Icon: InboxIcon },
-  drafts: { label: 'Rascunhos', Icon: FileText },
-  sent: { label: 'Enviados', Icon: Send },
-  archive: { label: 'Arquivo', Icon: Archive },
-  junk: { label: 'Spam', Icon: ShieldAlert },
-  trash: { label: 'Lixo', Icon: Trash2 },
-  custom: { label: '', Icon: Folder },
-};
-function folderLabel(f: EmailFolder) {
-  return f.role === 'custom' ? f.name : ROLE_META[f.role].label;
-}
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
-}
-
-function fmtListDate(value: string | null) {
-  if (!value) return '';
-  const d = new Date(value);
-  const now = new Date();
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (d.getTime() >= startToday) return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' });
-  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
-}
-function fmtFullDate(value: string | null) {
-  if (!value) return '';
-  return new Date(value).toLocaleString('pt-PT', {
-    weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
-function fmtSize(bytes: number | null) {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-function addrText(list: EmailAddress[]) {
-  return (list || []).map((a) => a.name || a.address).join(', ');
-}
-
-// ── HTML body in a sandboxed, auto-sized iframe (consistent fonts) ───────────
+// HTML body in a sandboxed, auto-sized iframe (consistent fonts).
 function EmailBody({ html, text }: { html: string | null; text: string | null }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const srcDoc = useMemo(() => {
@@ -93,110 +42,23 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
   );
 }
 
-// ── page ─────────────────────────────────────────────────────────────────────
-export default function EmailInbox() {
-  const { data: caixas = [], isLoading: loadingCaixas } = useEmailChannels();
-  const [channelId, setChannelId] = useState<string | null>(null);
-  const [folderId, setFolderId] = useState<string | null>(null);
+// Message list + reader for one folder. The folder rail lives in the caixa rail.
+export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
   const [messageId, setMessageId] = useState<string | null>(null);
-  const [caixaMenuOpen, setCaixaMenuOpen] = useState(false);
+  useEffect(() => { setMessageId(null); }, [folderId, channelId]);
 
-  useEffect(() => {
-    if (!channelId && caixas.length) setChannelId(caixas[0].id);
-  }, [caixas, channelId]);
-
-  const { data: folders = [] } = useEmailFolders(channelId);
-  useEffect(() => {
-    if (folders.length && (!folderId || !folders.some((f) => f.id === folderId))) {
-      setFolderId((folders.find((f) => f.role === 'inbox') || folders[0]).id);
-      setMessageId(null);
-    }
-  }, [folders, folderId]);
-
-  const { data: messages = [], isLoading: loadingMessages } = useEmailMessages(folderId);
+  const { data: messages = [], isLoading } = useEmailMessages(folderId);
   const { data: opened } = useEmailMessage(messageId);
-  const activeFolder = folders.find((f) => f.id === folderId) || null;
-  const activeCaixa = caixas.find((c) => c.id === channelId) || null;
-
-  if (!loadingCaixas && caixas.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Mail className="h-12 w-12 opacity-30" />
-        <p className="text-sm">Ainda não há nenhuma caixa de email configurada.</p>
-        <p className="text-xs">Adiciona uma em Definições → Integrações.</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* ── Folder rail ── */}
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-muted/20">
-        <div className="relative border-b p-3">
-          <button
-            onClick={() => caixas.length > 1 && setCaixaMenuOpen((o) => !o)}
-            className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left', caixas.length > 1 && 'hover:bg-accent')}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Mail className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{activeCaixa?.label || 'Email'}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{activeCaixa?.metadata?.email_address}</span>
-            </span>
-            {caixas.length > 1 && <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
-          </button>
-          {caixaMenuOpen && (
-            <div className="absolute inset-x-3 top-full z-10 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
-              {caixas.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => { setChannelId(c.id); setFolderId(null); setMessageId(null); setCaixaMenuOpen(false); }}
-                  className={cn('block w-full px-3 py-2 text-left text-sm hover:bg-accent', c.id === channelId && 'bg-accent')}
-                >
-                  <span className="block truncate font-medium">{c.label}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">{c.metadata?.email_address}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-          {folders.map((f) => {
-            const { Icon } = ROLE_META[f.role];
-            const active = f.id === folderId;
-            const showUnread = f.unread_count > 0 && f.role !== 'sent' && f.role !== 'drafts';
-            return (
-              <button
-                key={f.id}
-                onClick={() => { setFolderId(f.id); setMessageId(null); }}
-                className={cn(
-                  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
-                  active ? 'bg-primary/10 font-semibold text-primary' : 'text-foreground/80 hover:bg-accent',
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-left">{folderLabel(f)}</span>
-                {showUnread && (
-                  <span className={cn('shrink-0 rounded-full px-1.5 text-[11px] font-semibold', active ? 'bg-primary/20' : 'bg-muted text-muted-foreground')}>
-                    {f.unread_count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      {/* ── Message list ── */}
+    <>
+      {/* Message list */}
       <section className="flex w-[26rem] shrink-0 flex-col border-r">
         <header className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">{activeFolder ? folderLabel(activeFolder) : ''}</h2>
           <span className="text-xs text-muted-foreground">{messages.length} {messages.length === 1 ? 'email' : 'emails'}</span>
         </header>
         <div className="flex-1 overflow-y-auto">
-          {loadingMessages ? (
+          {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span>
             </div>
@@ -238,7 +100,7 @@ export default function EmailInbox() {
         </div>
       </section>
 
-      {/* ── Reader ── */}
+      {/* Reader */}
       <section className="flex min-w-0 flex-1 flex-col bg-muted/10">
         {!opened ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -290,6 +152,6 @@ export default function EmailInbox() {
           </div>
         )}
       </section>
-    </div>
+    </>
   );
 }

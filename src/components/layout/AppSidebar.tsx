@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Mailbox, Wallet, Lock, Search, Building2, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";
@@ -25,7 +25,6 @@ const allNavItems: NavItem[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
   { to: "/inbox", icon: MessageSquare, label: "Caixa de Entrada", moduleKey: 'inbox' },
-  { to: "/email", icon: Mailbox, label: "Email" },
   { to: "/clients", icon: UserCheck, label: "Clientes", moduleKey: 'clients' },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
   { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },

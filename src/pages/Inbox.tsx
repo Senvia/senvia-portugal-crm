@@ -49,6 +49,8 @@ import {
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
+import { EmailListReader } from "@/components/email/EmailListReader";
 import { ContactNotes } from "@/components/contacts/ContactNotes";
 import { useOpenInboxTasks, isTaskOverdue, phoneSuffix } from "@/hooks/useInboxTasks";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
@@ -473,6 +475,10 @@ export default function Inbox() {
   const [tab, setTab] = useState<ListTab>("all");
   // Inbox filter by caixa (chatwoot_inbox_id). null = all caixas.
   const [caixaFilter, setCaixaFilter] = useState<number | null>(null);
+  // Email mode: when an email caixa is picked in the rail, the chat columns are
+  // replaced by the email list+reader for the selected folder.
+  const [emailChannelId, setEmailChannelId] = useState<string | null>(null);
+  const [emailFolderId, setEmailFolderId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
@@ -1766,6 +1772,20 @@ export default function Inbox() {
         </div>
       )}
       <div className="flex min-h-0 flex-1 overflow-hidden">
+      <InboxCaixaRail
+        caixas={visibleCaixas}
+        caixaFilter={caixaFilter}
+        emailChannelId={emailChannelId}
+        emailFolderId={emailFolderId}
+        onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); }}
+        onSelectMessaging={(ch) => { setEmailChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); }}
+        onSelectEmail={(ch) => { setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); }}
+        onSelectFolder={(fid) => setEmailFolderId(fid)}
+      />
+      {emailChannelId ? (
+        <EmailListReader channelId={emailChannelId} folderId={emailFolderId} />
+      ) : (
+      <>
       {/* ---- Conversation list ---- */}
       <aside
         className={cn(
@@ -1866,40 +1886,7 @@ export default function Inbox() {
             ))}
           </div>
 
-          {/* Caixa filter — only when the user can see more than one caixa */}
-          {visibleCaixas.length > 1 && (
-            <div className="flex flex-wrap gap-1.5 mt-2 border-t pt-2">
-              <button
-                onClick={() => setCaixaFilter(null)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                  caixaFilter === null ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
-                )}
-              >
-                Todas as caixas
-              </button>
-              {visibleCaixas.map((ch) => {
-                const active = caixaFilter === ch.chatwoot_inbox_id;
-                const fallbackDot = ch.channel_type === 'whatsapp' ? '#25D366'
-                  : ch.channel_type === 'instagram' ? '#E4405F'
-                  : ch.channel_type === 'facebook' ? '#0084FF' : '#64748b';
-                const dot = ch.color || fallbackDot;
-                return (
-                  <button
-                    key={ch.id}
-                    onClick={() => setCaixaFilter(ch.chatwoot_inbox_id ?? null)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                      active ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
-                    )}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
-                    {ch.label || 'WhatsApp'}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Caixa selection moved to the unified left rail (InboxCaixaRail) */}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -2471,6 +2458,8 @@ export default function Inbox() {
         <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
           {contactPanel}
         </aside>
+      )}
+      </>
       )}
       </div>
 

@@ -20,7 +20,6 @@ const Novidades = lazy(() => import("./pages/Novidades"));
 const NovidadeDetail = lazy(() => import("./pages/NovidadeDetail"));
 const Leads = lazy(() => import("./pages/Leads"));
 const Inbox = lazy(() => import("./pages/Inbox"));
-const EmailInbox = lazy(() => import("./pages/EmailInbox"));
 const Prospects = lazy(() => import("./pages/Prospects"));
 const PortalTotalLink = lazy(() => import("./pages/PortalTotalLink"));
 const PortalTotalLinkHome = lazy(() => import("./pages/portal-total-link/Home"));
@@ -101,7 +100,6 @@ const App = () => (
                   <Route path="/novidades/:id" element={<NovidadeDetail />} />
                   <Route path="/leads" element={<Leads />} />
                   <Route path="/inbox" element={<Inbox />} />
-                  <Route path="/email" element={<EmailInbox />} />
                   <Route path="/prospects" element={<Prospects />} />
                   <Route path="/portal-total-link" element={<PortalTotalLink />}>
                     <Route index element={<Navigate to="home" replace />} />
