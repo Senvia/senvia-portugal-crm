@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare } from 'lucide-react';
+import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useEmailMessages, useEmailMessage, useEmailRealtime, type EmailAttachment } from '@/hooks/useEmail';
+import { Input } from '@/components/ui/input';
+import { useEmailMessages, useEmailMessage, useEmailRealtime, useEmailSearch, type EmailAttachment } from '@/hooks/useEmail';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { EmailComposer, type ComposeMode } from './EmailComposer';
@@ -52,7 +53,16 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
   useEmailRealtime(channelId);
 
-  const { data: messages = [], isLoading } = useEmailMessages(folderId);
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  useEffect(() => { const t = setTimeout(() => setDebounced(search), 350); return () => clearTimeout(t); }, [search]);
+  useEffect(() => { setSearch(''); setDebounced(''); }, [folderId, channelId]);
+  const searching = debounced.trim().length >= 2;
+
+  const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(folderId);
+  const { data: searchResults = [], isLoading: loadingSearch } = useEmailSearch(channelId, debounced);
+  const messages = searching ? searchResults : folderMessages;
+  const isLoading = searching ? loadingSearch : loadingFolder;
   const { data: opened } = useEmailMessage(messageId);
 
   const { data: caixas = [] } = useEmailChannels();
@@ -72,11 +82,29 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
     <>
       {/* Message list */}
       <section className="flex w-[26rem] shrink-0 flex-col border-r">
-        <header className="flex items-center justify-between border-b px-3 py-2.5">
-          <Button size="sm" onClick={() => setCompose({ open: true, mode: 'new' })}>
-            <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
-          </Button>
-          <span className="text-xs text-muted-foreground">{messages.length} {messages.length === 1 ? 'email' : 'emails'}</span>
+        <header className="space-y-2 border-b px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <Button size="sm" onClick={() => setCompose({ open: true, mode: 'new' })}>
+              <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {searching ? `${messages.length} resultado(s)` : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
+            </span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Procurar emails..."
+              className="h-8 pl-8 pr-8 text-sm"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </header>
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (

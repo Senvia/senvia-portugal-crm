@@ -116,6 +116,28 @@ export function useEmailRealtime(channelId: string | null) {
   }, [channelId, qc]);
 }
 
+// Search across the whole caixa (all folders) by subject / sender / snippet.
+export function useEmailSearch(channelId: string | null, query: string) {
+  const term = query.trim().replace(/[,()%]/g, ' ');
+  return useQuery({
+    queryKey: ['email-search', channelId, term],
+    queryFn: async (): Promise<EmailMessage[]> => {
+      if (!channelId || term.length < 2) return [];
+      const like = `%${term}%`;
+      const { data, error } = await db
+        .from('email_messages')
+        .select('id, channel_id, folder_id, from_name, from_address, to_addresses, cc_addresses, subject, snippet, date, seen, flagged, answered, has_attachments')
+        .eq('channel_id', channelId)
+        .or(`subject.ilike.${like},from_name.ilike.${like},from_address.ilike.${like},snippet.ilike.${like}`)
+        .order('date', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data || []) as EmailMessage[];
+    },
+    enabled: !!channelId && term.length >= 2,
+  });
+}
+
 // One full message (with body) + its attachments, for the reader pane.
 export function useEmailMessage(messageId: string | null) {
   return useQuery({
