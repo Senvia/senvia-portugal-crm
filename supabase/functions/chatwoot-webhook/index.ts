@@ -204,37 +204,11 @@ Deno.serve(async (req) => {
       if (!claimed) return ok({ ok: true, duplicate: true });
     }
 
-    // Realtime nudge FIRST (lowest latency): open Senvia inboxes subscribe to
-    // `inbox-<org>` and refetch immediately, instead of waiting for the poll.
-    // Fired for incoming AND outgoing (our sends mirror back via Evolution).
-    try {
-      await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          messages: [{
-            topic: `inbox-${org.id}`,
-            event: 'message',
-            payload: {
-              conversation_id: event.conversation?.id ?? null,
-              incoming: event.message_type === 'incoming',
-            },
-          }],
-        }),
-      });
-    } catch (e) {
-      console.error('realtime broadcast failed:', e);
-    }
-
-    // Channel row feeds the AI suggestions (both directions) and the auto-reply.
-    // Resolve the SPECIFIC channel by the conversation's Chatwoot inbox so
-    // per-inbox config (auto-reply, AI tasks) and the outbound instance are right
-    // when the org has several WhatsApp numbers. Falls back to the org's first
-    // WhatsApp channel (covers the legacy row whose inbox id isn't stored yet).
+    // ---- Evolution status messages (CONNECTION_UPDATE / QRCODE events) ----
+    // Handle before the realtime broadcast so these never trigger an inbox refetch.
+    // Also auto-resolve the Chatwoot conversation immediately so it never sits in
+    // the Open queue — at 100 instances reconnecting every 20s this would saturate
+    // Chatwoot. Channel resolution is still needed for the flap guard below.
     const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
     let channel: { id?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null; needs_repair?: boolean } | null = null;
     // channelExact = resolved by the conversation's inbox id (not the fallback).
@@ -262,23 +236,30 @@ Deno.serve(async (req) => {
       channel = data;
     }
 
-    // ---- Flap guard: a dead WhatsApp session reconnects in a loop and floods
-    // Chatwoot with status messages (this once saturated the whole server). Count
-    // them per caixa; on a confirmed runaway, remove the broken Evolution instance
-    // at the source and alert the org. Status messages never get AI/push/auto-reply
-    // either way, so we handle them here and return. Only acts on an EXACT inbox
-    // match + a real Evolution instance + a caixa not already flagged (no cycling).
-    //
-    // QR events are NOT counted: they are normal during legitimate connection setup
-    // (Baileys generates a new QR every ~20s while waiting for scan). Only
-    // reconnect-loop events (connection established/timeout/disconnected) indicate
-    // a dead session spinning, and only those should trip the brake.
     const isFlappingEvent =
       evoBody.startsWith('connection successfully established') ||
       evoBody.startsWith('connection timeout') ||
       evoBody.startsWith('disconnected from whatsapp') ||
-      evoBody.startsWith('qrcode generation limit'); // hitting QR gen limit = problem
+      evoBody.startsWith('qrcode generation limit');
+
     if (isEvoStatus) {
+      // Auto-resolve the Chatwoot conversation so it disappears from the Open queue.
+      const cwConvId = event.conversation?.id;
+      if (cwConvId && org.chatwoot_account_token) {
+        const cwBase = (Deno.env.get('CHATWOOT_URL') || '').replace(/\/$/, '');
+        try {
+          await fetch(`${cwBase}/api/v1/accounts/${accountId}/conversations/${cwConvId}/toggle_status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', api_access_token: org.chatwoot_account_token },
+            body: JSON.stringify({ status: 'resolved' }),
+          });
+        } catch (e) { console.error('[evo-status] resolve failed', e); }
+      }
+
+      // ---- Flap guard: a dead WhatsApp session reconnects in a loop and floods
+      // Chatwoot with status messages. Count them per caixa; on a confirmed
+      // runaway, remove the broken Evolution instance and alert the org.
+      // QR events are NOT counted: normal during legitimate connection setup.
       if (isFlappingEvent && channelExact && channel?.id && channel?.evolution_instance && !channel.needs_repair) {
         try {
           const { data: tripped } = await admin.rpc('bump_channel_flap', {
@@ -312,6 +293,31 @@ Deno.serve(async (req) => {
         }
       }
       return ok({ ok: true, evo_status: true });
+    }
+
+    // Realtime nudge: open Senvia inboxes subscribe to `inbox-<org>` and refetch
+    // immediately, instead of waiting for the poll. Only for real messages.
+    try {
+      await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          messages: [{
+            topic: `inbox-${org.id}`,
+            event: 'message',
+            payload: {
+              conversation_id: event.conversation?.id ?? null,
+              incoming: event.message_type === 'incoming',
+            },
+          }],
+        }),
+      });
+    } catch (e) {
+      console.error('realtime broadcast failed:', e);
     }
 
     // AI task suggestions — promises by the agent AND requests by the customer.
