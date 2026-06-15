@@ -323,7 +323,7 @@ function EmailForm({
 
 // ─── Add Modal ─────────────────────────────────────────────────────────────────
 
-function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const createChannel = useCreateEmailChannel();
   const [form, setForm] = useState<EmailFormState>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
@@ -388,7 +388,7 @@ function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
 
 // ─── Edit Modal ────────────────────────────────────────────────────────────────
 
-function EditEmailModal({
+export function EditEmailModal({
   channel, open, onOpenChange,
 }: { channel: EmailChannel; open: boolean; onOpenChange: (o: boolean) => void }) {
   const updateChannel = useUpdateEmailChannel();

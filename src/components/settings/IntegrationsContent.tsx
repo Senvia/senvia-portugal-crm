@@ -16,7 +16,8 @@ import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeW
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
 import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
-import { EmailManager } from "./EmailManager";
+import { AddEmailModal, EditEmailModal } from "./EmailManager";
+import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
@@ -81,8 +82,7 @@ interface IntegrationDef {
 const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Faturação eletrónica'] as const;
 
 const integrations: IntegrationDef[] = [
-  { key: 'inboxes', icon: Inbox, title: 'WhatsApp / Social', description: 'WhatsApp, Instagram e Facebook via Chatwoot', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
-  { key: 'email_inboxes', icon: Mail, title: 'Caixas de Email', description: 'Gmail, Outlook, Exchange e qualquer IMAP/SMTP', toggleKey: 'email_inboxes', group: 'Caixas de Entrada' },
+  { key: 'inboxes', icon: Inbox, title: 'Caixas de Entrada', description: 'WhatsApp, Instagram, Facebook, Email e mais', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
   { key: 'brevo', icon: Megaphone, title: 'Email Marketing', description: 'Campanhas e automações de email', toggleKey: 'brevo', group: 'Marketing' },
   { key: 'webhook', icon: Webhook, title: 'Webhook de Saída', description: 'Notificar sistemas externos (Make, Zapier, n8n)', toggleKey: 'webhook', group: 'Automações' },
   { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads (Facebook, Zapier, Make)', toggleKey: 'webhook_inbound', group: 'Automações' },
@@ -241,7 +241,6 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
           {active === 'webhook' && <WebhooksManager />}
           {active === 'webhook_inbound' && <InboundWebhookSection />}
           {active === 'inboxes' && <InboxesManager />}
-          {active === 'email_inboxes' && <EmailManager />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}
@@ -759,14 +758,12 @@ function IntakeWebhookCard({ webhook, members }: { webhook: LeadIntakeWebhook; m
 
 // --- Form sub-components ---
 
-// Channel catalog for the "+ Nova caixa" picker. Only WhatsApp is active in
-// Phase 1; Instagram/Facebook/Email are shown as coming soon.
 type ChannelIcon = React.ComponentType<{ className?: string }>;
 const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; tint: string; available: boolean }[] = [
   { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: true },
+  { type: 'email', label: 'Email', icon: Mail, color: 'text-blue-600', tint: 'bg-blue-500/10', available: true },
   { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: false },
-  { type: 'facebook', label: 'Facebook Messenger', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
-  { type: 'email', label: 'Email', icon: Mail, color: 'text-amber-600', tint: 'bg-amber-500/10', available: false },
+  { type: 'facebook', label: 'Facebook', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
 ];
 
 function channelMeta(type: string) {
@@ -933,21 +930,24 @@ function InboxesManager() {
   const { data: channels = [] } = useMessagingChannels();
   const { data: members = [] } = useTeamMembers();
   const deleteChannel = useDeleteChannel();
+  const deleteEmailChannel = useDeleteEmailChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
   const updateAssign = useUpdateChannelAssignment();
   const updateGroups = useUpdateChannelGroups();
   const logoutChannel = useLogoutChannel();
 
   const [editCh, setEditCh] = useState<typeof channels[0] | null>(null);
+  const [editEmailCh, setEditEmailCh] = useState<EmailChannel | null>(null);
   const [toDisconnect, setToDisconnect] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<{ id: string; type: string } | null>(null);
   // WhatsApp connect modal
   const [connectModal, setConnectModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
   // New caixa dialog
   const [newOpen, setNewOpen] = useState(false);
   const [newLabel, setNewLabel] = useState('');
+  const [addEmailOpen, setAddEmailOpen] = useState(false);
 
-  const orphanCount = channels.filter((c) => c.status !== 'connected').length;
+  const orphanCount = channels.filter((c) => c.channel_type !== 'email' && c.status !== 'connected').length;
 
   const startNewWhatsApp = () => {
     setConnectModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
@@ -973,9 +973,11 @@ function InboxesManager() {
           {channels.map((ch) => {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;
-            const connected = ch.status === 'connected';
+            const isEmail = ch.channel_type === 'email';
+            const connected = isEmail || ch.status === 'connected';
             const attendants = ch.assigned_user_ids || [];
-            const groupsOn = (ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
+            const groupsOn = !isEmail && (ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
+            const emailAddr = isEmail ? (ch.metadata as Record<string, unknown> | null)?.email_address as string | undefined : undefined;
             return (
               <div key={ch.id} className={cn(
                 'rounded-2xl border overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col',
@@ -989,18 +991,12 @@ function InboxesManager() {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">{ch.label || meta.label}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {meta.label}{ch.phone_number ? ` · +${ch.phone_number}` : ''}
+                      {emailAddr ?? (ch.phone_number ? `+${ch.phone_number}` : meta.label)}
                     </p>
                   </div>
-                  {connected ? (
-                    <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-500/20 border border-amber-500/30 rounded-full px-2 py-0.5 shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Por ligar
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
+                  </span>
                 </div>
 
                 {/* Stats row */}
@@ -1023,12 +1019,15 @@ function InboxesManager() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 px-4 py-3 mt-auto">
-                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => setEditCh(ch)}>
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => {
+                    if (isEmail) setEditEmailCh(ch as unknown as EmailChannel);
+                    else setEditCh(ch);
+                  }}>
                     <Settings2 className="h-3.5 w-3.5" /> Editar
                   </Button>
                   <button
                     type="button"
-                    onClick={() => setToDelete(ch.id)}
+                    onClick={() => setToDelete({ id: ch.id, type: ch.channel_type })}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
                     title="Remover caixa"
                   >
@@ -1057,7 +1056,7 @@ function InboxesManager() {
         </Button>
       )}
 
-      {/* Edit modal */}
+      {/* Edit modal — social channels */}
       {editCh && (
         <EditCaixaModal
           ch={editCh}
@@ -1071,6 +1070,16 @@ function InboxesManager() {
           onDisconnect={() => { setToDisconnect(editCh.id); setEditCh(null); }}
         />
       )}
+      {/* Edit modal — email channels */}
+      {editEmailCh && (
+        <EditEmailModal
+          channel={editEmailCh}
+          open={!!editEmailCh}
+          onOpenChange={(o) => { if (!o) setEditEmailCh(null); }}
+        />
+      )}
+      {/* Add email modal */}
+      <AddEmailModal open={addEmailOpen} onOpenChange={setAddEmailOpen} />
 
       {/* New caixa dialog */}
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
@@ -1083,10 +1092,20 @@ function InboxesManager() {
             {CHANNEL_CATALOG.map((c) => {
               const Icon = c.icon;
               return (
-                <div key={c.type} className={cn(
-                  'flex items-center gap-2.5 rounded-xl border p-3',
-                  c.available ? 'border-primary/30 bg-primary/5' : 'opacity-50',
-                )}>
+                <button
+                  key={c.type}
+                  type="button"
+                  disabled={!c.available}
+                  onClick={() => {
+                    if (!c.available) return;
+                    if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
+                    // WhatsApp (and future channels): stay open so user enters a label
+                  }}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',
+                    c.available ? 'hover:border-primary/40 hover:bg-accent/50 cursor-pointer' : 'opacity-50 cursor-not-allowed',
+                  )}
+                >
                   <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', c.tint)}>
                     <Icon className={cn('h-5 w-5', c.color)} />
                   </div>
@@ -1094,12 +1113,12 @@ function InboxesManager() {
                     <p className="text-sm font-medium">{c.label}</p>
                     {!c.available && <p className="text-[10px] text-muted-foreground">Em breve</p>}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
           <div className="space-y-2 border-t pt-4">
-            <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa (WhatsApp)</Label>
+            <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
             <Input
               id="new-inbox-label"
               value={newLabel}
@@ -1133,7 +1152,12 @@ function InboxesManager() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (toDelete) deleteChannel.mutate(toDelete); setToDelete(null); }}
+              onClick={() => {
+                if (!toDelete) return;
+                if (toDelete.type === 'email') deleteEmailChannel.mutate(toDelete.id);
+                else deleteChannel.mutate(toDelete.id);
+                setToDelete(null);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remover
