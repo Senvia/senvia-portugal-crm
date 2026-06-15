@@ -7,7 +7,7 @@
 // here — not in whatsapp-connect — keeps Evolution silent until the session is
 // actually open, preventing event floods during QR scan and reconnect loops.
 import {
-  corsHeaders, json, getConfig, authOrgAdmin, evolutionFetch, instanceNameForOrg,
+  corsHeaders, json, getConfig, authOrgAdmin, evolutionFetch, chatwootFetch, instanceNameForOrg,
   ensureChatwootAccount, findChatwootInboxByName,
 } from '../_shared/multicanal.ts';
 
@@ -96,17 +96,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Wire Chatwoot on first successful connection (chatwoot_inbox_id not yet set).
-    // Evolution only starts sending events to Chatwoot AFTER /chatwoot/set/ is called,
-    // so delaying until here means no events reach Chatwoot during QR scan or
-    // Baileys reconnect loops.
+    // Wire Chatwoot on first successful connection (chatwoot_inbox_id not yet set)
+    // OR re-wire after a flap-guard repair (needs_repair = true). Evolution only
+    // starts sending events to Chatwoot AFTER /chatwoot/set/ is called, so without
+    // this the channel stays connected but silent after a flap-guard trip.
     if (status === 'connected' && resolved.id) {
       const { data: chRow } = await admin
         .from('messaging_channels')
-        .select('chatwoot_inbox_id, label, metadata')
+        .select('chatwoot_inbox_id, label, metadata, needs_repair')
         .eq('id', resolved.id)
         .maybeSingle();
-      if (chRow && !chRow.chatwoot_inbox_id) {
+      if (chRow && (!chRow.chatwoot_inbox_id || chRow.needs_repair)) {
         try {
           const { data: orgData } = await admin
             .from('organizations')
@@ -115,37 +115,57 @@ Deno.serve(async (req) => {
             .single();
           if (orgData) {
             const { accountId, token } = await ensureChatwootAccount(admin, cfg, orgData);
-            const baseLabel = (chRow.label || '').trim() || 'WhatsApp';
-            const isLegacy = instanceName === instanceNameForOrg(organization_id);
-            const inboxName = isLegacy ? baseLabel : `${baseLabel} ${resolved.id.slice(0, 6)}`;
-            // Default to true (groups enabled) when groups_enabled is not set in metadata.
-            // Using !== false means: undefined/null/true → allow groups; only explicit false blocks them.
             const groupsEnabled = (chRow.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
-            await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
-              enabled: true,
-              accountId: String(accountId),
-              token,
-              url: cfg.chatwootUrl,
-              signMsg: true,
-              signDelimiter: '\n',
-              nameInbox: inboxName,
-              reopenConversation: true,
-              conversationPending: false,
-              mergeBrazilContacts: false,
-              importContacts: false,
-              importMessages: false,
-              daysLimitImportMessages: 7,
-              autoCreate: true,
-              ignoreGroups: !groupsEnabled,
-              organization: orgData.name,
-              logo: '',
-            });
-            const inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
-            if (inboxId) {
-              await admin
-                .from('messaging_channels')
-                .update({ chatwoot_inbox_id: inboxId })
-                .eq('id', resolved.id);
+            let inboxName: string;
+            let autoCreate: boolean;
+            if (chRow.chatwoot_inbox_id) {
+              // Re-wiring after flap guard: look up the real inbox name from Chatwoot
+              // to avoid mismatches if the inbox was renamed after initial wiring.
+              const inboxRes = await chatwootFetch(cfg, token, `/api/v1/accounts/${accountId}/inboxes/${chRow.chatwoot_inbox_id}`);
+              const inboxData = inboxRes.ok ? await inboxRes.json() : null;
+              inboxName = inboxData?.name ?? inboxData?.payload?.name ?? '';
+              autoCreate = false;
+            } else {
+              // First wiring: construct the inbox name and let Evolution auto-create it.
+              const baseLabel = (chRow.label || '').trim() || 'WhatsApp';
+              const isLegacy = instanceName === instanceNameForOrg(organization_id);
+              inboxName = isLegacy ? baseLabel : `${baseLabel} ${resolved.id.slice(0, 6)}`;
+              autoCreate = true;
+            }
+            if (inboxName) {
+              await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
+                enabled: true,
+                accountId: String(accountId),
+                token,
+                url: cfg.chatwootUrl,
+                signMsg: true,
+                signDelimiter: '\n',
+                nameInbox: inboxName,
+                reopenConversation: true,
+                conversationPending: false,
+                mergeBrazilContacts: false,
+                importContacts: false,
+                importMessages: false,
+                daysLimitImportMessages: 7,
+                autoCreate,
+                ignoreGroups: !groupsEnabled,
+                organization: orgData.name,
+                logo: '',
+              });
+              if (!chRow.chatwoot_inbox_id) {
+                const inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
+                if (inboxId) {
+                  await admin
+                    .from('messaging_channels')
+                    .update({ chatwoot_inbox_id: inboxId, needs_repair: false })
+                    .eq('id', resolved.id);
+                }
+              } else {
+                await admin
+                  .from('messaging_channels')
+                  .update({ needs_repair: false })
+                  .eq('id', resolved.id);
+              }
             }
           }
         } catch (e) {

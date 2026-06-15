@@ -65,7 +65,14 @@ const SystemAdminUsers = lazy(() => import("./pages/system-admin/Users"));
 const SystemAdminAnnouncements = lazy(() => import("./pages/system-admin/Announcements"));
 const FinanceInternalRequests = lazy(() => import("./pages/finance/InternalRequests"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 15000),
+    },
+  },
+});
 
 const App = () => (
   <HelmetProvider>

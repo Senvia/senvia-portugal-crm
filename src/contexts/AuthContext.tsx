@@ -216,11 +216,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Auth state listener
   useEffect(() => {
     let mounted = true;
-    
+
+    // Safety net: if getSession() hangs (expired token + network stall on refresh),
+    // the Promise never resolves and isLoading stays true forever. Unblock after 8s
+    // so the user sees the login page instead of an infinite spinner.
+    const loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('[Auth] getSession timeout — forcing isLoading=false');
+        setIsLoading(false);
+      }
+    }, 8000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
-        
+        clearTimeout(loadingTimeout);
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -228,17 +238,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(loadingTimeout);
       if (!mounted) return;
-      
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
     }).catch(() => {
+      clearTimeout(loadingTimeout);
       if (mounted) setIsLoading(false);
     });
 
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);

@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
 
       if (evoRes.ok) {
         results.push({ channel: ch.label, status: 'ok', inbox: inboxName });
+        await admin.from('messaging_channels').update({ needs_repair: false }).eq('id', ch.id);
       } else {
         const errText = await evoRes.text();
         results.push({ channel: ch.label, status: 'error', inbox: inboxName, error: `Evolution ${evoRes.status}: ${errText.slice(0, 100)}` });
