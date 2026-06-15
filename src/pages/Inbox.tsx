@@ -2892,10 +2892,38 @@ export default function Inbox() {
   );
 }
 
+// Detect HTML content: Chatwoot may set content_type='html' or may not set it at all
+// even when the body contains raw HTML. Check the content itself as fallback.
+function looksLikeHtml(content: string | null | undefined): boolean {
+  if (!content) return false;
+  return /&[a-z]+;|<[a-z][^>]*>/i.test(content);
+}
+
+// Wrap plain text in minimal HTML for iframe so fonts/spacing match the card.
+function bodyForIframe(content: string | null | undefined, isHtml: boolean): string {
+  const body = content ?? '';
+  if (isHtml) {
+    // Inject a base style so the iframe doesn't use browser defaults with huge fonts.
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box}
+      body{margin:0;padding:0;font-family:inherit;font-size:13px;line-height:1.6;color:#111;word-break:break-word;overflow-wrap:break-word}
+      a{color:#2563eb}
+      img{max-width:100%;height:auto}
+    </style></head><body>${body}</body></html>`;
+  }
+  const escaped = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body{margin:0;padding:0;font-family:inherit;font-size:13px;line-height:1.6;color:#111;white-space:pre-wrap;word-break:break-word}
+  </style></head><body>${escaped}</body></html>`;
+}
+
 // Email message card: shown instead of a chat bubble for email channel messages.
-// Displays From / To / CC / Subject header + full body (HTML rendered in sandboxed iframe).
+// Displays From / To / CC / Subject header + full body (rendered in sandboxed iframe).
 function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: string) => void }) {
   const fromLabel = m.email_from || m.sender_name || (m.outgoing ? 'Você' : 'Contacto');
+  const isHtml = m.content_type === 'html' || m.content_type === 'text/html' || looksLikeHtml(m.content);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
   return (
     <div className={cn("my-2 w-full max-w-[92%] rounded-xl border bg-card shadow-sm text-sm", m.outgoing ? "ml-auto" : "mr-auto")}>
       <div className="border-b px-4 py-2.5 space-y-1">
@@ -2915,23 +2943,24 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
             ))}
           </div>
         )}
-        {m.content_type === 'html' ? (
+        {m.content ? (
           <iframe
-            srcDoc={m.content ?? ''}
+            ref={iframeRef}
+            srcDoc={bodyForIframe(m.content, isHtml)}
             sandbox="allow-same-origin"
-            className="w-full border-0 min-h-[100px]"
-            style={{ height: '200px' }}
+            className="w-full border-0"
+            style={{ height: '120px' }}
             title="Email"
-            onLoad={(e) => {
-              const iframe = e.currentTarget;
+            onLoad={() => {
               try {
-                const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
-                if (h > 0) iframe.style.height = `${Math.min(h + 16, 700)}px`;
+                const doc = iframeRef.current?.contentDocument;
+                const h = doc?.documentElement?.scrollHeight ?? doc?.body?.scrollHeight ?? 0;
+                if (h > 0 && iframeRef.current) {
+                  iframeRef.current.style.height = `${Math.min(h + 8, 700)}px`;
+                }
               } catch { /* cross-origin blocked */ }
             }}
           />
-        ) : m.content ? (
-          <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
         ) : null}
       </div>
     </div>
