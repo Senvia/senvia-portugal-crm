@@ -30,19 +30,21 @@ interface SectionItem {
   label: string;
   icon: any;
   description: string;
+  tint: string;
+  iconColor: string;
   requiresTeam?: boolean;
   requiresIntegrations?: boolean;
 }
 
 const sections: SectionItem[] = [
-  { id: "account", label: "A Minha Conta", icon: User, description: "Perfil, empresa, plano e suporte" },
-  { id: "modules", label: "Módulos e Campos", icon: LayoutGrid, description: "Funcionalidades e campos do CRM" },
-  { id: "capture", label: "Formulários de Captação", icon: FormInput, description: "Formulários públicos de leads" },
-  { id: "sales", label: "Vendas e Comissões", icon: TrendingUp, description: "Pipeline, regras, comissões e produtos" },
-  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Colaboradores, perfis e equipas", requiresTeam: true },
-  { id: "integrations", label: "Integrações", icon: Plug, description: "WhatsApp, email, webhooks e faturação", requiresIntegrations: true },
-  { id: "finance", label: "Financeiro", icon: Receipt, description: "IVA e tipos de despesas", requiresIntegrations: true },
-  { id: "alerts", label: "Notificações e Alertas", icon: Bell, description: "Push, calendário, email e fidelização" },
+  { id: "account", label: "A Minha Conta", icon: User, description: "Perfil, empresa, plano e suporte", tint: "bg-blue-500/10", iconColor: "text-blue-600" },
+  { id: "modules", label: "Módulos e Campos", icon: LayoutGrid, description: "Funcionalidades e campos do CRM", tint: "bg-violet-500/10", iconColor: "text-violet-600" },
+  { id: "capture", label: "Formulários de Captação", icon: FormInput, description: "Formulários públicos de leads", tint: "bg-teal-500/10", iconColor: "text-teal-600" },
+  { id: "sales", label: "Vendas e Comissões", icon: TrendingUp, description: "Pipeline, regras, comissões e produtos", tint: "bg-green-500/10", iconColor: "text-green-600" },
+  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Colaboradores, perfis e equipas", tint: "bg-orange-500/10", iconColor: "text-orange-600", requiresTeam: true },
+  { id: "integrations", label: "Integrações", icon: Plug, description: "WhatsApp, email, webhooks e faturação", tint: "bg-pink-500/10", iconColor: "text-pink-600", requiresIntegrations: true },
+  { id: "finance", label: "Financeiro", icon: Receipt, description: "IVA e tipos de despesas", tint: "bg-amber-500/10", iconColor: "text-amber-600", requiresIntegrations: true },
+  { id: "alerts", label: "Notificações e Alertas", icon: Bell, description: "Push, calendário, email e fidelização", tint: "bg-red-500/10", iconColor: "text-red-600" },
 ];
 
 export function MobileSettingsNav({
@@ -67,6 +69,8 @@ export function MobileSettingsNav({
           title={section.label}
           description={section.description}
           onClick={() => onSelectSection(section.id)}
+          tint={section.tint}
+          iconColor={section.iconColor}
         />
       ))}
     </div>

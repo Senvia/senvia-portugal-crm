@@ -248,7 +248,90 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   );
 };
 
-// --- Webhooks Manager (replaces single URL input) ---
+// --- Webhooks Manager (outbound) ---
+
+function EditOutboundWebhookModal({ wh, open, onOpenChange, toggleWebhook, deleteWebhook, testWebhook, testingId }: {
+  wh: OrganizationWebhook;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  toggleWebhook: ReturnType<typeof useToggleWebhook>;
+  deleteWebhook: ReturnType<typeof useDeleteWebhook>;
+  testWebhook: ReturnType<typeof useTestWebhook>;
+  testingId: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => { navigator.clipboard.writeText(wh.url); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+        <div className="relative px-6 py-5 flex items-center gap-4 bg-violet-500/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 dark:bg-black/30 shrink-0 shadow-sm">
+            <Webhook className="h-6 w-6 text-violet-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <DialogTitle className="text-base font-bold">{wh.name}</DialogTitle>
+            <DialogDescription className="text-xs mt-0.5 font-mono truncate">{wh.url}</DialogDescription>
+          </div>
+          <span className={cn("flex items-center gap-1 text-[10px] font-semibold rounded-full px-2.5 py-1 border shrink-0",
+            wh.is_active ? "text-green-700 bg-green-500/20 border-green-500/30" : "text-muted-foreground bg-muted border-border")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", wh.is_active ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50")} />
+            {wh.is_active ? 'Ativo' : 'Inativo'}
+          </span>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">URL de destino</Label>
+            <div className="flex gap-2">
+              <Input readOnly value={wh.url} className="text-xs font-mono bg-muted text-muted-foreground h-9" />
+              <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="shrink-0 h-9">
+                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-xl border divide-y overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
+                  <Zap className="h-4 w-4 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Webhook ativo</p>
+                  <p className="text-[11px] text-muted-foreground">Envia eventos quando ativo</p>
+                </div>
+              </div>
+              <Switch checked={wh.is_active} onCheckedChange={(c) => toggleWebhook.mutate({ id: wh.id, is_active: c })} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => testWebhook.mutate(wh.url)} disabled={testingId === wh.id || !wh.is_active}>
+              {testingId === wh.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Testar
+            </Button>
+            {!wh.is_system && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive border-destructive/30 gap-1.5">
+                    <Trash2 className="h-4 w-4" /> Eliminar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Eliminar "{wh.name}"?</AlertDialogTitle>
+                    <AlertDialogDescription>O destino deixa de receber eventos. Esta ação não pode ser anulada.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { deleteWebhook.mutate(wh.id); onOpenChange(false); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function WebhooksManager() {
   const { data: webhooks = [], isLoading } = useOrganizationWebhooks();
@@ -257,150 +340,127 @@ function WebhooksManager() {
   const deleteWebhook = useDeleteWebhook();
   const testWebhook = useTestWebhook();
 
-  const [isAdding, setIsAdding] = useState(false);
+  const [editWh, setEditWh] = useState<OrganizationWebhook | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [showHelp, setShowHelp] = useState(false);
 
-  const isValidUrl = (url: string) => {
-    if (!url) return false;
-    try { new URL(url); return true; } catch { return false; }
-  };
+  const isValidUrl = (url: string) => { try { new URL(url); return true; } catch { return false; } };
 
   const handleAdd = () => {
     if (!newName.trim() || !isValidUrl(newUrl)) return;
     createWebhook.mutate({ name: newName.trim(), url: newUrl.trim() }, {
-      onSuccess: () => { setNewName(''); setNewUrl(''); setIsAdding(false); },
+      onSuccess: () => { setNewName(''); setNewUrl(''); setNewOpen(false); },
     });
   };
 
-  const handleTest = (webhook: OrganizationWebhook) => {
-    setTestingId(webhook.id);
-    testWebhook.mutate(webhook.url, {
-      onSettled: () => setTestingId(null),
-    });
+  const handleTest = (wh: OrganizationWebhook) => {
+    setTestingId(wh.id);
+    testWebhook.mutate(wh.url, { onSettled: () => setTestingId(null) });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-sm">A carregar webhooks...</span>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar webhooks...</span></div>;
 
   return (
-    <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
-      <div className="space-y-4 min-w-0">
-      <p className="text-sm text-muted-foreground">
-        Envia um POST com os dados de cada novo lead para sistemas externos (Make, Zapier, n8n…).
-      </p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Envia um POST com os dados de cada novo lead para sistemas externos (Make, Zapier, n8n…).</p>
+        <Button size="sm" onClick={() => setNewOpen(true)} className="shrink-0 gap-1.5">
+          <Plus className="h-4 w-4" /> Adicionar Webhook
+        </Button>
+      </div>
 
-      {/* Webhook list */}
-      {webhooks.length > 0 && (
-        <div className="space-y-2">
+      {webhooks.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {webhooks.map((wh) => (
-            <div key={wh.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{wh.name}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate">{wh.url}</p>
+            <div key={wh.id} className={cn("rounded-2xl border overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col", !wh.is_active && "opacity-70")}>
+              <div className="px-4 pt-4 pb-3 flex items-start gap-3 bg-violet-500/10">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 dark:bg-black/30 shrink-0 shadow-sm">
+                  <Webhook className="h-5 w-5 text-violet-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">{wh.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate">{wh.url}</p>
+                </div>
+                {wh.is_active ? (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ativo
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted border border-border rounded-full px-2 py-0.5 shrink-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> Inativo
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleTest(wh)}
-                  disabled={testingId === wh.id || !wh.is_active}
-                  className="text-xs"
-                >
-                  {testingId === wh.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              <div className="flex items-center gap-3 px-4 py-2.5 border-t border-b text-xs text-muted-foreground bg-muted/10">
+                {wh.is_system && <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Predefinido</span>}
+                <span className="flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> Webhook de saída</span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-3 mt-auto">
+                <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => setEditWh(wh)}>
+                  <Settings2 className="h-3.5 w-3.5" /> Editar
                 </Button>
-                <Switch
-                  checked={wh.is_active}
-                  onCheckedChange={(checked) => toggleWebhook.mutate({ id: wh.id, is_active: checked })}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteWebhook.mutate(wh.id)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-3 w-3" />
+                <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => handleTest(wh)} disabled={testingId === wh.id || !wh.is_active}>
+                  {testingId === wh.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </div>
             </div>
           ))}
         </div>
-      )}
-
-      {webhooks.length === 0 && !isAdding && (
-        <div className="text-center py-8 text-muted-foreground">
-          <Webhook className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Nenhum webhook configurado</p>
-        </div>
-      )}
-
-      {/* Add form */}
-      {isAdding ? (
-        <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-          <div className="space-y-2">
-            <Label htmlFor="wh-name">Nome</Label>
-            <Input id="wh-name" placeholder="Ex: Notificação CRM" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="wh-url">URL</Label>
-            <Input id="wh-url" type="url" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)} className={newUrl && !isValidUrl(newUrl) ? 'border-destructive' : ''} />
-            {newUrl && !isValidUrl(newUrl) && <p className="text-xs text-destructive">URL inválido</p>}
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleAdd} disabled={!newName.trim() || !isValidUrl(newUrl) || createWebhook.isPending}>
-              {createWebhook.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Guardar
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setIsAdding(false); setNewName(''); setNewUrl(''); }}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
       ) : (
-        <Button variant="outline" onClick={() => setIsAdding(true)} className="w-full">
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar Webhook
-        </Button>
-      )}
-      </div>
-
-      {/* Ajuda — coluna direita */}
-      <div className="rounded-lg border h-fit">
-        <button
-          type="button"
-          onClick={() => setShowHelp((v) => !v)}
-          className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-accent/40 transition-colors rounded-lg"
-        >
-          <span>📋 Como ligar ao Zapier / Make</span>
-          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", showHelp && "rotate-180")} />
-        </button>
-        {showHelp && (
-          <div className="px-4 pb-4 space-y-2 border-t pt-3">
-            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-              <li>No Zapier (trigger <strong>Webhooks → Catch Hook</strong>) ou Make (módulo <strong>Webhooks → Custom webhook</strong>), copia o URL que a ferramenta gera.</li>
-              <li>Aqui no Senvia, clica <strong>Adicionar Webhook</strong>, dá um nome e cola esse URL.</li>
-              <li>Usa o botão de teste (<Send className="inline h-3 w-3" />) para disparar um lead de exemplo e mapear os campos do lado do Zapier/Make.</li>
-              <li>A partir daí, cada novo lead é enviado como <strong>POST JSON</strong> com, entre outros:
-                <ul className="ml-4 mt-1 space-y-1 list-disc">
-                  <li><code className="bg-muted px-1 rounded text-xs">lead.name</code> · <code className="bg-muted px-1 rounded text-xs">lead.email</code> · <code className="bg-muted px-1 rounded text-xs">lead.phone</code></li>
-                  <li><code className="bg-muted px-1 rounded text-xs">lead.company_name</code> · <code className="bg-muted px-1 rounded text-xs">lead.source</code> · <code className="bg-muted px-1 rounded text-xs">lead.status</code></li>
-                  <li><code className="bg-muted px-1 rounded text-xs">lead.custom_data</code> (campos do formulário)</li>
-                </ul>
-              </li>
-            </ol>
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              ⚠️ O POST não é assinado — o destino deve tratar o endpoint como público.
-            </p>
+        <div className="rounded-2xl border border-dashed p-10 text-center bg-muted/20">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 mx-auto mb-3">
+            <Webhook className="h-7 w-7 text-violet-500/60" />
           </div>
-        )}
+          <p className="text-sm font-medium text-muted-foreground">Nenhum webhook configurado</p>
+          <p className="text-xs text-muted-foreground mt-1">Clica em "Adicionar Webhook" para começar</p>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editWh && (
+        <EditOutboundWebhookModal wh={editWh} open={!!editWh} onOpenChange={(o) => { if (!o) setEditWh(null); }}
+          toggleWebhook={toggleWebhook} deleteWebhook={deleteWebhook} testWebhook={testWebhook} testingId={testingId} />
+      )}
+
+      {/* New webhook dialog */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Novo Webhook de Saída</DialogTitle>
+            <DialogDescription>Envia eventos para um URL externo (Zapier, Make, n8n…).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-2">
+              <Label htmlFor="wh-name" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</Label>
+              <Input id="wh-name" placeholder="Ex: Notificação CRM" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-url" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">URL de destino</Label>
+              <Input id="wh-url" type="url" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)} className={newUrl && !isValidUrl(newUrl) ? 'border-destructive' : ''} />
+              {newUrl && !isValidUrl(newUrl) && <p className="text-xs text-destructive">URL inválido</p>}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button onClick={handleAdd} disabled={!newName.trim() || !isValidUrl(newUrl) || createWebhook.isPending} className="flex-1">
+                {createWebhook.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar
+              </Button>
+              <Button variant="ghost" onClick={() => { setNewOpen(false); setNewName(''); setNewUrl(''); }}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Help box */}
+      <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">📋 Como ligar ao Zapier / Make</p>
+        <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+          <li>No Zapier ou Make, copia o URL gerado pela ferramenta.</li>
+          <li>Aqui, clica <strong>Adicionar Webhook</strong> e cola esse URL.</li>
+          <li>Usa o botão <Send className="inline h-3 w-3" /> para disparar um lead de exemplo.</li>
+          <li>Cada novo lead é enviado como <strong>POST JSON</strong> com <code className="bg-muted px-1 rounded text-xs">lead.name</code>, <code className="bg-muted px-1 rounded text-xs">lead.email</code>, <code className="bg-muted px-1 rounded text-xs">lead.phone</code>, etc.</li>
+        </ol>
+        <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ O POST não é assinado — trata o endpoint como público.</p>
       </div>
     </div>
   );
@@ -442,384 +502,256 @@ function assigneeSummary(webhook: LeadIntakeWebhook, members: MemberOption[]): s
   return `Fixo · ${first?.full_name || '1 pessoa'}`;
 }
 
-function InboundWebhookSection() {
-  const { data: webhooks = [], isLoading } = useLeadIntakeWebhooks();
-  const { data: members = [], isLoading: loadingMembers } = useTeamMembers();
-  const createWebhook = useCreateLeadIntakeWebhook();
-
-  const [isAdding, setIsAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newRotate, setNewRotate] = useState(false);
-  const [newUsers, setNewUsers] = useState<string[]>([]);
-  const [showHelp, setShowHelp] = useState(false);
-
-  const memberOptions: MemberOption[] = members.map((m) => ({
-    user_id: m.user_id,
-    full_name: m.full_name || m.email || 'Sem nome',
-  }));
-
-  const resetForm = () => { setNewName(''); setNewRotate(false); setNewUsers([]); setIsAdding(false); };
-
-  // Regras: rotação OFF -> exatamente 1; rotação ON -> pelo menos 2
-  const usersValid = newRotate ? newUsers.length >= 2 : newUsers.length === 1;
-  const canCreate = !!newName.trim() && usersValid && !createWebhook.isPending;
-
-  const handleAdd = () => {
-    if (!canCreate) return;
-    createWebhook.mutate(
-      { name: newName.trim(), assigned_user_ids: newUsers, rotate_enabled: newRotate },
-      { onSuccess: resetForm }
-    );
-  };
-
-  const handleToggleRotate = (enabled: boolean) => {
-    setNewRotate(enabled);
-    if (!enabled && newUsers.length > 1) setNewUsers([newUsers[0]]); // mantém só 1
-  };
-
-  if (isLoading || loadingMembers) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-sm">A carregar...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
-      <div className="space-y-4 min-w-0">
-      <p className="text-sm text-muted-foreground">
-        Um link por origem de leads (campanha, parceiro…). Cada um escolhe quem da equipa recebe os contactos.
-      </p>
-
-      {/* Lista de webhooks */}
-      <div className="space-y-2.5">
-        {webhooks.map((wh) => (
-          <IntakeWebhookCard key={wh.id} webhook={wh} members={memberOptions} />
-        ))}
-      </div>
-
-      {webhooks.length === 0 && !isAdding && (
-        <div className="text-center py-8 text-muted-foreground">
-          <Link2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Ainda não tens webhooks de entrada</p>
-        </div>
-      )}
-
-      {/* Criação */}
-      {isAdding ? (
-        <div className="space-y-4 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
-          <div className="space-y-2">
-            <Label htmlFor="iwh-name">Nome do webhook</Label>
-            <Input
-              id="iwh-name"
-              autoFocus
-              placeholder="Ex: Facebook Ads — Campanha Verão"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-sm font-normal flex items-center gap-2">
-                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                Distribuição rotativa
-              </Label>
-              <Switch checked={newRotate} onCheckedChange={handleToggleRotate} />
-            </div>
-            <p className="text-xs text-muted-foreground">Distribui os leads em rotação entre vários colaboradores (round-robin).</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              {newRotate ? 'Quem recebe os leads (escolhe 2 ou mais)' : 'Quem recebe os leads (escolhe 1)'}
-            </Label>
-            <MemberSelector members={memberOptions} value={newUsers} rotate={newRotate} onChange={setNewUsers} />
-            {!usersValid && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                {newRotate ? 'Seleciona pelo menos 2 utilizadores.' : 'Seleciona exatamente 1 utilizador.'}
-              </p>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleAdd} disabled={!canCreate}>
-              {createWebhook.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Criar webhook
-            </Button>
-            <Button size="sm" variant="ghost" onClick={resetForm}>Cancelar</Button>
-          </div>
-        </div>
-      ) : (
-        <Button variant="outline" onClick={() => setIsAdding(true)} className="w-full">
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar Webhook de Entrada
-        </Button>
-      )}
-      </div>
-
-      {/* Ajuda — coluna direita */}
-      <div className="rounded-lg border h-fit">
-        <button
-          type="button"
-          onClick={() => setShowHelp((v) => !v)}
-          className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-accent/40 transition-colors rounded-lg"
-        >
-          <span>📋 Como ligar ao Zapier / Make</span>
-          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", showHelp && "rotate-180")} />
-        </button>
-        {showHelp && (
-          <div className="px-4 pb-4 space-y-2 border-t pt-3">
-            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-              <li>Cria um cenário/zap com o trigger desejado (Facebook Lead Ads, Google Forms, etc.)</li>
-              <li>Adiciona uma ação HTTP <strong>POST</strong> com o URL do webhook (botão Copiar em cada um)</li>
-              <li>Body type: <strong>JSON</strong></li>
-              <li>Mapeia os campos:
-                <ul className="ml-4 mt-1 space-y-1 list-disc">
-                  <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo</li>
-                  <li><code className="bg-muted px-1 rounded text-xs">email</code> → Email</li>
-                  <li><code className="bg-muted px-1 rounded text-xs">phone</code> → Telefone</li>
-                  <li><code className="bg-muted px-1 rounded text-xs">company</code> → Empresa (opcional)</li>
-                  <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional)</li>
-                  <li><code className="bg-muted px-1 rounded text-xs">notes</code> → Notas (opcional)</li>
-                </ul>
-              </li>
-            </ol>
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              ⚠️ Não partilhes estes URLs publicamente — cada link autentica a tua organização.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --- Cartão de um webhook de entrada ---
-
-function IntakeWebhookCard({
-  webhook,
-  members,
-}: {
-  webhook: LeadIntakeWebhook;
-  members: MemberOption[];
+function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
+  webhook: LeadIntakeWebhook; members: MemberOption[]; open: boolean; onOpenChange: (o: boolean) => void;
 }) {
   const updateWebhook = useUpdateLeadIntakeWebhook();
   const deleteWebhook = useDeleteLeadIntakeWebhook();
-
-  const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(webhook.name);
+  useEffect(() => { setNameDraft(webhook.name); }, [webhook.name, open]);
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=${webhook.token}`;
   const selected = webhook.assigned_user_ids || [];
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const saveName = () => {
-    const trimmed = nameDraft.trim();
-    setEditingName(false);
-    if (trimmed && trimmed !== webhook.name) {
-      updateWebhook.mutate({ id: webhook.id, name: trimmed });
-    } else {
-      setNameDraft(webhook.name);
-    }
-  };
-
-  const setUsers = (next: string[]) => {
-    updateWebhook.mutate({ id: webhook.id, assigned_user_ids: next });
-  };
+  const handleCopy = () => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
   const toggleRotate = (enabled: boolean) => {
-    // Ao desligar a rotação, mantém só 1 utilizador (regra: 1 fixo)
-    if (!enabled && selected.length > 1) {
-      updateWebhook.mutate({ id: webhook.id, rotate_enabled: false, assigned_user_ids: [selected[0]] });
-    } else {
-      updateWebhook.mutate({ id: webhook.id, rotate_enabled: enabled });
-    }
+    if (!enabled && selected.length > 1) updateWebhook.mutate({ id: webhook.id, rotate_enabled: false, assigned_user_ids: [selected[0]] });
+    else updateWebhook.mutate({ id: webhook.id, rotate_enabled: enabled });
   };
-
-  // Avisos de validação
   const rotateOffInvalid = !webhook.rotate_enabled && selected.length !== 1;
   const rotateOnHint = webhook.rotate_enabled && selected.length < 2;
-  const needsAttention = rotateOffInvalid || (webhook.is_active && selected.length === 0);
 
   return (
-    <div className={cn("rounded-lg border bg-card overflow-hidden", !webhook.is_active && "opacity-70")}>
-      {/* Cabeçalho recolhível — nome editável inline (sem campo Nome duplicado no expandido) */}
-      <div className="flex items-center gap-2 p-3">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-2 shrink-0"
-          aria-label={expanded ? 'Recolher' : 'Expandir'}
-        >
-          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-          <span className={cn("h-2 w-2 rounded-full", webhook.is_active ? "bg-green-500" : "bg-muted-foreground/40")} />
-        </button>
-
-        {editingName ? (
-          <Input
-            autoFocus
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onBlur={saveName}
-            onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(webhook.name); setEditingName(false); } }}
-            className="h-8 text-sm flex-1"
-          />
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
-            >
-              <span className="text-sm font-medium truncate">{webhook.name}</span>
-              {webhook.is_system && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
-                        <ShieldCheck className="h-3 w-3" /> Predefinido
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs max-w-[220px]">Webhook base da tua conta. Podes editá-lo ou desativá-lo, mas não eliminá-lo.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {needsAttention && (
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5 shrink-0">
-                  ⚠️ Configurar
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setNameDraft(webhook.name); setEditingName(true); }}
-              className="p-1 text-muted-foreground hover:text-foreground shrink-0"
-              title="Renomear"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          </>
-        )}
-
-        <span className="hidden sm:block text-xs text-muted-foreground truncate max-w-[160px]">
-          {assigneeSummary(webhook, members)}
-        </span>
-        <Switch
-          checked={webhook.is_active}
-          onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, is_active: checked })}
-        />
-      </div>
-
-      {/* Conteúdo expandido */}
-      {expanded && (
-        <div className="px-4 pb-4 pt-1 space-y-4 border-t">
-          {/* URL */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">URL do Webhook</Label>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={url} className="text-xs font-mono bg-muted text-muted-foreground" />
-              <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copied ? 'Copiado' : 'Copiar'}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+        <div className="relative px-6 py-5 flex items-center gap-4 bg-teal-500/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 dark:bg-black/30 shrink-0 shadow-sm">
+            <Link2 className="h-6 w-6 text-teal-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <DialogTitle className="text-base font-bold">{webhook.name}</DialogTitle>
+            <DialogDescription className="text-xs mt-0.5">{assigneeSummary(webhook, members)}</DialogDescription>
+          </div>
+          <span className={cn("flex items-center gap-1 text-[10px] font-semibold rounded-full px-2.5 py-1 border shrink-0",
+            webhook.is_active ? "text-green-700 bg-green-500/20 border-green-500/30" : "text-muted-foreground bg-muted border-border")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", webhook.is_active ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50")} />
+            {webhook.is_active ? 'Ativo' : 'Inativo'}
+          </span>
+        </div>
+        <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[70vh]">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</Label>
+            <div className="flex gap-2">
+              <Input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} className="h-9" />
+              <Button size="sm" className="h-9" disabled={!nameDraft.trim() || nameDraft.trim() === webhook.name}
+                onClick={() => updateWebhook.mutate({ id: webhook.id, name: nameDraft.trim() })}>Guardar</Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">URL do Webhook</Label>
+            <div className="flex gap-2">
+              <Input readOnly value={url} className="text-xs font-mono bg-muted text-muted-foreground h-9" />
+              <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="shrink-0 h-9">
+                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </div>
-
-          {/* Distribuição rotativa */}
-          <div className="flex items-center justify-between gap-3">
-            <Label className="text-sm font-normal flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
-              Distribuição rotativa
-            </Label>
-            <Switch checked={webhook.rotate_enabled} onCheckedChange={toggleRotate} />
-          </div>
-
-          {/* Utilizadores que recebem */}
-          <div className="space-y-2">
-            <Label className="text-xs flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              {webhook.rotate_enabled ? 'Quem recebe os leads (2 ou mais)' : 'Quem recebe os leads (1 pessoa)'}
-            </Label>
-            <MemberSelector members={members} value={selected} rotate={webhook.rotate_enabled} onChange={setUsers} />
-
-            {rotateOffInvalid ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                {selected.length === 0
-                  ? '⚠️ Seleciona 1 colaborador, senão o lead fica sem responsável.'
-                  : '⚠️ Sem rotação, só pode haver 1 colaborador.'}
-              </p>
-            ) : rotateOnHint ? (
-              <p className="text-xs text-blue-600 dark:text-blue-400">💡 Seleciona pelo menos 2 para a rotação fazer sentido.</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>
-            )}
-          </div>
-
-          {/* Notificar todos os admins */}
-          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="flex items-start gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Avisar também os administradores</Label>
-                <p className="text-xs text-muted-foreground">
-                  {webhook.notify_all_admins
-                    ? 'LIGADO: além de quem recebe o lead, todos os administradores recebem o aviso — mesmo que não estejam na lista acima.'
-                    : 'DESLIGADO: só quem está selecionado acima recebe o aviso. Os outros administradores não são notificados.'}
-                </p>
+          <div className="rounded-xl border divide-y overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10">
+                  <Zap className="h-4 w-4 text-teal-600" />
+                </div>
+                <div><p className="text-sm font-medium">Webhook ativo</p><p className="text-[11px] text-muted-foreground">Recebe leads quando ativo</p></div>
               </div>
+              <Switch checked={webhook.is_active} onCheckedChange={(c) => updateWebhook.mutate({ id: webhook.id, is_active: c })} />
             </div>
-            <Switch
-              checked={webhook.notify_all_admins}
-              onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, notify_all_admins: checked })}
-            />
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                  <RefreshCw className="h-4 w-4 text-blue-600" />
+                </div>
+                <div><p className="text-sm font-medium">Distribuição rotativa</p><p className="text-[11px] text-muted-foreground">Round-robin entre colaboradores</p></div>
+              </div>
+              <Switch checked={webhook.rotate_enabled} onCheckedChange={toggleRotate} />
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
+                  <Mail className="h-4 w-4 text-amber-600" />
+                </div>
+                <div><p className="text-sm font-medium">Avisar administradores</p><p className="text-[11px] text-muted-foreground">Notifica todos os admins por push/email</p></div>
+              </div>
+              <Switch checked={webhook.notify_all_admins} onCheckedChange={(c) => updateWebhook.mutate({ id: webhook.id, notify_all_admins: c })} />
+            </div>
           </div>
-
-          {/* Eliminar (com confirmação) — só webhooks não predefinidos */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <UsersRound className="h-3.5 w-3.5" /> {webhook.rotate_enabled ? 'Quem recebe (2 ou mais)' : 'Quem recebe (1 pessoa)'}
+            </Label>
+            <MemberSelector members={members} value={selected} rotate={webhook.rotate_enabled} onChange={(next) => updateWebhook.mutate({ id: webhook.id, assigned_user_ids: next })} />
+            {rotateOffInvalid ? <p className="text-xs text-amber-600">⚠️ {selected.length === 0 ? 'Seleciona 1 colaborador.' : 'Sem rotação, só 1 colaborador.'}</p>
+              : rotateOnHint ? <p className="text-xs text-blue-600">💡 Seleciona pelo menos 2 para a rotação.</p>
+              : <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>}
+          </div>
           {!webhook.is_system && (
-            <div className="flex justify-end pt-1 border-t">
+            <div className="pt-1 border-t flex justify-end">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive mt-3">
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar webhook
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5">
+                    <Trash2 className="h-3.5 w-3.5" /> Eliminar webhook
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Eliminar "{webhook.name}"?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      O link deixa de funcionar e qualquer integração externa (Make, Zapier, Facebook…) que o use para de enviar leads. Esta ação não pode ser anulada.
-                    </AlertDialogDescription>
+                    <AlertDialogDescription>O link deixa de funcionar e qualquer integração que o use para de enviar leads. Esta ação não pode ser anulada.</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteWebhook.mutate(webhook.id)}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Eliminar
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={() => { deleteWebhook.mutate(webhook.id); onOpenChange(false); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InboundWebhookSection() {
+  const { data: webhooks = [], isLoading } = useLeadIntakeWebhooks();
+  const { data: members = [], isLoading: loadingMembers } = useTeamMembers();
+  const createWebhook = useCreateLeadIntakeWebhook();
+
+  const [newOpen, setNewOpen] = useState(false);
+  const [editWh, setEditWh] = useState<LeadIntakeWebhook | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newRotate, setNewRotate] = useState(false);
+  const [newUsers, setNewUsers] = useState<string[]>([]);
+
+  const memberOptions: MemberOption[] = members.map((m) => ({ user_id: m.user_id, full_name: m.full_name || m.email || 'Sem nome' }));
+  const resetForm = () => { setNewName(''); setNewRotate(false); setNewUsers([]); setNewOpen(false); };
+  const usersValid = newRotate ? newUsers.length >= 2 : newUsers.length === 1;
+  const canCreate = !!newName.trim() && usersValid && !createWebhook.isPending;
+
+  const handleAdd = () => {
+    if (!canCreate) return;
+    createWebhook.mutate({ name: newName.trim(), assigned_user_ids: newUsers, rotate_enabled: newRotate }, { onSuccess: resetForm });
+  };
+
+  if (isLoading || loadingMembers) return <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Um link por origem de leads (campanha, parceiro…). Cada um escolhe quem da equipa recebe os contactos.</p>
+        <Button size="sm" onClick={() => setNewOpen(true)} className="shrink-0 gap-1.5">
+          <Plus className="h-4 w-4" /> Adicionar Webhook
+        </Button>
+      </div>
+
+      {webhooks.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {webhooks.map((wh) => {
+            const needsAttention = (!wh.rotate_enabled && (wh.assigned_user_ids || []).length !== 1) || (wh.is_active && (wh.assigned_user_ids || []).length === 0);
+            return (
+              <div key={wh.id} className={cn("rounded-2xl border overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col", !wh.is_active && "opacity-70")}>
+                <div className="px-4 pt-4 pb-3 flex items-start gap-3 bg-teal-500/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 dark:bg-black/30 shrink-0 shadow-sm">
+                    <Link2 className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{wh.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{assigneeSummary(wh, memberOptions)}</p>
+                  </div>
+                  {wh.is_active ? (
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ativo
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted border border-border rounded-full px-2 py-0.5 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> Inativo
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 px-4 py-2.5 border-t border-b text-xs text-muted-foreground bg-muted/10">
+                  {wh.rotate_enabled && <span className="flex items-center gap-1 text-blue-600"><RefreshCw className="h-3 w-3" /> Rotação</span>}
+                  {wh.notify_all_admins && <span className="flex items-center gap-1 text-amber-600"><Mail className="h-3 w-3" /> Admins</span>}
+                  {needsAttention && <span className="flex items-center gap-1 text-amber-600">⚠️ Configurar</span>}
+                </div>
+                <div className="flex items-center gap-2 px-4 py-3 mt-auto">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => setEditWh(wh)}>
+                    <Settings2 className="h-3.5 w-3.5" /> Editar
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed p-10 text-center bg-muted/20">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/10 mx-auto mb-3">
+            <Link2 className="h-7 w-7 text-teal-500/60" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">Ainda não tens webhooks de entrada</p>
+          <p className="text-xs text-muted-foreground mt-1">Clica em "Adicionar Webhook" para começar</p>
+        </div>
       )}
+
+      {/* Edit modal */}
+      {editWh && <IntakeWebhookEditModal webhook={editWh} members={memberOptions} open={!!editWh} onOpenChange={(o) => { if (!o) setEditWh(null); }} />}
+
+      {/* New dialog */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Novo Webhook de Entrada</DialogTitle>
+            <DialogDescription>Recebe leads de fontes externas (Facebook, Google, Zapier…).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</Label>
+              <Input autoFocus placeholder="Ex: Facebook Ads — Campanha Verão" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-normal flex items-center gap-2"><RefreshCw className="h-4 w-4 text-muted-foreground" /> Distribuição rotativa</Label>
+              <Switch checked={newRotate} onCheckedChange={(v) => { setNewRotate(v); if (!v && newUsers.length > 1) setNewUsers([newUsers[0]]); }} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{newRotate ? 'Quem recebe (2 ou mais)' : 'Quem recebe (1 pessoa)'}</Label>
+              <MemberSelector members={memberOptions} value={newUsers} rotate={newRotate} onChange={setNewUsers} />
+              {!usersValid && <p className="text-xs text-amber-600">{newRotate ? 'Seleciona pelo menos 2.' : 'Seleciona exatamente 1.'}</p>}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button onClick={handleAdd} disabled={!canCreate} className="flex-1">
+                {createWebhook.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Criar webhook
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">📋 Como ligar ao Zapier / Make</p>
+        <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+          <li>Cria um cenário/zap com o trigger (Facebook Lead Ads, Google Forms, etc.)</li>
+          <li>Adiciona uma ação HTTP <strong>POST</strong> com o URL do webhook (botão Copiar)</li>
+          <li>Body type: <strong>JSON</strong> — mapeia <code className="bg-muted px-1 rounded text-xs">name</code>, <code className="bg-muted px-1 rounded text-xs">email</code>, <code className="bg-muted px-1 rounded text-xs">phone</code>, <code className="bg-muted px-1 rounded text-xs">company</code></li>
+        </ol>
+        <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ Não partilhes estes URLs publicamente.</p>
+      </div>
     </div>
   );
+}
+
+// IntakeWebhookCard mantido por compatibilidade mas já não é usado na UI
+function IntakeWebhookCard({ webhook, members }: { webhook: LeadIntakeWebhook; members: MemberOption[] }) {
+  return null;
 }
 
 // --- Form sub-components ---
