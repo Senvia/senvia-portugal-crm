@@ -114,6 +114,7 @@ function EmailChipInput({
         onKeyDown={handleKeyDown}
         onBlur={commit}
         placeholder={value.length === 0 ? placeholder : ''}
+        autoComplete="off"
         className="flex-1 min-w-[120px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
       />
     </div>
@@ -416,6 +417,7 @@ export function EmailComposer({
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Assunto"
+              autoComplete="off"
               className="border-0 p-0 shadow-none focus-visible:ring-0 text-sm bg-transparent"
             />
           </div>
