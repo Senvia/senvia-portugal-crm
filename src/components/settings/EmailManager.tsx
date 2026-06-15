@@ -233,7 +233,7 @@ function EmailForm({
 
 // --- Full-Screen Editor ---
 
-type EditorTab = 'config' | 'signatures';
+type EditorTab = 'config' | 'team' | 'signatures';
 
 function EmailFullScreenEditor({
   channel,
@@ -370,24 +370,6 @@ function EmailFullScreenEditor({
       <div className="flex-1 overflow-y-auto py-5 space-y-5 min-h-0">
         {activeTab === 'config' && (
           <>
-            {isEdit && members.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                  <UsersRound className="h-3.5 w-3.5" /> Quem atende esta caixa
-                </Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
-                </p>
-                <CollaboratorPicker
-                  members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
-                  value={attendants}
-                  onChange={(next) => updateAssign.mutate({ channelId: channel!.id, assigned_user_ids: next })}
-                  mode="multi"
-                  emptyHint="Vazio = todos os colaboradores veem esta caixa."
-                />
-              </div>
-            )}
-
             {isEdit && (
               <div className="space-y-2">
                 <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cor da caixa</Label>
@@ -411,6 +393,34 @@ function EmailFullScreenEditor({
 
             <EmailForm form={form} setForm={setForm} isEdit={isEdit} error={formError} />
           </>
+        )}
+
+        {activeTab === 'team' && (
+          isEdit ? (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <UsersRound className="h-3.5 w-3.5" /> Quem atende esta caixa
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
+                </p>
+              </div>
+              {members.length > 0 ? (
+                <CollaboratorPicker
+                  members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
+                  value={attendants}
+                  onChange={(next) => updateAssign.mutate({ channelId: channel!.id, assigned_user_ids: next })}
+                  mode="multi"
+                  emptyHint="Vazio = todos os colaboradores veem esta caixa."
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum colaborador disponível.</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Guarda a caixa primeiro para atribuir colaboradores.</p>
+          )
         )}
 
         {activeTab === 'signatures' && (
