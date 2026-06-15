@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon } from 'lucide-react';
+import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { useEmailMessages, useEmailMessage, useEmailRealtime, type EmailAttachment } from '@/hooks/useEmail';
+import { useEmailChannels } from '@/hooks/useEmailChannels';
+import { useEmailActions } from '@/hooks/useEmailActions';
+import { EmailComposer, type ComposeMode } from './EmailComposer';
 import { initials, fmtListDate, fmtFullDate, fmtSize, addrText } from './emailShared';
 
 // HTML body in a sandboxed, auto-sized iframe (consistent fonts).
@@ -51,11 +55,27 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   const { data: messages = [], isLoading } = useEmailMessages(folderId);
   const { data: opened } = useEmailMessage(messageId);
 
+  const { data: caixas = [] } = useEmailChannels();
+  const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
+  const actions = useEmailActions(channelId, folderId);
+  const [compose, setCompose] = useState<{ open: boolean; mode: ComposeMode }>({ open: false, mode: 'new' });
+
+  // Auto-mark-read when opening an unread message (standard email behaviour).
+  useEffect(() => {
+    if (opened?.message && !opened.message.seen) actions.setRead(opened.message.id, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened?.message?.id]);
+
+  const act = (fn: () => void) => { fn(); setMessageId(null); };
+
   return (
     <>
       {/* Message list */}
       <section className="flex w-[26rem] shrink-0 flex-col border-r">
-        <header className="flex items-center justify-between border-b px-4 py-3">
+        <header className="flex items-center justify-between border-b px-3 py-2.5">
+          <Button size="sm" onClick={() => setCompose({ open: true, mode: 'new' })}>
+            <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
+          </Button>
           <span className="text-xs text-muted-foreground">{messages.length} {messages.length === 1 ? 'email' : 'emails'}</span>
         </header>
         <div className="flex-1 overflow-y-auto">
@@ -109,7 +129,19 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
             <p className="text-sm">Seleciona um email para ler</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <>
+            <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5">
+              <Button size="sm" variant="ghost" onClick={() => setCompose({ open: true, mode: 'reply' })}><Reply className="mr-1.5 h-4 w-4" /> Responder</Button>
+              <Button size="icon" variant="ghost" title="Responder a todos" onClick={() => setCompose({ open: true, mode: 'replyAll' })}><ReplyAll className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" title="Reencaminhar" onClick={() => setCompose({ open: true, mode: 'forward' })}><Forward className="h-4 w-4" /></Button>
+              <div className="mx-1 h-5 w-px bg-border" />
+              <Button size="icon" variant="ghost" title="Marcar como não lida" onClick={() => act(() => actions.setRead(opened.message.id, false))}><MailOpen className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" title={opened.message.flagged ? 'Remover estrela' : 'Marcar com estrela'} onClick={() => actions.setFlag(opened.message.id, !opened.message.flagged)}><Star className={cn('h-4 w-4', opened.message.flagged && 'fill-amber-400 text-amber-400')} /></Button>
+              <Button size="icon" variant="ghost" title="Arquivar" onClick={() => act(() => actions.archive(opened.message.id))}><Archive className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" title="Marcar como spam" onClick={() => act(() => actions.spam(opened.message.id))}><ShieldAlert className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" title="Apagar" onClick={() => act(() => actions.trash(opened.message.id))}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">
               <h1 className="mb-4 text-xl font-semibold leading-snug">{opened.message.subject || '(sem assunto)'}</h1>
               <div className="mb-4 flex items-start gap-3 border-b pb-4">
@@ -151,8 +183,19 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               </div>
             </div>
           </div>
+          </>
         )}
       </section>
+
+      <EmailComposer
+        open={compose.open}
+        onOpenChange={(o) => setCompose((c) => ({ ...c, open: o }))}
+        channelId={channelId}
+        folderId={folderId}
+        mode={compose.mode}
+        original={opened?.message ?? null}
+        selfAddress={selfAddress}
+      />
     </>
   );
 }
