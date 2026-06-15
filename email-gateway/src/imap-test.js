@@ -3,6 +3,7 @@
 // Run: npm run test:connect   (after filling TEST_IMAP_* in .env)
 import 'dotenv/config';
 import { ImapFlow } from 'imapflow';
+import { folderRole } from './imap-roles.js';
 
 const host = process.env.TEST_IMAP_HOST;
 const port = Number(process.env.TEST_IMAP_PORT) || 993;
@@ -13,18 +14,6 @@ const pass = process.env.TEST_IMAP_PASSWORD;
 if (!host || !user || !pass) {
   console.error('Faltam TEST_IMAP_HOST / TEST_IMAP_USER / TEST_IMAP_PASSWORD no .env');
   process.exit(1);
-}
-
-// Map IMAP \Special-Use flags to our folder roles.
-function roleOf(box) {
-  const u = (box.specialUse || '').toLowerCase();
-  if (box.path.toUpperCase() === 'INBOX') return 'inbox';
-  if (u.includes('sent')) return 'sent';
-  if (u.includes('drafts')) return 'drafts';
-  if (u.includes('junk')) return 'junk';
-  if (u.includes('trash')) return 'trash';
-  if (u.includes('archive')) return 'archive';
-  return 'custom';
 }
 
 const client = new ImapFlow({
@@ -40,7 +29,7 @@ try {
   console.log('── Pastas (mailboxes) ──');
   const boxes = await client.list();
   for (const b of boxes) {
-    console.log(`  ${roleOf(b).padEnd(8)} ${b.path}${b.specialUse ? `  [${b.specialUse}]` : ''}`);
+    console.log(`  ${folderRole(b).padEnd(8)} ${b.path}${b.specialUse ? `  [${b.specialUse}]` : ''}`);
   }
 
   console.log('\n── Últimas mensagens na INBOX ──');
