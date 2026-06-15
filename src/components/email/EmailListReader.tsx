@@ -165,7 +165,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
     <>
       {/* Message list */}
       <section className="flex w-[26rem] shrink-0 flex-col border-r">
-        <header className="space-y-2 border-b px-3 py-2.5">
+        <header className="space-y-2 border-b px-4 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <Button size="sm" onClick={() => { setComposeDraft(null); setCompose({ open: true, mode: 'new' }); }}>
               <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
@@ -262,7 +262,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5">
+            <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-3 pt-5 pb-2">
               <Button size="sm" variant="ghost" onClick={() => setCompose({ open: true, mode: 'reply' })}><Reply className="mr-1.5 h-4 w-4" /> Responder</Button>
               <Button size="icon" variant="ghost" title="Responder a todos" onClick={() => setCompose({ open: true, mode: 'replyAll' })}><ReplyAll className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" title="Reencaminhar" onClick={() => setCompose({ open: true, mode: 'forward' })}><Forward className="h-4 w-4" /></Button>

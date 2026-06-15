@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mailbox, Inbox as InboxIcon, SlidersHorizontal, Check } from 'lucide-react';
+import { Mailbox, Inbox as InboxIcon, SlidersHorizontal, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
@@ -13,9 +13,6 @@ function dotColor(ch: MessagingChannel) {
   return '#64748b';
 }
 
-// Unified caixa rail (Front/Missive style): all caixas in one column. Messaging
-// caixas open the chat; email caixas expand to their folders and open the email
-// reader — all inside the same Caixa de Entrada.
 export function InboxCaixaRail({
   caixas,
   caixaFilter,
@@ -35,17 +32,38 @@ export function InboxCaixaRail({
   onSelectEmail: (ch: MessagingChannel) => void;
   onSelectFolder: (folderId: string) => void;
 }) {
-  // Which caixas the user chose to show in the rail (persisted per browser).
-  // Useful when there are many caixas — show only the ones you care about.
   const [hidden, setHidden] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('inbox-rail-hidden-v1') || '[]'); } catch { return []; }
   });
+  // Track which email caixas have their folder list expanded (independently of active caixa).
+  const [openEmails, setOpenEmails] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('inbox-rail-open-emails-v1') || '[]'); } catch { return []; }
+  });
+
   const isHidden = (id: string) => hidden.includes(id);
   const toggleHidden = (id: string) => setHidden((prev) => {
     const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     localStorage.setItem('inbox-rail-hidden-v1', JSON.stringify(next));
     return next;
   });
+  const isFolderOpen = (id: string) => openEmails.includes(id);
+  const toggleFolderOpen = (id: string, expand: boolean) => setOpenEmails((prev) => {
+    const next = expand ? [...prev.filter((x) => x !== id), id] : prev.filter((x) => x !== id);
+    localStorage.setItem('inbox-rail-open-emails-v1', JSON.stringify(next));
+    return next;
+  });
+
+  const handleEmailClick = (ch: MessagingChannel) => {
+    const wasOpen = isFolderOpen(ch.id);
+    if (wasOpen) {
+      // Collapse folders (stays in email mode if already active).
+      toggleFolderOpen(ch.id, false);
+    } else {
+      // Expand folders and activate email reader.
+      toggleFolderOpen(ch.id, true);
+      onSelectEmail(ch);
+    }
+  };
 
   const messaging = caixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
@@ -84,7 +102,6 @@ export function InboxCaixaRail({
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
-        {/* All messaging conversations */}
         <button
           onClick={onSelectAll}
           className={cn(
@@ -96,7 +113,6 @@ export function InboxCaixaRail({
           <span className="min-w-0 flex-1 truncate text-left">Todas as conversas</span>
         </button>
 
-        {/* Messaging caixas (WhatsApp / Instagram / Messenger) */}
         {messaging.map((ch) => {
           const active = !emailChannelId && caixaFilter === ch.chatwoot_inbox_id;
           return (
@@ -114,16 +130,16 @@ export function InboxCaixaRail({
           );
         })}
 
-        {/* Email caixas — expand to folders when active */}
         {emails.length > 0 && (
           <div className="mt-3 border-t pt-2">
             <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">E-mails</p>
             {emails.map((ch) => {
               const active = emailChannelId === ch.id;
+              const expanded = isFolderOpen(ch.id);
               return (
                 <div key={ch.id}>
                   <button
-                    onClick={() => onSelectEmail(ch)}
+                    onClick={() => handleEmailClick(ch)}
                     className={cn(
                       'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
                       active ? 'font-semibold text-primary' : 'text-foreground/80 hover:bg-accent',
@@ -131,9 +147,19 @@ export function InboxCaixaRail({
                   >
                     <Mailbox className="h-4 w-4 shrink-0" style={ch.color ? { color: ch.color } : undefined} />
                     <span className="min-w-0 flex-1 truncate text-left">{ch.label || 'Email'}</span>
+                    {expanded
+                      ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                   </button>
-                  {active && (
-                    <EmailFolderList channelId={ch.id} activeFolderId={emailFolderId} onSelect={onSelectFolder} />
+                  {expanded && (
+                    <EmailFolderList
+                      channelId={ch.id}
+                      activeFolderId={emailFolderId}
+                      onSelect={(fid) => {
+                        if (emailChannelId !== ch.id) onSelectEmail(ch);
+                        onSelectFolder(fid);
+                      }}
+                    />
                   )}
                 </div>
               );
