@@ -549,6 +549,7 @@ export default function Inbox() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLInputElement>(null);
   const prevSelectedRef = useRef<number | null>(null);
   // Latest list/selection/action for the singly-bound keyboard handler.
   const kbdRef = useRef<{
@@ -869,13 +870,13 @@ export default function Inbox() {
     const switched = prevSelectedRef.current !== selectedId;
     prevSelectedRef.current = selectedId;
     if (switched) {
-      bottomRef.current?.scrollIntoView();
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView();
+        composerRef.current?.focus();
+      }, 50);
       return;
     }
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
@@ -2449,6 +2450,7 @@ export default function Inbox() {
                         : "Escreve uma mensagem..."
                   }
                   autoComplete="off"
+                  ref={composerRef}
                 />
 
                 {draft.trim() || outAttachments.length > 0 ? (
