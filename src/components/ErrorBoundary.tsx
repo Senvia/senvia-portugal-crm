@@ -2,8 +2,10 @@ import { Component, type ReactNode } from "react";
 
 // Errors thrown when a lazily-loaded chunk no longer exists on the server
 // (typical after a new deploy while an old tab is still open).
+// NOTE: "Failed to fetch" alone is intentionally excluded — it also matches
+// Supabase/API network errors that must NOT trigger an auto-reload loop.
 const CHUNK_ERROR_RE =
-  /Loading chunk|dynamically imported module|module script failed|ChunkLoadError|Failed to fetch/i;
+  /Loading chunk|dynamically imported module|module script failed|ChunkLoadError|Failed to fetch dynamically imported module/i;
 
 export function isChunkError(error: unknown): boolean {
   const msg = error instanceof Error ? `${error.name} ${error.message}` : String(error);

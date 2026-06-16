@@ -455,6 +455,26 @@ type ListTab = "all" | "unread" | "waiting" | "mine" | "archived";
 const MEM_DEBUG = import.meta.env.DEV
   || (typeof window !== "undefined" && (() => { try { return window.localStorage.getItem("inbox-debug") === "1"; } catch { return false; } })());
 
+// --- Capture the FIRST React warning/error that mentions render/update/hooks,
+// stamped into localStorage("_ireact") so it survives the OOM tab crash (the
+// console is unreadable once the tab freezes). React names the offending
+// component in "Cannot update a component (X) while rendering (Y)" /
+// "Too many re-renders" — that string points straight at the loop's source.
+if (typeof window !== "undefined" && !(window as any).__ireactPatched) {
+  (window as any).__ireactPatched = true;
+  const orig = console.error;
+  console.error = function (...args: unknown[]) {
+    try {
+      const msg = args.map((a) => (typeof a === "string" ? a : (a as Error)?.message ?? String(a))).join(" ");
+      if (/re-render|too many|while rendering|update a component|hook|maximum update/i.test(msg)
+          && !localStorage.getItem("_ireact")) {
+        localStorage.setItem("_ireact", msg.slice(0, 800));
+      }
+    } catch { /* noop */ }
+    return orig.apply(console, args as []);
+  };
+}
+
 // --- Render-loop detector. Module-level so it survives re-renders without a
 // hook. Counts, per watched value, how many renders changed its reference. The
 // key whose count tracks the total render count is the loop driver. Results are
@@ -474,7 +494,7 @@ function _trackRenderLoop(snap: Record<string, unknown>) {
   if (_diffRenders % 50 === 0) {
     try {
       const top = Object.entries(_diffCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      localStorage.setItem("_idiff", `renders=${_diffRenders} mounts=${_mountCount} | ${top.map(([k, v]) => `${k}:${v}`).join(" ")}`);
+      localStorage.setItem("_idiff", `[build=V8] renders=${_diffRenders} mounts=${_mountCount} | ${top.map(([k, v]) => `${k}:${v}`).join(" ")}`);
     } catch { /* quota */ }
   }
 }
@@ -512,14 +532,6 @@ export default function Inbox() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [queryClient]);
-  // Defer the heavy JSX tree by one rAF tick. This lets the old page's GC run
-  // between hook initialisation (frame 0) and VDOM construction (frame 1),
-  // reducing the peak heap size on the first render after a hard reload.
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const id = window.requestAnimationFrame(() => setReady(true));
-    return () => window.cancelAnimationFrame(id);
-  }, []);
   useEffect(() => { _mountCount++; }, []); // diagnostics: count real mounts
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
@@ -1375,12 +1387,11 @@ export default function Inbox() {
   // Virtual list for the conversation panel — only renders ~15 visible rows
   // instead of the full 200-cap, dramatically reducing DOM nodes and memory.
   const ROW_HEIGHT = 73; // px: border-b + py-3 (24px) + two text lines (~49px)
-  const listVirtualizer = useVirtualizer({
-    count: filtered.length,
-    getScrollElement: () => listScrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 5,
-  });
+  // DIAGNOSTIC: virtualizer disabled to test if it is the render-loop source.
+  const listVirtualizer = {
+    getTotalSize: () => filtered.length * ROW_HEIGHT,
+    getVirtualItems: () => filtered.map((_, index) => ({ index, start: index * ROW_HEIGHT, key: index })),
+  };
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
   // / search, c new conversation, n toggle note. Ignored while typing. ----
   useEffect(() => {
@@ -1518,7 +1529,7 @@ export default function Inbox() {
     openProposals, openSales, linkResults, scheduledMsgs, autoReplyConfig,
     user, openTasks, myTasks, taskStateByPhone, visible, filtered, thread,
     threadRows, channelByInbox, visibleCaixas, emailInboxIds, pending,
-    selectedId, live, ready, search, debouncedSearch, tab, caixaFilter,
+    selectedId, live, search, debouncedSearch, tab, caixaFilter,
   });
 
   // ---- Empty state: no caixa connected yet ----
@@ -1911,9 +1922,13 @@ export default function Inbox() {
   );
 
   try { localStorage.setItem("_ic", "F"); } catch {} // crash probe F: before JSX
-  // Frame 0: hooks run but JSX is skipped — gives GC a chance between hook
-  // initialisation and the full VDOM tree build (see rAF effect above).
-  if (!ready) return null;
+
+  // DIAGNOSTIC bisection: short-circuit the entire JSX/children tree. If the
+  // render loop STOPS (mounts becomes 1), the loop lives in the JSX/children;
+  // if it CONTINUES (mounts stays 0), the loop is in the hooks above.
+  if (typeof window !== "undefined" && window.localStorage.getItem("_idiag") === "1") {
+    return <div style={{ padding: 40 }}>DIAG-V9: hooks ran, JSX skipped</div>;
+  }
 
   // Thread rows with date separators interleaved. Consecutive messages from the
   // same sender within a short window are grouped: only the LAST keeps a tail +

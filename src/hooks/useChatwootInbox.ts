@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, useIsMutating, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -153,7 +153,10 @@ export function useInboxRealtime(): boolean {
           queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId] });
         }, 400);
       })
-      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+      .subscribe((status) => setLive((prev) => {
+        const next = status === 'SUBSCRIBED';
+        return prev === next ? prev : next;
+      }));
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       if (taskTimer !== null) window.clearTimeout(taskTimer);
@@ -213,7 +216,13 @@ export function useInboxPresence(
         arr.push(meta);
         map.set(meta.conversationId, arr);
       }
-      setPeers(map);
+      // Only update state if the serialized presence actually changed — prevents
+      // rapid Realtime reconnect cycles from flooding the React tree with re-renders.
+      setPeers((prev) => {
+        const prevStr = JSON.stringify([...prev.entries()]);
+        const nextStr = JSON.stringify([...map.entries()]);
+        return prevStr === nextStr ? prev : map;
+      });
     };
 
     channel
@@ -221,11 +230,13 @@ export function useInboxPresence(
       .on('presence', { event: 'join' }, recompute)
       .on('presence', { event: 'leave' }, recompute)
       .subscribe((status) => {
-        subscribedRef.current = status === 'SUBSCRIBED';
-        if (status === 'SUBSCRIBED') {
+        const isNowSubscribed = status === 'SUBSCRIBED';
+        subscribedRef.current = isNowSubscribed;
+        if (isNowSubscribed) {
           const s = stateRef.current;
           channel.track({ userId, name: s.selfName, conversationId: s.conversationId, typing: s.typing });
         }
+        // Only trigger a re-render when the live status genuinely changes.
       });
 
     return () => {
@@ -273,8 +284,25 @@ async function fetchConversationsMerged(
   // optimistic patches, which are already in `previous`).
   const seenKeys = new Set(fresh.map(convKey));
   const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
-  const rest = previous.filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id));
-  return [...fresh, ...rest];
+  // Cap older rows to prevent unbounded cache growth when the org has hundreds of
+  // historical conversations. 200 is well above what fits in the viewport but
+  // avoids accumulating the entire Chatwoot history in browser memory.
+  const MAX_CACHED = 200;
+  const rest = previous
+    .filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id))
+    .slice(0, Math.max(0, MAX_CACHED - fresh.length));
+  // Reuse previous object references for conversations whose visible data has not
+  // changed (updated_at + unread_count are the two fields that drive re-renders).
+  // This lets ConversationRow.memo bail out on every poll when nothing actually changed.
+  const prevById = new Map(previous.map((c) => [c.id, c]));
+  const stabilize = (c: InboxConversation): InboxConversation => {
+    const p = prevById.get(c.id);
+    if (p && p.updated_at === c.updated_at && p.unread_count === c.unread_count
+        && p.status === c.status && p.waiting_since === c.waiting_since
+        && p.assigned_id === c.assigned_id) return p;
+    return c;
+  };
+  return [...fresh.map(stabilize), ...rest];
 }
 
 // List the open conversations for the org's Chatwoot account.
@@ -284,14 +312,13 @@ async function fetchConversationsMerged(
 export function useInboxConversations(enabled = true, live = false) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
-  const mutating = useIsMutating() > 0;
   return useQuery({
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
     // Gentle fallback polling (realtime is the primary freshness path). 5s was too
     // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
-    refetchInterval: !enabled || mutating ? false : live ? 20000 : 15000,
+    refetchInterval: !enabled ? false : live ? 20000 : 15000,
     // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
     // realtime invalidate already keep this fresh. Without this, every focus
     // change re-ran the read-modify-write merge and re-rendered the whole inbox.
@@ -335,14 +362,13 @@ export function countUnreadConversations(conversations: InboxConversation[]): nu
 export function useInboxUnreadTotal(enabled = true) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
-  const mutating = useIsMutating() > 0;
   const query = useQuery({
     queryKey: ['inbox-conversations', organization?.id],
     // SAME queryFn as useInboxConversations — sharing the merge logic is what
     // stops the badge poll from clobbering the list cache.
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled && !mutating ? 20000 : false,
+    refetchInterval: enabled ? 20000 : false,
     staleTime: 10000,
     refetchOnWindowFocus: false,
   });
@@ -353,7 +379,6 @@ export function useInboxUnreadTotal(enabled = true) {
 // Passing altIds merges the threads of the contact's other conversations into one.
 export function useInboxMessages(conversationId: number | null, altIds: number[] = [], live = false) {
   const { organization } = useAuth();
-  const mutating = useIsMutating() > 0;
   const allIds = conversationId ? [conversationId, ...altIds] : [];
   return useQuery({
     queryKey: ['inbox-messages', organization?.id, conversationId, altIds.join(',')],
@@ -366,15 +391,21 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
       return res.messages || [];
     },
     enabled: !!organization?.id && !!conversationId,
-    // Suspend polling during a mutation so a refetch can't revert the optimistic
-    // bubble/patch mid-send. Relaxed fallback (was 2.5s, too heavy on a slow Chatwoot).
-    refetchInterval: !conversationId || mutating ? false : live ? 15000 : 8000,
+    // Realtime is the primary freshness path; polling is the safety net. When
+    // realtime is connected (live) a relaxed 20s net is plenty; when it isn't,
+    // poll every 8s so incoming messages don't lag tens of seconds. We do NOT
+    // suspend on global useIsMutating: the messages cache has no optimistic
+    // patches to protect (sends use local `pending` state, not the cache), and a
+    // background mark_read mutation was needlessly freezing the messages poll —
+    // that was why incoming messages took so long to appear after a read receipt.
+    refetchInterval: !conversationId ? false : live ? 20000 : 8000,
     // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
     // the poll already keep the open thread fresh.
     refetchOnWindowFocus: false,
-    // Keep already-opened conversations cached: switching back shows the thread
-    // instantly (background refetch updates it) instead of a full-screen loader.
-    gcTime: 30 * 60 * 1000,
+    // 5 minutes: long enough to switch back to a conversation without a reload,
+    // short enough not to accumulate message data across many conversations and
+    // exhaust browser memory (original 30min caused OOM in dev).
+    gcTime: 5 * 60 * 1000,
   });
 }
 
@@ -929,10 +960,11 @@ export function useScheduledMessages(phone: string | null | undefined) {
         .eq('status', 'pending')
         .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
         .order('send_at', { ascending: true });
-      if (error) throw error;
+      if (error) return []; // degrade gracefully (e.g. column not yet migrated)
       return (data ?? []) as ScheduledMessage[];
     },
     enabled: !!organization?.id && suffix.length >= 9,
+    retry: false,
     refetchInterval: 30000,
   });
 }

@@ -426,10 +426,11 @@ Deno.serve(async (req) => {
 
       // Chatwoot takes >1s PER page and serves few requests at once — 6 pages on
       // every poll was queueing the whole server ("loading forever"). Only the
-      // FIRST load fetches deep (6 pages); refreshes fetch the 2 newest pages
-      // (50 conversations by latest activity) and the client merges them into
-      // its cached list.
-      const pageNums = body.mode === 'fresh' ? [1, 2] : [1, 2, 3, 4, 5, 6];
+      // FIRST load fetches deep (3 pages = ~75 conversations); refreshes fetch
+      // the 2 newest pages and the client merges them into its cached list.
+      // (Reduced from 6 → 3 to cut initial memory footprint; the client caps its
+      // cache at 200 so historical pages beyond 3 rarely matter for active use.)
+      const pageNums = body.mode === 'fresh' ? [1, 2] : [1, 2, 3];
       const pages = await Promise.all(
         pageNums.map(async (page) => {
           // A slow/aborted page must NOT fail the whole list (Chatwoot can be slow

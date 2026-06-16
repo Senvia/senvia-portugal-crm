@@ -11,6 +11,20 @@ if (typeof window !== "undefined") {
     e.preventDefault();
     reloadOnce();
   });
+
+  // Log unhandled async errors to console AND localStorage so they survive a
+  // browser freeze (console is inaccessible when the tab hangs).
+  const saveErrorLog = (label: string, err: unknown) => {
+    try {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : String(err);
+      const entry = `[${new Date().toISOString()}] ${label}: ${msg}`;
+      console.error(entry);
+      const prev = sessionStorage.getItem("app:error-log") ?? "";
+      sessionStorage.setItem("app:error-log", (prev + "\n" + entry).slice(-4000));
+    } catch { /* noop */ }
+  };
+  window.addEventListener("unhandledrejection", (e) => saveErrorLog("UnhandledRejection", e.reason));
+  window.addEventListener("error", (e) => { if (e.error) saveErrorLog("GlobalError", e.error); });
 }
 
 // Register a lightweight push-notification service worker — production only.
