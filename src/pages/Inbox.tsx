@@ -2008,6 +2008,16 @@ export default function Inbox() {
                 </div>
               </div>
 
+              {/* Arquivar / Restaurar */}
+              <Button
+                variant="ghost"
+                size="icon"
+                title={isArchived ? "Restaurar conversa" : "Arquivar conversa"}
+                onClick={handleToggleArchive}
+              >
+                {isArchived ? <ArchiveRestore className="h-4 w-4 text-emerald-500" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+              </Button>
+
               {/* CRM: contacto associado → ficha + alterar; desconhecido → adicionar */}
               {contactMatch ? (
                 <div className="hidden items-center gap-1 sm:flex">
