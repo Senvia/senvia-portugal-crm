@@ -1,15 +1,24 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare, Search, X, FileEdit } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import {
+  Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon,
+  Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare,
+  Search, X, FileEdit, FolderInput, CheckCheck,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useEmailFolders, useEmailMessages, useEmailMessage, useEmailRealtime, useEmailSearch, useEmailDrafts, type EmailAttachment, type EmailDraft } from '@/hooks/useEmail';
+import {
+  useEmailFolders, useEmailMessages, useEmailMessage, useEmailRealtime,
+  useEmailSearch, useEmailDrafts,
+  type EmailAttachment, type EmailDraft, type EmailMessage,
+} from '@/hooks/useEmail';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { EmailComposer, type ComposeMode } from './EmailComposer';
-import { initials, fmtListDate, fmtFullDate, fmtSize, addrText } from './emailShared';
+import { initials, fmtListDate, fmtFullDate, fmtSize, addrText, folderLabel, ROLE_META } from './emailShared';
 
 // HTML body in a sandboxed, auto-sized iframe (consistent fonts).
 function EmailBody({ html, text }: { html: string | null; text: string | null }) {
@@ -130,21 +139,79 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [unreadOnly, setUnreadOnly] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 350); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { setSearch(''); setDebounced(''); }, [folderId, channelId]);
+  useEffect(() => { setSearch(''); setDebounced(''); setUnreadOnly(false); }, [folderId, channelId]);
   const searching = debounced.trim().length >= 2;
 
   const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(isDraftsFolder ? null : folderId);
   const { data: searchResults = [], isLoading: loadingSearch } = useEmailSearch(channelId, debounced);
   const { data: drafts = [], isLoading: loadingDrafts } = useEmailDrafts(isDraftsFolder ? channelId : null);
 
-  const messages = searching ? searchResults : folderMessages;
+  const unreadCount = folderMessages.filter((m) => !m.seen).length;
+  const baseMessages = searching ? searchResults : folderMessages;
+  const messages = (!searching && unreadOnly) ? baseMessages.filter((m) => !m.seen) : baseMessages;
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened } = useEmailMessage(messageId);
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
   const actions = useEmailActions(channelId, folderId);
+
+  // Multi-select ──────────────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  useEffect(() => { setSelectedIds(new Set()); }, [folderId, channelId]);
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const batchArchive = () => { [...selectedIds].forEach((id) => actions.archive(id)); clearSelection(); };
+  const batchTrash = () => { [...selectedIds].forEach((id) => actions.trash(id)); clearSelection(); };
+  const batchSpam = () => { [...selectedIds].forEach((id) => actions.spam(id)); clearSelection(); };
+  const batchSetRead = (read: boolean) => { [...selectedIds].forEach((id) => actions.setRead(id, read)); clearSelection(); };
+  const markAllRead = () => { if (folderId) actions.markFolderRead(folderId); };
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // "Carregar mais antigos" — asks the gateway to sync the next older batch.
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const prevCountRef = useRef(folderMessages.length);
+  useEffect(() => {
+    // Clear both spinners once the gateway synced more (list grew).
+    if (folderMessages.length !== prevCountRef.current) {
+      prevCountRef.current = folderMessages.length;
+      setLoadingOlder(false);
+      setSyncingUnread(false);
+    }
+  }, [folderMessages.length]);
+  useEffect(() => { setLoadingOlder(false); }, [folderId, channelId]);
+  const loadOlder = () => {
+    if (!folderId || loadingOlder) return;
+    setLoadingOlder(true);
+    actions.loadOlder(folderId);
+    // Safety timeout in case nothing new comes back (already fully synced).
+    setTimeout(() => setLoadingOlder(false), 15000);
+  };
+
+  // "Não lidos" filter: the folder badge counts ALL unread on IMAP, but only the
+  // recent window is synced — so unread mail can live outside it. When the filter
+  // is turned on and the folder has more unread than we've loaded, pull them.
+  const currentFolder = folders.find((f) => f.id === folderId);
+  const folderUnread = currentFolder?.unread_count ?? 0;
+  const [syncingUnread, setSyncingUnread] = useState(false);
+  useEffect(() => { setSyncingUnread(false); }, [folderId, channelId]);
+  const toggleUnread = () => {
+    const next = !unreadOnly;
+    setUnreadOnly(next);
+    if (next && folderId && folderUnread > unreadCount) {
+      setSyncingUnread(true);
+      actions.syncUnread(folderId);
+      setTimeout(() => setSyncingUnread(false), 15000);
+    }
+  };
 
   interface ComposeInstance {
     id: string;
@@ -165,6 +232,41 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   }, [opened?.message?.id]);
 
   const act = (fn: () => void) => { fn(); setMessageId(null); };
+
+  // Keyboard navigation ───────────────────────────────────────────────────────
+  // j/k or ↓/↑ to navigate; e=archive, #=delete, r=reply, u=mark unread, Esc=deselect
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') return;
+      const idx = messages.findIndex((m) => m.id === messageId);
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = messages[idx + 1];
+        if (next) setMessageId(next.id);
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = messages[idx - 1];
+        if (prev) setMessageId(prev.id);
+      } else if (e.key === 'e' && messageId && !isDraftsFolder) {
+        act(() => actions.archive(messageId));
+      } else if (e.key === '#' && messageId && !isDraftsFolder) {
+        act(() => actions.trash(messageId));
+      } else if (e.key === 'r' && opened?.message) {
+        addCompose('reply', opened.message);
+      } else if (e.key === 'u' && messageId && !isDraftsFolder) {
+        actions.setRead(messageId, false);
+        setMessageId(null);
+      } else if (e.key === 'Escape') {
+        clearSelection();
+        setMessageId(null);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, messageId, opened, isDraftsFolder, selectedIds]);
+  // ───────────────────────────────────────────────────────────────────────────
 
   const { toast } = useToast();
   const [dlId, setDlId] = useState<string | null>(null);
@@ -190,6 +292,8 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
     }
   };
 
+  const hasSelection = selectedIds.size > 0;
+
   return (
     <>
       {/* Message list — resizable via drag handle on right border */}
@@ -199,19 +303,49 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
           onMouseDown={onResizeStart}
           className="absolute inset-y-0 right-0 z-10 w-[4px] cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors"
         />
-        <header className="space-y-2 border-b px-4 pt-5 pb-3">
-          <div className="flex items-center justify-between">
-            <Button size="sm" onClick={() => addCompose('new')}>
-              <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {isDraftsFolder
-                ? `${drafts.length} ${drafts.length === 1 ? 'rascunho' : 'rascunhos'}`
-                : searching
-                  ? `${messages.length} resultado(s)`
-                  : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
-            </span>
-          </div>
+        <header className="border-b px-4 pt-5 pb-3 space-y-2">
+          {hasSelection ? (
+            /* Batch action bar */
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+                title="Cancelar seleção"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+              </span>
+              <div className="flex-1" />
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => batchSetRead(true)}>
+                Lido
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Arquivar" onClick={batchArchive}>
+                <Archive className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Spam" onClick={batchSpam}>
+                <ShieldAlert className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Apagar" onClick={batchTrash}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <Button size="sm" onClick={() => addCompose('new')}>
+                <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {isDraftsFolder
+                  ? `${drafts.length} ${drafts.length === 1 ? 'rascunho' : 'rascunhos'}`
+                  : searching
+                    ? `${messages.length} resultado(s)`
+                    : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
+              </span>
+            </div>
+          )}
           {!isDraftsFolder && (
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -227,6 +361,43 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
+            </div>
+          )}
+          {/* Unread filter + mark-all-read */}
+          {!isDraftsFolder && !searching && !hasSelection && (
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={toggleUnread}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                  unreadOnly ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:bg-accent',
+                )}
+              >
+                Não lidos{folderUnread > 0 ? ` (${folderUnread})` : ''}
+              </button>
+              {folderUnread > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" /> Marcar todas como lidas
+                </button>
+              )}
+            </div>
+          )}
+          {/* Select all row — shown when items are selected */}
+          {hasSelection && messages.length > 0 && (
+            <div className="flex items-center gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => selectedIds.size === messages.length ? clearSelection() : setSelectedIds(new Set(messages.map((m) => m.id)))}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                {selectedIds.size === messages.length ? 'Desselecionar todos' : `Selecionar todos (${messages.length})`}
+              </button>
             </div>
           )}
         </header>
@@ -246,39 +417,84 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               ))
             )
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
-              <InboxIcon className="h-8 w-8 opacity-30" /><span className="text-sm">Pasta vazia</span>
-            </div>
+            syncingUnread ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin opacity-50" /><span className="text-sm">A procurar não lidos...</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+                <InboxIcon className="h-8 w-8 opacity-30" />
+                <span className="text-sm">{unreadOnly ? 'Sem emails não lidos' : 'Pasta vazia'}</span>
+              </div>
+            )
           ) : (
             messages.map((m) => {
               const active = m.id === messageId;
+              const selected = selectedIds.has(m.id);
               const who = m.from_name || m.from_address || '(desconhecido)';
               return (
-                <button
+                <div
                   key={m.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setMessageId(m.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && setMessageId(m.id)}
                   className={cn(
-                    'flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors',
+                    'group flex w-full cursor-pointer items-start border-b text-left transition-colors',
                     active ? 'bg-accent' : 'hover:bg-accent/50',
-                    !m.seen && 'bg-primary/[0.03]',
+                    !m.seen && !active && 'bg-primary/[0.03]',
+                    selected && 'bg-primary/10',
                   )}
                 >
-                  <div className="flex items-center gap-2">
-                    {!m.seen && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                    <span className={cn('min-w-0 flex-1 truncate text-sm', !m.seen ? 'font-bold' : 'font-medium')}>{who}</span>
-                    {m.flagged && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
-                    <span className="shrink-0 text-[11px] text-muted-foreground">{fmtListDate(m.date)}</span>
+                  {/* Checkbox — visible on hover or when any row is selected */}
+                  <div
+                    className={cn(
+                      'flex shrink-0 items-center self-stretch pl-3 pr-1 pt-[14px] transition-opacity',
+                      !hasSelection && 'opacity-0 group-hover:opacity-100',
+                    )}
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(m.id); }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => {}}
+                      className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-primary focus:ring-0 focus:ring-offset-0"
+                    />
                   </div>
-                  <span className={cn('truncate text-sm', !m.seen ? 'font-semibold text-foreground' : 'text-foreground/80')}>
-                    {m.subject || '(sem assunto)'}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {m.has_attachments && <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                    <span className="truncate text-xs text-muted-foreground">{m.snippet || ''}</span>
+                  {/* Message content */}
+                  <div className={cn('flex min-w-0 flex-1 flex-col gap-0.5 py-3 pr-4', hasSelection ? 'pl-1' : 'pl-3')}>
+                    <div className="flex items-center gap-2">
+                      {!m.seen && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                      <span className={cn('min-w-0 flex-1 truncate text-sm', !m.seen ? 'font-bold' : 'font-medium')}>{who}</span>
+                      {m.flagged && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{fmtListDate(m.date)}</span>
+                    </div>
+                    <span className={cn('truncate text-sm', !m.seen ? 'font-semibold text-foreground' : 'text-foreground/80')}>
+                      {m.subject || '(sem assunto)'}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {m.has_attachments && <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                      <span className="truncate text-xs text-muted-foreground">{m.snippet || ''}</span>
+                    </div>
                   </div>
-                </button>
+                </div>
               );
             })
+          )}
+          {/* Load older — asks the gateway to sync the next batch from IMAP */}
+          {!isDraftsFolder && !searching && !isLoading && messages.length > 0 && (
+            <div className="p-3">
+              <button
+                type="button"
+                onClick={loadOlder}
+                disabled={loadingOlder}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+              >
+                {loadingOlder
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> A carregar mais antigos...</>
+                  : 'Carregar mais antigos'}
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -294,6 +510,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <Mail className="h-10 w-10 opacity-30" />
             <p className="text-sm">Seleciona um email para ler</p>
+            <p className="text-xs text-muted-foreground/60">j/k para navegar · e arquivar · # apagar · r responder</p>
           </div>
         ) : (
           <>
@@ -307,6 +524,33 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               <Button size="icon" variant="ghost" title="Arquivar" onClick={() => act(() => actions.archive(opened.message.id))}><Archive className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" title="Marcar como spam" onClick={() => act(() => actions.spam(opened.message.id))}><ShieldAlert className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" title="Apagar" onClick={() => act(() => actions.trash(opened.message.id))}><Trash2 className="h-4 w-4" /></Button>
+
+              {/* Move to folder */}
+              {folders.length > 1 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="icon" variant="ghost" title="Mover para pasta">
+                      <FolderInput className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-48 p-1">
+                    <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Mover para</p>
+                    {folders.filter((f) => f.id !== folderId).map((f) => {
+                      const { Icon } = ROLE_META[f.role];
+                      return (
+                        <button
+                          key={f.id}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                          onClick={() => act(() => actions.move(opened.message.id, f.id))}
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          {folderLabel(f)}
+                        </button>
+                      );
+                    })}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">

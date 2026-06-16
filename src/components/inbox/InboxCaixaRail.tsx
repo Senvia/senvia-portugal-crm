@@ -4,6 +4,20 @@ import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
 import { EmailFolderList } from '@/components/email/EmailFolderList';
+import { useEmailFolders } from '@/hooks/useEmail';
+
+function EmailChannelBadge({ channelId }: { channelId: string }) {
+  const { data: folders = [] } = useEmailFolders(channelId);
+  const unread = folders
+    .filter((f) => f.role !== 'sent' && f.role !== 'drafts')
+    .reduce((s, f) => s + (f.unread_count || 0), 0);
+  if (!unread) return null;
+  return (
+    <span className="ml-1 shrink-0 rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold leading-none text-primary-foreground">
+      {unread > 99 ? '99+' : unread}
+    </span>
+  );
+}
 
 function dotColor(ch: MessagingChannel) {
   if (ch.color) return ch.color;
@@ -13,9 +27,22 @@ function dotColor(ch: MessagingChannel) {
   return '#64748b';
 }
 
+function CountBadge({ n, active }: { n: number; active?: boolean }) {
+  if (!n) return null;
+  return (
+    <span className={cn(
+      'ml-1 shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold leading-none',
+      active ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-primary',
+    )}>
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
+
 export function InboxCaixaRail({
   caixas,
   caixaFilter,
+  unreadByInbox,
   emailChannelId,
   emailFolderId,
   onSelectAll,
@@ -25,6 +52,7 @@ export function InboxCaixaRail({
 }: {
   caixas: MessagingChannel[];
   caixaFilter: number | null;
+  unreadByInbox?: Map<number, number>;
   emailChannelId: string | null;
   emailFolderId: string | null;
   onSelectAll: () => void;
@@ -70,6 +98,9 @@ export function InboxCaixaRail({
   const messaging = caixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
   const allActive = !emailChannelId && caixaFilter === null;
+  const unreadFor = (ch: MessagingChannel) =>
+    ch.chatwoot_inbox_id != null ? (unreadByInbox?.get(ch.chatwoot_inbox_id) ?? 0) : 0;
+  const totalUnread = messaging.reduce((s, ch) => s + unreadFor(ch), 0);
 
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r bg-muted/20 md:flex">
@@ -113,6 +144,7 @@ export function InboxCaixaRail({
         >
           <InboxIcon className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Todas as conversas</span>
+          <CountBadge n={totalUnread} active={allActive} />
         </button>
 
         {messaging.map((ch) => {
@@ -128,6 +160,7 @@ export function InboxCaixaRail({
             >
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dotColor(ch) }} />
               <span className="min-w-0 flex-1 truncate text-left">{ch.label || 'WhatsApp'}</span>
+              <CountBadge n={unreadFor(ch)} active={active} />
             </button>
           );
         })}
@@ -149,6 +182,7 @@ export function InboxCaixaRail({
                   >
                     <Mailbox className="h-4 w-4 shrink-0" style={ch.color ? { color: ch.color } : undefined} />
                     <span className="min-w-0 flex-1 truncate text-left">{ch.label || 'Email'}</span>
+                    <EmailChannelBadge channelId={ch.id} />
                     {expanded
                       ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -156,7 +190,8 @@ export function InboxCaixaRail({
                   {expanded && (
                     <EmailFolderList
                       channelId={ch.id}
-                      activeFolderId={emailFolderId}
+                      activeFolderId={emailChannelId === ch.id ? emailFolderId : null}
+                      isActive={emailChannelId === ch.id}
                       onSelect={(fid) => {
                         if (emailChannelId !== ch.id) onSelectEmail(ch);
                         onSelectFolder(fid);

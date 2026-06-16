@@ -3,7 +3,7 @@
 // exposes a small authenticated API for the CRM's Edge Functions to call.
 import 'dotenv/config';
 import Fastify from 'fastify';
-import { startAll, stopAll, managerStatus, getManager } from './idle.js';
+import { startAll, stopAll, managerStatus, getManager, refreshChannels } from './idle.js';
 import { startCommandLoop } from './commands.js';
 import { getEmailCaixa } from './caixas.js';
 import { fetchMessageBody } from './sync.js';
@@ -26,6 +26,12 @@ function authed(req, reply, done) {
 
 // Health / status — handy for monitoring and for confirming caixas are connected.
 app.get('/health', async () => ({ ok: true, caixas: managerStatus() }));
+
+// Detect and start any channels added since gateway startup (also runs automatically every 60s).
+app.post('/channels/refresh', { preHandler: authed }, async () => {
+  const added = await refreshChannels();
+  return { ok: true, added, caixas: managerStatus() };
+});
 
 // Force a full resync of a caixa.
 app.post('/caixas/:id/sync', { preHandler: authed }, async (req, reply) => {

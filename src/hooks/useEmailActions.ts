@@ -82,6 +82,10 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
     qc.setQueryData(['email-messages', folderId], (old: EmailMessage[] | undefined) =>
       Array.isArray(old) ? old.map((m) => (m.id === messageId ? { ...m, ...patch } : m)) : old);
   };
+  const patchAll = (patch: Partial<EmailMessage>) => {
+    qc.setQueryData(['email-messages', folderId], (old: EmailMessage[] | undefined) =>
+      Array.isArray(old) ? old.map((m) => ({ ...m, ...patch })) : old);
+  };
   const removeFromList = (messageId: string) => {
     qc.setQueryData(['email-messages', folderId], (old: EmailMessage[] | undefined) =>
       Array.isArray(old) ? old.filter((m) => m.id !== messageId) : old);
@@ -94,6 +98,9 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
     spam: (id: string) => { removeFromList(id); return queue('spam', { messageId: id }); },
     trash: (id: string) => { removeFromList(id); return queue('delete', { messageId: id }); },
     move: (id: string, targetFolderId: string) => { removeFromList(id); return queue('move', { messageId: id, targetFolderId }); },
+    markFolderRead: (targetFolderId: string) => { patchAll({ seen: true }); return queue('mark_folder_read', { folderId: targetFolderId }); },
+    loadOlder: (targetFolderId: string, batch = 40) => queue('load_older', { folderId: targetFolderId, batch }),
+    syncUnread: (targetFolderId: string) => queue('sync_unread', { folderId: targetFolderId }),
     fetchAttachment: (attachmentId: string) => queue('fetch_attachment', { attachmentId }),
     send: (payload: SendPayload) => queue('send', payload as unknown as Record<string, unknown>),
     saveDraft,

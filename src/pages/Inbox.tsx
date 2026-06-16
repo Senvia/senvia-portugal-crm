@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo, lazy, Suspense } from "react";
 import { useWhatsappChannel, useMessagingChannels, MessagingChannel } from "@/hooks/useMessagingChannels";
 import {
   useInboxConversations,
@@ -59,10 +59,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useClientProposals, useClientSales } from "@/hooks/useClientHistory";
 import { useClient } from "@/hooks/useClients";
 import { useLeadById, useUpdateLeadStatus, useUpdateLead } from "@/hooks/useLeads";
-import { CreateClientModal } from "@/components/clients/CreateClientModal";
-import { EditClientModal } from "@/components/clients/EditClientModal";
-import { AddLeadModal } from "@/components/leads/AddLeadModal";
-import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
+const CreateClientModal = lazy(() => import("@/components/clients/CreateClientModal").then(m => ({ default: m.CreateClientModal })));
+const EditClientModal = lazy(() => import("@/components/clients/EditClientModal").then(m => ({ default: m.EditClientModal })));
+const AddLeadModal = lazy(() => import("@/components/leads/AddLeadModal").then(m => ({ default: m.AddLeadModal })));
+const LeadDetailsModal = lazy(() => import("@/components/leads/LeadDetailsModal").then(m => ({ default: m.LeadDetailsModal })));
 import { ConnectWhatsAppModal } from "@/components/settings/ConnectWhatsAppModal";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -88,6 +88,8 @@ import {
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useQueryClient } from "@tanstack/react-query";
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
@@ -415,6 +417,7 @@ function ContactAvatar({ name, src, className }: { name: string; src?: string | 
       <img
         src={src}
         alt={name}
+        loading="lazy"
         onError={() => setErrored(true)}
         className={cn("shrink-0 rounded-full object-cover", className)}
       />
@@ -447,10 +450,47 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
 
 type ListTab = "all" | "unread" | "waiting" | "mine" | "archived";
 
+// DEV / opt-in diagnostic switch for the inbox memory probe. Set
+// localStorage["inbox-debug"]="1" to enable it in a production preview build.
+const MEM_DEBUG = import.meta.env.DEV
+  || (typeof window !== "undefined" && (() => { try { return window.localStorage.getItem("inbox-debug") === "1"; } catch { return false; } })());
+
+// --- Render-loop detector. Module-level so it survives re-renders without a
+// hook. Counts, per watched value, how many renders changed its reference. The
+// key whose count tracks the total render count is the loop driver. Results are
+// stamped into localStorage("_idiff") so they survive the OOM freeze.
+let _prevSnap: Record<string, unknown> | null = null;
+const _diffCounts: Record<string, number> = {};
+let _diffRenders = 0;
+let _mountCount = 0; // bumped by the Inbox mount effect; mounts≈renders ⇒ remount-loop, mounts=1 ⇒ rerender-loop
+function _trackRenderLoop(snap: Record<string, unknown>) {
+  _diffRenders++;
+  if (_prevSnap) {
+    for (const k of Object.keys(snap)) {
+      if (!Object.is(snap[k], _prevSnap[k])) _diffCounts[k] = (_diffCounts[k] || 0) + 1;
+    }
+  }
+  _prevSnap = snap;
+  if (_diffRenders % 50 === 0) {
+    try {
+      const top = Object.entries(_diffCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      localStorage.setItem("_idiff", `renders=${_diffRenders} mounts=${_mountCount} | ${top.map(([k, v]) => `${k}:${v}`).join(" ")}`);
+    } catch { /* quota */ }
+  }
+}
+
 export default function Inbox() {
+  // crash probe: count renders + mark furthest point reached this render.
+  try {
+    const n = (parseInt(localStorage.getItem("_icount") || "0", 10) || 0) + 1;
+    localStorage.setItem("_icount", String(n));
+    localStorage.setItem("_ic", "A0");
+  } catch {}
   const { channel } = useWhatsappChannel();
+  try { localStorage.setItem("_ic", "A1"); } catch {} // after useWhatsappChannel
   const connected = channel?.status === "connected";
   const { data: channels = [] } = useMessagingChannels();
+  try { localStorage.setItem("_ic", "A2"); } catch {} // after useMessagingChannels
   // Caixas that map to a known Chatwoot inbox (so we can filter conversations by them).
   const channelByInbox = useMemo(() => {
     const m = new Map<number, MessagingChannel>();
@@ -460,7 +500,27 @@ export default function Inbox() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  try { localStorage.setItem("_ic", "A3"); } catch {} // after useAuth
   const { isAdmin } = usePermissions();
+  try { localStorage.setItem("_ic", "A4"); } catch {} // after usePermissions
+  const queryClient = useQueryClient();
+  // On hard reload both the old and new V8 context coexist briefly. Clear the
+  // cache in beforeunload so the old heap is as small as possible when the new
+  // page starts compiling.
+  useEffect(() => {
+    const handler = () => queryClient.clear();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [queryClient]);
+  // Defer the heavy JSX tree by one rAF tick. This lets the old page's GC run
+  // between hook initialisation (frame 0) and VDOM construction (frame 1),
+  // reducing the peak heap size on the first render after a hard reload.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setReady(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+  useEffect(() => { _mountCount++; }, []); // diagnostics: count real mounts
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
   const visibleCaixas = useMemo(
@@ -549,6 +609,7 @@ export default function Inbox() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
   const prevSelectedRef = useRef<number | null>(null);
   // Latest list/selection/action for the singly-bound keyboard handler.
@@ -568,6 +629,7 @@ export default function Inbox() {
   const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
+  try { localStorage.setItem("_ic", "B"); } catch {} // crash probe B: before realtime/conversations
   const live = useInboxRealtime();
   const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
   const selected = conversations.find((c) => c.id === selectedId) || null;
@@ -598,6 +660,7 @@ export default function Inbox() {
   const createCanned = useCreateCannedResponse();
   const deleteCanned = useDeleteCannedResponse();
   const deleteMessage = useDeleteMessage();
+  try { localStorage.setItem("_ic", "C"); } catch {} // crash probe C: before CRM/scheduling
   const { data: teamMembers = [] } = useTeamMembers();
   const createEvent = useCreateEvent();
 
@@ -647,6 +710,7 @@ export default function Inbox() {
   const cancelScheduled = useCancelScheduledMessage();
   const { data: autoReplyConfig } = useAutoReplyConfig();
   const saveAutoReply = useSaveAutoReplyConfig();
+  try { localStorage.setItem("_ic", "D"); } catch {} // crash probe D: before tasks
   const createCommunication = useCreateCommunication();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -755,6 +819,16 @@ export default function Inbox() {
     [visible, caixaFilter],
   );
   const unreadTotal = useMemo(() => countUnreadConversations(scoped), [scoped]);
+  // Unread conversation count per messaging caixa (inbox_id) for the rail badges.
+  const unreadByInbox = useMemo(() => {
+    const muted = new Set(loadMutedIds());
+    const map = new Map<number, number>();
+    for (const c of visible) {
+      if (c.status === "resolved" || muted.has(c.id) || (c.unread_count || 0) <= 0 || c.inbox_id == null) continue;
+      map.set(c.inbox_id, (map.get(c.inbox_id) || 0) + 1);
+    }
+    return map;
+  }, [visible]);
   const waitingTotal = useMemo(
     () => scoped.filter((c) => c.status !== "resolved" && !!c.waiting_since).length,
     [scoped],
@@ -825,6 +899,49 @@ export default function Inbox() {
     return rows;
   }, [thread]);
 
+  // DEV-only diagnostic for the inbox OOM/freeze: samples the JS heap + render
+  // rate once a second so the next crash leaves a trail (console + sessionStorage
+  // key "inbox-mem-last"). A linearly climbing heap = leak; a sudden spike = one
+  // big allocation (e.g. an email body); renders/s in the hundreds = a render loop.
+  const renderCountRef = useRef(0);
+  const memSnapRef = useRef({ thread: 0, convs: 0, sel: null as number | null, live: false });
+  useEffect(() => {
+    renderCountRef.current++;
+    memSnapRef.current = { thread: thread.length, convs: conversations.length, sel: selectedId, live };
+    // Catch a render LOOP even if the 500ms sampler never gets a turn: every 100
+    // commits, stamp the count so the trail survives the freeze.
+    if (MEM_DEBUG && renderCountRef.current % 100 === 0) {
+      try { sessionStorage.setItem("inbox-render-burst", `${renderCountRef.current} renders @ ${new Date().toISOString().slice(11, 23)}`); } catch { /* quota */ }
+    }
+  });
+  useEffect(() => {
+    if (!MEM_DEBUG) return;
+    let last = 0;
+    const sample = () => {
+      const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+      const used = mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1;
+      const limit = mem ? Math.round(mem.jsHeapSizeLimit / 1048576) : -1;
+      const renders = renderCountRef.current;
+      const delta = renders - last;
+      last = renders;
+      const s = memSnapRef.current;
+      const clock = new Date().toISOString().slice(11, 23);
+      const line = `${clock} heap=${used}/${limit}MB renders=${renders}(+${delta}) thread=${s.thread} convs=${s.convs} sel=${s.sel ?? "none"} live=${s.live}`;
+      const hot = delta > 15 || (limit > 0 && used / limit > 0.8);
+      if (hot) console.warn("[inbox-mem]", line);
+      else console.log("[inbox-mem]", line);
+      // Ring buffer (last 30 samples = ~15s) survives the crash in sessionStorage,
+      // so after the tab dies + reloads we can read the trajectory leading up to it.
+      try {
+        const prev = sessionStorage.getItem("inbox-mem-trace") ?? "";
+        sessionStorage.setItem("inbox-mem-trace", (prev + "\n" + line).split("\n").slice(-30).join("\n"));
+      } catch { /* quota */ }
+    };
+    sample();
+    const id = window.setInterval(sample, 500);
+    return () => window.clearInterval(id);
+  }, []);
+
   // Drop optimistic bubbles once the real (mirrored) message arrives in the feed.
   // Attachment/voice bubbles never text-match the mirror, so confirmed ("sent")
   // bubbles also expire after 8s — by then the mirror is in the thread.
@@ -876,7 +993,12 @@ export default function Inbox() {
       }, 50);
       return;
     }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only follow to the bottom when the agent is already near it — don't yank
+    // the view (a synchronous full-thread reflow) while they read older history.
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
@@ -1249,6 +1371,16 @@ export default function Inbox() {
 
   // Keep the keyboard handler's data fresh without rebinding the listener.
   kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
+
+  // Virtual list for the conversation panel — only renders ~15 visible rows
+  // instead of the full 200-cap, dramatically reducing DOM nodes and memory.
+  const ROW_HEIGHT = 73; // px: border-b + py-3 (24px) + two text lines (~49px)
+  const listVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  });
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
   // / search, c new conversation, n toggle note. Ignored while typing. ----
   useEffect(() => {
@@ -1378,6 +1510,16 @@ export default function Inbox() {
       },
     );
   };
+
+  try { localStorage.setItem("_ic", "E"); } catch {} // crash probe E: all hooks done
+  _trackRenderLoop({
+    channel, channels, conversations, selected, messages, searchResults,
+    labels, canned, teamMembers, phoneMatch, contactMatch, crmRecord,
+    openProposals, openSales, linkResults, scheduledMsgs, autoReplyConfig,
+    user, openTasks, myTasks, taskStateByPhone, visible, filtered, thread,
+    threadRows, channelByInbox, visibleCaixas, emailInboxIds, pending,
+    selectedId, live, ready, search, debouncedSearch, tab, caixaFilter,
+  });
 
   // ---- Empty state: no caixa connected yet ----
   if (!channelConfigured) {
@@ -1768,6 +1910,11 @@ export default function Inbox() {
     </div>
   );
 
+  try { localStorage.setItem("_ic", "F"); } catch {} // crash probe F: before JSX
+  // Frame 0: hooks run but JSX is skipped — gives GC a chance between hook
+  // initialisation and the full VDOM tree build (see rAF effect above).
+  if (!ready) return null;
+
   // Thread rows with date separators interleaved. Consecutive messages from the
   // same sender within a short window are grouped: only the LAST keeps a tail +
   // timestamp, and the gap between them tightens — the WhatsApp "grouped" look.
@@ -1790,6 +1937,7 @@ export default function Inbox() {
       <InboxCaixaRail
         caixas={visibleCaixas}
         caixaFilter={caixaFilter}
+        unreadByInbox={unreadByInbox}
         emailChannelId={emailChannelId}
         emailFolderId={emailFolderId}
         onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); }}
@@ -1904,7 +2052,7 @@ export default function Inbox() {
           {/* Caixa selection moved to the unified left rail (InboxCaixaRail) */}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listScrollRef} className="flex-1 overflow-y-auto">
           {loadingConvos ? (
             <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1925,20 +2073,35 @@ export default function Inbox() {
                         : "Ainda não há conversas. Quando um cliente enviar uma mensagem, ela aparece aqui."}
             </div>
           ) : (
-            filtered.map((c) => (
-              <ConversationRow
-                key={c.id}
-                conversation={c}
-                active={c.id === selectedId}
-                pinned={pinned.includes(c.id)}
-                muted={muted.includes(c.id)}
-                taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
-                viewers={presence.get(c.id)}
-                caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
-                caixaColor={c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.color ?? null : null}
-                onSelect={setSelectedId}
-              />
-            ))
+            <div style={{ height: listVirtualizer.getTotalSize(), position: "relative" }}>
+              {listVirtualizer.getVirtualItems().map((vItem) => {
+                const c = filtered[vItem.index];
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${vItem.start}px)`,
+                    }}
+                  >
+                    <ConversationRow
+                      conversation={c}
+                      active={c.id === selectedId}
+                      pinned={pinned.includes(c.id)}
+                      muted={muted.includes(c.id)}
+                      taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
+                      viewers={presence.get(c.id)}
+                      caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
+                      caixaColor={c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.color ?? null : null}
+                      onSelect={setSelectedId}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </aside>
@@ -2002,7 +2165,7 @@ export default function Inbox() {
                       {selected.assigned_name}
                     </span>
                   )}
-                  {selected.labels.map((l) => (
+                  {(selected.labels ?? []).map((l) => (
                     <span key={l} className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary">{formatLabel(l)}</span>
                   ))}
                 </div>
@@ -2702,7 +2865,7 @@ export default function Inbox() {
 
       {/* Modais nativos de criação — com dados do contacto pré-preenchidos */}
       {selected && (
-        <>
+        <Suspense fallback={null}>
           <CreateClientModal
             open={createClientModalOpen}
             onOpenChange={setCreateClientModalOpen}
@@ -2744,7 +2907,7 @@ export default function Inbox() {
             onUpdate={(leadId, updates) => updateLeadInline.mutate({ leadId, updates })}
             inboxContact={{ name: selected.contact_name, phone: selected.contact_phone }}
           />
-        </>
+        </Suspense>
       )}
 
       {/* Custom reminder date/time */}

@@ -5,7 +5,7 @@ import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import { simpleParser } from 'mailparser';
 import { getEmailCaixa, smtpTransport } from './caixas.js';
 import { getManager } from './idle.js';
-import { syncFolderMessages } from './sync.js';
+import { syncFolderMessages, syncOlderMessages, syncUnreadMessages, backfillBodies } from './sync.js';
 import { q } from './db.js';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -150,6 +150,36 @@ async function execute(cmd) {
       const target = await folderById(p.targetFolderId);
       if (!target) throw new Error('pasta destino inexistente');
       return doMove(client, caixa, m, target);
+    }
+    case 'mark_folder_read': {
+      const target = await folderById(p.folderId);
+      if (!target) throw new Error('pasta inexistente');
+      const lock = await client.getMailboxLock(target.path);
+      try {
+        // One IMAP op: add \Seen to every UNSEEN message in the folder.
+        const unseen = await client.search({ seen: false }, { uid: true });
+        if (unseen.length) await client.messageFlagsAdd(unseen, ['\\Seen'], { uid: true });
+      } finally { lock.release(); }
+      await q(`UPDATE email_messages SET seen=true, updated_at=now() WHERE folder_id=$1 AND seen=false`, [target.id]);
+      return updateCounts(client, target.id);
+    }
+    case 'load_older': {
+      const target = await folderById(p.folderId);
+      if (!target) throw new Error('pasta inexistente');
+      const n = await syncOlderMessages(client, caixa, target, p.batch || 40);
+      if (n) await backfillBodies(client, caixa, p.batch || 40, target.id);
+      await updateCounts(client, target.id);
+      log(`load_older: +${n} em ${target.path}`);
+      return;
+    }
+    case 'sync_unread': {
+      const target = await folderById(p.folderId);
+      if (!target) throw new Error('pasta inexistente');
+      const n = await syncUnreadMessages(client, caixa, target, 200);
+      if (n) await backfillBodies(client, caixa, 80, target.id);
+      await updateCounts(client, target.id);
+      log(`sync_unread: +${n} em ${target.path}`);
+      return;
     }
     case 'fetch_attachment': return fetchAttachment(client, p.attachmentId);
     case 'send': return sendMail(caixa, p);

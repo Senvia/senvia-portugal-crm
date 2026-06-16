@@ -107,13 +107,14 @@ export async function fetchMessageBody(client, channel, msg) {
 }
 
 // Fetch bodies for messages of a caixa that don't have one yet (eager backfill).
-export async function backfillBodies(client, caixa, cap = 150) {
+// Pass folderId to scope the backfill to a single folder (used by "load older").
+export async function backfillBodies(client, caixa, cap = 150, folderId = null) {
   const pending = await q(
     `SELECT m.id, m.uid, f.path
        FROM email_messages m JOIN email_folders f ON f.id = m.folder_id
-      WHERE m.channel_id=$1 AND m.body_fetched=false
+      WHERE m.channel_id=$1 AND m.body_fetched=false ${folderId ? 'AND m.folder_id=$3' : ''}
       ORDER BY m.date DESC LIMIT $2`,
-    [caixa.id, cap],
+    folderId ? [caixa.id, cap, folderId] : [caixa.id, cap],
   );
   let done = 0;
   for (const msg of pending) {
@@ -133,6 +134,37 @@ export async function syncCaixaFull(client, caixa, { perFolder = 40, bodyCap = 1
   return byPath;
 }
 
+// Insert/update one message header row from a fetched IMAP message.
+async function insertHeader(channel, folder, msg) {
+  const env = msg.envelope || {};
+  const from = env.from?.[0] || {};
+  const refs = (env.inReplyTo ? [stripBrackets(env.inReplyTo)] : []);
+  const messageId = stripBrackets(env.messageId);
+  const threadId = refs[0] || stripBrackets(env.inReplyTo) || messageId;
+  await q(
+    `INSERT INTO email_messages
+       (organization_id, channel_id, folder_id, uid, message_id, thread_id, in_reply_to,
+        from_name, from_address, to_addresses, cc_addresses, bcc_addresses,
+        subject, date, seen, flagged, answered, draft, has_attachments, size, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20, now())
+     ON CONFLICT (channel_id, folder_id, uid) DO UPDATE SET
+       seen=EXCLUDED.seen, flagged=EXCLUDED.flagged, answered=EXCLUDED.answered,
+       draft=EXCLUDED.draft, updated_at=now()`,
+    [
+      channel.organization_id, channel.id, folder.id, Number(msg.uid),
+      messageId, threadId, stripBrackets(env.inReplyTo),
+      from.name || '', from.address || '',
+      JSON.stringify(addrs(env.to)), JSON.stringify(addrs(env.cc)), JSON.stringify(addrs(env.bcc)),
+      env.subject || '', env.date || msg.internalDate || null,
+      msg.flags?.has('\\Seen') || false, msg.flags?.has('\\Flagged') || false,
+      msg.flags?.has('\\Answered') || false, msg.flags?.has('\\Draft') || false,
+      hasAttachments(msg.bodyStructure), msg.size || null,
+    ],
+  );
+}
+
+const FETCH_FIELDS = { uid: true, envelope: true, flags: true, size: true, bodyStructure: true, internalDate: true };
+
 // Sync the most recent `limit` messages (headers only) of one folder into email_messages.
 export async function syncFolderMessages(client, channel, folder, limit = 50) {
   const lock = await client.getMailboxLock(folder.path);
@@ -141,34 +173,49 @@ export async function syncFolderMessages(client, channel, folder, limit = 50) {
     const total = client.mailbox.exists;
     if (!total) return 0;
     const start = Math.max(1, total - limit + 1);
-    for await (const msg of client.fetch(`${start}:*`, {
-      uid: true, envelope: true, flags: true, size: true, bodyStructure: true, internalDate: true,
-    })) {
-      const env = msg.envelope || {};
-      const from = env.from?.[0] || {};
-      const refs = (env.inReplyTo ? [stripBrackets(env.inReplyTo)] : []);
-      const messageId = stripBrackets(env.messageId);
-      const threadId = refs[0] || stripBrackets(env.inReplyTo) || messageId;
-      await q(
-        `INSERT INTO email_messages
-           (organization_id, channel_id, folder_id, uid, message_id, thread_id, in_reply_to,
-            from_name, from_address, to_addresses, cc_addresses, bcc_addresses,
-            subject, date, seen, flagged, answered, draft, has_attachments, size, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20, now())
-         ON CONFLICT (channel_id, folder_id, uid) DO UPDATE SET
-           seen=EXCLUDED.seen, flagged=EXCLUDED.flagged, answered=EXCLUDED.answered,
-           draft=EXCLUDED.draft, updated_at=now()`,
-        [
-          channel.organization_id, channel.id, folder.id, Number(msg.uid),
-          messageId, threadId, stripBrackets(env.inReplyTo),
-          from.name || '', from.address || '',
-          JSON.stringify(addrs(env.to)), JSON.stringify(addrs(env.cc)), JSON.stringify(addrs(env.bcc)),
-          env.subject || '', env.date || msg.internalDate || null,
-          msg.flags?.has('\\Seen') || false, msg.flags?.has('\\Flagged') || false,
-          msg.flags?.has('\\Answered') || false, msg.flags?.has('\\Draft') || false,
-          hasAttachments(msg.bodyStructure), msg.size || null,
-        ],
-      );
+    for await (const msg of client.fetch(`${start}:*`, FETCH_FIELDS)) {
+      await insertHeader(channel, folder, msg);
+      count++;
+    }
+  } finally {
+    lock.release();
+  }
+  return count;
+}
+
+// Sync the headers of all UNSEEN messages in a folder (regardless of how deep they
+// are), so the "Não lidos" filter can show unread mail outside the recent window.
+export async function syncUnreadMessages(client, channel, folder, cap = 200) {
+  const lock = await client.getMailboxLock(folder.path);
+  let count = 0;
+  try {
+    const unseen = await client.search({ seen: false }, { uid: true });
+    if (!unseen?.length) return 0;
+    const slice = unseen.slice(-cap); // newest `cap` unseen if there are very many
+    for await (const msg of client.fetch(slice, FETCH_FIELDS, { uid: true })) {
+      await insertHeader(channel, folder, msg);
+      count++;
+    }
+  } finally {
+    lock.release();
+  }
+  return count;
+}
+
+// Sync the next batch of OLDER headers — those below the oldest UID already in the
+// DB for this folder. Used by the "carregar mais antigos" action. Returns the count.
+export async function syncOlderMessages(client, channel, folder, batch = 40) {
+  const lock = await client.getMailboxLock(folder.path);
+  let count = 0;
+  try {
+    const [{ min }] = await q(`SELECT MIN(uid) AS min FROM email_messages WHERE folder_id=$1`, [folder.id]);
+    if (!min) return 0;
+    // Lightweight UID-only search for everything below our oldest, then take the newest `batch`.
+    const below = await client.search({ uid: `1:${Number(min) - 1}` }, { uid: true });
+    if (!below?.length) return 0;
+    const slice = below.slice(-batch);
+    for await (const msg of client.fetch(slice, FETCH_FIELDS, { uid: true })) {
+      await insertHeader(channel, folder, msg);
       count++;
     }
   } finally {

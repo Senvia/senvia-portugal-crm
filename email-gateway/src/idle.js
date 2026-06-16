@@ -98,7 +98,7 @@ class CaixaManager {
   }
 }
 
-// Start a live manager for every email caixa.
+// Start a live manager for every email caixa, then poll every 60 s for new/removed ones.
 export async function startAll() {
   const caixas = await getEmailCaixas();
   for (const caixa of caixas) {
@@ -106,7 +106,43 @@ export async function startAll() {
     managers.set(caixa.id, m);
     m.start().catch((e) => log(`[${caixa.label}] start falhou: ${e.message}`));
   }
+  // Hot-reload: detect new channels added after gateway startup without restarting.
+  setInterval(async () => {
+    try {
+      const added = await refreshChannels();
+      if (added > 0) log(`hot-reload: ${added} nova(s) caixa(s) adicionada(s)`);
+    } catch (e) {
+      log('hot-reload erro:', e.message);
+    }
+  }, 60_000);
   return caixas.length;
+}
+
+// Detect channels added/removed since startup; start/stop their managers.
+export async function refreshChannels() {
+  const caixas = await getEmailCaixas();
+  const known = new Set(managers.keys());
+  let added = 0;
+  for (const caixa of caixas) {
+    if (!managers.has(caixa.id)) {
+      log(`[${caixa.label}] nova caixa detectada, a ligar...`);
+      const m = new CaixaManager(caixa);
+      managers.set(caixa.id, m);
+      m.start().catch((e) => log(`[${caixa.label}] start falhou: ${e.message}`));
+      added++;
+    }
+    known.delete(caixa.id);
+  }
+  // Stop managers for channels that were removed from the DB.
+  for (const removedId of known) {
+    const m = managers.get(removedId);
+    if (m) {
+      log(`[${m.caixa.label}] caixa removida, a desligar...`);
+      await m.stop();
+      managers.delete(removedId);
+    }
+  }
+  return added;
 }
 
 export function getManager(channelId) { return managers.get(channelId); }

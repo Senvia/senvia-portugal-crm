@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useEmailFolders } from '@/hooks/useEmail';
 import { ROLE_META, folderLabel } from './emailShared';
@@ -9,18 +9,25 @@ export function EmailFolderList({
   channelId,
   activeFolderId,
   onSelect,
+  isActive,
 }: {
   channelId: string;
   activeFolderId: string | null;
   onSelect: (folderId: string) => void;
+  isActive?: boolean;
 }) {
   const { data: folders = [] } = useEmailFolders(channelId);
 
+  // Keep onSelect in a ref so it never triggers the auto-select effect on re-renders.
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; });
+
   useEffect(() => {
+    if (!isActive) return;
     if (folders.length && (!activeFolderId || !folders.some((f) => f.id === activeFolderId))) {
-      onSelect((folders.find((f) => f.role === 'inbox') || folders[0]).id);
+      onSelectRef.current((folders.find((f) => f.role === 'inbox') || folders[0]).id);
     }
-  }, [folders, activeFolderId, onSelect]);
+  }, [folders, activeFolderId, isActive]);
 
   return (
     <div className="space-y-0.5 py-1 pl-3">
