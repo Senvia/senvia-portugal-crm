@@ -24,8 +24,8 @@ interface SubscriptionPlan {
 const DEFAULT_PLAN: SubscriptionPlan = {
   id: 'starter',
   name: 'Starter',
-  max_users: 10,
-  max_forms: 2,
+  max_users: 5,
+  max_forms: 5,
   price_monthly: 49,
   features: {
     modules: { sales: false, finance: false, marketing: false, ecommerce: false },

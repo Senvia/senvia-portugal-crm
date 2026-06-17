@@ -72,7 +72,7 @@ serve(async (req) => {
     // Get org plan
     const { data: orgData } = await supabaseAdmin
       .from('organizations')
-      .select('plan')
+      .select('plan, max_users_override')
       .eq('id', organizationId)
       .single();
 
@@ -85,7 +85,14 @@ serve(async (req) => {
       .eq('id', planId)
       .single();
 
-    if (planData?.max_users !== null && planData?.max_users !== undefined) {
+    // A per-org override (grandfathering / negociações pontuais) sobrepõe o
+    // limite do plano quando preenchido. null/undefined = usa o limite do plano.
+    const override = orgData?.max_users_override;
+    const effectiveMax = (override !== null && override !== undefined)
+      ? override
+      : planData?.max_users;
+
+    if (effectiveMax !== null && effectiveMax !== undefined) {
       // Count active members
       const { count: memberCount } = await supabaseAdmin
         .from('organization_members')
@@ -93,10 +100,10 @@ serve(async (req) => {
         .eq('organization_id', organizationId)
         .eq('is_active', true);
 
-      if (memberCount !== null && memberCount >= planData.max_users) {
+      if (memberCount !== null && memberCount >= effectiveMax) {
         return new Response(
-          JSON.stringify({ 
-            error: `Limite de ${planData.max_users} utilizadores atingido para o plano ${planData.name || planId}. Faça upgrade para adicionar mais membros.` 
+          JSON.stringify({
+            error: `Limite de ${effectiveMax} utilizadores atingido para o plano ${planData?.name || planId}. Faça upgrade para adicionar mais membros.`
           }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
