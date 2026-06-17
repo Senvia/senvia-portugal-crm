@@ -92,18 +92,40 @@ Deno.serve(async (req) => {
         .eq('id', channelRow.id);
     }
 
-    // Fast-path: if the Evolution instance is already open (WhatsApp session
-    // active), return immediately WITHOUT calling /instance/connect/. That call
-    // disconnects an active session and triggers Chatwoot event spam.
+    // Read current Evolution state (single call, reused for all decisions below).
+    let evolutionState: string | undefined;
+    let evolutionQr: string | null = null;
     const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);
     if (stateRes.ok) {
       const stateData = await stateRes.json();
-      if (stateData?.instance?.state === 'open') {
-        await admin.from('messaging_channels')
-          .update({ status: 'connected', needs_repair: false })
-          .eq('id', channelRow.id);
-        return json({ success: true, channel_id: channelRow.id, instance: instanceName, already_connected: true, qr: null, pairing_code: null });
-      }
+      evolutionState = stateData?.instance?.state;
+      evolutionQr = stateData?.instance?.qrcode?.base64 ?? null;
+    }
+
+    // Fast-path: already open — do NOT call /instance/connect/ as that
+    // disconnects the active session and triggers Chatwoot event spam.
+    if (evolutionState === 'open') {
+      await admin.from('messaging_channels')
+        .update({ status: 'connected', needs_repair: false })
+        .eq('id', channelRow.id);
+      return json({ success: true, channel_id: channelRow.id, instance: instanceName, already_connected: true, qr: null, pairing_code: null });
+    }
+
+    // Mid-connection guard: if Baileys is completing a QR handshake, calling
+    // /instance/connect/ again regenerates the QR and invalidates the scan —
+    // the phone gets stuck on "A ligar..." and the connection never completes.
+    // Return what we have from connectionState; the 4s whatsapp-status poll
+    // detects 'open' as soon as the handshake finishes.
+    if (evolutionState === 'connecting') {
+      return json({
+        success: true,
+        channel_id: channelRow.id,
+        instance: instanceName,
+        chatwoot_inbox_id: channelRow.chatwoot_inbox_id ?? null,
+        qr: evolutionQr,   // may be null on Evolution builds that omit it
+        pairing_code: null,
+        already_connected: false,
+      });
     }
 
     // Check if the Evolution instance exists.
@@ -111,10 +133,9 @@ Deno.serve(async (req) => {
     const existing = fetchRes.ok ? await fetchRes.json() : [];
     const instanceExists = Array.isArray(existing) && existing.length > 0;
 
-    // Only recreate when the channel is 'disconnected' (stale/ended session). When
-    // it is 'connecting' we are in the middle of a pairing flow — destroying the
-    // instance would cancel a scan that may be in progress.
-    const shouldRecreate = instanceExists && channelRow?.status === 'disconnected';
+    // Recreate unless Baileys is mid-connection. Use Evolution state as source
+    // of truth — DB status can be stale (e.g. 'connected' after a session dies).
+    const shouldRecreate = instanceExists && evolutionState !== 'connecting';
 
     if (shouldRecreate) {
       await evolutionFetch(cfg, `/instance/delete/${instanceName}`, 'DELETE');
@@ -136,13 +157,13 @@ Deno.serve(async (req) => {
     // Persist channel state + flap reset. When recreating, clear chatwoot_inbox_id
     // so whatsapp-status re-wires the Chatwoot integration after the new session
     // connects (the old instance is gone, so its webhook target is gone too).
-    const newStatus = channelRow.status === 'connected' ? 'connected' : 'connecting';
+    // Always 'connecting' — Evolution confirmed NOT 'open' above.
     await admin
       .from('messaging_channels')
       .update({
         evolution_instance: instanceName,
         ...(shouldRecreate ? { chatwoot_inbox_id: null } : {}),
-        status: newStatus,
+        status: 'connecting',
         needs_repair: false,
         flap_count: 0,
         flap_window_start: null,

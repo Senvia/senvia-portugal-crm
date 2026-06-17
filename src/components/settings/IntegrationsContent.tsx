@@ -1075,9 +1075,15 @@ function InboxesManager() {
                       {emailAddr ?? (ch.phone_number ? `+${ch.phone_number}` : meta.label)}
                     </p>
                   </div>
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
-                  </span>
+                  {connected ? (
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {CHANNEL_STATUS_LABEL[ch.status] || 'Por ligar'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Stats row */}
