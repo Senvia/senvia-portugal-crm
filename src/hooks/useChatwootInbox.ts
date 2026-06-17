@@ -680,18 +680,20 @@ export function useSendInternalNote() {
   });
 }
 
-// Start a conversation with a number that never wrote to us.
+// Start a conversation with a number that never wrote to us. Supports an optional
+// attachment as the first message (image/audio/doc/voice).
 export function useStartConversation() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ phone, content, inboxId }: { phone: string; content: string; inboxId?: number | null }) => {
+    mutationFn: async ({ phone, content, inboxId, attachment }: { phone: string; content: string; inboxId?: number | null; attachment?: OutgoingAttachment }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox<{ ok: boolean }>(organization.id, {
         action: 'start_conversation',
         phone,
         content,
         inbox_id: inboxId ?? undefined,
+        attachment,
       });
     },
     onSuccess: () => {

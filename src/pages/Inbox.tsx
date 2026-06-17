@@ -1183,24 +1183,39 @@ export default function Inbox() {
     const content = draft.trim();
 
     // Draft conversation: create it by sending the first message (start_conversation),
-    // then auto-open the real conversation once it lands. Attachments aren't
-    // supported as the very first message (the contact has no thread yet).
+    // then auto-open the real conversation once it lands. Supports text and/or
+    // attachments — the first file carries the caption, the rest go bare.
     if (draftConv) {
-      if (!content) return;
+      if (!content && outAttachments.length === 0) return;
+      const { phone, inboxId } = draftConv;
       setDraft("");
-      startConversation.mutate(
-        { phone: draftConv.phone, content, inboxId: draftConv.inboxId },
-        {
-          onSuccess: () => {
-            setPendingSelectPhone(draftConv.phone);
-            toast({ title: "Mensagem enviada", description: "A abrir a conversa..." });
-          },
-          onError: (err) => {
-            setDraft(content);
-            toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
-          },
-        },
-      );
+      try {
+        if (outAttachments.length > 0) {
+          const list = outAttachments;
+          setOutAttachments([]);
+          for (let i = 0; i < list.length; i++) {
+            const data = await fileToBase64(list[i].file);
+            await startConversation.mutateAsync({
+              phone,
+              content: i === 0 ? content : "",
+              inboxId,
+              attachment: {
+                data,
+                mimetype: list[i].file.type || "application/octet-stream",
+                filename: list[i].file.name,
+                kind: list[i].kind,
+              },
+            });
+          }
+        } else {
+          await startConversation.mutateAsync({ phone, content, inboxId });
+        }
+        setPendingSelectPhone(phone);
+        toast({ title: "Mensagem enviada", description: "A abrir a conversa..." });
+      } catch (err) {
+        if (content) setDraft((d) => (d.trim() ? d : content));
+        toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
+      }
       return;
     }
 

@@ -678,15 +678,40 @@ Deno.serve(async (req) => {
     if (action === 'start_conversation') {
       // Message a number that has no conversation yet. Evolution mirrors the sent
       // message into Chatwoot, which creates the conversation; the list poll then
-      // picks it up.
+      // picks it up. Supports text and/or an attachment (same media path as
+      // send_message) so the very first message can be an image/audio/doc.
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       const text = String(content ?? '').trim();
+      const attachment = body.attachment as
+        | { data: string; mimetype: string; filename: string; kind: string }
+        | undefined;
       if (!phone || phone.length < 9) return json({ error: 'Número inválido' }, 400);
-      if (!text) return json({ error: 'Mensagem vazia' }, 400);
-      const evoRes = await evolutionFetch(cfg, `/message/sendText/${await getInstance()}`, 'POST', {
-        number: phone,
-        text,
-      });
+      if (!text && !attachment) return json({ error: 'Mensagem vazia' }, 400);
+
+      const instance = await getInstance();
+      let evoRes: Response;
+      if (attachment && attachment.kind === 'voice') {
+        evoRes = await evolutionFetch(cfg, `/message/sendWhatsAppAudio/${instance}`, 'POST', {
+          number: phone,
+          audio: attachment.data,
+          encoding: true,
+        });
+      } else if (attachment) {
+        const mediatype = MEDIA_TYPES[attachment.kind] ?? 'document';
+        evoRes = await evolutionFetch(cfg, `/message/sendMedia/${instance}`, 'POST', {
+          number: phone,
+          mediatype,
+          mimetype: attachment.mimetype,
+          media: attachment.data,
+          fileName: attachment.filename,
+          ...(text ? { caption: text } : {}),
+        });
+      } else {
+        evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+          number: phone,
+          text,
+        });
+      }
       if (!evoRes.ok) {
         console.error('Evolution start failed:', evoRes.status, await evoRes.text());
         return json({ error: 'Falha ao enviar — confirma que o número tem WhatsApp' }, 502);
