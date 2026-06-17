@@ -104,11 +104,12 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
     return () => clearTimeout(t);
   }, [displayQr, qrExpiry]);
 
-  // Auto-refresh when the countdown reaches 0 — but ONLY if not yet connected.
-  // whatsapp-connect with a channelId and 'connecting' status skips instance
-  // recreation and just fetches the current QR from Evolution (fast path).
+  // Proactively refresh a few seconds BEFORE the QR expires, so the new code is
+  // already on screen by the time the old one dies — no visible "A atualizar"
+  // gap. Only while not yet connected. inFlightRef inside refreshQr prevents the
+  // call from firing more than once per countdown.
   useEffect(() => {
-    if (qrExpiry !== 0 || !displayQr || isPending || connected) return;
+    if (qrExpiry > 3 || !displayQr || isPending || connected) return;
     // If Evolution's connectionState already supplies a fresh QR (status.qr), the
     // 4s status poll keeps it current on its own — do NOT call /instance/connect/
     // again. That forced regeneration was resetting a scan already in progress,

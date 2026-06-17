@@ -40,10 +40,11 @@ Deno.serve(async (req) => {
       .single();
     if (orgErr || !org) return json({ error: 'Organização não encontrada' }, 404);
 
-    // Ensure the org has its own Chatwoot account (creates it if absent).
-    // Called here — not just in whatsapp-status — so the account exists before
-    // we need to wire it after the WhatsApp session connects.
-    await ensureChatwootAccount(admin, cfg, org);
+    // Note: the org's Chatwoot account is ensured lazily — only when we actually
+    // create a new Evolution instance (see below), not on every QR refresh.
+    // Calling it here on each poll added a Chatwoot HTTP round-trip that made the
+    // QR refresh feel slow. whatsapp-status also ensures it before wiring, so the
+    // account is guaranteed to exist by the time it's needed.
 
     // Resolve the target channel row: reconnect an existing one (by id) or
     // create a new one. New channels get a per-channel instance name so multiple
@@ -111,18 +112,19 @@ Deno.serve(async (req) => {
       return json({ success: true, channel_id: channelRow.id, instance: instanceName, already_connected: true, qr: null, pairing_code: null });
     }
 
-    // Mid-connection guard: if Baileys is completing a QR handshake, calling
-    // /instance/connect/ again regenerates the QR and invalidates the scan —
-    // the phone gets stuck on "A ligar..." and the connection never completes.
-    // Return what we have from connectionState; the 4s whatsapp-status poll
-    // detects 'open' as soon as the handshake finishes.
-    if (evolutionState === 'connecting') {
+    // Mid-connection guard: only when Baileys has a QR in connectionState does
+    // it mean a scan is actively in flight. Calling /instance/connect/ at that
+    // point regenerates the QR and cancels the handshake — phone stuck on
+    // "A ligar..." forever. Return the current QR instead.
+    // Without evolutionQr the instance is in a stale 'connecting' state (prior
+    // attempt failed/stuck) — fall through to recreate it for a clean start.
+    if (evolutionState === 'connecting' && evolutionQr) {
       return json({
         success: true,
         channel_id: channelRow.id,
         instance: instanceName,
         chatwoot_inbox_id: channelRow.chatwoot_inbox_id ?? null,
-        qr: evolutionQr,   // may be null on Evolution builds that omit it
+        qr: evolutionQr,
         pairing_code: null,
         already_connected: false,
       });
@@ -131,17 +133,17 @@ Deno.serve(async (req) => {
     // Check if the Evolution instance exists.
     const fetchRes = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
     const existing = fetchRes.ok ? await fetchRes.json() : [];
-    const instanceExists = Array.isArray(existing) && existing.length > 0;
+    let instanceExists = Array.isArray(existing) && existing.length > 0;
 
-    // Recreate unless Baileys is mid-connection. Use Evolution state as source
-    // of truth — DB status can be stale (e.g. 'connected' after a session dies).
-    const shouldRecreate = instanceExists && evolutionState !== 'connecting';
-
-    if (shouldRecreate) {
-      await evolutionFetch(cfg, `/instance/delete/${instanceName}`, 'DELETE');
-    }
-
-    if (!instanceExists || shouldRecreate) {
+    // Create the instance only when it genuinely doesn't exist. For an existing
+    // instance we do NOT delete+recreate: deleting a 'connecting' instance does
+    // not free the name in time, so the immediate create fails with
+    // 403 "name already in use". Instead we just call /instance/connect/ below,
+    // which regenerates a fresh QR for a 'close' or stale-'connecting' instance.
+    if (!instanceExists) {
+      // New instance → make sure the org's Chatwoot account exists so it can be
+      // wired once the session connects (only paid here, not on every refresh).
+      await ensureChatwootAccount(admin, cfg, org);
       const createRes = await evolutionFetch(cfg, '/instance/create', 'POST', {
         instanceName,
         integration: 'WHATSAPP-BAILEYS',
@@ -154,15 +156,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Persist channel state + flap reset. When recreating, clear chatwoot_inbox_id
-    // so whatsapp-status re-wires the Chatwoot integration after the new session
-    // connects (the old instance is gone, so its webhook target is gone too).
-    // Always 'connecting' — Evolution confirmed NOT 'open' above.
+    // Persist channel state + flap reset. Always 'connecting' — Evolution
+    // confirmed the instance is NOT 'open' above.
     await admin
       .from('messaging_channels')
       .update({
         evolution_instance: instanceName,
-        ...(shouldRecreate ? { chatwoot_inbox_id: null } : {}),
         status: 'connecting',
         needs_repair: false,
         flap_count: 0,
@@ -171,12 +170,49 @@ Deno.serve(async (req) => {
       .eq('id', channelRow.id);
 
     // Fetch the QR code.
-    const connectRes = await evolutionFetch(cfg, `/instance/connect/${instanceName}`);
+    let connectRes = await evolutionFetch(cfg, `/instance/connect/${instanceName}`);
     if (!connectRes.ok) {
       console.error('Evolution connect failed:', connectRes.status, await connectRes.text());
       return json({ error: 'Falha ao obter QR code' }, 502);
     }
-    const connect = await connectRes.json();
+    let connect = await connectRes.json();
+
+    // Fallback: an existing instance with a corrupted session can return no QR
+    // and no pairing code from /connect/. Tear it down properly (logout → delete),
+    // wait for Evolution to free the name, recreate, and connect again. This is
+    // the only path that deletes — and it does so safely (not racing create).
+    if (instanceExists && !connect.base64 && !connect.pairingCode) {
+      try { await evolutionFetch(cfg, `/instance/logout/${instanceName}`, 'DELETE'); } catch (_e) { /* ignore */ }
+      try { await evolutionFetch(cfg, `/instance/delete/${instanceName}`, 'DELETE'); } catch (_e) { /* ignore */ }
+      // Poll until the name is actually free (delete is async on Evolution).
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const chk = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
+        const arr = chk.ok ? await chk.json() : [];
+        if (!Array.isArray(arr) || arr.length === 0) { instanceExists = false; break; }
+      }
+      const createRes = await evolutionFetch(cfg, '/instance/create', 'POST', {
+        instanceName,
+        integration: 'WHATSAPP-BAILEYS',
+        qrcode: true,
+      });
+      if (!createRes.ok) {
+        console.error('Evolution recreate failed:', createRes.status, await createRes.text());
+        return json({ error: 'Falha ao recriar instância na Evolution' }, 502);
+      }
+      // A fresh instance has no Chatwoot wiring; clear the stored inbox id so
+      // whatsapp-status re-wires it after the new session connects.
+      await admin
+        .from('messaging_channels')
+        .update({ chatwoot_inbox_id: null })
+        .eq('id', channelRow.id);
+      connectRes = await evolutionFetch(cfg, `/instance/connect/${instanceName}`);
+      if (!connectRes.ok) {
+        console.error('Evolution connect (after recreate) failed:', connectRes.status, await connectRes.text());
+        return json({ error: 'Falha ao obter QR code' }, 502);
+      }
+      connect = await connectRes.json();
+    }
 
     return json({
       success: true,
