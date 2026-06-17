@@ -60,6 +60,34 @@ serve(async (req) => {
       const adminEmail = await getAdminEmail(supabase, org.id);
       if (!adminEmail) continue;
 
+      // Trial just started — welcome (dia 0/1 do trial de 14 dias → ~13-14 dias por usar).
+      // Janela alta para nunca disparar em trials antigos/expirados.
+      if (daysLeft >= 12 && !reminders["automation_started"]) {
+        logStep("Trial started", { orgId: org.id, orgName: org.name });
+        await dispatchAutomation(supabase, "trial_started", { email: adminEmail, nome: org.name });
+        reminders["automation_started"] = true;
+        await updateReminders(supabase, org.id, reminders);
+        processed++;
+      }
+
+      // Dia 3 do trial (ativação) — ~8-11 dias por usar.
+      if (daysLeft <= 11 && daysLeft >= 8 && !reminders["automation_day3"]) {
+        logStep("Trial day 3", { orgId: org.id, orgName: org.name });
+        await dispatchAutomation(supabase, "trial_day_3", { email: adminEmail, nome: org.name });
+        reminders["automation_day3"] = true;
+        await updateReminders(supabase, org.id, reminders);
+        processed++;
+      }
+
+      // Dia 7 do trial (diferenciadores) — ~4-7 dias por usar.
+      if (daysLeft <= 7 && daysLeft >= 4 && !reminders["automation_day7"]) {
+        logStep("Trial day 7", { orgId: org.id, orgName: org.name });
+        await dispatchAutomation(supabase, "trial_day_7", { email: adminEmail, nome: org.name });
+        reminders["automation_day7"] = true;
+        await updateReminders(supabase, org.id, reminders);
+        processed++;
+      }
+
       // Trial expiring in 3 days
       if (daysLeft <= 3 && daysLeft > 1 && !reminders["automation_3d"]) {
         logStep("Trial expiring in 3 days", { orgId: org.id, orgName: org.name });
