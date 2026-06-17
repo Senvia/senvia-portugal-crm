@@ -267,11 +267,26 @@ async function ensureChatwootWebhook(
     // return the array directly) — normalize before checking.
     const raw = data?.payload?.webhooks ?? data?.payload ?? data;
     const hooks: any[] = Array.isArray(raw) ? raw : [];
+    // message_updated is needed for incoming media: Chatwoot creates the message
+    // first (no file yet) then emits message_updated once it finishes downloading
+    // the attachment. Without it, images only show on the next poll (10-20s lag).
+    const desiredSubs = ['message_created', 'message_updated'];
     let hasDesired = false;
     for (const h of hooks) {
       const url = String(h?.url ?? h?.webhook?.url ?? '');
       const id = h?.id ?? h?.webhook?.id;
-      if (url === desiredUrl) { hasDesired = true; continue; }
+      if (url === desiredUrl) {
+        hasDesired = true;
+        // Upgrade an existing hook that's still on the old single-event list.
+        const subs: string[] = Array.isArray(h?.subscriptions) ? h.subscriptions : [];
+        const missing = desiredSubs.some((s) => !subs.includes(s));
+        if (id && missing) {
+          await chatwootFetch(cfg, token, `${base}/webhooks/${id}`, 'PATCH', {
+            webhook: { url: desiredUrl, subscriptions: desiredSubs },
+          }).catch(() => {});
+        }
+        continue;
+      }
       // Remove stale hooks for our function (keyless or wrong/rotated key).
       if (id && url.startsWith(baseHookUrl)) {
         await chatwootFetch(cfg, token, `${base}/webhooks/${id}`, 'DELETE').catch(() => {});
@@ -279,7 +294,7 @@ async function ensureChatwootWebhook(
     }
     if (hasDesired) return;
     await chatwootFetch(cfg, token, `${base}/webhooks`, 'POST', {
-      webhook: { url: desiredUrl, subscriptions: ['message_created'] },
+      webhook: { url: desiredUrl, subscriptions: desiredSubs },
     });
   } catch (e) {
     console.error('ensureChatwootWebhook failed:', e);

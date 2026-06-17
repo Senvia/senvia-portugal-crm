@@ -33,6 +33,68 @@ function runInBackground(p: Promise<unknown>): void {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
 
+// Broadcast the (normalized) Chatwoot message on the org's private realtime
+// channel so open inboxes update without waiting for the poll. Used both for new
+// messages (message_created) and for media that just finished downloading
+// (message_updated). The client appends by id and runs a debounced refetch to
+// reconcile attachments/placeholders.
+async function broadcastInboxMessage(
+  supabaseUrl: string,
+  serviceKey: string,
+  orgId: string,
+  event: any,
+): Promise<void> {
+  const cwBase = (Deno.env.get('CHATWOOT_URL') || '').replace(/\/$/, '');
+  const absUrl = (u: unknown): string | null => {
+    const s = u == null ? '' : String(u);
+    if (!s) return null;
+    return /^https?:\/\//i.test(s) ? s : `${cwBase}${s.startsWith('/') ? '' : '/'}${s}`;
+  };
+  const atts = (Array.isArray(event.attachments) ? event.attachments : []).map((a: any) => ({
+    id: a?.id,
+    file_type: a?.file_type ?? 'file',
+    data_url: absUrl(a?.data_url),
+    thumb_url: absUrl(a?.thumb_url),
+    file_size: a?.file_size ?? null,
+    extension: a?.extension ?? null,
+  }));
+  // Chatwoot webhook message_type is a STRING here (incoming/outgoing/...).
+  const mt = String(event.message_type ?? '');
+  const broadcastMessage = {
+    id: event.id,
+    content: String(event.content ?? ''),
+    outgoing: mt === 'outgoing' || mt === 'template',
+    is_activity: mt === 'activity',
+    is_private: event.private === true,
+    created_at: event.created_at ?? null,
+    sender_name: event.sender?.name ?? null,
+    status: event.status ?? null,
+    wa_id: event.source_id ? String(event.source_id).replace(/^WAID:/i, '') : null,
+    attachments: atts,
+    content_type: event.content_type ?? null,
+    email_from: null, email_to: null, email_cc: null, email_subject: null, email_html_body: null,
+  };
+  await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({
+      messages: [{
+        topic: `inbox-${orgId}`,
+        event: 'message',
+        payload: {
+          conversation_id: event.conversation?.id ?? null,
+          incoming: event.message_type === 'incoming',
+          message: broadcastMessage,
+        },
+      }],
+    }),
+  });
+}
+
 // ---- AI task suggestions (fase 2) ----
 // Classify the message with Gemini Flash: does it imply a concrete follow-up
 // task (a promise by the agent, or a request by the customer)? If so, insert a
@@ -140,8 +202,9 @@ Deno.serve(async (req) => {
 
   try {
     const event = await req.json().catch(() => null);
-    if (!event || event.event !== 'message_created') return ok();
+    if (!event || (event.event !== 'message_created' && event.event !== 'message_updated')) return ok();
     if (event.private) return ok();
+    const isUpdate = event.event === 'message_updated';
 
     // Evolution injects connection-status messages via Chatwoot (message_type
     // 'incoming') from its bot contact. The real messages are emoji-prefixed
@@ -190,6 +253,23 @@ Deno.serve(async (req) => {
         console.warn('chatwoot-webhook: rejected call with bad/missing key for account', accountId);
         return ok({ ok: false, rejected: true });
       }
+    }
+
+    // ---- message_updated: incoming media that just finished downloading ----
+    // Chatwoot creates the message on message_created (no file yet) and emits
+    // message_updated once the attachment is ready. Re-broadcast so open inboxes
+    // refetch and show the image/audio/video right away instead of waiting for
+    // the poll (~10-20s). Status-only updates (sent/delivered/read) carry no
+    // attachment — skip them to avoid refetch storms. We deliberately do NOT
+    // claim idempotency here (same message id is already claimed by the create),
+    // and we skip push/AI/auto-reply (those belong to message_created only).
+    if (isUpdate) {
+      const hasAtt = Array.isArray(event.attachments) && event.attachments.length > 0;
+      if (hasAtt) {
+        try { await broadcastInboxMessage(supabaseUrl, serviceKey, org.id, event); }
+        catch (e) { console.error('realtime re-broadcast (update) failed:', e); }
+      }
+      return ok({ ok: true, updated: true });
     }
 
     // IDEMPOTENCY: Chatwoot retries deliveries, so dedupe by message id to avoid
@@ -301,55 +381,7 @@ Deno.serve(async (req) => {
     // the open thread instantly (no Chatwoot round-trip); the client still runs a
     // debounced refetch afterwards to reconcile attachments/placeholders.
     try {
-      const cwBase = (Deno.env.get('CHATWOOT_URL') || '').replace(/\/$/, '');
-      const absUrl = (u: unknown): string | null => {
-        const s = u == null ? '' : String(u);
-        if (!s) return null;
-        return /^https?:\/\//i.test(s) ? s : `${cwBase}${s.startsWith('/') ? '' : '/'}${s}`;
-      };
-      const atts = (Array.isArray(event.attachments) ? event.attachments : []).map((a: any) => ({
-        id: a?.id,
-        file_type: a?.file_type ?? 'file',
-        data_url: absUrl(a?.data_url),
-        thumb_url: absUrl(a?.thumb_url),
-        file_size: a?.file_size ?? null,
-        extension: a?.extension ?? null,
-      }));
-      // Chatwoot webhook message_type is a STRING here (incoming/outgoing/...).
-      const mt = String(event.message_type ?? '');
-      const broadcastMessage = {
-        id: event.id,
-        content: String(event.content ?? ''),
-        outgoing: mt === 'outgoing' || mt === 'template',
-        is_activity: mt === 'activity',
-        is_private: event.private === true,
-        created_at: event.created_at ?? null,
-        sender_name: event.sender?.name ?? null,
-        status: event.status ?? null,
-        wa_id: event.source_id ? String(event.source_id).replace(/^WAID:/i, '') : null,
-        attachments: atts,
-        content_type: event.content_type ?? null,
-        email_from: null, email_to: null, email_cc: null, email_subject: null, email_html_body: null,
-      };
-      await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          messages: [{
-            topic: `inbox-${org.id}`,
-            event: 'message',
-            payload: {
-              conversation_id: event.conversation?.id ?? null,
-              incoming: event.message_type === 'incoming',
-              message: broadcastMessage,
-            },
-          }],
-        }),
-      });
+      await broadcastInboxMessage(supabaseUrl, serviceKey, org.id, event);
     } catch (e) {
       console.error('realtime broadcast failed:', e);
     }
