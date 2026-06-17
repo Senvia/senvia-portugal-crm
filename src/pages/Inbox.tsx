@@ -83,13 +83,12 @@ import {
   ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
-  ChevronsUpDown, Eye,
+  ChevronsUpDown, Eye, Inbox as InboxIcon,
 } from "lucide-react";
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useQueryClient } from "@tanstack/react-query";
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
@@ -455,62 +454,10 @@ type ListTab = "all" | "unread" | "waiting" | "mine" | "archived";
 const MEM_DEBUG = import.meta.env.DEV
   || (typeof window !== "undefined" && (() => { try { return window.localStorage.getItem("inbox-debug") === "1"; } catch { return false; } })());
 
-// --- Capture the FIRST React warning/error that mentions render/update/hooks,
-// stamped into localStorage("_ireact") so it survives the OOM tab crash (the
-// console is unreadable once the tab freezes). React names the offending
-// component in "Cannot update a component (X) while rendering (Y)" /
-// "Too many re-renders" — that string points straight at the loop's source.
-if (typeof window !== "undefined" && !(window as any).__ireactPatched) {
-  (window as any).__ireactPatched = true;
-  const orig = console.error;
-  console.error = function (...args: unknown[]) {
-    try {
-      const msg = args.map((a) => (typeof a === "string" ? a : (a as Error)?.message ?? String(a))).join(" ");
-      if (/re-render|too many|while rendering|update a component|hook|maximum update/i.test(msg)
-          && !localStorage.getItem("_ireact")) {
-        localStorage.setItem("_ireact", msg.slice(0, 800));
-      }
-    } catch { /* noop */ }
-    return orig.apply(console, args as []);
-  };
-}
-
-// --- Render-loop detector. Module-level so it survives re-renders without a
-// hook. Counts, per watched value, how many renders changed its reference. The
-// key whose count tracks the total render count is the loop driver. Results are
-// stamped into localStorage("_idiff") so they survive the OOM freeze.
-let _prevSnap: Record<string, unknown> | null = null;
-const _diffCounts: Record<string, number> = {};
-let _diffRenders = 0;
-let _mountCount = 0; // bumped by the Inbox mount effect; mounts≈renders ⇒ remount-loop, mounts=1 ⇒ rerender-loop
-function _trackRenderLoop(snap: Record<string, unknown>) {
-  _diffRenders++;
-  if (_prevSnap) {
-    for (const k of Object.keys(snap)) {
-      if (!Object.is(snap[k], _prevSnap[k])) _diffCounts[k] = (_diffCounts[k] || 0) + 1;
-    }
-  }
-  _prevSnap = snap;
-  if (_diffRenders % 50 === 0) {
-    try {
-      const top = Object.entries(_diffCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      localStorage.setItem("_idiff", `[build=V8] renders=${_diffRenders} mounts=${_mountCount} | ${top.map(([k, v]) => `${k}:${v}`).join(" ")}`);
-    } catch { /* quota */ }
-  }
-}
-
 export default function Inbox() {
-  // crash probe: count renders + mark furthest point reached this render.
-  try {
-    const n = (parseInt(localStorage.getItem("_icount") || "0", 10) || 0) + 1;
-    localStorage.setItem("_icount", String(n));
-    localStorage.setItem("_ic", "A0");
-  } catch {}
   const { channel } = useWhatsappChannel();
-  try { localStorage.setItem("_ic", "A1"); } catch {} // after useWhatsappChannel
   const connected = channel?.status === "connected";
   const { data: channels = [] } = useMessagingChannels();
-  try { localStorage.setItem("_ic", "A2"); } catch {} // after useMessagingChannels
   // Caixas that map to a known Chatwoot inbox (so we can filter conversations by them).
   const channelByInbox = useMemo(() => {
     const m = new Map<number, MessagingChannel>();
@@ -520,19 +467,7 @@ export default function Inbox() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
-  try { localStorage.setItem("_ic", "A3"); } catch {} // after useAuth
   const { isAdmin } = usePermissions();
-  try { localStorage.setItem("_ic", "A4"); } catch {} // after usePermissions
-  const queryClient = useQueryClient();
-  // On hard reload both the old and new V8 context coexist briefly. Clear the
-  // cache in beforeunload so the old heap is as small as possible when the new
-  // page starts compiling.
-  useEffect(() => {
-    const handler = () => queryClient.clear();
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [queryClient]);
-  useEffect(() => { _mountCount++; }, []); // diagnostics: count real mounts
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
   const visibleCaixas = useMemo(
@@ -641,7 +576,6 @@ export default function Inbox() {
   const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
-  try { localStorage.setItem("_ic", "B"); } catch {} // crash probe B: before realtime/conversations
   const live = useInboxRealtime();
   const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
   const selected = conversations.find((c) => c.id === selectedId) || null;
@@ -672,7 +606,6 @@ export default function Inbox() {
   const createCanned = useCreateCannedResponse();
   const deleteCanned = useDeleteCannedResponse();
   const deleteMessage = useDeleteMessage();
-  try { localStorage.setItem("_ic", "C"); } catch {} // crash probe C: before CRM/scheduling
   const { data: teamMembers = [] } = useTeamMembers();
   const createEvent = useCreateEvent();
 
@@ -722,7 +655,6 @@ export default function Inbox() {
   const cancelScheduled = useCancelScheduledMessage();
   const { data: autoReplyConfig } = useAutoReplyConfig();
   const saveAutoReply = useSaveAutoReplyConfig();
-  try { localStorage.setItem("_ic", "D"); } catch {} // crash probe D: before tasks
   const createCommunication = useCreateCommunication();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1387,11 +1319,12 @@ export default function Inbox() {
   // Virtual list for the conversation panel — only renders ~15 visible rows
   // instead of the full 200-cap, dramatically reducing DOM nodes and memory.
   const ROW_HEIGHT = 73; // px: border-b + py-3 (24px) + two text lines (~49px)
-  // DIAGNOSTIC: virtualizer disabled to test if it is the render-loop source.
-  const listVirtualizer = {
-    getTotalSize: () => filtered.length * ROW_HEIGHT,
-    getVirtualItems: () => filtered.map((_, index) => ({ index, start: index * ROW_HEIGHT, key: index })),
-  };
+  const listVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  });
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
   // / search, c new conversation, n toggle note. Ignored while typing. ----
   useEffect(() => {
@@ -1522,22 +1455,12 @@ export default function Inbox() {
     );
   };
 
-  try { localStorage.setItem("_ic", "E"); } catch {} // crash probe E: all hooks done
-  _trackRenderLoop({
-    channel, channels, conversations, selected, messages, searchResults,
-    labels, canned, teamMembers, phoneMatch, contactMatch, crmRecord,
-    openProposals, openSales, linkResults, scheduledMsgs, autoReplyConfig,
-    user, openTasks, myTasks, taskStateByPhone, visible, filtered, thread,
-    threadRows, channelByInbox, visibleCaixas, emailInboxIds, pending,
-    selectedId, live, search, debouncedSearch, tab, caixaFilter,
-  });
-
   // ---- Empty state: no caixa connected yet ----
   if (!channelConfigured) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="rounded-2xl bg-primary/10 p-5">
-          <Inbox className="h-12 w-12 text-primary" />
+          <InboxIcon className="h-12 w-12 text-primary" />
         </div>
         <div>
           <h2 className="text-xl font-semibold">Liga a tua primeira caixa de entrada</h2>
@@ -1920,15 +1843,6 @@ export default function Inbox() {
       </div>{/* end gap-3 flex col */}
     </div>
   );
-
-  try { localStorage.setItem("_ic", "F"); } catch {} // crash probe F: before JSX
-
-  // DIAGNOSTIC bisection: short-circuit the entire JSX/children tree. If the
-  // render loop STOPS (mounts becomes 1), the loop lives in the JSX/children;
-  // if it CONTINUES (mounts stays 0), the loop is in the hooks above.
-  if (typeof window !== "undefined" && window.localStorage.getItem("_idiag") === "1") {
-    return <div style={{ padding: 40 }}>DIAG-V9: hooks ran, JSX skipped</div>;
-  }
 
   // Thread rows with date separators interleaved. Consecutive messages from the
   // same sender within a short window are grouped: only the LAST keeps a tail +
