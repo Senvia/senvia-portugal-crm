@@ -620,7 +620,7 @@ export default function Inbox() {
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
   const live = useInboxRealtime();
-  const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
+  const { data: conversations = [], isLoading: loadingConvos, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
   // Synthetic conversation for the draft (id < 0 so it never collides with a real
   // Chatwoot id). selectedId stays null for drafts, so message fetch / mark-read /
   // presence all stay disabled — the thread is simply empty until the first send.
@@ -788,6 +788,20 @@ export default function Inbox() {
       setPendingSelectPhone(null);
     }
   }, [pendingSelectPhone, conversations]);
+
+  // The new conversation only exists once Evolution mirrors our sent message back
+  // into Chatwoot — a race the realtime nudge can lose, leaving the chat missing
+  // for a full poll cycle (15-20s). While waiting, refetch aggressively (every 2s,
+  // capped at 30s) so it shows up in ~1-2s.
+  useEffect(() => {
+    if (!pendingSelectPhone) return;
+    const started = Date.now();
+    const iv = window.setInterval(() => {
+      if (Date.now() - started > 30000) { window.clearInterval(iv); return; }
+      refetchConvos();
+    }, 2000);
+    return () => window.clearInterval(iv);
+  }, [pendingSelectPhone, refetchConvos]);
 
   // Chatwoot inbox ids that belong to EMAIL caixas — these are now handled by the
   // dedicated email client (rail + reader), so they must never show in the chat
@@ -2361,7 +2375,24 @@ export default function Inbox() {
 
             {/* Messages */}
             <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
-              {loadingMessages && thread.length === 0 ? (
+              {draftConv ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+                  {pendingSelectPhone ? (
+                    <>
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <p className="text-sm">Mensagem enviada. A abrir a conversa...</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                        <MessageSquare className="h-6 w-6 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">Nova conversa com {selected.contact_name}</p>
+                      <p className="max-w-xs text-xs">Escreve a primeira mensagem abaixo para iniciar a conversa no WhatsApp.</p>
+                    </>
+                  )}
+                </div>
+              ) : loadingMessages && thread.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-sm">A carregar mensagens...</span>
