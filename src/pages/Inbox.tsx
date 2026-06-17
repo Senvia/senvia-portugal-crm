@@ -797,7 +797,15 @@ export default function Inbox() {
     if (!pendingSelectPhone) return;
     const started = Date.now();
     const iv = window.setInterval(() => {
-      if (Date.now() - started > 30000) { window.clearInterval(iv); return; }
+      // Give up after 30s: if the conversation never materialized the mirror
+      // likely failed. Clear the pending flag so the pane drops back to the
+      // "Nova conversa" draft state instead of spinning forever.
+      if (Date.now() - started > 30000) {
+        window.clearInterval(iv);
+        setPendingSelectPhone(null);
+        toast({ title: "A conversa demorou a sincronizar", description: "Atualiza a caixa de entrada se não aparecer." });
+        return;
+      }
       refetchConvos();
     }, 2000);
     return () => window.clearInterval(iv);
