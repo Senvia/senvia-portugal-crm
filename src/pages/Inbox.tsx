@@ -70,7 +70,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -564,11 +564,16 @@ export default function Inbox() {
   const [newQuickReply, setNewQuickReply] = useState("");
   // Label creation.
   const [newLabel, setNewLabel] = useState("");
-  // New conversation modal.
+  // New conversation picker + draft.
   const [newConvOpen, setNewConvOpen] = useState(false);
-  const [newConvPhone, setNewConvPhone] = useState("");
-  const [newConvMessage, setNewConvMessage] = useState("");
   const [newConvCaixa, setNewConvCaixa] = useState<number | null>(null); // chatwoot_inbox_id to send from
+  // Draft conversation: a not-yet-created chat shown in the right pane so the user
+  // types the first message in the normal composer (no separate "send" modal).
+  // The real Chatwoot conversation is created on first send (start_conversation).
+  const [draftConv, setDraftConv] = useState<{ phone: string; name: string; inboxId: number | null } | null>(null);
+  // After starting a draft, watch the list for the real conversation by phone and
+  // auto-open it.
+  const [pendingSelectPhone, setPendingSelectPhone] = useState<string | null>(null);
   // Rename contact dialog.
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -616,7 +621,22 @@ export default function Inbox() {
   // sends). While connected, the polls below stretch into mere safety nets.
   const live = useInboxRealtime();
   const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
-  const selected = conversations.find((c) => c.id === selectedId) || null;
+  // Synthetic conversation for the draft (id < 0 so it never collides with a real
+  // Chatwoot id). selectedId stays null for drafts, so message fetch / mark-read /
+  // presence all stay disabled — the thread is simply empty until the first send.
+  const draftSelected: InboxConversation | null = draftConv
+    ? {
+        id: -1, alt_ids: [], contact_id: null,
+        contact_name: draftConv.name || `+${draftConv.phone}`,
+        contact_phone: draftConv.phone, contact_email: null, contact_identifier: null,
+        contact_thumbnail: null, last_message: null, email_subject: null,
+        unread_count: 0, status: "open", channel: "whatsapp",
+        inbox_id: draftConv.inboxId, updated_at: null, waiting_since: null,
+        labels: [], assigned_id: null, assigned_name: null,
+        crm_kind: null, crm_id: null, crm_name: null,
+      }
+    : null;
+  const selected = (selectedId ? conversations.find((c) => c.id === selectedId) : null) || draftSelected;
   const altIds = selected?.alt_ids ?? [];
   const isEmailSelected = !!(selected?.channel?.toLowerCase().includes('email'));
   // WhatsApp group: the JID ends in @g.us (robust), with a (GROUP) name fallback.
@@ -740,13 +760,34 @@ export default function Inbox() {
     if (found) {
       setSelectedId(found.id);
     } else {
-      setNewConvPhone(`+${phoneParam}`);
-      setNewConvOpen(true);
+      // No conversation yet: open a draft straight in the pane (default caixa).
+      setSelectedId(null);
+      setDraftConv({ phone: phoneParam, name: `+${phoneParam}`, inboxId: null });
     }
     searchParams.delete("phone");
     setSearchParams(searchParams, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loadingConvos, conversations.length]);
+
+  // Selecting a real conversation always dismisses any open draft.
+  useEffect(() => {
+    if (selectedId != null && draftConv) setDraftConv(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // After a draft's first message is sent, the real conversation lands via
+  // realtime/poll — find it by phone and open it (clearing the draft).
+  useEffect(() => {
+    if (!pendingSelectPhone) return;
+    const suffix = pendingSelectPhone.replace(/\D/g, "").slice(-9);
+    const found = conversations.find(
+      (c) => (c.contact_phone || "").replace(/\D/g, "").slice(-9) === suffix,
+    );
+    if (found) {
+      setSelectedId(found.id);
+      setPendingSelectPhone(null);
+    }
+  }, [pendingSelectPhone, conversations]);
 
   // Chatwoot inbox ids that belong to EMAIL caixas — these are now handled by the
   // dedicated email client (rail + reader), so they must never show in the chat
@@ -1140,6 +1181,29 @@ export default function Inbox() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const content = draft.trim();
+
+    // Draft conversation: create it by sending the first message (start_conversation),
+    // then auto-open the real conversation once it lands. Attachments aren't
+    // supported as the very first message (the contact has no thread yet).
+    if (draftConv) {
+      if (!content) return;
+      setDraft("");
+      startConversation.mutate(
+        { phone: draftConv.phone, content, inboxId: draftConv.inboxId },
+        {
+          onSuccess: () => {
+            setPendingSelectPhone(draftConv.phone);
+            toast({ title: "Mensagem enviada", description: "A abrir a conversa..." });
+          },
+          onError: (err) => {
+            setDraft(content);
+            toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
+          },
+        },
+      );
+      return;
+    }
+
     if ((!content && outAttachments.length === 0) || !selectedId) return;
     setDraft("");
 
@@ -1539,24 +1603,21 @@ export default function Inbox() {
       : sendableCaixas[0]?.chatwoot_inbox_id)
     ?? null;
 
-  const handleStartConversation = () => {
-    const phone = newConvPhone.replace(/\D/g, "");
-    const content = newConvMessage.trim();
-    if (phone.length < 9 || !content) return;
-    startConversation.mutate(
-      { phone, content, inboxId: effectiveNewConvCaixa },
-      {
-        onSuccess: () => {
-          setNewConvOpen(false);
-          setNewConvPhone("");
-          setNewConvMessage("");
-          toast({ title: "Mensagem enviada", description: "A conversa vai aparecer na lista em segundos." });
-        },
-        onError: (err) => {
-          toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
-        },
-      },
+  // Open the conversation for a phone: select the existing one, or start a draft.
+  const openConversationForContact = (phone: string, name: string) => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 9) return;
+    const suffix = digits.slice(-9);
+    const existing = conversations.find(
+      (c) => (c.contact_phone || "").replace(/\D/g, "").slice(-9) === suffix,
     );
+    setNewConvOpen(false);
+    if (existing) {
+      setSelectedId(existing.id);
+    } else {
+      setSelectedId(null);
+      setDraftConv({ phone: digits, name, inboxId: effectiveNewConvCaixa });
+    }
   };
 
   // ---- Empty state: no caixa connected yet ----
@@ -2025,9 +2086,11 @@ export default function Inbox() {
               >
                 <Settings2 className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="outline" title="Nova conversa" onClick={() => setNewConvOpen(true)}>
-                <Plus className="h-4 w-4" />
-              </Button>
+              {sendableCaixas.length > 0 && (
+                <Button size="icon" variant="outline" title="Nova conversa" onClick={() => setNewConvOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
           <div className="relative mb-3">
@@ -2656,8 +2719,8 @@ export default function Inbox() {
                 />
 
                 {draft.trim() || outAttachments.length > 0 ? (
-                  <Button type="submit" size="icon" disabled={sendMessage.isPending}>
-                    {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <Button type="submit" size="icon" disabled={sendMessage.isPending || startConversation.isPending}>
+                    {(sendMessage.isPending || startConversation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 ) : !isEmailSelected ? (
                   <Button type="button" size="icon" variant="ghost" title="Gravar mensagem de voz" onClick={startRecording}>
@@ -2721,64 +2784,15 @@ export default function Inbox() {
         onOpenConversation={openTaskConversation}
       />
 
-      <Dialog open={newConvOpen} onOpenChange={setNewConvOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nova conversa</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            {sendableCaixas.length > 1 && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Enviar pela caixa</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {sendableCaixas.map((c) => {
-                    const active = effectiveNewConvCaixa === c.chatwoot_inbox_id;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setNewConvCaixa(c.chatwoot_inbox_id ?? null)}
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                          active ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
-                        )}
-                      >
-                        {c.label || "WhatsApp"}{c.phone_number ? ` · +${c.phone_number}` : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Número de WhatsApp</label>
-              <Input
-                value={newConvPhone}
-                onChange={(e) => setNewConvPhone(e.target.value)}
-                placeholder="+351 912 345 678"
-                inputMode="tel"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Mensagem</label>
-              <Textarea
-                value={newConvMessage}
-                onChange={(e) => setNewConvMessage(e.target.value)}
-                placeholder="Escreve a primeira mensagem..."
-                rows={3}
-              />
-            </div>
-            <Button
-              className="w-full"
-              disabled={newConvPhone.replace(/\D/g, "").length < 9 || !newConvMessage.trim() || startConversation.isPending}
-              onClick={handleStartConversation}
-            >
-              {startConversation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Enviar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <NewConversationPicker
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        caixas={sendableCaixas}
+        selectedCaixa={effectiveNewConvCaixa}
+        onSelectCaixa={setNewConvCaixa}
+        conversations={conversations}
+        onPick={openConversationForContact}
+      />
 
       {/* Schedule message dialog */}
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
@@ -3314,6 +3328,147 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
+// Picker for starting a new conversation: search existing leads/clients (by name
+// or number) OR type a brand-new number. Picking a target does NOT compose here —
+// it opens the conversation (existing or a draft) so the first message is written
+// in the normal composer.
+function NewConversationPicker({
+  open, onOpenChange, caixas, selectedCaixa, onSelectCaixa, conversations, onPick,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  caixas: { id: string; label: string | null; phone_number: string | null; chatwoot_inbox_id: number | null }[];
+  selectedCaixa: number | null;
+  onSelectCaixa: (id: number | null) => void;
+  conversations: InboxConversation[];
+  onPick: (phone: string, name: string) => void;
+}) {
+  const [term, setTerm] = useState("");
+  useEffect(() => { if (open) setTerm(""); }, [open]);
+  const { data: results = [], isFetching } = useSearchCrmRecords(term);
+  const digits = term.replace(/\D/g, "");
+  const isPhone = digits.length >= 9;
+
+  const hasConv = (phone?: string | null) => {
+    const sfx = (phone || "").replace(/\D/g, "").slice(-9);
+    if (!sfx) return false;
+    return conversations.some((c) => (c.contact_phone || "").replace(/\D/g, "").slice(-9) === sfx);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nova conversa</DialogTitle>
+          <DialogDescription>Procura um lead ou cliente, ou escreve um número novo.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {caixas.length > 1 && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Enviar pela caixa</label>
+              <div className="flex flex-wrap gap-1.5">
+                {caixas.map((c) => {
+                  const active = selectedCaixa === c.chatwoot_inbox_id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onSelectCaixa(c.chatwoot_inbox_id ?? null)}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                        active ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {c.label || "WhatsApp"}{c.phone_number ? ` · +${c.phone_number}` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Nome do contacto, ou número (+351...)"
+              className="pl-9"
+            />
+          </div>
+
+          <div className="max-h-72 space-y-1 overflow-y-auto">
+            {/* Raw number option */}
+            {isPhone && (
+              <button
+                type="button"
+                onClick={() => onPick(digits, `+${digits}`)}
+                className="flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors hover:bg-accent"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                  <Smartphone className="h-4 w-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Iniciar conversa com +{digits}</p>
+                  <p className="text-xs text-muted-foreground">Número novo, fora do CRM</p>
+                </div>
+              </button>
+            )}
+
+            {/* CRM results */}
+            {results.map((r) => {
+              const phone = (r.phone || "").trim();
+              const disabled = !phone;
+              const existing = hasConv(phone);
+              return (
+                <button
+                  key={`${r.kind}-${r.id}`}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => phone && onPick(phone, r.name)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors",
+                    disabled ? "cursor-not-allowed opacity-50" : "hover:bg-accent",
+                  )}
+                >
+                  <ContactAvatar name={r.name} className="h-9 w-9 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{r.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {phone ? phone : "Sem número"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {r.kind === "client" ? "Cliente" : "Lead"}
+                  </span>
+                  {existing && (
+                    <span className="shrink-0 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-600">
+                      conversa
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Empty / hint states */}
+            {term.trim().length < 2 && !isPhone && (
+              <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                Escreve um nome para procurar, ou um número para começar.
+              </p>
+            )}
+            {term.trim().length >= 2 && !isFetching && results.length === 0 && !isPhone && (
+              <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                Nenhum lead ou cliente encontrado.
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ChannelBadge({ channel }: { channel: string | null }) {
   if (!channel) return null;

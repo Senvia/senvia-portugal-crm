@@ -733,6 +733,9 @@ export interface ContactMatch {
   kind: 'lead' | 'client';
   id: string;
   name: string;
+  // Present on results from useSearchCrmRecords — needed to start a WhatsApp
+  // conversation with the picked lead/client.
+  phone?: string | null;
 }
 
 // Matches a CRM lead/client behind a conversation. By the last 9 digits of the
@@ -1283,23 +1286,29 @@ export function useSearchCrmRecords(query: string) {
     queryKey: ['inbox-crm-search', organization?.id, term],
     queryFn: async (): Promise<ContactMatch[]> => {
       if (!organization?.id || term.length < 2) return [];
+      // Match by name OR phone (digits), so a number search also finds the CRM
+      // record. PostgREST .or() uses '*' as the LIKE wildcard.
+      const digits = term.replace(/\D/g, '');
+      const orFilter = digits.length >= 3
+        ? `name.ilike.%${term}%,phone.like.*${digits}*`
+        : `name.ilike.%${term}%`;
       const [{ data: leads }, { data: clients }] = await Promise.all([
         supabase
           .from('leads')
-          .select('id, name')
+          .select('id, name, phone')
           .eq('organization_id', organization.id)
-          .ilike('name', `%${term}%`)
+          .or(orFilter)
           .limit(8),
         supabase
           .from('crm_clients')
-          .select('id, name')
+          .select('id, name, phone')
           .eq('organization_id', organization.id)
-          .ilike('name', `%${term}%`)
+          .or(orFilter)
           .limit(8),
       ]);
       return [
-        ...(clients ?? []).map((c) => ({ kind: 'client' as const, id: c.id, name: c.name })),
-        ...(leads ?? []).map((l) => ({ kind: 'lead' as const, id: l.id, name: l.name })),
+        ...(clients ?? []).map((c) => ({ kind: 'client' as const, id: c.id, name: c.name, phone: c.phone })),
+        ...(leads ?? []).map((l) => ({ kind: 'lead' as const, id: l.id, name: l.name, phone: l.phone })),
       ];
     },
     enabled: !!organization?.id && term.length >= 2,
