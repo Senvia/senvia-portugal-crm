@@ -297,7 +297,40 @@ Deno.serve(async (req) => {
 
     // Realtime nudge: open Senvia inboxes subscribe to `inbox-<org>` and refetch
     // immediately, instead of waiting for the poll. Only for real messages.
+    // We also ship the NORMALIZED message itself so the client can append it to
+    // the open thread instantly (no Chatwoot round-trip); the client still runs a
+    // debounced refetch afterwards to reconcile attachments/placeholders.
     try {
+      const cwBase = (Deno.env.get('CHATWOOT_URL') || '').replace(/\/$/, '');
+      const absUrl = (u: unknown): string | null => {
+        const s = u == null ? '' : String(u);
+        if (!s) return null;
+        return /^https?:\/\//i.test(s) ? s : `${cwBase}${s.startsWith('/') ? '' : '/'}${s}`;
+      };
+      const atts = (Array.isArray(event.attachments) ? event.attachments : []).map((a: any) => ({
+        id: a?.id,
+        file_type: a?.file_type ?? 'file',
+        data_url: absUrl(a?.data_url),
+        thumb_url: absUrl(a?.thumb_url),
+        file_size: a?.file_size ?? null,
+        extension: a?.extension ?? null,
+      }));
+      // Chatwoot webhook message_type is a STRING here (incoming/outgoing/...).
+      const mt = String(event.message_type ?? '');
+      const broadcastMessage = {
+        id: event.id,
+        content: String(event.content ?? ''),
+        outgoing: mt === 'outgoing' || mt === 'template',
+        is_activity: mt === 'activity',
+        is_private: event.private === true,
+        created_at: event.created_at ?? null,
+        sender_name: event.sender?.name ?? null,
+        status: event.status ?? null,
+        wa_id: event.source_id ? String(event.source_id).replace(/^WAID:/i, '') : null,
+        attachments: atts,
+        content_type: event.content_type ?? null,
+        email_from: null, email_to: null, email_cc: null, email_subject: null, email_html_body: null,
+      };
       await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
         method: 'POST',
         headers: {
@@ -312,6 +345,7 @@ Deno.serve(async (req) => {
             payload: {
               conversation_id: event.conversation?.id ?? null,
               incoming: event.message_type === 'incoming',
+              message: broadcastMessage,
             },
           }],
         }),

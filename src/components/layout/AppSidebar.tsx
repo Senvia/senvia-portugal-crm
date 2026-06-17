@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";
+import { useSidebarStore } from "@/stores/useSidebarStore";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -36,6 +37,15 @@ const allNavItems: NavItem[] = [
   { to: "/settings", icon: Settings, label: "Definições" },
 ];
 
+// Hover tooltip shown only when the sidebar is collapsed (parent must be `group`).
+function CollapsedTooltip({ label }: { label: string }) {
+  return (
+    <span className="pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-md border border-sidebar-border bg-sidebar-accent px-2 py-1 text-xs font-medium text-sidebar-foreground shadow-md group-hover:block">
+      {label}
+    </span>
+  );
+}
+
 const getRoleLabel = (roles: AppRole[]): string => {
   if (roles.includes('super_admin')) return 'Super Admin';
   if (roles.includes('admin')) return 'Administrador';
@@ -56,6 +66,8 @@ export function AppSidebar({
   const navigate = useNavigate();
   const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
   const { setOpen: setOttoOpen } = useOttoStore();
+  const collapsed = useSidebarStore((s) => s.collapsed);
+  const toggleCollapsed = useSidebarStore((s) => s.toggle);
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
@@ -95,32 +107,49 @@ export function AppSidebar({
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 gradient-sidebar border-r border-sidebar-border">
+      <aside className={cn(
+        "fixed left-0 top-0 z-40 h-screen gradient-sidebar border-r border-sidebar-border transition-[width] duration-200",
+        collapsed ? "w-16" : "w-64",
+      )}>
         <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center border-b border-sidebar-border px-4">
-            <img 
-              alt={organization?.name || "SENVIA"} 
-              className="h-10 w-40 object-contain" 
-              src={organization?.logo_url || "/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png"} 
-            />
+          <div className={cn("flex h-16 items-center border-b border-sidebar-border", collapsed ? "justify-center px-2" : "justify-between px-4")}>
+            {!collapsed && (
+              <img
+                alt={organization?.name || "SENVIA"}
+                className="h-10 w-40 object-contain"
+                src={organization?.logo_url || "/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png"}
+              />
+            )}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+              className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </button>
           </div>
 
-          <div className="border-b border-sidebar-border px-3 py-3">
-            <OrganizationSwitcher />
-          </div>
+          {!collapsed && (
+            <div className="border-b border-sidebar-border px-3 py-3">
+              <OrganizationSwitcher />
+            </div>
+          )}
 
-          <nav className="flex-1 space-y-1 px-3 py-4">
+          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
             {navItems.map(item => {
               const locked = item.moduleKey ? isModuleLocked(item.moduleKey) : false;
               const isActive = location.pathname === item.to || item.to !== "/dashboard" && location.pathname.startsWith(item.to);
-              
+
               return (
                 <NavLink
                   key={item.to}
                   to={locked ? "#" : item.to}
                   onClick={(e) => handleLockedClick(e, item)}
+                  title={collapsed ? item.label : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    collapsed && "justify-center",
                     locked
                       ? "cursor-pointer text-sidebar-muted/50 hover:bg-sidebar-accent/30"
                       : isActive
@@ -128,10 +157,15 @@ export function AppSidebar({
                         : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
                 >
-                  <item.icon className="h-5 w-5" />
-                  <span className="flex-1">{item.label}</span>
-                  {item.to === "/inbox" && !locked && <InboxUnreadBadge />}
-                  {locked && <Lock className="h-3.5 w-3.5 text-sidebar-muted/60" />}
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {item.to === "/inbox" && !locked && (
+                    <span className={cn(collapsed && "absolute right-0.5 top-0.5 scale-90")}>
+                      <InboxUnreadBadge />
+                    </span>
+                  )}
+                  {!collapsed && locked && <Lock className="h-3.5 w-3.5 text-sidebar-muted/60" />}
+                  {collapsed && <CollapsedTooltip label={item.label} />}
                 </NavLink>
               );
             })}
@@ -140,71 +174,94 @@ export function AppSidebar({
             <button
               type="button"
               onClick={() => setOttoOpen(true)}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-muted transition-all duration-200 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              title={collapsed ? "Suporte / Otto" : undefined}
+              className={cn(
+                "group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-muted transition-all duration-200 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                collapsed && "justify-center",
+              )}
             >
-              <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 rounded-full" />
-              <span className="flex-1 text-left">Suporte / Otto</span>
+              <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 shrink-0 rounded-full" />
+              {!collapsed && <span className="flex-1 text-left">Suporte / Otto</span>}
+              {collapsed && <CollapsedTooltip label="Suporte / Otto" />}
             </button>
 
             {hasPerfect2GetherModuleAccess && (
               <NavLink
                 to="/portal-total-link"
+                title={collapsed ? "Portal Total Link" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  collapsed && "justify-center",
                   location.pathname.startsWith("/portal-total-link")
                     ? "bg-sidebar-accent text-sidebar-foreground"
                     : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                 )}
               >
-                <Building2 className="h-5 w-5" />
-                Portal Total Link
+                <Building2 className="h-5 w-5 shrink-0" />
+                {!collapsed && "Portal Total Link"}
+                {collapsed && <CollapsedTooltip label="Portal Total Link" />}
               </NavLink>
             )}
-            
+
             {isSuperAdmin && (
               <NavLink
                 to="/system-admin"
+                title={collapsed ? "System Admin" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  collapsed && "justify-center",
                   location.pathname.startsWith("/system-admin")
                     ? "bg-sidebar-accent text-sidebar-foreground"
                     : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                 )}
               >
-                <Shield className="h-5 w-5" />
-                System Admin
+                <Shield className="h-5 w-5 shrink-0" />
+                {!collapsed && "System Admin"}
+                {collapsed && <CollapsedTooltip label="System Admin" />}
               </NavLink>
             )}
           </nav>
 
-          <div className="border-t border-sidebar-border p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-foreground">
+          <div className={cn("border-t border-sidebar-border", collapsed ? "p-2" : "p-4")}>
+            <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-foreground">
                 {userName.charAt(0).toUpperCase()}
               </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium text-sidebar-foreground">
-                  {userName}
-                </p>
-                <p className="text-xs text-sidebar-muted">{getRoleLabel(roles)}</p>
-              </div>
-              <button onClick={handleLogout} className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" title="Terminar sessão">
-                <LogOut className="h-4 w-4" />
-              </button>
+              {!collapsed && (
+                <>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-medium text-sidebar-foreground">
+                      {userName}
+                    </p>
+                    <p className="text-xs text-sidebar-muted">{getRoleLabel(roles)}</p>
+                  </div>
+                  <button onClick={handleLogout} className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" title="Terminar sessão">
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
+            {collapsed && (
+              <button onClick={handleLogout} className="group relative mt-1 flex w-full justify-center rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" title="Terminar sessão">
+                <LogOut className="h-4 w-4" />
+                <CollapsedTooltip label="Terminar sessão" />
+              </button>
+            )}
           </div>
 
-          <div className="px-4 py-2 text-center leading-tight">
-            <NavLink
-              to="/novidades"
-              className="block text-[10px] text-sidebar-muted/60 transition-colors hover:text-sidebar-muted"
-            >
-              Senvia OS v{APP_VERSION}
-            </NavLink>
-            <span className="block text-[9px] text-sidebar-muted/40">
-              {typeof window !== 'undefined' ? window.location.host : ''}
-            </span>
-          </div>
+          {!collapsed && (
+            <div className="px-4 py-2 text-center leading-tight">
+              <NavLink
+                to="/novidades"
+                className="block text-[10px] text-sidebar-muted/60 transition-colors hover:text-sidebar-muted"
+              >
+                Senvia OS v{APP_VERSION}
+              </NavLink>
+              <span className="block text-[9px] text-sidebar-muted/40">
+                {typeof window !== 'undefined' ? window.location.host : ''}
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 

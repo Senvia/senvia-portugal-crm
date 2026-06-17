@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMessagingChannels } from '@/hooks/useMessagingChannels';
 
 export interface InboxConversation {
   id: number;
@@ -116,6 +117,32 @@ function rollbackConversations(
   if (previous) queryClient.setQueryData(['inbox-conversations', orgId], previous);
 }
 
+// Append a realtime-delivered message to every message cache that contains the
+// given conversation (the open thread, whatever its merged altIds). Deduped by
+// id so the later reconciling refetch never double-counts. Key shape:
+// ['inbox-messages', orgId, conversationId, altIdsCsv].
+function appendMessageToCaches(
+  queryClient: QueryClient,
+  orgId: string,
+  conversationId: number,
+  msg: InboxMessage,
+) {
+  const caches = queryClient.getQueryCache().findAll({ queryKey: ['inbox-messages', orgId] });
+  for (const cache of caches) {
+    const key = cache.queryKey as [string, string, number | null, string?];
+    const primary = key[2];
+    const altCsv = key[3] ?? '';
+    const altIds = altCsv ? altCsv.split(',').map(Number) : [];
+    const belongs = primary === conversationId || altIds.includes(conversationId);
+    if (!belongs) continue;
+    queryClient.setQueryData<InboxMessage[]>(cache.queryKey, (old) => {
+      if (!old) return old; // thread not loaded yet — let the refetch populate it
+      if (old.some((m) => m.id === msg.id)) return old;
+      return [...old, msg];
+    });
+  }
+}
+
 // Realtime push: chatwoot-webhook broadcasts on `inbox-<org>` whenever a message
 // lands in Chatwoot (incoming, or our own send mirrored back). Refetching on the
 // event makes receiving near-instant; polling becomes a relaxed fallback.
@@ -137,7 +164,16 @@ export function useInboxRealtime(): boolean {
     supabase.realtime.setAuth();
     const channel = supabase
       .channel(`inbox-${orgId}`, { config: { private: true } })
-      .on('broadcast', { event: 'message' }, () => {
+      .on('broadcast', { event: 'message' }, ({ payload }) => {
+        // Instant append: the webhook now ships the message itself, so the OPEN
+        // thread updates immediately without waiting for the Chatwoot refetch.
+        // The debounced invalidate below still runs to reconcile (attachments,
+        // media placeholders, server ordering).
+        const convId = Number(payload?.conversation_id);
+        const msg = payload?.message as InboxMessage | undefined;
+        if (convId && msg && msg.id != null) {
+          appendMessageToCaches(queryClient, orgId, convId, msg);
+        }
         // AI task suggestions land a few seconds after the message — refresh
         // the tasks caches once the classifier has had time to run.
         if (taskTimer !== null) window.clearTimeout(taskTimer);
@@ -262,6 +298,28 @@ function convKey(c: InboxConversation): string {
   return (c.contact_phone || '').replace(/\D/g, '') || `id-${c.id}`;
 }
 
+// Persist the conversations list to localStorage so a page reload shows the last
+// known inbox INSTANTLY (no "A carregar conversas..." against a slow Chatwoot),
+// then refreshes in the background. Keyed per org; capped to keep it small.
+const CONV_CACHE_PREFIX = 'inbox-conv-cache-v1:';
+function loadCachedConversations(orgId: string): InboxConversation[] | undefined {
+  try {
+    const raw = localStorage.getItem(CONV_CACHE_PREFIX + orgId);
+    if (!raw) return undefined;
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) && arr.length > 0 ? arr : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function saveCachedConversations(orgId: string, list: InboxConversation[]) {
+  try {
+    localStorage.setItem(CONV_CACHE_PREFIX + orgId, JSON.stringify(list.slice(0, 200)));
+  } catch {
+    /* quota — non-fatal, the in-memory cache still works */
+  }
+}
+
 // Shared fetch+merge for the conversations cache. BOTH the inbox list and the
 // sidebar unread badge use this exact queryFn under the same key, so the badge's
 // poll can never overwrite the list's merged cache with a raw fetch (the bug
@@ -271,14 +329,19 @@ async function fetchConversationsMerged(
   queryClient: QueryClient,
   orgId: string,
 ): Promise<InboxConversation[]> {
-  const previous = queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]);
+  // Fall back to the localStorage cache when the in-memory cache is cold (page
+  // reload): lets the refresh run in the cheaper 'fresh' mode (2 pages) AND keeps
+  // the older history rows the merge below preserves.
+  const previous =
+    queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]) ??
+    loadCachedConversations(orgId);
   const mode = previous && previous.length > 0 ? 'fresh' : 'full';
   const res = await invokeInbox<{ conversations: InboxConversation[] }>(orgId, {
     action: 'list_conversations',
     mode,
   });
   const fresh = res.conversations || [];
-  if (mode === 'full' || !previous) return fresh;
+  if (mode === 'full' || !previous) { saveCachedConversations(orgId, fresh); return fresh; }
   // Merge: fresh rows win; keep cached rows for contacts not in the fresh window
   // (no recent activity — their state can only have changed through our own
   // optimistic patches, which are already in `previous`).
@@ -344,13 +407,20 @@ export function saveMutedIds(ids: number[]) {
 
 // Conversations that should count as "unread" for badges: active (not archived),
 // real contacts (not the Evolution control bot), not muted, with unread messages.
-export function countUnreadConversations(conversations: InboxConversation[]): number {
+// excludeInboxIds drops conversations of EMAIL caixas — those are handled by the
+// dedicated email client, so the messaging badge must not count them (otherwise
+// the sidebar shows e.g. 41 while the inbox's "Não lidas" shows 5).
+export function countUnreadConversations(
+  conversations: InboxConversation[],
+  excludeInboxIds?: Set<number>,
+): number {
   const muted = new Set(loadMutedIds());
   return conversations.filter(
     (c) =>
       c.status !== 'resolved' &&
       c.contact_name !== 'EvolutionAPI' &&
       !muted.has(c.id) &&
+      !(c.inbox_id != null && excludeInboxIds?.has(c.inbox_id)) &&
       (c.unread_count || 0) > 0,
   ).length;
 }
@@ -362,6 +432,17 @@ export function countUnreadConversations(conversations: InboxConversation[]): nu
 export function useInboxUnreadTotal(enabled = true) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
+  // Email caixas are handled by the dedicated email client — exclude them from the
+  // messaging unread badge so it matches the inbox's own "Não lidas" count.
+  const { data: channels = [] } = useMessagingChannels();
+  const emailInboxIds = useMemo(
+    () => new Set(
+      channels
+        .filter((c) => c.channel_type === 'email' && c.chatwoot_inbox_id != null)
+        .map((c) => c.chatwoot_inbox_id as number),
+    ),
+    [channels],
+  );
   const query = useQuery({
     queryKey: ['inbox-conversations', organization?.id],
     // SAME queryFn as useInboxConversations — sharing the merge logic is what
@@ -372,7 +453,7 @@ export function useInboxUnreadTotal(enabled = true) {
     staleTime: 10000,
     refetchOnWindowFocus: false,
   });
-  return { total: countUnreadConversations(query.data || []), isLoading: query.isLoading };
+  return { total: countUnreadConversations(query.data || [], emailInboxIds), isLoading: query.isLoading };
 }
 
 // Messages of a conversation (refetched on realtime events; polled as fallback).
@@ -407,6 +488,29 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     // exhaust browser memory (original 30min caused OOM in dev).
     gcTime: 5 * 60 * 1000,
   });
+}
+
+// Prefetch a conversation's thread into the cache so opening it is instant.
+// Wired to row hover: by the time the agent clicks, the Chatwoot round-trip is
+// already done (or in flight). No-op if already cached and fresh.
+export function useInboxMessagePrefetch() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useCallback((conversationId: number, altIds: number[] = []) => {
+    if (!organization?.id || !conversationId) return;
+    const allIds = [conversationId, ...altIds];
+    queryClient.prefetchQuery({
+      queryKey: ['inbox-messages', organization.id, conversationId, altIds.join(',')],
+      queryFn: async (): Promise<InboxMessage[]> => {
+        const res = await invokeInbox<{ messages: InboxMessage[] }>(organization.id!, {
+          action: 'get_messages',
+          conversation_ids: allIds,
+        });
+        return res.messages || [];
+      },
+      staleTime: 8000,
+    });
+  }, [organization?.id, queryClient]);
 }
 
 // Server-side search across MESSAGE CONTENT (not just contact names).

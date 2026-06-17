@@ -55,7 +55,12 @@ export function useMessagingChannels() {
       const { data, error } = await supabase
         .from('messaging_channels')
         .select('*')
-        .eq('organization_id', organization.id);
+        .eq('organization_id', organization.id)
+        // Stable order: without it Postgres returns rows in physical/heap order,
+        // which changes whenever a row is UPDATEd — making the cards jump around
+        // every time a caixa is edited. created_at + id is deterministic.
+        .order('created_at', { ascending: true, nullsFirst: true })
+        .order('id', { ascending: true });
       if (error) throw error;
       return (data || []) as MessagingChannel[];
     },

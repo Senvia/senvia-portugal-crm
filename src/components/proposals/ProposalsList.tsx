@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { useLeadProposals } from '@/hooks/useProposals';
 import { CreateProposalModal } from './CreateProposalModal';
 import { ProposalDetailsModal } from './ProposalDetailsModal';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_TYPE_LABELS } from '@/types/proposals';
+import { PROPOSAL_TYPE_LABELS } from '@/types/proposals';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { proposalStatusBadge } from '@/lib/status-badge-maps';
 import type { Proposal } from '@/types/proposals';
 import type { Lead } from '@/types';
 import { cn } from '@/lib/utils';
@@ -61,9 +63,7 @@ export function ProposalsList({ lead }: ProposalsListProps) {
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <Badge className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}>
-                    {PROPOSAL_STATUS_LABELS[proposal.status]}
-                  </Badge>
+                  <StatusBadge {...proposalStatusBadge(proposal.status)} />
                   {proposal.proposal_type && (
                     <Badge className={cn('text-xs', proposal.proposal_type === 'energia' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-violet-500/20 text-violet-400')}>
                       {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3 mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}

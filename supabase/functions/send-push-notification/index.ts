@@ -329,11 +329,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Extract conversation ID from tag (format: "inbox-123") so muted conversations
+    // can be filtered per-subscription before sending.
+    const conversationId = tag?.startsWith('inbox-') ? parseInt(tag.slice(6), 10) : NaN;
+
     let successCount = 0;
     const expiredEndpoints: string[] = [];
     const results: Array<{ endpoint: string; success: boolean; status?: number; error?: string }> = [];
 
     for (const sub of subscriptions) {
+      if (!isNaN(conversationId) && Array.isArray(sub.muted_conversation_ids) && sub.muted_conversation_ids.includes(conversationId)) {
+        console.log(`Skipping push for user ${sub.user_id} — conversation ${conversationId} is muted`);
+        continue;
+      }
+
       const result = await sendWebPush(
         { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
         payload,

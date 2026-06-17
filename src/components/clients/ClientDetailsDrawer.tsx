@@ -36,8 +36,10 @@ import {
 import { formatDate, formatCurrency, getInboxUrl } from "@/lib/format";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, type ProposalStatus, type Proposal } from "@/types/proposals";
-import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, type SaleStatus } from "@/types/sales";
+import { type ProposalStatus, type Proposal } from "@/types/proposals";
+import { type SaleStatus } from "@/types/sales";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { saleStatusBadge, proposalStatusBadge } from "@/lib/status-badge-maps";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
@@ -453,9 +455,7 @@ export function ClientDetailsDrawer({
                             <div className="flex items-center gap-2">
                               <div className="text-right">
                                 <p className="font-semibold text-success">{formatCurrency(proposal.total_value)}</p>
-                                <Badge variant="outline" className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status as ProposalStatus])}>
-                                  {PROPOSAL_STATUS_LABELS[proposal.status as ProposalStatus] || proposal.status}
-                                </Badge>
+                                <StatusBadge {...proposalStatusBadge(proposal.status as ProposalStatus)} />
                               </div>
                               <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             </div>
@@ -480,9 +480,7 @@ export function ClientDetailsDrawer({
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-success">{formatCurrency(sale.total_value)}</p>
-                              <Badge variant="outline" className={cn('text-xs', SALE_STATUS_COLORS[sale.status as SaleStatus])}>
-                                {SALE_STATUS_LABELS[sale.status as SaleStatus] || sale.status}
-                              </Badge>
+                              <StatusBadge {...saleStatusBadge(sale.status as SaleStatus)} />
                             </div>
                           </div>
                         ))}

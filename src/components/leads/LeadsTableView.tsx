@@ -367,24 +367,24 @@ export function LeadsTableView({
                         disabled={isLocked}
                       >
                         <SelectTrigger className="w-[130px] h-8 border-0 bg-transparent p-0">
-                          <Badge
-                            variant="outline"
-                            className="text-xs"
+                          <span
+                            className="inline-flex h-[26px] items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold"
                             style={currentStage ? getStatusBadgeStyle(currentStage.color) : undefined}
                           >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                             {getStatusLabel(lead.status || '')}
-                          </Badge>
+                          </span>
                         </SelectTrigger>
                         <SelectContent>
                           {stages.map((stage) => (
                             <SelectItem key={stage.id} value={stage.key}>
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
+                              <span
+                                className="inline-flex h-[26px] items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold"
                                 style={getStatusBadgeStyle(stage.color)}
                               >
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                                 {stage.name}
-                              </Badge>
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>

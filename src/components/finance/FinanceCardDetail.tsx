@@ -16,11 +16,9 @@ import type { DateRange } from "react-day-picker";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentWithSale } from "@/types/finance";
-import {
-  SALE_STATUS_LABELS, SALE_STATUS_COLORS,
-  PAYMENT_RECORD_STATUS_LABELS, PAYMENT_RECORD_STATUS_COLORS,
-  PAYMENT_METHOD_LABELS,
-} from "@/types/sales";
+import { PAYMENT_METHOD_LABELS } from "@/types/sales";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { saleStatusBadge, paymentRecordStatusBadge } from "@/lib/status-badge-maps";
 import { useSales } from "@/hooks/useSales";
 import { useExpenses, useDeleteExpense } from "@/hooks/useExpenses";
 import { useUpdateSalePayment, useCreateSalePayment } from "@/hooks/useSalePayments";
@@ -188,9 +186,7 @@ function PaymentsDetailTable({ payments, allowMarkPaid = false }: { payments: Pa
                   {p.payment_method ? PAYMENT_METHOD_LABELS[p.payment_method] : "—"}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={cn(PAYMENT_RECORD_STATUS_COLORS[p.status])}>
-                    {PAYMENT_RECORD_STATUS_LABELS[p.status]}
-                  </Badge>
+                  <StatusBadge {...paymentRecordStatusBadge(p.status)} />
                 </TableCell>
                 <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
                 {showActions && (
@@ -294,9 +290,7 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
                   <TableCell>{s.client?.name || s.lead?.name || "—"}</TableCell>
                   <TableCell>{s.code}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn(SALE_STATUS_COLORS[s.status])}>
-                      {SALE_STATUS_LABELS[s.status]}
-                    </Badge>
+                    <StatusBadge {...saleStatusBadge(s.status)} />
                   </TableCell>
                   <TableCell className="text-right font-medium">{formatCurrency(s.total_value)}</TableCell>
                 </TableRow>

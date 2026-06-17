@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Settings2, Trash2, Plus, Loader2, Eye, EyeOff, Server, Lock, AlertCircle, UsersRound, ArrowLeft, PenLine } from 'lucide-react';
+import { Mail, Settings2, Trash2, Plus, Loader2, Eye, EyeOff, Server, Lock, AlertCircle, UsersRound, ArrowLeft, PenLine, Plane } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import {
 } from '@/hooks/useEmailChannels';
 import { useUpdateChannelAssignment } from '@/hooks/useMessagingChannels';
 import { CollaboratorPicker } from './CollaboratorPicker';
+import { SignaturesTab, VacationTab } from './EmailExtrasTabs';
 
 // --- Form state ---
 
@@ -210,7 +211,7 @@ function EmailForm({ form, setForm, isEdit = false, error }: {
 
 // --- Full-Screen Editor ---
 
-type EditorTab = 'config' | 'team' | 'signatures';
+type EditorTab = 'config' | 'team' | 'signatures' | 'vacation';
 
 interface TabDef {
   key: EditorTab;
@@ -303,7 +304,8 @@ function EmailFullScreenEditor({
   const TABS: TabDef[] = [
     { key: 'config',     label: 'Configuração da conta', icon: Settings2,  desc: 'Servidor de email, credenciais IMAP e SMTP.' },
     { key: 'team',       label: 'Colaboradores',          icon: UsersRound, desc: 'Quem vê e atende esta caixa no Inbox.' },
-    { key: 'signatures', label: 'Assinaturas',            icon: PenLine,    desc: 'Assinaturas automáticas por colaborador.' },
+    { key: 'signatures', label: 'Assinaturas',            icon: PenLine,    desc: 'Assinaturas incluídas no final das mensagens enviadas.' },
+    { key: 'vacation',   label: 'Resposta de férias',     icon: Plane,      desc: 'Resposta automática às mensagens recebidas durante um período.' },
   ];
 
   const currentTab = TABS.find((t) => t.key === activeTab)!;
@@ -416,13 +418,25 @@ function EmailFullScreenEditor({
             )}
 
             {activeTab === 'signatures' && (
-              <div className="rounded-xl border border-dashed p-10 text-center bg-muted/10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/30 mx-auto mb-3">
-                  <PenLine className="h-6 w-6 text-muted-foreground/50" />
+              isEdit ? (
+                <SignaturesTab channel={channel!} />
+              ) : (
+                <div className="rounded-xl border border-dashed p-8 text-center bg-muted/10">
+                  <PenLine className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Cria a caixa primeiro para configurar assinaturas.</p>
                 </div>
-                <p className="text-sm font-medium text-muted-foreground">Assinaturas ainda não disponíveis</p>
-                <p className="text-xs text-muted-foreground mt-1">Esta funcionalidade será adicionada em breve.</p>
-              </div>
+              )
+            )}
+
+            {activeTab === 'vacation' && (
+              isEdit ? (
+                <VacationTab channel={channel!} />
+              ) : (
+                <div className="rounded-xl border border-dashed p-8 text-center bg-muted/10">
+                  <Plane className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Cria a caixa primeiro para configurar a resposta de férias.</p>
+                </div>
+              )
             )}
           </div>
 

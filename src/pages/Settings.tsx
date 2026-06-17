@@ -72,6 +72,15 @@ export default function Settings() {
       setActiveSub('account-plan');
       if (tab === 'billing') setSearchParams({}, { replace: true });
     }
+    // Deep link from the empty inbox: open Integrações → Caixas de Entrada.
+    // ?addInbox=1 survives so IntegrationsContent can auto-open the "Nova caixa" dialog.
+    if (tab === 'inboxes') {
+      setActiveGroup('integrations');
+      setActiveSub('integrations-connect');
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
   }, []);
 
 

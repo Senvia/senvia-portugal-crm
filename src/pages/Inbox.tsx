@@ -35,6 +35,7 @@ import {
   useAutoReplyConfig,
   useSaveAutoReplyConfig,
   countUnreadConversations,
+  useInboxMessagePrefetch,
   loadMutedIds,
   saveMutedIds,
   AutoReplyConfig,
@@ -49,6 +50,7 @@ import {
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
 import { EmailListReader } from "@/components/email/EmailListReader";
 import { ContactNotes } from "@/components/contacts/ContactNotes";
@@ -89,6 +91,7 @@ import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { supabase } from "@/integrations/supabase/client";
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
@@ -96,6 +99,37 @@ function initials(name: string): string {
 
 function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "";
+}
+
+// Group messages arrive from Evolution with the individual sender embedded in the
+// body as a bold prefix, e.g. "**+351 910 812 500 - Ana Silva:**\n\nactual text".
+// Pull that out so we can show the sender's name + avatar like WhatsApp does,
+// and strip it from the visible body. Returns null sender for non-group/no-prefix.
+const GROUP_SENDER_RE = /^\*\*\s*(.+?)\s*:\*\*\s*\n*/;
+function parseGroupMessage(content: string): { sender: string | null; body: string } {
+  const match = content.match(GROUP_SENDER_RE);
+  if (!match) return { sender: null, body: content };
+  const inner = match[1].trim(); // e.g. "+351 910 812 500 - Ana Silva"
+  const body = content.slice(match[0].length);
+  const dash = inner.indexOf(" - ");
+  if (dash > -1) {
+    const phone = inner.slice(0, dash).trim();
+    const name = inner.slice(dash + 3).trim();
+    return { sender: name || phone, body };
+  }
+  return { sender: inner, body };
+}
+
+// Stable per-sender colour (WhatsApp-style) so each participant in a group keeps
+// the same accent across their messages. Hashes the name into a fixed palette.
+const GROUP_SENDER_COLORS = [
+  "text-rose-600", "text-amber-600", "text-emerald-600", "text-sky-600",
+  "text-violet-600", "text-fuchsia-600", "text-teal-600", "text-orange-600",
+];
+function senderColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return GROUP_SENDER_COLORS[Math.abs(h) % GROUP_SENDER_COLORS.length];
 }
 
 // E.164 display: exactly one leading "+". Chatwoot may store the number already
@@ -466,7 +500,8 @@ export default function Inbox() {
   }, [channels]);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
+  const prefetchMessages = useInboxMessagePrefetch();
   const { isAdmin } = usePermissions();
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
@@ -557,8 +592,11 @@ export default function Inbox() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const prevSelectedRef = useRef<number | null>(null);
+  // True while a freshly-opened conversation still owes its initial scroll to the
+  // bottom (messages and/or images load asynchronously after the switch).
+  const needsInitialScrollRef = useRef(false);
   // Latest list/selection/action for the singly-bound keyboard handler.
   const kbdRef = useRef<{
     filtered: InboxConversation[];
@@ -581,6 +619,9 @@ export default function Inbox() {
   const selected = conversations.find((c) => c.id === selectedId) || null;
   const altIds = selected?.alt_ids ?? [];
   const isEmailSelected = !!(selected?.channel?.toLowerCase().includes('email'));
+  // WhatsApp group: the JID ends in @g.us (robust), with a (GROUP) name fallback.
+  const isGroupSelected =
+    !!selected?.contact_identifier?.includes('@g.us') || /\(GROUP\)/i.test(selected?.contact_name ?? '');
   const { data: messages = [], isLoading: loadingMessages } = useInboxMessages(selectedId, altIds, live);
   // Debounced server-side search (one request after typing pauses, not per key).
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -662,6 +703,7 @@ export default function Inbox() {
   const { data: openTasks = [] } = useOpenInboxTasks(channelConfigured);
   // "Transformar mensagem em tarefa" pre-fills the panel quick-add.
   const [taskPrefill, setTaskPrefill] = useState<string | null>(null);
+  const [tasksModalOpen, setTasksModalOpen] = useState(false);
   // Badge per conversation: phone suffix -> open / overdue.
   const taskStateByPhone = useMemo(() => {
     const map = new Map<string, "open" | "overdue">();
@@ -810,14 +852,27 @@ export default function Inbox() {
   // in the render body cost on every keystroke.
   type ThreadRow =
     | { type: "sep"; key: string; label: string }
-    | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean };
+    | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean; groupSender?: string | null; displayContent?: string };
   const threadRows = useMemo<ThreadRow[]>(() => {
     const rows: ThreadRow[] = [];
     const GROUP_WINDOW = INBOX_CONFIG.GROUP_WINDOW_MS;
     const msgs = thread.filter((m) => !m.is_activity);
+    // In a WhatsApp group, the individual sender is embedded in each incoming
+    // body. Parse it once so grouping + rendering both share the same identity.
+    const parsedSender = new Map<number, string | null>();
+    const parsedBody = new Map<number, string>();
+    if (isGroupSelected) {
+      for (const m of msgs) {
+        if (m.outgoing) continue;
+        const { sender, body } = parseGroupMessage(m.content || "");
+        if (sender) { parsedSender.set(m.id, sender); parsedBody.set(m.id, body); }
+      }
+    }
+    const senderOf = (m: InboxMessage) =>
+      m.outgoing ? (m.sender_name || "") : (parsedSender.get(m.id) || "");
     const sameSender = (a: InboxMessage, b: InboxMessage) =>
       a.outgoing === b.outgoing &&
-      (a.sender_name || "") === (b.sender_name || "") &&
+      senderOf(a) === senderOf(b) &&
       !!a.is_private === !!b.is_private;
     let lastDay = "";
     for (let i = 0; i < msgs.length; i++) {
@@ -838,10 +893,18 @@ export default function Inbox() {
         dayKey(toMs(next.created_at)) !== k ||
         !sameSender(next, m) ||
         toMs(next.created_at) - ms > GROUP_WINDOW;
-      rows.push({ type: "msg", key: `m-${m.id}`, msg: m, firstOfGroup, lastOfGroup });
+      rows.push({
+        type: "msg",
+        key: `m-${m.id}`,
+        msg: m,
+        firstOfGroup,
+        lastOfGroup,
+        groupSender: parsedSender.get(m.id) ?? null,
+        displayContent: parsedBody.get(m.id),
+      });
     }
     return rows;
-  }, [thread]);
+  }, [thread, isGroupSelected]);
 
   // DEV-only diagnostic for the inbox OOM/freeze: samples the JS heap + render
   // rate once a second so the next crash leaves a trail (console + sessionStorage
@@ -924,18 +987,45 @@ export default function Inbox() {
 
   const visiblePending = pending.filter((p) => p.conversationId === selectedId);
 
+  // Auto-grow the composer with its content: reset to 1 line, then expand to fit
+  // (capped at ~10 lines by the CSS max-height, after which it scrolls). Runs on
+  // every draft change, including the reset to empty after a send.
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft, selectedId]);
+
   // Auto-scroll to the latest message — but DON'T yank the view to the bottom
   // while the agent is reading older history. Always jump on opening a different
   // conversation; otherwise only follow when already near the bottom.
+  const jumpToBottom = useCallback(() => {
+    // Pin via the container (instant, no smooth) so async image/layout reflow
+    // doesn't leave the view stranded mid-thread.
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView();
+  }, []);
   useEffect(() => {
     const switched = prevSelectedRef.current !== selectedId;
     prevSelectedRef.current = selectedId;
     if (switched) {
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView();
-        composerRef.current?.focus();
-      }, 50);
-      return;
+      // Owe an initial bottom scroll until the thread (and its images) settle.
+      needsInitialScrollRef.current = true;
+      composerRef.current?.focus();
+    }
+    // While we still owe the opening scroll, keep pinning to the bottom as the
+    // messages arrive and images load (each changes scrollHeight). Re-correct a
+    // few times, then release control back to the agent.
+    if (needsInitialScrollRef.current) {
+      if (messages.length === 0) return; // nothing to scroll to yet
+      jumpToBottom();
+      requestAnimationFrame(jumpToBottom);
+      const t1 = window.setTimeout(jumpToBottom, 120);
+      const t2 = window.setTimeout(jumpToBottom, 400);
+      const t3 = window.setTimeout(() => { jumpToBottom(); needsInitialScrollRef.current = false; }, 800);
+      return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
     }
     // Only follow to the bottom when the agent is already near it — don't yank
     // the view (a synchronous full-thread reflow) while they read older history.
@@ -943,7 +1033,7 @@ export default function Inbox() {
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, visiblePending.length, selectedId]);
+  }, [messages.length, visiblePending.length, selectedId, jumpToBottom]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
   useEffect(() => {
@@ -1208,14 +1298,23 @@ export default function Inbox() {
   };
 
   // ---- Conversation actions (used by the contact panel) ----
-  const handleToggleMute = () => {
+  const handleToggleMute = async () => {
     if (!selected) return;
-    const next = muted.includes(selected.id)
+    const wasMuted = muted.includes(selected.id);
+    const next = wasMuted
       ? muted.filter((m) => m !== selected.id)
       : [...muted, selected.id];
     setMuted(next);
     saveMutedIds(next);
-    toast({ title: muted.includes(selected.id) ? "Notificações reativadas" : "Conversa silenciada" });
+    // Sync to server so the push edge function can filter per-user
+    if (user?.id && organization?.id) {
+      await supabase
+        .from('push_subscriptions')
+        .update({ muted_conversation_ids: next })
+        .eq('user_id', user.id)
+        .eq('organization_id', organization.id);
+    }
+    toast({ title: wasMuted ? "Notificações reativadas" : "Conversa silenciada" });
   };
 
   const handleExport = () => {
@@ -1224,8 +1323,11 @@ export default function Inbox() {
       .filter((m) => !m.is_activity)
       .map((m) => {
         const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
-        const who = m.outgoing ? (m.sender_name || "Eu") : selected.contact_name;
-        const what = m.content || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
+        // In groups, pull the individual sender (and clean body) from the prefix.
+        const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
+        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || selected.contact_name);
+        const text = parsed?.sender ? parsed.body : m.content;
+        const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
         return `[${when}] ${who}: ${what}`;
       });
     const contactRef = displayPhone(selected.contact_phone) || selected.contact_email || "";
@@ -1424,8 +1526,10 @@ export default function Inbox() {
 
   // ---- New conversation ----
   // Caixas the user can send a new conversation from (visible + connected).
+  // Only WhatsApp: a new conversation is started by phone number, so email
+  // inboxes (Geral Senvia, Geral Pro Peças, ...) must not appear here.
   const sendableCaixas = useMemo(
-    () => visibleCaixas.filter((c) => c.status === "connected"),
+    () => visibleCaixas.filter((c) => c.status === "connected" && c.channel_type === "whatsapp"),
     [visibleCaixas],
   );
   const effectiveNewConvCaixa =
@@ -1465,14 +1569,13 @@ export default function Inbox() {
         <div>
           <h2 className="text-xl font-semibold">Liga a tua primeira caixa de entrada</h2>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Conecta um canal para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia. O WhatsApp já está disponível (Instagram, Facebook e Email em breve).
+            Conecta um canal (WhatsApp, Email e mais) para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia.
           </p>
         </div>
-        <Button onClick={() => setConnectOpen(true)}>
-          <Smartphone className="mr-2 h-4 w-4" />
-          Conectar WhatsApp
+        <Button onClick={() => navigate('/settings?tab=inboxes&addInbox=1')}>
+          <Plus className="mr-2 h-4 w-4" />
+          Adicionar caixa de entrada
         </Button>
-        <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
       </div>
     );
   }
@@ -1892,44 +1995,25 @@ export default function Inbox() {
               Caixa de Entrada
             </h1>
             <div className="flex gap-1.5">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" title="Minhas tarefas" className="relative">
-                    <ClipboardList className="h-4 w-4" />
-                    {myTasks.length > 0 && (
-                      <span
-                        className={cn(
-                          "absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white",
-                          myOverdueCount > 0 ? "bg-red-500" : "bg-primary",
-                        )}
-                      >
-                        {myTasks.length}
-                      </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Tarefas"
+                className="relative"
+                onClick={() => setTasksModalOpen(true)}
+              >
+                <ClipboardList className="h-4 w-4" />
+                {myTasks.length > 0 && (
+                  <span
+                    className={cn(
+                      "absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white",
+                      myOverdueCount > 0 ? "bg-red-500" : "bg-primary",
                     )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                    Minhas tarefas{myOverdueCount > 0 ? ` — ${myOverdueCount} atrasada(s)` : ""}
-                  </div>
-                  {myTasks.length === 0 && (
-                    <div className="px-2 pb-2 text-xs text-muted-foreground">Sem tarefas abertas. 🎉</div>
-                  )}
-                  {myTasks.slice(0, 10).map((t) => (
-                    <DropdownMenuItem key={t.id} className="flex-col items-start gap-0.5" onClick={() => openTaskConversation(t.contact_phone)}>
-                      <span className="w-full truncate text-xs font-medium">{t.title}</span>
-                      <span className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
-                        {t.contact_name && <span className="truncate">{t.contact_name}</span>}
-                        {t.due_at && (
-                          <span className={cn("ml-auto shrink-0", isTaskOverdue(t) && "font-semibold text-red-600")}>
-                            {new Date(t.due_at).toLocaleString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        )}
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  >
+                    {myTasks.length}
+                  </span>
+                )}
+              </Button>
               <Button
                 size="icon"
                 variant="ghost"
@@ -2026,6 +2110,7 @@ export default function Inbox() {
                       caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
                       caixaColor={c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.color ?? null : null}
                       onSelect={setSelectedId}
+                      onHover={prefetchMessages}
                     />
                   </div>
                 );
@@ -2102,12 +2187,13 @@ export default function Inbox() {
 
               {/* Arquivar / Restaurar */}
               <Button
-                variant="ghost"
-                size="icon"
+                size="sm"
                 title={isArchived ? "Restaurar conversa" : "Arquivar conversa"}
                 onClick={handleToggleArchive}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
               >
-                {isArchived ? <ArchiveRestore className="h-4 w-4 text-emerald-500" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+                {isArchived ? <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" /> : <Archive className="mr-1.5 h-3.5 w-3.5" />}
+                {isArchived ? "Restaurar" : "Arquivar"}
               </Button>
 
               {/* CRM: contacto associado → ficha + alterar; desconhecido → adicionar */}
@@ -2226,6 +2312,8 @@ export default function Inbox() {
                         firstOfGroup={row.firstOfGroup}
                         lastOfGroup={row.lastOfGroup}
                         emailMode={isEmailSelected}
+                        groupSender={row.groupSender}
+                        displayContent={row.displayContent}
                         onPreview={setPreviewUrl}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
@@ -2349,7 +2437,7 @@ export default function Inbox() {
                     <span className="truncate">Re: {selected.email_subject}</span>
                   </div>
                 )}
-              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-center gap-1.5 p-3">
+              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-end gap-1.5 p-3">
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
 
                 {/* "+" menu — groups attach / emoji / schedule / signature to keep the bar uncluttered */}
@@ -2530,8 +2618,9 @@ export default function Inbox() {
                   {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-violet-500" />}
                 </Button>
 
-                <Input
+                <Textarea
                   value={draft}
+                  rows={1}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     // Show "typing..." on the contact's WhatsApp (throttled, not for email).
@@ -2544,15 +2633,26 @@ export default function Inbox() {
                     if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
                     typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
                   }}
+                  onKeyDown={(e) => {
+                    // Enter sends; Shift+Enter inserts a newline. Ignore while the
+                    // IME is composing (accents / Asian input) so it doesn't send mid-word.
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                   placeholder={
                     outAttachments.length > 0
                       ? "Legenda (opcional)..."
                       : isEmailSelected
                         ? "Escreve a tua resposta ao email..."
-                        : "Escreve uma mensagem..."
+                        : "Escreve uma mensagem... (Enter envia, Shift+Enter nova linha)"
                   }
                   autoComplete="off"
                   ref={composerRef}
+                  // Grows with the text up to ~10 lines, then scrolls. min-h-0 + the
+                  // resize effect override the component's default 80px min height.
+                  className="max-h-[240px] min-h-0 resize-none py-2"
                 />
 
                 {draft.trim() || outAttachments.length > 0 ? (
@@ -2612,6 +2712,15 @@ export default function Inbox() {
       </Dialog>
 
       {/* New conversation modal */}
+      <InboxTasksModal
+        open={tasksModalOpen}
+        onOpenChange={setTasksModalOpen}
+        tasks={openTasks}
+        teamMembers={teamMembers}
+        currentUserId={user?.id}
+        onOpenConversation={openTaskConversation}
+      />
+
       <Dialog open={newConvOpen} onOpenChange={setNewConvOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -3097,6 +3206,8 @@ const MessageBubble = memo(function MessageBubble({
   emailMode = false,
   firstOfGroup = true,
   lastOfGroup = true,
+  groupSender = null,
+  displayContent,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
@@ -3106,7 +3217,14 @@ const MessageBubble = memo(function MessageBubble({
   emailMode?: boolean;
   firstOfGroup?: boolean;
   lastOfGroup?: boolean;
+  // Individual sender in a WhatsApp group (incoming only); null otherwise.
+  groupSender?: string | null;
+  // Body with the group-sender prefix stripped; falls back to m.content.
+  displayContent?: string;
 }) {
+  // Show the per-participant avatar + name only for incoming group messages.
+  const showGroupSender = !m.outgoing && !!groupSender;
+  const body = displayContent ?? m.content;
   const taskButton = onTask ? (
     <button
       type="button"
@@ -3151,6 +3269,17 @@ const MessageBubble = memo(function MessageBubble({
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
         </div>
       )}
+      {/* Group participant avatar (initials), aligned to the last bubble like WhatsApp.
+          Space is reserved on the other rows so the bubbles stay aligned. */}
+      {showGroupSender && (
+        lastOfGroup ? (
+          <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-muted text-[10px] font-semibold", senderColor(groupSender!))}>
+            {initials(groupSender!)}
+          </div>
+        ) : (
+          <div className="w-7 shrink-0" />
+        )
+      )}
       <div
         className={cn(
           "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm",
@@ -3162,10 +3291,13 @@ const MessageBubble = memo(function MessageBubble({
         {m.outgoing && m.sender_name && firstOfGroup && (
           <p className="text-[10px] font-medium text-primary-foreground/70">{m.sender_name}</p>
         )}
+        {showGroupSender && firstOfGroup && (
+          <p className={cn("text-[11px] font-semibold", senderColor(groupSender!))}>{groupSender}</p>
+        )}
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
         ))}
-        {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+        {body && <p className="whitespace-pre-wrap break-words">{body}</p>}
         {lastOfGroup && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {formatTime(m.created_at)}
@@ -3233,6 +3365,7 @@ const ConversationRow = memo(function ConversationRow({
   caixaLabel,
   caixaColor,
   onSelect,
+  onHover,
 }: {
   conversation: InboxConversation;
   active: boolean;
@@ -3247,6 +3380,8 @@ const ConversationRow = memo(function ConversationRow({
   // Stable parent callback (setSelectedId) so memo can skip re-renders on
   // unrelated parent state changes (e.g. composer typing).
   onSelect: (id: number) => void;
+  // Prefetch the thread on hover so the click opens instantly.
+  onHover?: (id: number, altIds: number[]) => void;
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
@@ -3255,6 +3390,7 @@ const ConversationRow = memo(function ConversationRow({
   return (
     <button
       onClick={() => onSelect(conversation.id)}
+      onMouseEnter={() => onHover?.(conversation.id, conversation.alt_ids ?? [])}
       className={cn(
         "flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
         active && "bg-accent",

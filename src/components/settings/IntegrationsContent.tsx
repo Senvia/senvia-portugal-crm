@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -121,6 +122,16 @@ function IntegrationCard({
 
 export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const [active, setActive] = useState<IntegrationKey | null>(null);
+  const [searchParams] = useSearchParams();
+
+  // Deep link from the empty inbox (?addInbox=1): jump straight into the Caixas de
+  // Entrada view. InboxesManager then auto-opens the "Nova caixa" dialog (and
+  // clears the param), so the user lands on the chooser in one step.
+  useEffect(() => {
+    if (searchParams.get('addInbox')) setActive('inboxes');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { data: webhooks = [] } = useOrganizationWebhooks();
   const { data: channels = [] } = useMessagingChannels();
   const connectedChannels = channels.filter((c) => c.status === 'connected').length;
@@ -975,6 +986,19 @@ function InboxesManager() {
   const [newLabel, setNewLabel] = useState('');
   const [addEmailOpen, setAddEmailOpen] = useState(false);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep link from the empty inbox (?addInbox=1): open the "Nova caixa" chooser
+  // straight away, then drop the param so a refresh doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('addInbox')) {
+      setNewOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('addInbox');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const orphanCount = channels.filter((c) => c.channel_type !== 'email' && c.status !== 'connected').length;
 
@@ -1026,7 +1050,7 @@ function InboxesManager() {
 
       {/* 3-column grid */}
       {channels.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {channels.filter((ch) => filterType === null || ch.channel_type === filterType).map((ch) => {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;

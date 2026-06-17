@@ -72,11 +72,11 @@ import {
   type PaymentMethod,
   type SaleStatus,
   PAYMENT_METHOD_LABELS,
-  PAYMENT_RECORD_STATUS_LABELS,
-  PAYMENT_RECORD_STATUS_COLORS,
   SALE_STATUS_LABELS,
   SALE_STATUSES,
 } from "@/types/sales";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { paymentRecordStatusBadge } from "@/lib/status-badge-maps";
 import { calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { AddDraftPaymentModal, type DraftPayment } from "./AddDraftPaymentModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
@@ -1351,9 +1351,7 @@ export function CreateSaleModal({
                               <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
-                                  <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
-                                    {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
-                                  </Badge>
+                                  <StatusBadge {...paymentRecordStatusBadge(dp.status)} />
                                 </div>
                                 <span className="text-xs text-muted-foreground">
                                   {dp.payment_date}

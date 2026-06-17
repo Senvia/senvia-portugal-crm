@@ -8,6 +8,8 @@ import { PaymentOverdueBanner } from "./PaymentOverdueBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { OttoFAB } from "@/components/otto/OttoFAB";
+import { useSidebarStore } from "@/stores/useSidebarStore";
+import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -19,6 +21,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   const isMobile = useIsMobile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { subscriptionStatus, hasChecked } = useStripeSubscription();
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
 
   const showTrialBanner = hasChecked && subscriptionStatus?.on_trial && !subscriptionStatus?.billing_exempt && (subscriptionStatus?.days_remaining ?? 0) > 0;
   // Paying customer overdue but still inside the grace window → warn (don't block).
@@ -66,7 +69,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar userName={userName} organizationName={organizationName} />
-      <main className="pl-64">
+      <main className={cn("transition-[padding] duration-200", sidebarCollapsed ? "pl-16" : "pl-64")}>
         {showTrialBanner && <TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} />}
         {showOverdueBanner && <PaymentOverdueBanner daysUntilBlock={subscriptionStatus!.days_until_block ?? 0} blockAt={subscriptionStatus!.block_at} />}
         <div className="min-h-screen">

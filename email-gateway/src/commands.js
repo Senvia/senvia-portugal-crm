@@ -67,6 +67,42 @@ function toAddr(list) {
   return arr.map((a) => (typeof a === 'string' ? a : { name: a.name || '', address: a.address })).filter(Boolean);
 }
 
+// Render a stored signature/message body to HTML. Plain text → escaped + <br>;
+// content that already looks like HTML is used as-is.
+export function bodyToHtml(raw) {
+  const s = String(raw || '');
+  if (!s.trim()) return '';
+  if (/<(br|p|div|b|i|u|ol|ul|li|a|strong|em|span|table|img|h[1-6])\b/i.test(s)) return s;
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+function htmlToPlain(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+// Append the caixa's default signature to an outgoing message. Picks the "reply"
+// default when the message is a reply (has inReplyTo), else the "new" default.
+function applySignature(caixa, p) {
+  const m = caixa.meta || {};
+  const sigs = Array.isArray(m.signatures) ? m.signatures : [];
+  if (!sigs.length) return p;
+  const id = p.inReplyTo ? m.signature_default_reply : m.signature_default_new;
+  const sig = id ? sigs.find((s) => s.id === id) : null;
+  if (!sig || !String(sig.html || '').trim()) return p;
+  const sigHtml = bodyToHtml(sig.html);
+  const block = `<br><br><div class="senvia-signature">--<br>${sigHtml}</div>`;
+  const out = { ...p };
+  if (p.html) out.html = `${p.html}${block}`;
+  else if (p.text != null) out.text = `${p.text}\n\n--\n${htmlToPlain(sigHtml)}`;
+  else out.html = block;
+  return out;
+}
+
 // Download one attachment's bytes from IMAP and cache them (base64) in the DB,
 // so the browser can download it. Re-parses the message source via mailparser
 // (reliable across providers).
@@ -182,7 +218,7 @@ async function execute(cmd) {
       return;
     }
     case 'fetch_attachment': return fetchAttachment(client, p.attachmentId);
-    case 'send': return sendMail(caixa, p);
+    case 'send': return sendMail(caixa, applySignature(caixa, p));
     default: throw new Error(`tipo desconhecido: ${cmd.type}`);
   }
 }

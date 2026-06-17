@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ShoppingCart, Eye, Truck, CreditCard } from "lucide-react";
+import { ShoppingCart, Eye, Truck } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,7 +11,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -28,26 +27,10 @@ import {
   PaymentStatus,
   FulfillmentStatus,
   ORDER_STATUS_LABELS,
-  PAYMENT_STATUS_LABELS,
-  FULFILLMENT_STATUS_LABELS,
 } from "@/types/ecommerce";
 import { OrderDetailsModal } from "./OrderDetailsModal";
-
-const statusColors: Record<OrderStatus, string> = {
-  pending: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-  confirmed: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  processing: "bg-purple-500/10 text-purple-600 border-purple-500/20",
-  shipped: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
-  delivered: "bg-green-500/10 text-green-600 border-green-500/20",
-  cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
-};
-
-const paymentColors: Record<PaymentStatus, string> = {
-  pending: "bg-yellow-500/10 text-yellow-600",
-  paid: "bg-green-500/10 text-green-600",
-  refunded: "bg-blue-500/10 text-blue-600",
-  failed: "bg-red-500/10 text-red-600",
-};
+import { StatusBadge } from "@/components/ui/status-badge";
+import { orderStatusBadge, ecomPaymentStatusBadge, fulfillmentStatusBadge } from "@/lib/status-badge-maps";
 
 export function OrdersTable() {
   const { data: orders, isLoading } = useOrders();
@@ -142,10 +125,8 @@ export function OrdersTable() {
                       value={order.status}
                       onValueChange={(value) => handleStatusChange(order.id, value as OrderStatus)}
                     >
-                      <SelectTrigger className="h-7 w-[130px] border-0 p-0">
-                        <Badge className={statusColors[order.status as OrderStatus]} variant="outline">
-                          {ORDER_STATUS_LABELS[order.status as OrderStatus]}
-                        </Badge>
+                      <SelectTrigger className="h-7 w-[140px] border-0 p-0">
+                        <StatusBadge {...orderStatusBadge(order.status as OrderStatus)} />
                       </SelectTrigger>
                       <SelectContent>
                         {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
@@ -157,16 +138,10 @@ export function OrdersTable() {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Badge className={paymentColors[order.payment_status as PaymentStatus]}>
-                      <CreditCard className="mr-1 h-3 w-3" />
-                      {PAYMENT_STATUS_LABELS[order.payment_status as PaymentStatus]}
-                    </Badge>
+                    <StatusBadge {...ecomPaymentStatusBadge(order.payment_status as PaymentStatus)} />
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      <Truck className="mr-1 h-3 w-3" />
-                      {FULFILLMENT_STATUS_LABELS[order.fulfillment_status as FulfillmentStatus]}
-                    </Badge>
+                    <StatusBadge {...fulfillmentStatusBadge(order.fulfillment_status as FulfillmentStatus)} icon={Truck} />
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatCurrency(order.total)}

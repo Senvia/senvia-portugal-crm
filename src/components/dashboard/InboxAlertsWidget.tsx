@@ -1,38 +1,43 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Clock, ArrowRight } from "lucide-react";
-import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
+import { MessageSquare, ArrowRight } from "lucide-react";
+import { useMessagingChannels } from "@/hooks/useMessagingChannels";
 import { useInboxConversations, countUnreadConversations } from "@/hooks/useChatwootInbox";
 
-// "à espera 5m / 2h / 3d"
-function waitingFor(since: number | null): string {
-  if (!since) return "";
-  const mins = Math.floor((Date.now() - since * 1000) / 60000);
-  if (mins < 60) return `${Math.max(mins, 1)}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-// Dashboard widget: WhatsApp inbox health at a glance — who is waiting on a
-// reply and for how long. Renders nothing when WhatsApp isn't connected.
+// Dashboard widget: WhatsApp inbox health at a glance — how many conversations
+// are unread and how many are waiting on a reply. MESSAGING ONLY: email caixas
+// have their own client, so they're excluded from both counts. Renders nothing
+// when WhatsApp isn't connected.
 export function InboxAlertsWidget() {
-  const { channel } = useWhatsappChannel();
-  const connected = channel?.status === "connected";
+  const { data: channels = [] } = useMessagingChannels();
+  const whatsapp = channels.find((c) => c.channel_type === "whatsapp");
+  const connected = whatsapp?.status === "connected";
   const { data: conversations = [] } = useInboxConversations(connected);
 
-  const { unread, waiting } = useMemo(() => {
-    const active = conversations.filter(
-      (c) => c.status !== "resolved" && c.contact_name !== "EvolutionAPI",
-    );
+  // Chatwoot inbox ids that belong to EMAIL caixas — excluded from the counts.
+  const emailInboxIds = useMemo(
+    () => new Set(
+      channels
+        .filter((c) => c.channel_type === "email" && c.chatwoot_inbox_id != null)
+        .map((c) => c.chatwoot_inbox_id as number),
+    ),
+    [channels],
+  );
+
+  const { unread, waitingCount } = useMemo(() => {
+    const isEmail = (inboxId: number | null) => inboxId != null && emailInboxIds.has(inboxId);
     return {
-      unread: countUnreadConversations(conversations),
-      waiting: active
-        .filter((c) => !!c.waiting_since)
-        .sort((a, b) => (a.waiting_since ?? 0) - (b.waiting_since ?? 0)),
+      unread: countUnreadConversations(conversations, emailInboxIds),
+      waitingCount: conversations.filter(
+        (c) =>
+          c.status !== "resolved" &&
+          c.contact_name !== "EvolutionAPI" &&
+          !isEmail(c.inbox_id) &&
+          !!c.waiting_since,
+      ).length,
     };
-  }, [conversations]);
+  }, [conversations, emailInboxIds]);
 
   if (!connected) return null;
 
@@ -50,37 +55,18 @@ export function InboxAlertsWidget() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <div className="rounded-lg border p-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/inbox" className="rounded-lg border p-3 transition-colors hover:bg-accent">
             <p className="text-2xl font-bold">{unread}</p>
             <p className="text-xs text-muted-foreground">Conversas por ler</p>
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className={waiting.length > 0 ? "text-2xl font-bold text-amber-600" : "text-2xl font-bold"}>
-              {waiting.length}
+          </Link>
+          <Link to="/inbox" className="rounded-lg border p-3 transition-colors hover:bg-accent">
+            <p className={waitingCount > 0 ? "text-2xl font-bold text-amber-600" : "text-2xl font-bold"}>
+              {waitingCount}
             </p>
             <p className="text-xs text-muted-foreground">À espera de resposta</p>
-          </div>
+          </Link>
         </div>
-        {waiting.length > 0 ? (
-          <div className="space-y-1.5">
-            {waiting.slice(0, 4).map((c) => (
-              <Link
-                key={c.id}
-                to="/inbox"
-                className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-              >
-                <span className="truncate">{c.contact_name}</span>
-                <span className="ml-2 flex shrink-0 items-center gap-1 text-xs text-amber-600">
-                  <Clock className="h-3 w-3" />
-                  {waitingFor(c.waiting_since)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Ninguém à espera de resposta. 🎉</p>
-        )}
       </CardContent>
     </Card>
   );

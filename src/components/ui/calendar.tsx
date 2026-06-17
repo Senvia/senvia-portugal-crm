@@ -20,7 +20,7 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+          "h-7 w-7 rounded-full bg-transparent p-0 opacity-50 hover:opacity-100",
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
@@ -28,16 +28,30 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         head_row: "flex",
         head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
         row: "flex w-full mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-        day: cn(buttonVariants({ variant: "ghost" }), "h-9 w-9 p-0 font-normal aria-selected:opacity-100"),
-        day_range_end: "day-range-end",
+        // Range background bar lives on the cell (scoped to the range markers below,
+        // so a single selected date stays a clean circle with no square behind it).
+        cell: cn(
+          "relative h-9 w-9 p-0 text-center text-sm focus-within:relative focus-within:z-20",
+          "[&:has(.day-range-middle)]:bg-accent",
+          "[&:has(.day-range-start)]:bg-accent [&:has(.day-range-start)]:rounded-l-full",
+          "[&:has(.day-range-end)]:bg-accent [&:has(.day-range-end)]:rounded-r-full",
+          "[&:has([aria-selected].day-outside)]:bg-accent/50",
+        ),
+        // Pill cells: circular days, no buttonVariants (avoids a fixed rounded-md).
+        day: "inline-flex h-9 w-9 items-center justify-center rounded-full p-0 text-sm font-normal transition-colors hover:bg-accent hover:text-accent-foreground aria-selected:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
         day_selected:
-          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
+          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-full",
+        day_range_start:
+          "day-range-start bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground rounded-full",
+        day_range_end:
+          "day-range-end bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground rounded-full",
+        // Middle days are transparent so the cell's accent bar shows through.
+        day_range_middle: "day-range-middle bg-transparent text-accent-foreground hover:bg-accent/60",
+        // Today: a ring instead of a filled square.
+        day_today: "ring-1 ring-primary ring-offset-1 ring-offset-background",
         day_outside:
-          "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+          "day-outside text-muted-foreground opacity-50 aria-selected:bg-transparent aria-selected:text-muted-foreground aria-selected:opacity-30",
         day_disabled: "text-muted-foreground opacity-50",
-        day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
         day_hidden: "invisible",
         ...classNames,
       }}

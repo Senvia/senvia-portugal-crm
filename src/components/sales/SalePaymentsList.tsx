@@ -27,11 +27,9 @@ import { InvoiceDraftModal } from "./InvoiceDraftModal";
 import type { DraftSaleItem } from "./InvoiceDraftModal";
 import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
 import type { SalePayment } from "@/types/sales";
-import { 
-  PAYMENT_METHOD_LABELS, 
-  PAYMENT_RECORD_STATUS_LABELS,
-  PAYMENT_RECORD_STATUS_COLORS 
-} from "@/types/sales";
+import { PAYMENT_METHOD_LABELS } from "@/types/sales";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { paymentRecordStatusBadge } from "@/lib/status-badge-maps";
 
 import { toast } from "sonner";
 import { openPdfInNewTab } from "@/lib/download";
@@ -219,12 +217,7 @@ export function SalePaymentsList({
                     <span className="text-sm font-medium">
                       {formatCurrency(Number(payment.amount))}
                     </span>
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs ${PAYMENT_RECORD_STATUS_COLORS[payment.status]}`}
-                    >
-                      {PAYMENT_RECORD_STATUS_LABELS[payment.status]}
-                    </Badge>
+                    <StatusBadge {...paymentRecordStatusBadge(payment.status)} />
                     {payment.payment_method && (
                       <Badge variant="secondary" className="text-xs">
                         {PAYMENT_METHOD_LABELS[payment.payment_method]}

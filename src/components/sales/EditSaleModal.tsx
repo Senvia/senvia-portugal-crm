@@ -31,7 +31,8 @@ import { format } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { pt } from "date-fns/locale";
-import { SALE_STATUS_LABELS, SALE_STATUS_COLORS } from "@/types/sales";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { saleStatusBadge } from "@/lib/status-badge-maps";
 import { toast } from "sonner";
 import { 
   Loader2, 
@@ -589,9 +590,7 @@ export function EditSaleModal({
                         <div className="space-y-1.5">
                           <Label className="text-xs text-muted-foreground">Estado</Label>
                           <div>
-                            <Badge className={cn("text-xs", SALE_STATUS_COLORS[sale.status])}>
-                              {SALE_STATUS_LABELS[sale.status]}
-                            </Badge>
+                            <StatusBadge {...saleStatusBadge(sale.status)} />
                           </div>
                         </div>
                         {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (

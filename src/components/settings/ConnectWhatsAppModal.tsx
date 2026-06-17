@@ -109,8 +109,13 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   // recreation and just fetches the current QR from Evolution (fast path).
   useEffect(() => {
     if (qrExpiry !== 0 || !displayQr || isPending || connected) return;
+    // If Evolution's connectionState already supplies a fresh QR (status.qr), the
+    // 4s status poll keeps it current on its own — do NOT call /instance/connect/
+    // again. That forced regeneration was resetting a scan already in progress,
+    // leaving the phone stuck on "connecting" forever and then erroring.
+    if (status?.qr) return;
     refreshQr();
-  }, [qrExpiry, displayQr, isPending, connected, refreshQr]);
+  }, [qrExpiry, displayQr, isPending, connected, refreshQr, status?.qr]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

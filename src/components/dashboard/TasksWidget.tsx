@@ -1,9 +1,11 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, ArrowRight, CalendarClock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOpenInboxTasks, isTaskOverdue } from "@/hooks/useInboxTasks";
+import { useTeamMembers } from "@/hooks/useTeam";
+import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { cn } from "@/lib/utils";
 
 function dueLabel(dueAt: string): string {
@@ -21,7 +23,10 @@ function dueLabel(dueAt: string): string {
 // deep-links into the conversation. Renders nothing when there are no tasks.
 export function TasksWidget() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: openTasks = [] } = useOpenInboxTasks();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const [tasksModalOpen, setTasksModalOpen] = useState(false);
 
   const myTasks = useMemo(() => {
     const mine = openTasks.filter(
@@ -54,9 +59,13 @@ export function TasksWidget() {
               </span>
             )}
           </span>
-          <Link to="/inbox" className="flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => setTasksModalOpen(true)}
+            className="flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-foreground"
+          >
             Abrir <ArrowRight className="h-3 w-3" />
-          </Link>
+          </button>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -86,6 +95,17 @@ export function TasksWidget() {
           })}
         </div>
       </CardContent>
+
+      <InboxTasksModal
+        open={tasksModalOpen}
+        onOpenChange={setTasksModalOpen}
+        tasks={openTasks}
+        teamMembers={teamMembers}
+        currentUserId={user?.id}
+        onOpenConversation={(phone) => {
+          if (phone) navigate(`/inbox?phone=${encodeURIComponent(phone)}`);
+        }}
+      />
     </Card>
   );
 }

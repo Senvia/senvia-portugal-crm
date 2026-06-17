@@ -3,11 +3,54 @@
 // instant it arrives (the frontend updates via Supabase Realtime). Reconnects
 // with exponential backoff on drops.
 import { ImapFlow } from 'imapflow';
-import { imapConfig, getEmailCaixas } from './caixas.js';
+import { imapConfig, getEmailCaixas, getEmailCaixa, smtpTransport } from './caixas.js';
 import { syncCaixaFull, syncFolderMessages, backfillBodies } from './sync.js';
+import { bodyToHtml } from './commands.js';
+import { q } from './db.js';
 
 const managers = new Map();
 const log = (...a) => console.log(new Date().toISOString(), ...a);
+
+const VACATION_COOLDOWN_MS = 4 * 24 * 60 * 60 * 1000; // max one auto-reply per sender / 4 days
+// Senders we never auto-reply to (bounces, lists, robots) — replying would loop or annoy.
+const AUTOMATED_RE = /(^|[._-])(no-?reply|noreply|do-?not-?reply|mailer-daemon|postmaster|bounce|bounces|notifications?|automated|daemon)(@|[._-]|$)/i;
+
+function htmlToPlain(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+// Is "today" inside the vacation window? start required, end optional.
+function withinWindow(vac) {
+  if (!vac?.start_date) return true; // enabled with no start = always on
+  const now = Date.now();
+  const start = Date.parse(`${vac.start_date}T00:00:00`);
+  if (!Number.isNaN(start) && now < start) return false;
+  if (vac.end_date) {
+    const end = Date.parse(`${vac.end_date}T23:59:59`);
+    if (!Number.isNaN(end) && now > end) return false;
+  }
+  return true;
+}
+
+// only_contacts: does this email belong to a CRM lead or client of the org?
+async function isCrmContact(orgId, email) {
+  try {
+    const rows = await q(
+      `SELECT 1 WHERE EXISTS (SELECT 1 FROM crm_clients WHERE organization_id=$1 AND lower(email)=lower($2))
+                  OR EXISTS (SELECT 1 FROM leads        WHERE organization_id=$1 AND lower(email)=lower($2)) LIMIT 1`,
+      [orgId, email],
+    );
+    return rows.length > 0;
+  } catch (e) {
+    log(`[vacation] verificação de contacto CRM falhou: ${e.message}`);
+    return false; // conservative: with only_contacts on, don't email non-verifiable senders
+  }
+}
 
 class CaixaManager {
   constructor(caixa) {
@@ -43,6 +86,9 @@ class CaixaManager {
 
       if (this.inboxFolder) {
         await client.mailboxOpen(this.inboxFolder.path);
+        // Only auto-reply to mail that arrives AFTER we go live — never to the
+        // backlog of unread messages synced on connect (that would blast replies).
+        this.connectedAt = Date.now();
         // ImapFlow keeps the open mailbox in IDLE; 'exists' fires on new mail.
         client.on('exists', () => this.onNewMail());
         log(`[${this.caixa.label}] a vigiar a Entrada (IDLE)`);
@@ -60,11 +106,87 @@ class CaixaManager {
     try {
       await syncFolderMessages(this.client, this.caixa, this.inboxFolder, 15);
       await backfillBodies(this.client, this.caixa, 15);
+      // Refresh the Inbox unread/total counters from IMAP so the folder badge
+      // updates on new mail (syncFolderMessages alone doesn't touch the counts).
+      try {
+        const st = await this.client.status(this.inboxFolder.path, { messages: true, unseen: true });
+        await q(
+          `UPDATE email_folders SET total_count=$2, unread_count=$3, updated_at=now() WHERE id=$1`,
+          [this.inboxFolder.id, st.messages || 0, st.unseen || 0],
+        );
+      } catch (e) {
+        log(`[${this.caixa.label}] aviso ao atualizar contadores: ${e.message}`);
+      }
       log(`[${this.caixa.label}] novo email sincronizado`);
     } catch (err) {
       log(`[${this.caixa.label}] erro ao sincronizar novo email: ${err.message}`);
     } finally {
       this.syncing = false;
+    }
+    // Vacation auto-reply runs after sync, outside the sync guard.
+    try { await this.maybeVacationReply(); }
+    catch (err) { log(`[${this.caixa.label}] erro na resposta de férias: ${err.message}`); }
+  }
+
+  // Send the configured vacation auto-reply to senders of newly-arrived mail,
+  // respecting the date window, the per-sender 4-day cooldown, the only-contacts
+  // option, and skipping automated/own addresses.
+  async maybeVacationReply() {
+    // Read fresh config from the DB so enabling/disabling vacation takes effect
+    // immediately, without waiting for the caixa to reconnect.
+    const fresh = await getEmailCaixa(this.caixa.id);
+    if (fresh) this.caixa.meta = fresh.meta;
+    const vac = this.caixa.meta?.vacation_reply;
+    if (!vac?.enabled || !withinWindow(vac)) return;
+    if (!vac.subject || !vac.message) return;
+
+    const since = new Date((this.connectedAt || Date.now()) - 2 * 60 * 1000).toISOString();
+    const candidates = await q(
+      `SELECT id, from_address, from_name, message_id, subject
+         FROM email_messages
+        WHERE channel_id=$1 AND folder_id=$2 AND seen=false
+          AND from_address <> '' AND date > $3
+        ORDER BY date DESC LIMIT 10`,
+      [this.caixa.id, this.inboxFolder.id, since],
+    );
+    if (!candidates.length) return;
+
+    const selfAddr = String(this.caixa.meta?.email_address || '').toLowerCase();
+    for (const msg of candidates) {
+      const to = String(msg.from_address || '').trim();
+      const toLc = to.toLowerCase();
+      if (!to || toLc === selfAddr) continue;
+      if (AUTOMATED_RE.test(to)) continue;
+
+      // Per-sender cooldown.
+      const recent = await q(
+        `SELECT 1 FROM email_vacation_log
+          WHERE channel_id=$1 AND lower(to_address)=lower($2) AND sent_at > now() - interval '4 days' LIMIT 1`,
+        [this.caixa.id, to],
+      );
+      if (recent.length) continue;
+
+      if (vac.only_contacts && !(await isCrmContact(this.caixa.organization_id, to))) continue;
+
+      const html = bodyToHtml(vac.message);
+      const subject = /^re:/i.test(msg.subject || '') ? msg.subject : `${vac.subject}`;
+      try {
+        await smtpTransport(this.caixa).sendMail({
+          from: { name: this.caixa.label || '', address: this.caixa.meta.email_address },
+          to,
+          subject,
+          html,
+          text: htmlToPlain(html),
+          inReplyTo: msg.message_id ? `<${msg.message_id}>` : undefined,
+          references: msg.message_id ? `<${msg.message_id}>` : undefined,
+          // Mark as auto-generated so well-behaved servers don't auto-reply back.
+          headers: { 'Auto-Submitted': 'auto-replied', 'X-Auto-Response-Suppress': 'All' },
+        });
+        await q(`INSERT INTO email_vacation_log (channel_id, to_address) VALUES ($1,$2)`, [this.caixa.id, to]);
+        log(`[${this.caixa.label}] resposta de férias enviada a ${to}`);
+      } catch (e) {
+        log(`[${this.caixa.label}] falha ao enviar resposta de férias a ${to}: ${e.message}`);
+      }
     }
   }
 
