@@ -44,6 +44,7 @@ interface CommercialPreview {
   tier: EnergyVolumeTier;
   totalIndicativa: number;
   totalFinal: number;
+  totalChargeback: number;
   cpes: Array<{
     sale_id: string;
     proposal_cpe_id: string;
@@ -186,6 +187,7 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
             tier: 'low',
             totalIndicativa: 0,
             totalFinal: 0,
+            totalChargeback: 0,
             cpes: [],
           });
         }
@@ -233,25 +235,67 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
         entry.totalFinal = totalFinal;
       }
 
-      setPreview(Array.from(byCommercial.values()).sort((a, b) => b.totalFinal - a.totalFinal));
+      // Deduct this month's matched chargebacks (estornos) per commercial. A
+      // commercial with a chargeback but no commission this month still shows
+      // (net negative). Period is taken from the import's reference_month (or its
+      // created date when not set).
+      const monthEndStr = format(endOfMonth(new Date(month)), 'yyyy-MM-dd');
+      const { data: cbImports } = await supabase
+        .from('commission_chargeback_imports')
+        .select('id, reference_month, created_at')
+        .eq('organization_id', organization?.id);
+      const relevantImportIds = (cbImports || [])
+        .filter((imp) => {
+          const ref = (imp.reference_month as string | null) || (imp.created_at ? String(imp.created_at).slice(0, 10) : null);
+          return ref != null && ref >= month && ref <= monthEndStr;
+        })
+        .map((imp) => imp.id);
+
+      if (relevantImportIds.length > 0) {
+        const { data: cbItems } = await supabase
+          .from('commission_chargeback_items')
+          .select('matched_user_id, chargeback_amount')
+          .eq('organization_id', organization?.id)
+          .eq('matched', true)
+          .in('import_id', relevantImportIds);
+        for (const it of cbItems || []) {
+          const uid = it.matched_user_id as string | null;
+          if (!uid) continue;
+          let entry = byCommercial.get(uid);
+          if (!entry) {
+            entry = {
+              userId: uid, name: getMemberName(uid), totalConsumoKwh: 0, totalConsumoMwh: 0,
+              tier: 'low', totalIndicativa: 0, totalFinal: 0, totalChargeback: 0, cpes: [],
+            };
+            byCommercial.set(uid, entry);
+          }
+          entry.totalChargeback += Number(it.chargeback_amount || 0);
+        }
+      }
+
+      setPreview(Array.from(byCommercial.values()).sort((a, b) => (b.totalFinal - b.totalChargeback) - (a.totalFinal - a.totalChargeback)));
     } catch (err) {
       console.error('Error loading preview:', err);
     }
     setLoading(false);
   };
 
-  const totalCommission = preview.reduce((sum, p) => sum + p.totalFinal, 0);
+  const totalGross = preview.reduce((sum, p) => sum + p.totalFinal, 0);
+  const totalChargebacks = preview.reduce((sum, p) => sum + p.totalChargeback, 0);
+  const totalCommission = totalGross - totalChargebacks; // net payable
 
   const handleClose = () => {
     closeMonth.mutate({
       month,
-      totalCommission,
+      totalCommission, // net
+      totalChargeback: totalChargebacks,
       notes: notes || undefined,
       items: preview.map(p => ({
         user_id: p.userId,
         total_consumo_mwh: p.totalConsumoMwh,
         volume_tier: p.tier,
-        total_commission: p.totalFinal,
+        total_commission: p.totalFinal - p.totalChargeback, // net
+        total_chargeback: p.totalChargeback,
         items_detail: p.cpes,
       })),
     }, {
@@ -305,6 +349,8 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
                   <TableHead>Patamar</TableHead>
                   <TableHead className="text-right">Comissão Indicativa</TableHead>
                   <TableHead className="text-right">Comissão Final</TableHead>
+                  <TableHead className="text-right">Estornos</TableHead>
+                  <TableHead className="text-right">Líquido a pagar</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -317,12 +363,20 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">{formatCurrency(p.totalIndicativa)}</TableCell>
                     <TableCell className="text-right font-semibold">{formatCurrency(p.totalFinal)}</TableCell>
+                    <TableCell className="text-right text-destructive">
+                      {p.totalChargeback > 0 ? `−${formatCurrency(p.totalChargeback)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">{formatCurrency(p.totalFinal - p.totalChargeback)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="border-t-2 font-bold">
                   <TableCell colSpan={3}>Total</TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {formatCurrency(preview.reduce((s, p) => s + p.totalIndicativa, 0))}
+                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(totalGross)}</TableCell>
+                  <TableCell className="text-right text-destructive">
+                    {totalChargebacks > 0 ? `−${formatCurrency(totalChargebacks)}` : '—'}
                   </TableCell>
                   <TableCell className="text-right">{formatCurrency(totalCommission)}</TableCell>
                 </TableRow>

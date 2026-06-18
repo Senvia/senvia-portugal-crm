@@ -10,7 +10,8 @@ export interface CommissionClosingItem {
   user_id: string;
   total_consumo_mwh: number;
   volume_tier: string;
-  total_commission: number;
+  total_commission: number; // net (gross − chargeback)
+  total_chargeback: number;
   items_detail: any[];
   created_at: string;
 }
@@ -21,7 +22,8 @@ export interface CommissionClosing {
   month: string;
   closed_by: string;
   closed_at: string;
-  total_commission: number;
+  total_commission: number; // net (gross − chargeback)
+  total_chargeback: number;
   notes: string | null;
   created_at: string;
 }
@@ -71,13 +73,15 @@ export function useCommissionClosings() {
   const closeMonth = useMutation({
     mutationFn: async (params: {
       month: string;
-      totalCommission: number;
+      totalCommission: number; // net total
+      totalChargeback?: number;
       notes?: string;
       items: Array<{
         user_id: string;
         total_consumo_mwh: number;
         volume_tier: string;
-        total_commission: number;
+        total_commission: number; // net (gross − chargeback)
+        total_chargeback?: number;
         items_detail: any[];
       }>;
     }) => {
@@ -91,6 +95,7 @@ export function useCommissionClosings() {
           month: params.month,
           closed_by: user.id,
           total_commission: params.totalCommission,
+          total_chargeback: params.totalChargeback ?? 0,
           notes: params.notes || null,
         } as any)
         .select()
@@ -105,6 +110,7 @@ export function useCommissionClosings() {
         total_consumo_mwh: item.total_consumo_mwh,
         volume_tier: item.volume_tier,
         total_commission: item.total_commission,
+        total_chargeback: item.total_chargeback ?? 0,
         items_detail: item.items_detail,
       }));
 
