@@ -5,13 +5,13 @@
 | Component | Platform | Trigger | Branch |
 |-----------|----------|---------|--------|
 | Frontend (React SPA) | Vercel | Auto-deploy on push | `main` |
-| Edge Functions (Deno) | Supabase via Lovable | Auto-deploy on push | `main` |
+| Edge Functions (Deno) | Supabase | **Manual** `supabase functions deploy` | N/A |
 | Database migrations | Manual | SQL Editor in Supabase Dashboard | N/A |
 | Cron jobs | Supabase | pg_cron (configured in SQL Editor) | N/A |
 
 ## Deploy Steps
 
-### Standard deploy (frontend + Edge Functions)
+### Frontend deploy
 
 ```bash
 git add <files>
@@ -19,7 +19,17 @@ git commit -m "Fix: description"
 git push origin main
 ```
 
-Both Vercel and Lovable pick up the push automatically. No separate deploy command needed.
+Vercel picks up the push to `main` automatically. No separate deploy command needed.
+
+### Edge Functions deploy (manual)
+
+Edge Functions do **not** auto-deploy. Deploy each changed function explicitly:
+
+```bash
+supabase functions deploy <name> --project-ref chhmfwlimtbsyjmgtokn
+```
+
+Requires a Supabase access token with privileges on the project.
 
 ### Database changes
 
@@ -87,7 +97,7 @@ Requires `pg_net` and `pg_cron` extensions enabled.
 - **Never use `--force` push** without explicit approval.
 - **TypeScript check before push:** `npx tsc --noEmit --skipLibCheck`
 - **No test suite exists.** Manual verification only.
-- **Lovable handles Edge Function deployment** — do NOT use `supabase functions deploy` CLI unless Lovable access is unavailable.
+- **Edge Functions deploy manually** via `supabase functions deploy <name> --project-ref chhmfwlimtbsyjmgtokn`. They do NOT auto-deploy. (Lovable is no longer used in this project.)
 
 ## Stripe Webhook Setup
 

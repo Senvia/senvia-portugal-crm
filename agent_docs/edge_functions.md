@@ -1,6 +1,6 @@
 # Edge Functions Reference — Senvia OS
 
-All functions live in `supabase/functions/{name}/index.ts` (Deno runtime). Deployed automatically via Lovable on push to `main`. All have `verify_jwt = false` in `config.toml`.
+All functions live in `supabase/functions/{name}/index.ts` (Deno runtime). Deployed **manually** via `supabase functions deploy <name> --project-ref chhmfwlimtbsyjmgtokn` (they do NOT auto-deploy; Lovable is no longer used). Most have `verify_jwt = false` in `config.toml`.
 
 ## Stripe & Payments
 
