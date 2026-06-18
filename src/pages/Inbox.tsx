@@ -1147,7 +1147,10 @@ export default function Inbox() {
     if (switched) {
       // Owe an initial bottom scroll until the thread (and its images) settle.
       needsInitialScrollRef.current = true;
-      composerRef.current?.focus();
+      // Desktop: focus the composer so you can type straight away. Mobile: do NOT
+      // steal focus — it force-opens the on-screen keyboard the instant you tap a
+      // conversation, covering the thread before you've read a single message.
+      if (!isMobile) composerRef.current?.focus();
     }
     // While we still owe the opening scroll, keep pinning to the bottom as the
     // messages arrive and images load (each changes scrollHeight). Re-correct a
@@ -1167,7 +1170,7 @@ export default function Inbox() {
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, visiblePending.length, selectedId, jumpToBottom]);
+  }, [messages.length, visiblePending.length, selectedId, jumpToBottom, isMobile]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
   useEffect(() => {
@@ -2132,8 +2135,11 @@ export default function Inbox() {
       "flex flex-col overflow-hidden",
       // Desktop fills the viewport; on mobile the AppLayout adds a header + bottom
       // nav (~8.5rem), so cap the height to what's left or the composer hides
-      // behind the bottom nav. dvh accounts for the mobile browser chrome.
-      isMobile ? "h-[calc(100dvh-8.5rem)]" : "h-screen",
+      // behind the bottom nav. dvh accounts for the mobile browser chrome, and we
+      // also subtract the safe-area insets — 100dvh includes them but the header
+      // (safe-top) and bottom nav (safe-bottom) sit inside them, so without this
+      // the composer is pushed below the bottom nav on notched devices.
+      isMobile ? "h-[calc(100dvh-8.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-screen",
     )}>
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
       {!connected && (
