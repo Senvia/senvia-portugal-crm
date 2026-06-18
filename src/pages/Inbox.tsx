@@ -1177,6 +1177,26 @@ export default function Inbox() {
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId, jumpToBottom, isMobile]);
 
+  // Mobile conversation = full-screen immersive view (like WhatsApp): the thread
+  // becomes a fixed overlay sized to the visual viewport, so its header stays
+  // pinned at the top and the composer stays glued above the keyboard. Declared
+  // up here (before any early return) so every hook below always runs.
+  const mobileConvOpen = isMobile && !!selectedId;
+
+  // Tell AppLayout to hide mobile chrome: the bottom nav is hidden across the
+  // whole Inbox on mobile, and the rest of the chrome (app header / FAB) is hidden
+  // too while a conversation is open. Always restored when leaving the Inbox.
+  const setImmersive = useInboxImmersiveStore((s) => s.setImmersive);
+  const setHideNav = useInboxImmersiveStore((s) => s.setHideNav);
+  useEffect(() => {
+    setHideNav(isMobile);
+    setImmersive(mobileConvOpen);
+    return () => {
+      setHideNav(false);
+      setImmersive(false);
+    };
+  }, [isMobile, mobileConvOpen, setHideNav, setImmersive]);
+
   // When the visible viewport shrinks (keyboard opens) on the mobile overlay,
   // keep the latest message in view so it isn't hidden behind the keyboard —
   // but only if the agent was already near the bottom, so we don't yank the view
@@ -1771,25 +1791,6 @@ export default function Inbox() {
 
   const isArchived = selected?.status === "resolved";
   const isPinned = selected ? pinned.includes(selected.id) : false;
-
-  // Mobile conversation = full-screen immersive view (like WhatsApp): the thread
-  // becomes a fixed overlay sized to the visual viewport, so its header stays
-  // pinned at the top and the composer stays glued above the keyboard.
-  const mobileConvOpen = isMobile && !!selectedId;
-
-  // Tell AppLayout to hide mobile chrome: the bottom nav is hidden across the
-  // whole Inbox on mobile, and the rest of the chrome (app header / FAB) is hidden
-  // too while a conversation is open. Always restored when leaving the Inbox.
-  const setImmersive = useInboxImmersiveStore((s) => s.setImmersive);
-  const setHideNav = useInboxImmersiveStore((s) => s.setHideNav);
-  useEffect(() => {
-    setHideNav(isMobile);
-    setImmersive(mobileConvOpen);
-    return () => {
-      setHideNav(false);
-      setImmersive(false);
-    };
-  }, [isMobile, mobileConvOpen, setHideNav, setImmersive]);
 
   // Contact profile panel (QuickReply-style): right column on desktop, Sheet on
   // mobile — same content in both. Order: profile → assign → tags → details →
