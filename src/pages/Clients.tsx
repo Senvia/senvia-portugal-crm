@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Users, Crown, UserMinus, Euro, Shield, Upload } from "lucide-react";
+import { Plus, Search, Users, Crown, UserMinus, Euro, Shield, Upload, UserCheck } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useClients, useClientStats, useDeleteClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -233,40 +234,34 @@ export default function Clients() {
       />
       
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{labels.plural}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Gestão de {labels.plural.toLowerCase()} e relacionamento comercial
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isTelecom && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={handleImportFile}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {isImporting ? "A importar..." : "Importar"}
-                </Button>
-              </>
-            )}
-            <Button onClick={() => setShowCreateModal(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {labels.new}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          icon={UserCheck}
+          title={labels.plural}
+          subtitle={`Gestão de ${labels.plural.toLowerCase()} e relacionamento comercial`}
+          actions={
+            <>
+              {isTelecom && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={handleImportFile}
+                  />
+                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+                    <Upload className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">{isImporting ? "A importar..." : "Importar"}</span>
+                  </Button>
+                </>
+              )}
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">{labels.new}</span>
+              </Button>
+            </>
+          }
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

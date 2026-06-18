@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { fmtSize } from './emailShared';
 import type { EmailMessage, EmailAddress, EmailDraft } from '@/hooks/useEmail';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Attached { filename: string; contentType: string; b64: string; size: number; }
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
@@ -295,9 +296,13 @@ export function EmailComposer({
   const title = subject.trim() || baseTitle;
 
   const rightPx = 24 + stackIndex * (COMPOSER_W + COMPOSER_GAP);
+  const isMobile = useIsMobile();
 
   return (
-    <div className="fixed bottom-0 z-50 flex flex-col shadow-2xl" style={{ width: COMPOSER_W, right: rightPx }}>
+    <div
+      className="fixed bottom-0 z-50 flex flex-col shadow-2xl inset-x-0 md:inset-x-auto"
+      style={isMobile ? undefined : { width: COMPOSER_W, right: rightPx }}
+    >
       {/* Header */}
       <div
         className="flex select-none items-center gap-2 rounded-t-xl bg-[#1f2937] px-4 py-2.5 text-white cursor-pointer"

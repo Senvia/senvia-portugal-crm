@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Search, Filter, Plus, Zap, Wrench } from 'lucide-react';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from 'react-day-picker';
 import { ProposalDetailsModal } from '@/components/proposals/ProposalDetailsModal';
@@ -92,20 +93,18 @@ export default function Proposals() {
   return (
     <>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <FileText className="h-6 w-6" />
-              Propostas
-            </h1>
-            <p className="text-muted-foreground">Gestão de propostas comerciais.</p>
-          </div>
-          <Button onClick={() => setCreateModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Proposta
-          </Button>
-        </div>
+        <PageHeader
+          icon={FileText}
+          title="Propostas"
+          subtitle="Gestão de propostas comerciais."
+          actions={
+            <Button onClick={() => setCreateModalOpen(true)}>
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Nova Proposta</span>
+              <span className="sm:hidden">Nova</span>
+            </Button>
+          }
+        />
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

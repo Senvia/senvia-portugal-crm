@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
 
@@ -17,7 +17,10 @@ export default function FinanceInvoices() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Faturas</h1>
+          <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <FileText className="h-5 w-5 shrink-0 text-primary" />
+            Faturas
+          </h1>
           <p className="text-sm text-muted-foreground">
             Referências de faturas emitidas
           </p>

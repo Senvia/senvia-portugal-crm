@@ -12,7 +12,8 @@ import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePa
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
 import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
 import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, LayoutDashboard } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Link } from "react-router-dom";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -45,26 +46,24 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 md:mb-8">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">{greeting}</h1>
-          <p className="text-sm md:text-base text-muted-foreground">
-            Bem-vindo ao painel de controlo da {organization?.name || 'sua organização'}.
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          <Link
-            to="/novidades"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>O que há de novo</span>
-          </Link>
-          <DashboardPeriodFilter />
-          <TeamMemberFilter className="w-[160px] sm:w-[180px]" />
-        </div>
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        title={greeting}
+        subtitle={`Bem-vindo ao painel de controlo da ${organization?.name || 'sua organização'}.`}
+        actions={
+          <>
+            <Link
+              to="/novidades"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">O que há de novo</span>
+            </Link>
+            <DashboardPeriodFilter />
+            <TeamMemberFilter className="w-[150px] sm:w-[180px]" />
+          </>
+        }
+      />
 
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">

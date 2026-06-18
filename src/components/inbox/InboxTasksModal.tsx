@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Check, Clock, MessageSquare, ClipboardList, User } from "lucide-react";
+import { Check, Clock, MessageSquare, ClipboardList, User, ArrowLeft } from "lucide-react";
 import { InboxTask, isTaskOverdue, useToggleInboxTask, useUpdateInboxTask } from "@/hooks/useInboxTasks";
 import type { TeamMember } from "@/hooks/useTeam";
 
@@ -76,9 +76,9 @@ export function InboxTasksModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid h-[60vh] grid-cols-[1fr_1.2fr]">
-          {/* Left: filter + list */}
-          <div className="flex min-h-0 flex-col border-r">
+        <div className="flex h-[75vh] flex-col md:grid md:h-[60vh] md:grid-cols-[1fr_1.2fr]">
+          {/* Left: filter + list (hidden on mobile once a task is open) */}
+          <div className={cn("min-h-0 flex-col border-r md:flex", selectedId ? "hidden md:flex" : "flex")}>
             <div className="border-b p-3">
               <Select value={assignee} onValueChange={(v) => { setAssignee(v); setSelectedId(null); }}>
                 <SelectTrigger className="h-9">
@@ -125,14 +125,22 @@ export function InboxTasksModal({
             </div>
           </div>
 
-          {/* Right: details */}
-          <div className="min-h-0 overflow-y-auto p-5">
+          {/* Right: details (full-screen on mobile when a task is open) */}
+          <div className={cn("min-h-0 flex-1 overflow-y-auto p-5", selectedId ? "block" : "hidden md:block")}>
             {!selected ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Seleciona uma tarefa para ver os detalhes.
               </div>
             ) : (
               <div className="space-y-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mb-1 md:hidden"
+                  onClick={() => setSelectedId(null)}
+                >
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Voltar às tarefas
+                </Button>
                 <div>
                   <h3 className="text-lg font-semibold leading-snug">{selected.title}</h3>
                   {selected.contact_name && (

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 
 export default function SystemAdminUsers() {
   return (
@@ -12,8 +12,11 @@ export default function SystemAdminUsers() {
             <Link to="/system-admin"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Utilizadores</h1>
-            <p className="text-muted-foreground">Criar e gerir utilizadores.</p>
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Users className="h-5 w-5 shrink-0 text-primary" />
+              Utilizadores
+            </h1>
+            <p className="text-sm text-muted-foreground">Criar e gerir utilizadores.</p>
           </div>
         </div>
 

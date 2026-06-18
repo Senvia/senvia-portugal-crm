@@ -144,8 +144,8 @@ export default function SystemAdminAnnouncements() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl lg:text-2xl font-bold flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" /> Gerir Novidades
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Sparkles className="h-5 w-5 shrink-0 text-primary" /> Gerir Novidades
             </h1>
             <p className="text-sm text-muted-foreground">Pop-ups de novidades para utilizadores.</p>
           </div>

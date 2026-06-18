@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SEO } from "@/components/SEO";
@@ -22,7 +22,10 @@ export default function EcommerceProducts() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Produtos</h1>
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Package className="h-5 w-5 shrink-0 text-primary" />
+              Produtos
+            </h1>
             <p className="text-sm text-muted-foreground">Gerir catálogo e categorias</p>
           </div>
         </div>

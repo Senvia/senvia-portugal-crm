@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SEO } from "@/components/SEO";
 
@@ -20,7 +20,10 @@ export default function EcommerceOrders() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Pedidos</h1>
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <ShoppingCart className="h-5 w-5 shrink-0 text-primary" />
+              Pedidos
+            </h1>
             <p className="text-sm text-muted-foreground">Gerir encomendas e estados</p>
           </div>
         </div>

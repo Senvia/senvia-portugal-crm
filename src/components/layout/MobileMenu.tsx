@@ -1,24 +1,31 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Settings, 
-  LogOut,
-  Shield,
-  X,
-  Building2,
-  Search
+import {
+  LayoutDashboard, Users, Settings, LogOut, Shield, X, Building2,
+  Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Search, MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules, EnabledModules } from "@/hooks/useModules";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useSubscription } from "@/hooks/useSubscription";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { Button } from "@/components/ui/button";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
-const navItems = [
+// Same set as the desktop sidebar so the mobile menu is never missing pages.
+const allNavItems: { to: string; icon: React.ElementType; label: string; moduleKey?: keyof EnabledModules }[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
+  { to: "/inbox", icon: MessageSquare, label: "Caixa de Entrada", moduleKey: 'inbox' },
+  { to: "/clients", icon: UserCheck, label: "Clientes", moduleKey: 'clients' },
+  { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
+  { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
+  { to: "/financeiro", icon: Wallet, label: "Financeiro", moduleKey: 'finance' },
+  { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
+  { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
+  { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições" },
 ];
 
@@ -39,10 +46,22 @@ interface MobileMenuProps {
 export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizationName = "A Minha Empresa" }: MobileMenuProps) {
   const navigate = useNavigate();
   const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
+  const { modules } = useModules();
+  const { canViewModule } = usePermissions();
+  const { isModuleLocked } = useSubscription();
   const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
     organizationId: organization?.id,
     memberships: organizations,
     isSuperAdmin,
+  });
+
+  // Same visibility rule as the desktop sidebar (module enabled + viewable).
+  const navItems = allNavItems.filter((item) => {
+    if (!item.moduleKey) return true;
+    if (isModuleLocked(item.moduleKey)) return false;
+    if (!modules[item.moduleKey]) return false;
+    if (!canViewModule(item.moduleKey)) return false;
+    return true;
   });
 
   const handleLogout = async () => {

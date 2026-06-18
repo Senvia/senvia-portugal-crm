@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch } from "@/lib/utils";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -237,36 +238,33 @@ export default function Sales() {
     <div className="flex flex-col min-h-screen bg-background">
         {/* Header */}
       <div className="p-4 md:p-6 border-b border-border/50">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <ShoppingBag className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold">Vendas</h1>
-              <p className="text-sm text-muted-foreground hidden sm:block">Gestão de vendas e entregas.</p>
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            {isPerfect2Gether && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportPerfect2Gether}
-                disabled={isExporting}
-                className="w-full sm:w-auto"
-              >
-                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Exportar Perfect2Gether
+        <PageHeader
+          icon={ShoppingBag}
+          title="Vendas"
+          subtitle="Gestão de vendas e entregas."
+          className="mb-0"
+          actions={
+            <>
+              {isPerfect2Gether && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportPerfect2Gether}
+                  disabled={isExporting}
+                >
+                  {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  <span className="hidden sm:inline">Exportar Perfect2Gether</span>
+                  <span className="sm:hidden">Exportar</span>
+                </Button>
+              )}
+              <Button onClick={() => setShowCreateModal(true)} size="sm">
+                <Plus className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Nova Venda</span>
+                <span className="sm:hidden">Nova</span>
               </Button>
-            )}
-            <Button onClick={() => setShowCreateModal(true)} size="sm" className="w-full sm:w-auto">
-              <Plus className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Nova Venda</span>
-              <span className="sm:hidden">Nova</span>
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
       </div>
 
       {/* Summary Cards */}

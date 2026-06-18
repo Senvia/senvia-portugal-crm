@@ -8,9 +8,14 @@ export interface StripePlan {
   features: string[];
   modules: string[];
   integrations: string[];
-  limits: { users: string; forms: string };
+  limits: { users: string; forms: string; inboxes: string };
   highlighted?: boolean;
 }
+
+// Caixas de entrada são multicanal: cada caixa pode ligar WhatsApp, Instagram,
+// Facebook (Messenger) ou Email, e todas as conversas chegam num só lugar.
+export const INBOX_EXPLAINER =
+  "Caixas de entrada multicanal: liga WhatsApp, Instagram, Facebook e Email e responde a tudo num só lugar.";
 
 export const STRIPE_PLANS: StripePlan[] = [
   {
@@ -26,11 +31,12 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Propostas",
     ],
     integrations: ["Meta Pixels"],
-    limits: { users: "Até 10", forms: "2 formulários" },
+    limits: { users: "Até 5", forms: "5 formulários", inboxes: "2 caixas de entrada" },
     features: [
       "CRM base (Leads + Clientes)",
-      "Até 10 utilizadores",
-      "2 formulários",
+      "Até 5 utilizadores",
+      "5 formulários",
+      "2 caixas de entrada (WhatsApp, Instagram, Facebook, Email)",
       "Calendário e propostas",
     ],
   },
@@ -48,13 +54,14 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Módulo Marketing",
     ],
     integrations: ["WhatsApp", "Meta Pixels"],
-    limits: { users: "Até 15", forms: "5 formulários" },
+    limits: { users: "Até 15", forms: "15 formulários", inboxes: "10 caixas de entrada" },
     features: [
       "Tudo do Starter +",
       "Módulo Marketing",
       "Integração WhatsApp",
       "Até 15 utilizadores",
-      "5 formulários",
+      "15 formulários",
+      "10 caixas de entrada (WhatsApp, Instagram, Facebook, Email)",
     ],
   },
   {
@@ -70,13 +77,14 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Módulo E-commerce",
     ],
     integrations: ["WhatsApp", "Meta Pixels", "Faturação (KeyInvoice, InvoiceXpress)", "Pagamentos (Stripe)"],
-    limits: { users: "Ilimitados", forms: "Ilimitados" },
+    limits: { users: "Ilimitados", forms: "Ilimitados", inboxes: "Caixas ilimitadas" },
     features: [
       "Tudo do Pro +",
       "Módulo Financeiro",
       "Módulo E-commerce",
       "Utilizadores ilimitados",
       "Formulários ilimitados",
+      "Caixas de entrada ilimitadas (WhatsApp, Instagram, Facebook, Email)",
     ],
   },
 ];

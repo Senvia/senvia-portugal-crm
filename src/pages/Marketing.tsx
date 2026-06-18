@@ -1,6 +1,7 @@
-import { Mail, Send, BarChart3, ArrowRight, Users } from "lucide-react";
+import { Mail, Send, BarChart3, ArrowRight, Users, Megaphone } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const modules = [
   {
@@ -52,10 +53,7 @@ const modules = [
 export default function Marketing() {
   return (
     <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Marketing</h1>
-        <p className="text-muted-foreground">Gestão de templates de email e campanhas de marketing</p>
-      </div>
+      <PageHeader icon={Megaphone} title="Marketing" subtitle="Gestão de templates de email e campanhas de marketing" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {modules.map((module) => (

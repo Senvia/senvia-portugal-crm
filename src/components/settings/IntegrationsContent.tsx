@@ -23,6 +23,8 @@ import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
 
 interface IntegrationsContentProps {
   isLoadingIntegrations: boolean;
@@ -968,6 +970,9 @@ function InboxesManager() {
   useAutoRepairWiring(); // silent one-time repair of broken Evolution→Chatwoot wiring
   const { data: channels = [] } = useMessagingChannels();
   const { data: members = [] } = useTeamMembers();
+  const { limits, planName } = useSubscription();
+  const { organization } = useAuth();
+  const { toast } = useToast();
   const deleteChannel = useDeleteChannel();
   const deleteEmailChannel = useDeleteEmailChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
@@ -1002,7 +1007,26 @@ function InboxesManager() {
 
   const orphanCount = channels.filter((c) => c.channel_type !== 'email' && c.status !== 'connected').length;
 
+  // Caixa (inbox) limit: per-org override wins; null = unlimited. Every caixa is a
+  // messaging_channels row (WhatsApp, Email, ...), so channels.length is the count.
+  const overrideInboxes = (organization as { max_inboxes_override?: number | null } | null)?.max_inboxes_override;
+  const maxInboxes = overrideInboxes ?? limits.maxInboxes;
+  const inboxCount = channels.length;
+  const atInboxLimit = maxInboxes != null && inboxCount >= maxInboxes;
+
+  // Returns true (and warns) when the org has hit its caixa limit — callers bail.
+  const blockIfAtLimit = () => {
+    if (!atInboxLimit) return false;
+    toast({
+      title: `Limite de ${maxInboxes} caixas atingido`,
+      description: `O plano ${planName} permite ${maxInboxes} caixas de entrada. Faz upgrade para adicionares mais canais.`,
+      variant: 'destructive',
+    });
+    return true;
+  };
+
   const startNewWhatsApp = () => {
+    if (blockIfAtLimit()) return;
     setConnectModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
     setNewOpen(false);
     setNewLabel('');
@@ -1012,10 +1036,21 @@ function InboxesManager() {
     <div className="space-y-4">
       {/* Header with "Nova caixa" always visible at top */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Liga as tuas contas para receber e responder mensagens de todos os canais num só lugar.
-        </p>
-        <Button onClick={() => setNewOpen(true)} size="sm" className="shrink-0 gap-1.5">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">
+            Liga as tuas contas para receber e responder mensagens de todos os canais num só lugar.
+          </p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">
+            <span className={cn(atInboxLimit && 'text-destructive')}>{inboxCount}</span>
+            {maxInboxes != null ? ` / ${maxInboxes}` : ''} caixa{inboxCount !== 1 ? 's' : ''}
+            {maxInboxes != null && ` · plano ${planName}`}
+          </p>
+        </div>
+        <Button
+          onClick={() => { if (blockIfAtLimit()) return; setNewOpen(true); }}
+          size="sm"
+          className="shrink-0 gap-1.5"
+        >
           <Plus className="h-4 w-4" /> Nova caixa
         </Button>
       </div>
@@ -1186,6 +1221,7 @@ function InboxesManager() {
                   disabled={!c.available}
                   onClick={() => {
                     if (!c.available) return;
+                    if (blockIfAtLimit()) { setNewOpen(false); return; }
                     if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
                     // WhatsApp (and future channels): stay open so user enters a label
                   }}

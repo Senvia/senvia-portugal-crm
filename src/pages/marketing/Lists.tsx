@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Upload, Loader2, ArrowLeft } from "lucide-react";
+import { Plus, Upload, Loader2, ArrowLeft, List } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ContactListsTable } from "@/components/marketing/ContactListsTable";
@@ -25,7 +25,10 @@ export default function Lists() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Listas de Transmissão</h1>
+              <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <List className="h-5 w-5 shrink-0 text-primary" />
+                Listas de Transmissão
+              </h1>
               <p className="text-muted-foreground text-sm">Gira listas de contactos para campanhas</p>
             </div>
           </div>

@@ -381,7 +381,7 @@ export function useInboxConversations(enabled = true, live = false) {
     enabled: enabled && !!organization?.id,
     // Gentle fallback polling (realtime is the primary freshness path). 5s was too
     // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
-    refetchInterval: !enabled ? false : live ? 20000 : 15000,
+    refetchInterval: !enabled ? false : live ? 15000 : 6000,
     // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
     // realtime invalidate already keep this fresh. Without this, every focus
     // change re-ran the read-modify-write merge and re-rendered the whole inbox.
@@ -479,7 +479,10 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     // patches to protect (sends use local `pending` state, not the cache), and a
     // background mark_read mutation was needlessly freezing the messages poll —
     // that was why incoming messages took so long to appear after a read receipt.
-    refetchInterval: !conversationId ? false : live ? 20000 : 8000,
+    // Open-thread poll is the safety net behind realtime. Kept tight (3s) so an
+    // incoming message still lands fast even if a realtime broadcast is missed;
+    // it's a single conversation's fetch, so the Chatwoot load stays small.
+    refetchInterval: !conversationId ? false : live ? 6000 : 3000,
     // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
     // the poll already keep the open thread fresh.
     refetchOnWindowFocus: false,

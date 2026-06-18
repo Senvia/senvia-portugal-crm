@@ -48,7 +48,7 @@ export function CalendarAlertsWidget() {
 
   if (isLoading) {
     return (
-      <Card className="col-span-2 lg:col-span-1">
+      <Card className="lg:col-span-1">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Calendar className="h-4 w-4 text-primary" />
@@ -64,7 +64,7 @@ export function CalendarAlertsWidget() {
 
   if (totalAlerts === 0) {
     return (
-      <Card className="col-span-2 lg:col-span-1">
+      <Card className="lg:col-span-1">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Calendar className="h-4 w-4 text-primary" />
@@ -119,7 +119,7 @@ export function CalendarAlertsWidget() {
   return (
     <>
       <Card
-        className="col-span-2 lg:col-span-1 cursor-pointer hover:border-primary/30 transition-colors"
+        className="lg:col-span-1 cursor-pointer hover:border-primary/30 transition-colors"
         onClick={() => setModalOpen(true)}
       >
         <CardHeader className="pb-2">

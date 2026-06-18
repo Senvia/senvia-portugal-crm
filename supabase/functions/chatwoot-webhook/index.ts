@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
     // the Open queue — at 100 instances reconnecting every 20s this would saturate
     // Chatwoot. Channel resolution is still needed for the flap guard below.
     const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
-    let channel: { id?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null; needs_repair?: boolean } | null = null;
+    let channel: { id?: string; channel_type?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null; needs_repair?: boolean } | null = null;
     // channelExact = resolved by the conversation's inbox id (not the fallback).
     // The flap guard ONLY acts on an exact match, so a status message we can't
     // attribute to a specific caixa can never disconnect the wrong one.
@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
     if (inboxId != null) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('id, evolution_instance, metadata, assigned_user_ids, needs_repair')
+        .select('id, channel_type, evolution_instance, metadata, assigned_user_ids, needs_repair')
         .eq('organization_id', org.id)
         .eq('chatwoot_inbox_id', inboxId)
         .maybeSingle();
@@ -307,7 +307,7 @@ Deno.serve(async (req) => {
     if (!channel) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('id, evolution_instance, metadata, assigned_user_ids, needs_repair')
+        .select('id, channel_type, evolution_instance, metadata, assigned_user_ids, needs_repair')
         .eq('organization_id', org.id)
         .eq('channel_type', 'whatsapp')
         .order('created_at', { ascending: true })
@@ -465,21 +465,57 @@ Deno.serve(async (req) => {
       console.error('auto-assign failed:', e);
     }
 
+    const sender = event.conversation?.meta?.sender ?? event.sender ?? {};
     const senderName =
-      event.conversation?.meta?.sender?.name ||
-      event.sender?.name ||
-      event.conversation?.meta?.sender?.phone_number ||
+      sender?.name ||
+      sender?.phone_number ||
       'Novo contacto';
 
     const attachments = Array.isArray(event.attachments) ? event.attachments : [];
-    const preview = String(event.content ?? '').trim()
+    let preview = String(event.content ?? '').trim()
       || (attachments[0] ? (MEDIA_LABELS[attachments[0].file_type] ?? '📎 Anexo') : 'Nova mensagem');
+
+    // Per-channel notification title so the user knows the source at a glance
+    // (the "From Senvia" line is the PWA name and can't be made dynamic).
+    const channelType = channel?.channel_type ?? 'whatsapp';
+    const isGroup = String(sender?.identifier ?? '').includes('@g.us')
+      || /\(GROUP\)/i.test(String(sender?.name ?? ''));
+
+    let title: string;
+    if (channelType === 'email') {
+      const subject =
+        event.conversation?.additional_attributes?.mail_subject ||
+        event.content_attributes?.email?.subject ||
+        '';
+      const emailSender = sender?.email || senderName;
+      title = `📧 Email: ${emailSender}`;
+      if (subject) preview = String(subject); // body = subject for email
+    } else if (channelType === 'instagram') {
+      title = `📷 Instagram: ${senderName}`;
+    } else if (channelType === 'facebook' || channelType === 'messenger') {
+      title = `💬 Messenger: ${senderName}`;
+    } else if (isGroup) {
+      // WhatsApp group: the individual sender is embedded in the body as
+      // "**+351... - Nome:** message". Pull the person out for the title and
+      // strip the prefix from the body.
+      const m = preview.match(/^\*\*\s*(.+?)\s*:\*\*\s*\n*/);
+      let person = '';
+      if (m) {
+        const inner = m[1].trim();
+        const dash = inner.indexOf(' - ');
+        person = dash > -1 ? inner.slice(dash + 3).trim() : inner;
+        preview = preview.slice(m[0].length) || preview;
+      }
+      title = person ? `📱 WhatsApp: ${person} em ${senderName}` : `📱 WhatsApp: ${senderName}`;
+    } else {
+      title = `📱 WhatsApp: ${senderName}`;
+    }
 
     // Reuse the existing push pipeline (VAPID web push to push_subscriptions).
     // When the caixa has collaborators, notify only them; otherwise the whole org.
     const pushPayload: Record<string, unknown> = {
       organization_id: org.id,
-      title: `💬 ${senderName}`,
+      title,
       body: preview.slice(0, 140),
       url: '/inbox',
       // One notification per conversation: a newer message replaces the

@@ -9,8 +9,9 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -398,10 +399,7 @@ export default function Settings() {
         {activeGroup === null ? (
           // Level 1: Group cards grid
           <>
-            <div className="mb-6 sm:mb-8">
-              <h1 className="text-2xl font-bold text-foreground">Definições</h1>
-              <p className="text-muted-foreground">Configure a sua organização e integrações.</p>
-            </div>
+            <PageHeader icon={SettingsIcon} title="Definições" subtitle="Configure a sua organização e integrações." />
             <MobileSettingsNav
               activeSection={null}
               onSelectSection={handleGroupSelect}
@@ -417,7 +415,7 @@ export default function Settings() {
               <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{sectionTitles[activeGroup]}</h1>
+              <h1 className="text-lg font-semibold text-foreground">{sectionTitles[activeGroup]}</h1>
             </div>
 
             {groupSubs.length > 1 && (

@@ -17,6 +17,7 @@ interface SubscriptionPlan {
   name: string;
   max_users: number | null;
   max_forms: number | null;
+  max_inboxes: number | null;
   features: PlanFeatures;
   price_monthly: number;
 }
@@ -24,8 +25,9 @@ interface SubscriptionPlan {
 const DEFAULT_PLAN: SubscriptionPlan = {
   id: 'starter',
   name: 'Starter',
-  max_users: 10,
-  max_forms: 2,
+  max_users: 5,
+  max_forms: 5,
+  max_inboxes: 2,
   price_monthly: 49,
   features: {
     modules: { sales: false, finance: false, marketing: false, ecommerce: false },
@@ -111,6 +113,7 @@ export function useSubscription() {
           name: row.name,
           max_users: row.max_users,
           max_forms: row.max_forms,
+          max_inboxes: row.max_inboxes ?? null,
           price_monthly: Number(row.price_monthly),
           features: row.features as PlanFeatures,
         } as SubscriptionPlan;
@@ -124,6 +127,7 @@ export function useSubscription() {
         name: row.name,
         max_users: row.max_users,
         max_forms: row.max_forms,
+        max_inboxes: row.max_inboxes ?? null,
         price_monthly: Number(row.price_monthly),
         features: row.features as PlanFeatures,
       } as SubscriptionPlan;
@@ -179,6 +183,7 @@ export function useSubscription() {
     limits: {
       maxUsers: currentPlan.max_users,
       maxForms: currentPlan.max_forms,
+      maxInboxes: currentPlan.max_inboxes,
     },
     isLoading,
     canUseModule,

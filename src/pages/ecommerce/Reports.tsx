@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, TrendingUp, Package, Users, DollarSign } from "lucide-react";
+import { ArrowLeft, TrendingUp, Package, Users, DollarSign, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SEO } from "@/components/SEO";
@@ -25,7 +25,10 @@ export default function EcommerceReports() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <BarChart3 className="h-5 w-5 shrink-0 text-primary" />
+              Relatórios
+            </h1>
             <p className="text-sm text-muted-foreground">Análise e métricas da loja</p>
           </div>
         </div>

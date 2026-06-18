@@ -639,7 +639,8 @@ export default function Leads() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl lg:text-2xl font-bold text-foreground">Leads</h1>
+                <Users className="h-5 w-5 shrink-0 text-primary" />
+                <h1 className="text-lg font-semibold text-foreground">Leads</h1>
                 <Badge variant="secondary" className="text-xs font-medium">
                   {hasActiveFilters ? `${filteredLeads.length} / ${baseLeads.length}` : baseLeads.length}
                 </Badge>

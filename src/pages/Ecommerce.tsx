@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Package, ShoppingCart, Users, Truck, Tag, BarChart3, AlertTriangle, ChevronRight } from "lucide-react";
+import { Package, ShoppingCart, Users, Truck, Tag, BarChart3, AlertTriangle, ChevronRight, Store } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useEcommerceStats } from "@/hooks/ecommerce";
@@ -73,13 +74,7 @@ export default function Ecommerce() {
       />
       
       <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">E-commerce</h1>
-          <p className="text-muted-foreground">
-            Gestão completa da sua loja online
-          </p>
-        </div>
+        <PageHeader icon={Store} title="E-commerce" subtitle="Gestão completa da sua loja online" />
 
         {/* Quick Stats */}
         <div className="grid gap-4 md:grid-cols-4">

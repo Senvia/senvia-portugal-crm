@@ -17,6 +17,7 @@ import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDia
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
 import { GenerateProspectsDialog } from "@/components/prospects/GenerateProspectsDialog";
 import { Download, Loader2, Search, Upload, Users, Sparkles, Facebook, Instagram, Twitter, Youtube, Globe } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -173,10 +174,7 @@ export default function Prospects() {
   if (!modules.prospects) {
     return (
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">Ative o módulo Prospects nas Definições → Módulos para utilizar esta funcionalidade.</p>
-        </div>
+        <PageHeader icon={Search} title="Prospects" subtitle="Ative o módulo Prospects nas Definições → Módulos para utilizar esta funcionalidade." />
       </div>
     );
   }
@@ -184,12 +182,7 @@ export default function Prospects() {
   return (
     <>
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">
-            Importe prospects, distribua só pelos comerciais e converta automaticamente em leads.
-          </p>
-        </div>
+        <PageHeader icon={Search} title="Prospects" subtitle="Importe prospects, distribua só pelos comerciais e converta automaticamente em leads." />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>

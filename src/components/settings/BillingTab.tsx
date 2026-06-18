@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock } from 'lucide-react';
+import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -255,6 +255,15 @@ export function BillingTab() {
                     <div className="flex items-center gap-2.5 text-sm">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span><span className="font-medium">{plan.limits.forms}</span></span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm">
+                      <Inbox className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <span>
+                        <span className="font-medium">{plan.limits.inboxes}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Multicanal: WhatsApp, Instagram, Facebook e Email num só lugar
+                        </span>
+                      </span>
                     </div>
                   </div>
                 </div>

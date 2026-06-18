@@ -30,8 +30,8 @@ export default function Novidades() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Sparkles className="h-5 w-5 text-primary" /> O que há de novo
+          <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <Sparkles className="h-5 w-5 shrink-0 text-primary" /> O que há de novo
           </h1>
           <p className="text-sm text-muted-foreground">Histórico de atualizações da plataforma.</p>
         </div>

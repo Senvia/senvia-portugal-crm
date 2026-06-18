@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Users, Building, Sparkles } from "lucide-react";
+import { Users, Building, Sparkles, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,7 +111,10 @@ export default function SystemAdminDashboard() {
     <div className="min-h-screen bg-background p-4 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold">Painel Super Admin</h1>
+          <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
+            Painel Super Admin
+          </h1>
           <p className="text-sm text-muted-foreground">Gestão global do sistema Senvia OS.</p>
         </div>
 

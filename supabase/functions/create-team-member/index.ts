@@ -69,10 +69,10 @@ serve(async (req) => {
     const organizationId = profile.organization_id;
 
     // ---- Validate user limit based on subscription plan ----
-    // Get org plan
+    // Get org plan (+ per-org override and billing-exempt flag)
     const { data: orgData } = await supabaseAdmin
       .from('organizations')
-      .select('plan')
+      .select('plan, max_users_override, billing_exempt')
       .eq('id', organizationId)
       .single();
 
@@ -85,7 +85,13 @@ serve(async (req) => {
       .eq('id', planId)
       .single();
 
-    if (planData?.max_users !== null && planData?.max_users !== undefined) {
+    // Effective limit: per-org override always wins; null/undefined = unlimited.
+    // Billing-exempt orgs (demos, internal, partners) skip the limit entirely.
+    const overrideUsers = orgData?.max_users_override;
+    const effectiveMaxUsers =
+      overrideUsers !== null && overrideUsers !== undefined ? overrideUsers : planData?.max_users;
+
+    if (!orgData?.billing_exempt && effectiveMaxUsers !== null && effectiveMaxUsers !== undefined) {
       // Count active members
       const { count: memberCount } = await supabaseAdmin
         .from('organization_members')
@@ -93,10 +99,10 @@ serve(async (req) => {
         .eq('organization_id', organizationId)
         .eq('is_active', true);
 
-      if (memberCount !== null && memberCount >= planData.max_users) {
+      if (memberCount !== null && memberCount >= effectiveMaxUsers) {
         return new Response(
-          JSON.stringify({ 
-            error: `Limite de ${planData.max_users} utilizadores atingido para o plano ${planData.name || planId}. Faça upgrade para adicionar mais membros.` 
+          JSON.stringify({
+            error: `Limite de ${effectiveMaxUsers} utilizadores atingido para o plano ${planData?.name || planId}. Faça upgrade para adicionar mais membros.`
           }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

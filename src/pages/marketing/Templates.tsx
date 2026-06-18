@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,10 @@ export default function Templates() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Templates de Email</h1>
+              <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Mail className="h-5 w-5 shrink-0 text-primary" />
+                Templates de Email
+              </h1>
               <p className="text-sm text-muted-foreground">
                 Crie templates reutilizáveis para as suas campanhas
               </p>

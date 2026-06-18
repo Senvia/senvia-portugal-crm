@@ -85,8 +85,9 @@ import {
   ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
-  ChevronsUpDown, Eye, Inbox as InboxIcon,
+  ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause,
 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -335,6 +336,62 @@ function DownloadButton({ url, extension, className }: { url: string; extension?
   );
 }
 
+// Compact custom audio player (the native <audio controls> is inconsistent and ugly).
+function AudioPlayer({ url, outgoing }: { url: string; outgoing: boolean }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [cur, setCur] = useState(0);
+  const [dur, setDur] = useState(0);
+  const fmt = (s: number) => {
+    if (!isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  };
+  const toggle = () => {
+    const a = ref.current;
+    if (!a) return;
+    if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+  };
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = ref.current;
+    if (!a || !dur) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    a.currentTime = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * dur;
+  };
+  const pct = dur ? (cur / dur) * 100 : 0;
+  return (
+    <div className="flex min-w-[180px] items-center gap-2">
+      <button
+        type="button"
+        onClick={toggle}
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+          outgoing ? "bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30" : "bg-primary/10 text-primary hover:bg-primary/20",
+        )}
+      >
+        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
+      </button>
+      <div className="min-w-0 flex-1">
+        <div onClick={seek} className={cn("h-1.5 cursor-pointer rounded-full", outgoing ? "bg-primary-foreground/25" : "bg-muted")}>
+          <div className={cn("h-1.5 rounded-full", outgoing ? "bg-primary-foreground" : "bg-primary")} style={{ width: `${pct}%` }} />
+        </div>
+        <div className={cn("mt-1 text-[10px] tabular-nums", outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
+          {fmt(cur)} / {fmt(dur)}
+        </div>
+      </div>
+      <audio
+        ref={ref}
+        src={url}
+        preload="metadata"
+        className="hidden"
+        onTimeUpdate={() => setCur(ref.current?.currentTime ?? 0)}
+        onLoadedMetadata={() => setDur(ref.current?.duration ?? 0)}
+        onEnded={() => { setPlaying(false); setCur(0); }}
+      />
+    </div>
+  );
+}
+
 // Audio attachment with inline Groq Whisper transcription (on-demand, cached in localStorage).
 function AudioAttachment({ url, extension, outgoing, messageId }: {
   url: string; extension: string | null; outgoing: boolean; messageId: number;
@@ -343,8 +400,8 @@ function AudioAttachment({ url, extension, outgoing, messageId }: {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1">
-        <audio controls src={url} className="max-w-full" preload="none" />
-        <DownloadButton url={url} extension={extension} />
+        <AudioPlayer url={url} outgoing={outgoing} />
+        <DownloadButton url={url} extension={extension} className={outgoing ? "text-primary-foreground" : ""} />
       </div>
       {text ? (
         <p className={cn(
@@ -502,6 +559,7 @@ export default function Inbox() {
   const navigate = useNavigate();
   const { user, organization } = useAuth();
   const prefetchMessages = useInboxMessagePrefetch();
+  const isMobile = useIsMobile();
   const { isAdmin } = usePermissions();
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
@@ -589,6 +647,9 @@ export default function Inbox() {
   // CRM contact panel: fixed right column on desktop (persisted), Sheet on mobile.
   const [panelOpen, setPanelOpen] = useState<boolean>(() => localStorage.getItem("inbox-panel-v1") !== "0");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Mobile-only: the caixa rail (hidden < md) opens in a left Sheet so phones can
+  // switch caixa / reach email.
+  const [railSheetOpen, setRailSheetOpen] = useState(false);
   // Generic destructive-action confirmation (replaces window.confirm).
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
 
@@ -636,8 +697,18 @@ export default function Inbox() {
         crm_kind: null, crm_id: null, crm_name: null,
       }
     : null;
-  const selected = (selectedId ? conversations.find((c) => c.id === selectedId) : null) || draftSelected;
-  const altIds = selected?.alt_ids ?? [];
+  // Resolve the open conversation by its id OR by being one of a merged row's
+  // alt_ids: a new inbound message can spawn a NEWER Chatwoot conversation that
+  // becomes the merged row's primary, demoting the one we opened into an alt.
+  const selected = (selectedId
+    ? conversations.find((c) => c.id === selectedId || (c.alt_ids ?? []).includes(selectedId))
+    : null) || draftSelected;
+  // Fetch EVERY conversation of this contact (primary + alts), not just the ones
+  // known when the chat was opened — otherwise a message that lands in a sibling
+  // conversation shows in the list but never in the open thread.
+  const altIds = selected
+    ? [selected.id, ...(selected.alt_ids ?? [])].filter((id) => id !== selectedId)
+    : [];
   const isEmailSelected = !!(selected?.channel?.toLowerCase().includes('email'));
   // WhatsApp group: the JID ends in @g.us (robust), with a (GROUP) name fallback.
   const isGroupSelected =
@@ -1688,7 +1759,15 @@ export default function Inbox() {
     <div className="flex h-full flex-col overflow-y-auto">
       {/* Profile — gradient header */}
       <div className="relative bg-gradient-to-br from-green-500/15 via-primary/5 to-transparent px-4 pb-4 pt-5">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          title="Fechar painel"
+          onClick={() => { setSheetOpen(false); setPanelOpen(false); localStorage.setItem("inbox-panel-v1", "0"); }}
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm ring-1 ring-border transition-colors hover:bg-background"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-3 pr-9">
           <ContactAvatar name={selected.contact_name} src={selected.contact_thumbnail} className="h-16 w-16 shrink-0 ring-2 ring-white/80 shadow-md" />
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="truncate font-semibold">{selected.contact_name}</p>
@@ -2049,7 +2128,13 @@ export default function Inbox() {
   // same sender within a short window are grouped: only the LAST keeps a tail +
   // timestamp, and the gap between them tightens — the WhatsApp "grouped" look.
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className={cn(
+      "flex flex-col overflow-hidden",
+      // Desktop fills the viewport; on mobile the AppLayout adds a header + bottom
+      // nav (~8.5rem), so cap the height to what's left or the composer hides
+      // behind the bottom nav. dvh accounts for the mobile browser chrome.
+      isMobile ? "h-[calc(100dvh-8.5rem)]" : "h-screen",
+    )}>
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
       {!connected && (
         <div className="flex items-center gap-2 border-b bg-red-500/10 px-4 py-2 text-sm text-red-700">
@@ -2075,8 +2160,28 @@ export default function Inbox() {
         onSelectEmail={(ch) => { setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); }}
         onSelectFolder={(fid) => setEmailFolderId(fid)}
       />
+      {/* Mobile: same rail inside a left Sheet (the desktop rail is hidden < md). */}
+      <Sheet open={railSheetOpen} onOpenChange={setRailSheetOpen}>
+        <SheetContent side="left" className="w-72 p-0">
+          <SheetHeader className="border-b p-4 pb-3">
+            <SheetTitle>Caixas</SheetTitle>
+          </SheetHeader>
+          <InboxCaixaRail
+            caixas={visibleCaixas}
+            caixaFilter={caixaFilter}
+            unreadByInbox={unreadByInbox}
+            emailChannelId={emailChannelId}
+            emailFolderId={emailFolderId}
+            onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); setRailSheetOpen(false); }}
+            onSelectMessaging={(ch) => { setEmailChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); setRailSheetOpen(false); }}
+            onSelectEmail={(ch) => { setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); setRailSheetOpen(false); }}
+            onSelectFolder={(fid) => { setEmailFolderId(fid); setRailSheetOpen(false); }}
+            className="flex w-full border-r-0"
+          />
+        </SheetContent>
+      </Sheet>
       {emailChannelId ? (
-        <EmailListReader channelId={emailChannelId} folderId={emailFolderId} />
+        <EmailListReader channelId={emailChannelId} folderId={emailFolderId} onOpenRail={() => setRailSheetOpen(true)} />
       ) : (
       <>
       {/* ---- Conversation list ---- */}
@@ -2089,6 +2194,14 @@ export default function Inbox() {
         <div className="border-b p-4">
           <div className="mb-3 flex items-center justify-between">
             <h1 className="flex items-center gap-2 text-lg font-semibold">
+              <button
+                type="button"
+                title="Caixas"
+                className="-ml-1 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+                onClick={() => setRailSheetOpen(true)}
+              >
+                <Mailbox className="h-5 w-5" />
+              </button>
               <MessageSquare className="h-5 w-5 text-primary" />
               Caixa de Entrada
             </h1>
@@ -2167,9 +2280,16 @@ export default function Inbox() {
 
         <div ref={listScrollRef} className="flex-1 overflow-y-auto">
           {loadingConvos ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">A carregar conversas...</span>
+            <div className="p-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-2 py-3">
+                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
@@ -2222,7 +2342,7 @@ export default function Inbox() {
 
       {/* ---- Thread ---- */}
       <section
-        className={cn("flex-1 flex-col", selectedId ? "flex" : "hidden md:flex")}
+        className={cn("min-w-0 flex-1 flex-col", selectedId ? "flex" : "hidden md:flex")}
         onDragOver={(e) => {
           if (selectedId) e.preventDefault();
         }}
@@ -2233,18 +2353,26 @@ export default function Inbox() {
         }}
       >
         {!selected ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-            <MessageSquare className="h-10 w-10 opacity-40" />
-            <p className="text-sm">Seleciona uma conversa para começar</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+              <MessageSquare className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-foreground">As tuas conversas</p>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                Escolhe uma conversa à esquerda para ler e responder, ou inicia uma nova.
+              </p>
+            </div>
           </div>
         ) : (
           <>
             {/* Header */}
             <div className="flex items-center gap-2 border-b p-3">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="md:hidden"
+                className="shrink-0 md:hidden"
+                title="Voltar à lista"
                 onClick={() => setSelectedId(null)}
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -2336,7 +2464,9 @@ export default function Inbox() {
                 size="icon"
                 title="Painel do contacto"
                 onClick={() => {
-                  if (window.innerWidth >= INBOX_CONFIG.DESKTOP_BREAKPOINT) {
+                  // The pinned column only fits on very wide screens (2xl); below
+                  // that the panel opens as an overlay so it never clips the layout.
+                  if (window.innerWidth >= 1536) {
                     const next = !panelOpen;
                     setPanelOpen(next);
                     localStorage.setItem("inbox-panel-v1", next ? "1" : "0");
@@ -2773,11 +2903,11 @@ export default function Inbox() {
                 />
 
                 {draft.trim() || outAttachments.length > 0 ? (
-                  <Button type="submit" size="icon" disabled={sendMessage.isPending || startConversation.isPending}>
+                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={sendMessage.isPending || startConversation.isPending}>
                     {(sendMessage.isPending || startConversation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 ) : !isEmailSelected ? (
-                  <Button type="button" size="icon" variant="ghost" title="Gravar mensagem de voz" onClick={startRecording}>
+                  <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" onClick={startRecording}>
                     <Mic className="h-4 w-4" />
                   </Button>
                 ) : null}
@@ -2790,7 +2920,7 @@ export default function Inbox() {
 
       {/* ---- Contact panel (desktop right column) ---- */}
       {selected && panelOpen && (
-        <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
+        <aside className="hidden w-72 shrink-0 flex-col border-l 2xl:flex">
           {contactPanel}
         </aside>
       )}
@@ -3144,13 +3274,18 @@ export default function Inbox() {
         </DialogContent>
       </Dialog>
 
-      {/* CRM contact panel (mobile sheet — same content as the desktop column) */}
+      {/* CRM contact panel (mobile sheet — same content as the desktop column).
+          The panel's own gradient header carries the close X, so hide the Sheet's
+          default one to avoid a faint duplicate. */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full p-0 sm:max-w-md">
-          <SheetHeader className="border-b p-4 pb-3">
-            <SheetTitle>Contacto</SheetTitle>
-          </SheetHeader>
-          {contactPanel}
+        <SheetContent
+          // z-[70] so it sits ABOVE the fixed mobile header (z-[60]); otherwise the
+          // header overlaps and clips the top of the panel (the contact name).
+          className="z-[70] flex w-full flex-col p-0 sm:max-w-md [&>button]:hidden"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <SheetTitle className="sr-only">Contacto</SheetTitle>
+          <div className="min-h-0 flex-1">{contactPanel}</div>
         </SheetContent>
       </Sheet>
 
@@ -3611,7 +3746,10 @@ const ConversationRow = memo(function ConversationRow({
       </div>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+          <p className={cn(
+            "flex min-w-0 items-center gap-1 truncate text-sm",
+            conversation.unread_count > 0 ? "font-bold text-foreground" : "font-medium",
+          )}>
             {pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
             {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
             <span className="truncate">{conversation.contact_name}</span>
@@ -3647,7 +3785,10 @@ const ConversationRow = memo(function ConversationRow({
           <p className="truncate text-xs font-medium text-foreground/80">{conversation.email_subject}</p>
         )}
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className={cn(
+            "truncate text-xs",
+            conversation.unread_count > 0 ? "font-medium text-foreground/90" : "text-muted-foreground",
+          )}>
             {conversation.last_message ? translateActivity(conversation.last_message) : "—"}
           </p>
           {waiting && sla && (

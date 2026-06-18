@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Plus, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Loader2, Megaphone } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,10 @@ export default function Campaigns() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Campanhas</h1>
+              <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Megaphone className="h-5 w-5 shrink-0 text-primary" />
+                Campanhas
+              </h1>
               <p className="text-muted-foreground text-sm">Envie emails em massa para os seus clientes</p>
             </div>
           </div>

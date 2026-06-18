@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { Plus, Search, X, Pencil, Trash2, ArrowLeft, Download, RefreshCw } from 'lucide-react';
+import { Plus, Search, X, Pencil, Trash2, ArrowLeft, Download, RefreshCw, Receipt } from 'lucide-react';
 import { useExpenses, useDeleteExpense } from '@/hooks/useExpenses';
 import { useExpenseCategories } from '@/hooks/useExpenseCategories';
 import { AddExpenseModal } from '@/components/finance/AddExpenseModal';
@@ -114,7 +114,10 @@ export default function Expenses() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Despesas</h1>
+              <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Receipt className="h-5 w-5 shrink-0 text-primary" />
+                Despesas
+              </h1>
               <p className="text-sm text-muted-foreground">Gerir custos e despesas</p>
             </div>
           </div>

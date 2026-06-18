@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon,
   Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare,
-  Search, X, FileEdit, FolderInput, CheckCheck,
+  Search, X, FileEdit, FolderInput, CheckCheck, ArrowLeft, MoreVertical, Mailbox,
 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,13 +96,27 @@ function DraftRow({ draft, active, onClick }: { draft: EmailDraft; active: boole
   );
 }
 
+// Stable per-sender avatar colour so each contact is recognisable at a glance.
+const AVATAR_COLORS = [
+  'bg-rose-100 text-rose-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700',
+  'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700', 'bg-fuchsia-100 text-fuchsia-700',
+  'bg-teal-100 text-teal-700', 'bg-orange-100 text-orange-700',
+];
+function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
 const DEFAULT_LIST_W = 416; // 26rem
 const MIN_LIST_W = 240;
 const MAX_LIST_W = 640;
 
 // Message list + reader for one folder. The folder rail lives in the caixa rail.
-export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
+export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId: string | null; folderId: string | null; onOpenRail?: () => void }) {
   const [messageId, setMessageId] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Resizable list column ─────────────────────────────────────────────────────
   const [listWidth, setListWidth] = useState<number>(() => {
@@ -296,12 +311,18 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
 
   return (
     <>
-      {/* Message list — resizable via drag handle on right border */}
-      <section className="relative flex shrink-0 flex-col border-r" style={{ width: listWidth }}>
-        {/* Drag handle */}
+      {/* Message list — full-width single column on mobile; resizable side column on md+ */}
+      <section
+        className={cn(
+          'relative w-full flex-col border-r md:shrink-0',
+          messageId ? 'hidden md:flex' : 'flex',
+        )}
+        style={isMobile ? undefined : { width: listWidth }}
+      >
+        {/* Drag handle (desktop only) */}
         <div
           onMouseDown={onResizeStart}
-          className="absolute inset-y-0 right-0 z-10 w-[4px] cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors"
+          className="absolute inset-y-0 right-0 z-10 hidden w-[4px] cursor-col-resize transition-colors hover:bg-primary/40 active:bg-primary/60 md:block"
         />
         <header className="border-b px-4 pt-5 pb-3 space-y-2">
           {hasSelection ? (
@@ -333,11 +354,20 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               </Button>
             </div>
           ) : (
-            <div className="flex items-center justify-between">
-              <Button size="sm" onClick={() => addCompose('new')}>
-                <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
-              </Button>
-              <span className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {/* Mobile: reopen the caixa rail (the conversation list with its rail
+                    button is hidden in email mode, so without this you can't get back). */}
+                {onOpenRail && (
+                  <Button size="icon" variant="outline" className="h-8 w-8 shrink-0 md:hidden" title="Caixas" onClick={onOpenRail}>
+                    <Mailbox className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => addCompose('new')}>
+                  <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
+                </Button>
+              </div>
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {isDraftsFolder
                   ? `${drafts.length} ${drafts.length === 1 ? 'rascunho' : 'rascunhos'}`
                   : searching
@@ -403,8 +433,16 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         </header>
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span>
+            <div className="p-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-2 py-3">
+                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-2/5 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : isDraftsFolder ? (
             drafts.length === 0 ? (
@@ -461,8 +499,14 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
                       className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-primary focus:ring-0 focus:ring-offset-0"
                     />
                   </div>
+                  {/* Sender avatar (coloured initials) */}
+                  <div className="flex shrink-0 items-center self-stretch pl-2 pt-3">
+                    <span className={cn('flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold', avatarColor(who))}>
+                      {initials(who)}
+                    </span>
+                  </div>
                   {/* Message content */}
-                  <div className={cn('flex min-w-0 flex-1 flex-col gap-0.5 py-3 pr-4', hasSelection ? 'pl-1' : 'pl-3')}>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-3 pl-2.5 pr-4">
                     <div className="flex items-center gap-2">
                       {!m.seen && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
                       <span className={cn('min-w-0 flex-1 truncate text-sm', !m.seen ? 'font-bold' : 'font-medium')}>{who}</span>
@@ -499,64 +543,104 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         </div>
       </section>
 
-      {/* Reader — hidden in drafts mode (drafts open in composer instead) */}
-      <section className="flex min-w-0 flex-1 flex-col bg-muted/10">
+      {/* Reader — full-width on mobile (shown when a message is open), side column on md+ */}
+      <section className={cn('min-w-0 flex-1 flex-col bg-muted/10', messageId ? 'flex' : 'hidden md:flex')}>
         {isDraftsFolder ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileEdit className="h-10 w-10 opacity-20" />
             <p className="text-sm">Clica num rascunho para continuar a escrever</p>
           </div>
         ) : !opened ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Mail className="h-10 w-10 opacity-30" />
-            <p className="text-sm">Seleciona um email para ler</p>
-            <p className="text-xs text-muted-foreground/60">j/k para navegar · e arquivar · # apagar · r responder</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-foreground">Os teus emails</p>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
+              <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+            </div>
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-3 pt-5 pb-2">
-              <Button size="sm" variant="ghost" onClick={() => addCompose('reply', opened.message)}><Reply className="mr-1.5 h-4 w-4" /> Responder</Button>
-              <Button size="icon" variant="ghost" title="Responder a todos" onClick={() => addCompose('replyAll', opened.message)}><ReplyAll className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" title="Reencaminhar" onClick={() => addCompose('forward', opened.message)}><Forward className="h-4 w-4" /></Button>
-              <div className="mx-1 h-5 w-px bg-border" />
-              <Button size="icon" variant="ghost" title="Marcar como não lida" onClick={() => act(() => actions.setRead(opened.message.id, false))}><MailOpen className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" title={opened.message.flagged ? 'Remover estrela' : 'Marcar com estrela'} onClick={() => actions.setFlag(opened.message.id, !opened.message.flagged)}><Star className={cn('h-4 w-4', opened.message.flagged && 'fill-amber-400 text-amber-400')} /></Button>
-              <Button size="icon" variant="ghost" title="Arquivar" onClick={() => act(() => actions.archive(opened.message.id))}><Archive className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" title="Marcar como spam" onClick={() => act(() => actions.spam(opened.message.id))}><ShieldAlert className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" title="Apagar" onClick={() => act(() => actions.trash(opened.message.id))}><Trash2 className="h-4 w-4" /></Button>
-
-              {/* Move to folder */}
-              {folders.length > 1 && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button size="icon" variant="ghost" title="Mover para pasta">
-                      <FolderInput className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-48 p-1">
-                    <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Mover para</p>
-                    {folders.filter((f) => f.id !== folderId).map((f) => {
-                      const { Icon } = ROLE_META[f.role];
-                      return (
-                        <button
-                          key={f.id}
-                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
-                          onClick={() => act(() => actions.move(opened.message.id, f.id))}
-                        >
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          {folderLabel(f)}
-                        </button>
-                      );
-                    })}
-                  </PopoverContent>
-                </Popover>
-              )}
+            <div className="flex items-center gap-1 border-b bg-background px-2 pt-5 pb-2 sm:px-3">
+              <Button size="sm" variant="outline" className="px-2 md:hidden" onClick={() => setMessageId(null)}>
+                <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
+              </Button>
+              <Button size="sm" onClick={() => addCompose('reply', opened.message)}>
+                <Reply className="mr-1.5 h-4 w-4" /> Responder
+              </Button>
+              <Button size="sm" variant="outline" className="hidden sm:inline-flex" onClick={() => addCompose('forward', opened.message)}>
+                <Forward className="mr-1.5 h-4 w-4" /> Reencaminhar
+              </Button>
+              <div className="flex-1" />
+              {/* Star: common toggle, kept one tap away */}
+              <Button
+                size="icon"
+                variant="ghost"
+                title={opened.message.flagged ? 'Remover estrela' : 'Marcar com estrela'}
+                onClick={() => actions.setFlag(opened.message.id, !opened.message.flagged)}
+              >
+                <Star className={cn('h-4 w-4', opened.message.flagged && 'fill-amber-400 text-amber-400')} />
+              </Button>
+              {/* Everything else, LABELLED, in one menu (no more guessing icons). */}
+              <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
+                <PopoverTrigger asChild>
+                  <Button size="icon" variant="ghost" title="Mais ações"><MoreVertical className="h-4 w-4" /></Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-56 p-1">
+                  {([
+                    { icon: ReplyAll, label: 'Responder a todos', run: () => addCompose('replyAll', opened.message) },
+                    { icon: Forward, label: 'Reencaminhar', run: () => addCompose('forward', opened.message), mobileOnly: true },
+                    { icon: MailOpen, label: 'Marcar como não lida', run: () => act(() => actions.setRead(opened.message.id, false)) },
+                    { icon: Archive, label: 'Arquivar', run: () => act(() => actions.archive(opened.message.id)) },
+                    { icon: ShieldAlert, label: 'Marcar como spam', run: () => act(() => actions.spam(opened.message.id)) },
+                  ]).map((it) => (
+                    <button
+                      key={it.label}
+                      onClick={() => { it.run(); setActionsOpen(false); }}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent',
+                        it.mobileOnly && 'sm:hidden',
+                      )}
+                    >
+                      <it.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      {it.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { act(() => actions.trash(opened.message.id)); setActionsOpen(false); }}
+                    className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 shrink-0" /> Apagar
+                  </button>
+                  {folders.length > 1 && (
+                    <>
+                      <div className="my-1 border-t" />
+                      <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mover para</p>
+                      {folders.filter((f) => f.id !== folderId).map((f) => {
+                        const { Icon } = ROLE_META[f.role];
+                        return (
+                          <button
+                            key={f.id}
+                            className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                            onClick={() => { act(() => actions.move(opened.message.id, f.id)); setActionsOpen(false); }}
+                          >
+                            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            {folderLabel(f)}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">
               <h1 className="mb-4 text-xl font-semibold leading-snug">{opened.message.subject || '(sem assunto)'}</h1>
               <div className="mb-4 flex items-start gap-3 border-b pb-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold', avatarColor(opened.message.from_name || opened.message.from_address || '?'))}>
                   {initials(opened.message.from_name || opened.message.from_address || '?')}
                 </span>
                 <div className="min-w-0 flex-1 text-sm">

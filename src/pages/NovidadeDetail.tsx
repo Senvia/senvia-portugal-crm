@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useChangelogEntry } from "@/hooks/useChangelog";
@@ -20,7 +20,10 @@ export default function NovidadeDetail() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/novidades")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-xl font-bold tracking-tight">O que há de novo</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+          <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+          O que há de novo
+        </h1>
       </div>
 
       {isLoading ? (

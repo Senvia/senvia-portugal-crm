@@ -13,6 +13,7 @@ import {
   Percent,
 } from "lucide-react";
 import { useFinanceStats } from "@/hooks/useFinanceStats";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { formatCurrency } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -115,10 +116,7 @@ export default function Finance() {
   if (!isAdmin) {
     return (
       <div className="space-y-6 p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Financeiro</h1>
-          <p className="text-sm text-muted-foreground">As tuas comissões.</p>
-        </div>
+        <PageHeader icon={Wallet} title="Financeiro" subtitle="As tuas comissões." />
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           <Card
@@ -153,12 +151,7 @@ export default function Finance() {
 
   return (
     <div className="space-y-6 p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Financeiro</h1>
-          <p className="text-sm text-muted-foreground">Visão geral das finanças da sua empresa</p>
-        </div>
-      </div>
+      <PageHeader icon={Wallet} title="Financeiro" subtitle="Visão geral das finanças da sua empresa" />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="flex-wrap h-auto">
