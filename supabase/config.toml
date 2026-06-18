@@ -114,6 +114,9 @@ verify_jwt = false
 [functions.meta-capi-event]
 verify_jwt = false
 
+[functions.meta-capi-purchase]
+verify_jwt = false
+
 [functions.whatsapp-connect]
 verify_jwt = false
 

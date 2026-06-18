@@ -40,6 +40,7 @@ interface UpdateOrganizationData {
   msg_template_warm?: string | null;
   msg_template_cold?: string | null;
   meta_pixels?: Json;
+  meta_conversions_api_token?: string | null;
   brevo_api_key?: string | null;
   brevo_sender_email?: string | null;
   invoicexpress_account_name?: string | null;

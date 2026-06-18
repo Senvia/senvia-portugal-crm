@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -15,7 +15,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
-import { useTestWebhook } from "@/hooks/useOrganization";
+import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
+import { MetaConversionsForm } from "./MetaConversionsForm";
 import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
@@ -72,7 +73,7 @@ interface IntegrationsContentProps {
   updateProfileIsPending: boolean;
 }
 
-type IntegrationKey = 'webhook' | 'webhook_inbound' | 'inboxes' | 'brevo' | 'invoicexpress' | 'keyinvoice';
+type IntegrationKey = 'webhook' | 'webhook_inbound' | 'inboxes' | 'brevo' | 'invoicexpress' | 'keyinvoice' | 'meta';
 
 interface IntegrationDef {
   key: IntegrationKey;
@@ -88,6 +89,7 @@ const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Fa
 const integrations: IntegrationDef[] = [
   { key: 'inboxes', icon: Inbox, title: 'Caixas de Entrada', description: 'WhatsApp, Instagram, Facebook, Email e mais', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
   { key: 'brevo', icon: Megaphone, title: 'Email Marketing', description: 'Campanhas e automações de email', toggleKey: 'brevo', group: 'Marketing' },
+  { key: 'meta', icon: Target, title: 'Meta Ads (Conversões)', description: 'Avisar o Facebook/Instagram Ads quando um lead converte', toggleKey: 'meta', group: 'Marketing' },
   { key: 'webhook', icon: Webhook, title: 'Webhook de Saída', description: 'Notificar sistemas externos (Make, Zapier, n8n)', toggleKey: 'webhook', group: 'Automações' },
   { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads (Facebook, Zapier, Make)', toggleKey: 'webhook_inbound', group: 'Automações' },
   { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação eletrónica' },
@@ -137,6 +139,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
 
   const { data: webhooks = [] } = useOrganizationWebhooks();
   const { data: channels = [] } = useMessagingChannels();
+  const { data: org } = useOrganization();
   const connectedChannels = channels.filter((c) => c.status === 'connected').length;
 
   const {
@@ -159,6 +162,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
       case 'keyinvoice': return !!keyinvoiceApiKey;
+      case 'meta': return !!(org as { meta_conversions_api_token?: string } | null)?.meta_conversions_api_token;
     }
   };
 
@@ -236,7 +240,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         </div>
         <div className="flex items-center gap-2">
           {getBadge(active, isConfigured(active))}
-          {active !== 'inboxes' && (
+          {active !== 'inboxes' && active !== 'meta' && (
             <Switch
               checked={active === 'keyinvoice' ? integrationsEnabled.keyinvoice === true : integrationsEnabled[active] !== false}
               onCheckedChange={(checked) => onToggleIntegration(active, checked)}
@@ -258,6 +262,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}
+          {active === 'meta' && <MetaConversionsForm />}
         </div>
       )}
     </div>
