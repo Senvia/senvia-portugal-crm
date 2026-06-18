@@ -88,6 +88,8 @@ import {
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -560,6 +562,9 @@ export default function Inbox() {
   const { user, organization } = useAuth();
   const prefetchMessages = useInboxMessagePrefetch();
   const isMobile = useIsMobile();
+  // Visual viewport drives the mobile conversation overlay so it stays glued to
+  // the visible area (above the keyboard) like a real messaging app.
+  const vv = useVisualViewport();
   const { isAdmin } = usePermissions();
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
@@ -1172,6 +1177,18 @@ export default function Inbox() {
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId, jumpToBottom, isMobile]);
 
+  // When the visible viewport shrinks (keyboard opens) on the mobile overlay,
+  // keep the latest message in view so it isn't hidden behind the keyboard —
+  // but only if the agent was already near the bottom, so we don't yank the view
+  // while they read older history.
+  useEffect(() => {
+    if (!mobileConvOpen) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (nearBottom) requestAnimationFrame(() => bottomRef.current?.scrollIntoView());
+  }, [vv.height, mobileConvOpen]);
+
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
   useEffect(() => {
     if (selectedId) {
@@ -1754,6 +1771,19 @@ export default function Inbox() {
 
   const isArchived = selected?.status === "resolved";
   const isPinned = selected ? pinned.includes(selected.id) : false;
+
+  // Mobile conversation = full-screen immersive view (like WhatsApp): the thread
+  // becomes a fixed overlay sized to the visual viewport, so its header stays
+  // pinned at the top and the composer stays glued above the keyboard.
+  const mobileConvOpen = isMobile && !!selectedId;
+
+  // Tell AppLayout to hide the app header / bottom nav / FAB while the immersive
+  // conversation is up, and always restore them when leaving the Inbox.
+  const setImmersive = useInboxImmersiveStore((s) => s.setImmersive);
+  useEffect(() => {
+    setImmersive(mobileConvOpen);
+    return () => setImmersive(false);
+  }, [mobileConvOpen, setImmersive]);
 
   // Contact profile panel (QuickReply-style): right column on desktop, Sheet on
   // mobile — same content in both. Order: profile → assign → tags → details →
@@ -2348,7 +2378,17 @@ export default function Inbox() {
 
       {/* ---- Thread ---- */}
       <section
-        className={cn("min-w-0 flex-1 flex-col", selectedId ? "flex" : "hidden md:flex")}
+        className={cn(
+          "min-w-0 flex-col bg-background",
+          mobileConvOpen
+            // Full-screen overlay glued to the visible viewport (above the
+            // keyboard). AppLayout hides the app header / bottom nav while this is
+            // up, so z-40 is enough — and it stays below portaled Radix popovers /
+            // dialogs / sheets (z-50) opened from inside the conversation.
+            ? "fixed inset-x-0 top-0 z-40 flex"
+            : cn("flex-1", selectedId ? "flex" : "hidden md:flex"),
+        )}
+        style={mobileConvOpen ? { height: vv.height, transform: `translateY(${vv.offsetTop}px)` } : undefined}
         onDragOver={(e) => {
           if (selectedId) e.preventDefault();
         }}
@@ -2372,8 +2412,12 @@ export default function Inbox() {
           </div>
         ) : (
           <>
-            {/* Header */}
-            <div className="flex items-center gap-2 border-b p-3">
+            {/* Header — stays pinned at the top (flex sibling, never scrolls). On the
+                mobile overlay it also clears the notch via the safe-area inset. */}
+            <div
+              className="flex shrink-0 items-center gap-2 border-b bg-background p-3"
+              style={mobileConvOpen ? { paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" } : undefined}
+            >
               <Button
                 variant="outline"
                 size="icon"
@@ -2518,7 +2562,7 @@ export default function Inbox() {
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
+            <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
               {draftConv ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
                   {pendingSelectPhone ? (
@@ -2669,7 +2713,10 @@ export default function Inbox() {
 
             {/* Composer */}
             {recording ? (
-              <div className="flex items-center gap-3 border-t p-3">
+              <div
+                className="flex shrink-0 items-center gap-3 border-t bg-background p-3"
+                style={mobileConvOpen && !vv.keyboardOpen ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" } : undefined}
+              >
                 <span className="flex items-center gap-2 text-sm text-red-500">
                   <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
                   A gravar... {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
@@ -2683,7 +2730,10 @@ export default function Inbox() {
                 </Button>
               </div>
             ) : (
-              <div className="border-t">
+              <div
+                className="shrink-0 border-t bg-background"
+                style={mobileConvOpen && !vv.keyboardOpen ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" } : undefined}
+              >
                 {isEmailSelected && selected.email_subject && (
                   <div className="flex items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5 text-xs text-muted-foreground">
                     <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 fill-current opacity-60"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>

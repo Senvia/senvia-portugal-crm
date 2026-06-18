@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { OttoFAB } from "@/components/otto/OttoFAB";
 import { useSidebarStore } from "@/stores/useSidebarStore";
+import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
@@ -22,6 +23,9 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { subscriptionStatus, hasChecked } = useStripeSubscription();
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  // While a conversation is open on mobile, the Inbox renders it full-screen and
+  // owns the whole viewport — hide the app chrome so it's truly immersive.
+  const immersive = useInboxImmersiveStore((s) => s.immersive);
 
   const showTrialBanner = hasChecked && subscriptionStatus?.on_trial && !subscriptionStatus?.billing_exempt && (subscriptionStatus?.days_remaining ?? 0) > 0;
   // Paying customer overdue but still inside the grace window → warn (don't block).
@@ -36,31 +40,38 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   if (isMobile) {
     return (
       <div className="min-h-screen bg-background">
-        <MobileHeader 
-          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          isMenuOpen={isMobileMenuOpen}
-          organizationName={organizationName}
-        />
-        {showBanner && (
+        {!immersive && (
+          <MobileHeader
+            onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            isMenuOpen={isMobileMenuOpen}
+            organizationName={organizationName}
+          />
+        )}
+        {!immersive && showBanner && (
           <div style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}>
             {showTrialBanner
               ? <TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} totalDays={14} />
               : <PaymentOverdueBanner daysUntilBlock={subscriptionStatus!.days_until_block ?? 0} blockAt={subscriptionStatus!.block_at} />}
           </div>
         )}
-        <MobileMenu
-          isOpen={isMobileMenuOpen}
-          onClose={() => setIsMobileMenuOpen(false)}
-          userName={userName}
-          organizationName={organizationName}
-        />
-        <main className="pb-20" style={{ paddingTop: showBanner ? undefined : 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          <div className="min-h-[calc(100vh-8.5rem)]">
+        {!immersive && (
+          <MobileMenu
+            isOpen={isMobileMenuOpen}
+            onClose={() => setIsMobileMenuOpen(false)}
+            userName={userName}
+            organizationName={organizationName}
+          />
+        )}
+        <main
+          className={immersive ? undefined : "pb-20"}
+          style={immersive || showBanner ? undefined : { paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <div className={immersive ? undefined : "min-h-[calc(100vh-8.5rem)]"}>
             {children}
           </div>
         </main>
-        <MobileBottomNav />
-        <OttoFAB />
+        {!immersive && <MobileBottomNav />}
+        {!immersive && <OttoFAB />}
       </div>
     );
   }
