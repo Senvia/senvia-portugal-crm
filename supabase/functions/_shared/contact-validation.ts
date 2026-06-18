@@ -138,6 +138,38 @@ export function normalizePtPhone(raw: string | null | undefined): ValidationResu
   return { ok: true, value: "+351" + cleaned };
 }
 
+// Accepts a phone WITH its country code (E.164-ish), as produced by the
+// PhoneInput country selector. Portugal (+351) gets the strict PT rules; other
+// countries get a basic E.164 sanity check. Returns the full number WITH the
+// country code (+351912345678, +5511987654321, ...) — the code is never stripped.
+export function normalizeInternationalPhone(raw: string | null | undefined): ValidationResult<string> {
+  if (!raw) return { ok: false, reason: "Telefone em falta" };
+
+  let cleaned = String(raw).replace(/[\s\-.()_]/g, "");
+  cleaned = cleaned.replace(/^00/, "+");
+
+  // No country code provided: assume Portugal (back-compat with bare national numbers).
+  if (!cleaned.startsWith("+")) {
+    if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
+    cleaned = "+351" + cleaned;
+  }
+
+  // Portugal: keep the strict PT rules (prefixes, anti-fake).
+  if (cleaned.startsWith("+351")) {
+    return normalizePtPhone(cleaned);
+  }
+
+  // Other countries: basic E.164 check (8 to 15 digits including country code).
+  const digits = cleaned.slice(1);
+  if (!/^\d{8,15}$/.test(digits)) {
+    return { ok: false, reason: "Número internacional inválido" };
+  }
+  if (/^(\d)\1+$/.test(digits)) {
+    return { ok: false, reason: "Telefone obviamente falso" };
+  }
+  return { ok: true, value: "+" + digits };
+}
+
 export function normalizeEmail(raw: string | null | undefined): ValidationResult<string> {
   if (!raw) return { ok: false, reason: "Email em falta" };
 

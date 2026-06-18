@@ -22,6 +22,7 @@ import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChanne
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
+import { AssignmentSelector, deriveAssignmentMode, assignmentToFields, type AssignmentMode } from "./AssignmentSelector";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -530,12 +531,11 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
   const selected = webhook.assigned_user_ids || [];
   const handleCopy = () => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-  const toggleRotate = (enabled: boolean) => {
-    if (!enabled && selected.length > 1) updateWebhook.mutate({ id: webhook.id, rotate_enabled: false, assigned_user_ids: [selected[0]] });
-    else updateWebhook.mutate({ id: webhook.id, rotate_enabled: enabled });
+  const assignMode = deriveAssignmentMode(selected, webhook.rotate_enabled);
+  const applyAssignment = (mode: AssignmentMode, userIds: string[]) => {
+    const f = assignmentToFields(mode, userIds);
+    updateWebhook.mutate({ id: webhook.id, assigned_user_ids: f.assigned_user_ids, rotate_enabled: f.rotate_enabled });
   };
-  const rotateOffInvalid = !webhook.rotate_enabled && selected.length !== 1;
-  const rotateOnHint = webhook.rotate_enabled && selected.length < 2;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -584,15 +584,6 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                  <RefreshCw className="h-4 w-4 text-blue-600" />
-                </div>
-                <div><p className="text-sm font-medium">Distribuição rotativa</p><p className="text-[11px] text-muted-foreground">Round-robin entre colaboradores</p></div>
-              </div>
-              <Switch checked={webhook.rotate_enabled} onCheckedChange={toggleRotate} />
-            </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
                   <Mail className="h-4 w-4 text-amber-600" />
                 </div>
@@ -603,12 +594,15 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-              <UsersRound className="h-3.5 w-3.5" /> {webhook.rotate_enabled ? 'Quem recebe (2 ou mais)' : 'Quem recebe (1 pessoa)'}
+              <UsersRound className="h-3.5 w-3.5" /> Atribuição de leads
             </Label>
-            <MemberSelector members={members} value={selected} rotate={webhook.rotate_enabled} onChange={(next) => updateWebhook.mutate({ id: webhook.id, assigned_user_ids: next })} />
-            {rotateOffInvalid ? <p className="text-xs text-amber-600">⚠️ {selected.length === 0 ? 'Seleciona 1 colaborador.' : 'Sem rotação, só 1 colaborador.'}</p>
-              : rotateOnHint ? <p className="text-xs text-blue-600">💡 Seleciona pelo menos 2 para a rotação.</p>
-              : <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>}
+            <AssignmentSelector
+              members={members}
+              mode={assignMode}
+              userIds={selected}
+              noun="leads"
+              onChange={({ mode, userIds }) => applyAssignment(mode, userIds)}
+            />
           </div>
           {!webhook.is_system && (
             <div className="pt-1 border-t flex justify-end">
@@ -645,17 +639,18 @@ function InboundWebhookSection() {
   const [newOpen, setNewOpen] = useState(false);
   const [editWh, setEditWh] = useState<LeadIntakeWebhook | null>(null);
   const [newName, setNewName] = useState('');
-  const [newRotate, setNewRotate] = useState(false);
+  const [newMode, setNewMode] = useState<AssignmentMode>('rotate');
   const [newUsers, setNewUsers] = useState<string[]>([]);
 
   const memberOptions: MemberOption[] = members.map((m) => ({ user_id: m.user_id, full_name: m.full_name || m.email || 'Sem nome' }));
-  const resetForm = () => { setNewName(''); setNewRotate(false); setNewUsers([]); setNewOpen(false); };
-  const usersValid = newRotate ? newUsers.length >= 2 : newUsers.length === 1;
+  const resetForm = () => { setNewName(''); setNewMode('rotate'); setNewUsers([]); setNewOpen(false); };
+  const usersValid = newMode === 'none' ? true : newMode === 'rotate' ? newUsers.length >= 2 : newUsers.length === 1;
   const canCreate = !!newName.trim() && usersValid && !createWebhook.isPending;
 
   const handleAdd = () => {
     if (!canCreate) return;
-    createWebhook.mutate({ name: newName.trim(), assigned_user_ids: newUsers, rotate_enabled: newRotate }, { onSuccess: resetForm });
+    const f = assignmentToFields(newMode, newUsers);
+    createWebhook.mutate({ name: newName.trim(), assigned_user_ids: f.assigned_user_ids, rotate_enabled: f.rotate_enabled }, { onSuccess: resetForm });
   };
 
   if (isLoading || loadingMembers) return <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span></div>;
@@ -732,14 +727,15 @@ function InboundWebhookSection() {
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</Label>
               <Input autoFocus placeholder="Ex: Facebook Ads — Campanha Verão" value={newName} onChange={(e) => setNewName(e.target.value)} />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-sm font-normal flex items-center gap-2"><RefreshCw className="h-4 w-4 text-muted-foreground" /> Distribuição rotativa</Label>
-              <Switch checked={newRotate} onCheckedChange={(v) => { setNewRotate(v); if (!v && newUsers.length > 1) setNewUsers([newUsers[0]]); }} />
-            </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{newRotate ? 'Quem recebe (2 ou mais)' : 'Quem recebe (1 pessoa)'}</Label>
-              <MemberSelector members={memberOptions} value={newUsers} rotate={newRotate} onChange={setNewUsers} />
-              {!usersValid && <p className="text-xs text-amber-600">{newRotate ? 'Seleciona pelo menos 2.' : 'Seleciona exatamente 1.'}</p>}
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atribuição de leads</Label>
+              <AssignmentSelector
+                members={memberOptions}
+                mode={newMode}
+                userIds={newUsers}
+                noun="leads"
+                onChange={({ mode, userIds }) => { setNewMode(mode); setNewUsers(userIds); }}
+              />
             </div>
             <div className="flex gap-2 pt-1">
               <Button onClick={handleAdd} disabled={!canCreate} className="flex-1">

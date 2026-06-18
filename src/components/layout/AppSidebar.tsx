@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare, PanelLeftClose, PanelLeftOpen, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";

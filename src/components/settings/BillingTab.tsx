@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
-import { STRIPE_PLANS, type StripePlan } from '@/lib/stripe-plans';
+import { STRIPE_PLANS, type StripePlan, type BillingPeriod } from '@/lib/stripe-plans';
+import { PricingPlans, PricingCtaButton } from '@/components/billing/PricingPlans';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -20,6 +21,7 @@ export function BillingTab() {
   const { organization } = useAuth();
   const { isLoading, subscriptionStatus, hasChecked, checkSubscription, createCheckout, openCustomerPortal } = useStripeSubscription();
   const [checkingPlan, setCheckingPlan] = useState<string | null>(null);
+  const [period, setPeriod] = useState<BillingPeriod>('monthly');
 
   const isOnTrial = subscriptionStatus?.on_trial === true;
   const hasActiveSubscription = subscriptionStatus?.subscribed === true;
@@ -47,8 +49,12 @@ export function BillingTab() {
 
   const handleSelectPlan = async (plan: StripePlan) => {
     if (plan.id === currentPlanId) return;
+    // Use the price id for the chosen period; annual ids may not be set up in
+    // Stripe yet, in which case we don't start a (wrong) checkout.
+    const priceId = period === 'yearly' ? plan.priceIdYearly : plan.priceId;
+    if (!priceId) return;
     setCheckingPlan(plan.id);
-    await createCheckout(plan.priceId);
+    await createCheckout(priceId);
     setCheckingPlan(null);
   };
 
@@ -110,168 +116,50 @@ export function BillingTab() {
         </div>
       )}
 
-      {/* Plans - Full Width Vertical Sections */}
-      <div className="space-y-5">
-        {STRIPE_PLANS.map((plan) => {
-          const isCurrent = !hasNoSubscription && plan.id === currentPlanId;
-          const isHighlighted = plan.highlighted;
-          const planIndex = STRIPE_PLANS.findIndex(p => p.id === plan.id);
+      {/* Plans — reference visual (brush, heading, animated switch, gradient
+          CTAs), shared with the public /precos page. */}
+      <PricingPlans
+        period={period}
+        onPeriodChange={setPeriod}
+        currentPlanId={currentPlanId}
+        renderCta={(plan, { isCurrent, popular }) => {
+          if (subscriptionStatus?.billing_exempt) {
+            return (
+              <PricingCtaButton popular={popular} disabled>
+                Incluído no vitalício
+              </PricingCtaButton>
+            );
+          }
+          const planIndex = STRIPE_PLANS.findIndex((p) => p.id === plan.id);
           const isUpgrade = !hasNoSubscription && planIndex > currentIndex;
           const isDowngrade = !hasNoSubscription && planIndex < currentIndex;
-
+          // Annual price ids aren't configured in Stripe yet: block annual checkout
+          // for select/upgrade (downgrade goes through the customer portal).
+          const blockAnnual = period === 'yearly' && !plan.priceIdYearly && !isDowngrade && !isCurrent;
+          const busy = checkingPlan === plan.id;
           return (
-            <div
-              key={plan.id}
-              className={`relative rounded-2xl border-2 overflow-hidden transition-all ${
-                isCurrent
-                  ? 'border-primary ring-2 ring-primary/20 shadow-lg'
-                  : isHighlighted
-                  ? 'border-primary/50 shadow-md'
-                  : 'border-border shadow-sm'
-              }`}
+            <PricingCtaButton
+              popular={popular}
+              disabled={isCurrent || isLoading || busy || blockAnnual}
+              onClick={() => (isDowngrade ? openCustomerPortal() : handleSelectPlan(plan))}
             >
-              {/* Header - horizontal on desktop */}
-              <div className={`p-5 md:p-6 ${
-                isCurrent
-                  ? 'bg-gradient-to-r from-primary/10 via-primary/5 to-transparent'
-                  : isHighlighted
-                  ? 'bg-gradient-to-r from-primary/8 via-transparent to-transparent'
-                  : 'bg-gradient-to-r from-muted/50 to-transparent'
-              }`}>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <h3 className="text-xl font-bold tracking-tight">{plan.name}</h3>
-                        {isCurrent && (
-                          <Badge className="bg-primary text-primary-foreground text-[10px] px-2.5 py-1">
-                            <Crown className="h-3 w-3 mr-1" />
-                            Atual
-                          </Badge>
-                        )}
-                        {isHighlighted && !isCurrent && (
-                          <Badge variant="secondary" className="text-[10px] px-2.5 py-1">
-                            <Sparkles className="h-3 w-3 mr-1" />
-                            Popular
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold tracking-tight">{plan.priceMonthly}€</span>
-                      <span className="text-muted-foreground text-sm font-medium">/mês</span>
-                    </div>
-                    {!subscriptionStatus?.billing_exempt && (
-                      <Button
-                        size="lg"
-                        variant={isCurrent ? 'outline' : hasNoSubscription ? (isHighlighted ? 'default' : 'secondary') : isDowngrade ? 'secondary' : isHighlighted ? 'default' : 'secondary'}
-                        disabled={isCurrent || isLoading || checkingPlan === plan.id}
-                        onClick={() => {
-                          if (hasNoSubscription) {
-                            handleSelectPlan(plan);
-                          } else if (isDowngrade) {
-                            openCustomerPortal();
-                          } else {
-                            handleSelectPlan(plan);
-                          }
-                        }}
-                        className="min-w-[160px]"
-                      >
-                        {checkingPlan === plan.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : isCurrent ? (
-                          'Plano Atual'
-                        ) : hasNoSubscription ? (
-                          'Selecionar'
-                        ) : isUpgrade ? (
-                          'Fazer Upgrade'
-                        ) : (
-                          'Fazer Downgrade'
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Content - 3 columns on desktop */}
-              <div className="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Modules */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Package className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Módulos Incluídos</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {plan.modules.map((mod, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-sm">
-                        <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                        <span>{mod}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Integrations */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Puzzle className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Integrações</span>
-                  </div>
-                  {plan.integrations.length > 0 ? (
-                    <ul className="space-y-2">
-                      {plan.integrations.map((integ, i) => {
-                        const Icon = INTEGRATION_ICONS[integ] || Zap;
-                        return (
-                          <li key={i} className="flex items-center gap-2.5 text-sm">
-                            <Icon className="h-4 w-4 text-primary shrink-0" />
-                            <span>{integ}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">Nenhuma integração incluída</p>
-                  )}
-                </div>
-
-                {/* Limits */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Limites</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-sm">
-                      <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span><span className="font-medium">{plan.limits.users}</span> utilizadores</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-sm">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span><span className="font-medium">{plan.limits.forms}</span></span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-sm">
-                      <Inbox className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                      <span>
-                        <span className="font-medium">{plan.limits.inboxes}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          Multicanal: WhatsApp, Instagram, Facebook e Email num só lugar
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              {busy ? (
+                <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+              ) : isCurrent ? (
+                'Plano Atual'
+              ) : blockAnnual ? (
+                'Anual em breve'
+              ) : hasNoSubscription ? (
+                'Selecionar'
+              ) : isUpgrade ? (
+                'Fazer Upgrade'
+              ) : (
+                'Fazer Downgrade'
+              )}
+            </PricingCtaButton>
           );
-        })}
-      </div>
+        }}
+      />
     </div>
   );
 }

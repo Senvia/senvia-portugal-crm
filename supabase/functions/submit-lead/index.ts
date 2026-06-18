@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { normalizeEmail, normalizePtPhone } from '../_shared/contact-validation.ts';
+import { normalizeEmail, normalizePtPhone, normalizeInternationalPhone } from '../_shared/contact-validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -178,7 +178,10 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
 
       const evoUrl = (Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '');
       const evoKey = Deno.env.get('EVOLUTION_API_KEY') || '';
-      const number = digits.startsWith('351') ? digits : `351${digits}`;
+      // E.164 numbers (stored with a leading +) already carry their country code;
+      // legacy national numbers (9 digits, no +) are PT, so prepend 351.
+      const isIntl = String(lead.phone || '').trim().startsWith('+');
+      const number = isIntl ? digits : (digits.startsWith('351') ? digits : `351${digits}`);
       const res = await fetch(`${evoUrl}/message/sendText/${channel.evolution_instance}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: evoKey },
@@ -395,30 +398,13 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     console.log('Inbound webhook assignee:', autoAssignedTo, '| notifyAllAdmins:', notifyAllAdmins);
   } else if (dedicatedUserId) {
     autoAssignedTo = dedicatedUserId;
-    console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
+    console.log('Dedicated webhook: assigning to', dedicatedUserId);
   } else {
-    const salesSettings = (org.sales_settings as any) || {};
-    if (salesSettings.auto_assign_leads) {
-      try {
-        const { data: assignedId, error: rrError } = await supabase.rpc(
-          'get_next_round_robin_assignee',
-          {
-            p_org_id: org.id,
-            p_exclude_admins: salesSettings.exclude_admins_from_assignment ?? false,
-          }
-        );
-        if (rrError) {
-          console.error('Round-robin RPC failed:', rrError);
-        } else if (assignedId) {
-          autoAssignedTo = assignedId;
-          console.log('Round-robin assigned lead to:', assignedId);
-        } else {
-          console.warn('Round-robin returned no assignee (no eligible members?)');
-        }
-      } catch (rrErr) {
-        console.error('Round-robin failed:', rrErr);
-      }
-    }
+    // No org-wide round-robin fallback. Assignment is decided per-webhook
+    // (named intake) or per-dedicated-token only. A legacy/standard webhook
+    // with no own config leaves the lead unassigned (never a hidden general
+    // round-robin between all salespeople).
+    autoAssignedTo = null;
   }
 
   // Collect extra fields as custom_data
@@ -723,7 +709,7 @@ Deno.serve(async (req) => {
 
     let cleanPhone: string | null = null;
     if (body.phone) {
-      const r = normalizePtPhone(body.phone);
+      const r = normalizeInternationalPhone(body.phone);
       if (!r.ok) {
         console.warn('[submit-lead] phone rejected:', r.reason, body.phone);
         return new Response(
@@ -731,9 +717,9 @@ Deno.serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      // Store national digits only (9 digits, no +351) for back-compat with
-      // existing leads.phone format — most app code expects this shape.
-      cleanPhone = r.value.replace(/^\+351/, '');
+      // Store the full international number WITH country code (+351..., +55..., ...).
+      // The country code is no longer stripped, so the lead's origin is unambiguous.
+      cleanPhone = r.value;
     }
 
     // Create Supabase client with service role to bypass RLS
@@ -854,11 +840,11 @@ Deno.serve(async (req) => {
     }
 
     // ===== AUTO-ASSIGN =====
-    // Priority for form leads:
+    // Assignment is decided entirely by the form (no org-wide fallback):
     //  1) Form's own recipient list (assigned_user_ids) -> get_next_form_assignee
     //     (handles rotate on/off atomically, like inbound webhooks)
     //  2) Legacy single fixed assignee (forms.assigned_to)
-    //  3) Org-level round-robin (sales_settings.auto_assign_leads)
+    //  Otherwise the lead stays unassigned.
     let autoAssignedTo: string | null = null;
     const formUserIds = formSettings.assigned_user_ids || [];
 
@@ -884,30 +870,9 @@ Deno.serve(async (req) => {
       console.log('Form has legacy fixed assignee:', autoAssignedTo);
     }
 
-    if (!autoAssignedTo) {
-      const salesSettings = (org.sales_settings as any) || {};
-      if (salesSettings.auto_assign_leads) {
-        try {
-          const { data: assignedId, error: rrError } = await supabase.rpc(
-            'get_next_round_robin_assignee',
-            {
-              p_org_id: org.id,
-              p_exclude_admins: salesSettings.exclude_admins_from_assignment ?? false,
-            }
-          );
-          if (rrError) {
-            console.error('Round-robin RPC failed:', rrError);
-          } else if (assignedId) {
-            autoAssignedTo = assignedId;
-            console.log('Round-robin assigned lead to:', assignedId);
-          } else {
-            console.warn('Round-robin returned no assignee (no eligible members?)');
-          }
-        } catch (rrErr) {
-          console.error('Round-robin assignment failed:', rrErr);
-        }
-      }
-    }
+    // No org-wide fallback: assignment is always decided by the form itself
+    // (recipient list + rotation, or a fixed owner). If the form has no
+    // assignee, the lead stays unassigned, never a hidden general round-robin.
 
     // Insert lead with custom data - use defaults for required DB fields
     let { data: lead, error: leadError } = await supabase

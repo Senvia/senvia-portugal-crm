@@ -53,6 +53,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { MessageTemplateField, WELCOME_VARIABLES } from './MessageTemplateField';
 import { CollaboratorPicker } from './CollaboratorPicker';
+import { AssignmentSelector, deriveAssignmentMode, assignmentToFields, type AssignmentMode } from './AssignmentSelector';
 import { useUpdateForm } from '@/hooks/useForms';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -110,7 +111,14 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
       ? form.assigned_user_ids
       : (form.assigned_to ? [form.assigned_to] : [])
   );
-  const [rotateEnabled, setRotateEnabled] = useState<boolean>(form.rotate_enabled ?? false);
+  const [assignMode, setAssignMode] = useState<AssignmentMode>(
+    deriveAssignmentMode(
+      form.assigned_user_ids && form.assigned_user_ids.length > 0
+        ? form.assigned_user_ids
+        : (form.assigned_to ? [form.assigned_to] : []),
+      form.rotate_enabled ?? false,
+    )
+  );
   const [notifyAllAdmins, setNotifyAllAdmins] = useState<boolean>(form.notify_all_admins ?? true);
 
   // Welcome-message variables + this form's own custom fields ({{campo:Etiqueta}}).
@@ -119,14 +127,6 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
     ...settings.custom_fields.map((f) => ({ token: `{{campo:${f.label}}}`, label: f.label })),
   ];
 
-  const toggleRotate = (enabled: boolean) => {
-    // Turning rotation off keeps a single recipient (rule: 1 fixed person).
-    if (!enabled && assignedUserIds.length > 1) {
-      setAssignedUserIds([assignedUserIds[0]]);
-    }
-    setRotateEnabled(enabled);
-  };
-  
   // Target stage
   const [targetStage, setTargetStage] = useState<string | null>(form.target_stage || null);
 
@@ -151,11 +151,9 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         msg_template_cold: msgTemplateCold || null,
         ai_qualification_rules: aiQualificationRules || null,
         meta_pixels: metaPixels,
-        // Keep legacy single-assignee column in sync (first recipient) so any
-        // older reader still works; the array is now authoritative.
-        assigned_to: assignedUserIds[0] || null,
-        assigned_user_ids: assignedUserIds,
-        rotate_enabled: rotateEnabled,
+        // Single mental model: mode (none/fixed/rotate) maps to the persisted
+        // fields; assigned_to is kept in sync so any older reader still works.
+        ...assignmentToFields(assignMode, assignedUserIds),
         notify_all_admins: notifyAllAdmins,
         target_stage: targetStage,
       },
@@ -316,40 +314,13 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4 pt-2 space-y-4">
-            {/* Distribuição rotativa */}
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-sm font-normal flex items-center gap-2">
-                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                Distribuição rotativa
-              </Label>
-              <Switch checked={rotateEnabled} onCheckedChange={toggleRotate} />
-            </div>
-            <p className="text-xs text-muted-foreground -mt-2">
-              Distribui os leads em rotação entre vários colaboradores (round-robin).
-            </p>
-
-            {/* Quem recebe */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                {rotateEnabled ? 'Quem recebe os leads (2 ou mais)' : 'Quem recebe os leads (1 pessoa)'}
-              </Label>
-
-              <CollaboratorPicker
-                members={teamMembers || []}
-                value={assignedUserIds}
-                onChange={setAssignedUserIds}
-                mode={rotateEnabled ? 'multi' : 'single'}
-              />
-
-              {rotateEnabled && assignedUserIds.length < 2 ? (
-                <p className="text-xs text-blue-600 dark:text-blue-400">💡 Seleciona pelo menos 2 para a rotação fazer sentido.</p>
-              ) : assignedUserIds.length === 0 ? (
-                <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ Sem ninguém selecionado, o lead fica por atribuir.</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>
-              )}
-            </div>
+            <AssignmentSelector
+              members={teamMembers || []}
+              mode={assignMode}
+              userIds={assignedUserIds}
+              noun="leads"
+              onChange={({ mode, userIds }) => { setAssignMode(mode); setAssignedUserIds(userIds); }}
+            />
 
             {/* Avisar admins */}
             <div className="space-y-1 pt-1 border-t">

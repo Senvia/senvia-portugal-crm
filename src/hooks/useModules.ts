@@ -17,6 +17,10 @@ export interface EnabledModules {
   inbox: boolean;
 }
 
+// Core modules ship ACTIVE by default; access is gated only by the plan (the
+// padlock from useSubscription.isModuleLocked). The three advanced modules
+// (prospects, marketing, ecommerce) ship HIDDEN by default and are turned on
+// per-org in Definições → Módulos when needed.
 export const DEFAULT_MODULES: EnabledModules = {
   proposals: true,
   calendar: true,
@@ -27,7 +31,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   finance: true,
   energy: true,
   prospects: false,
-  inbox: false,
+  inbox: true,
 };
 
 export function useModules() {

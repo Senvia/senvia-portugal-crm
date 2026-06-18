@@ -13,7 +13,7 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings, MetaPixel } from '@/types';
-import { normalizeEmail, normalizePtPhone } from '@/lib/validation/contact';
+import { normalizeEmail, normalizeInternationalPhone } from '@/lib/validation/contact';
 
 // Declare fbq for TypeScript
 declare global {
@@ -318,12 +318,13 @@ export default function PublicLeadForm() {
       const required = settings.fields.phone.required;
       const hasValue = phone && phone.trim().length > 0;
       if (required || hasValue) {
-        const r = normalizePtPhone(phone);
+        const r = normalizeInternationalPhone(phone);
         if (!r.ok) {
           toast({ title: 'Telefone inválido', description: r.reason, variant: 'destructive' });
           return;
         }
-        normalizedPhone = r.value.replace(/^\+351/, '');
+        // Keep the full international number WITH country code (+351..., +55..., ...).
+        normalizedPhone = r.value;
       }
     }
 

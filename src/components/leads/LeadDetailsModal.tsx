@@ -556,6 +556,30 @@ export function LeadDetailsModal({
                 {/* Unified contact notes (shared with the inbox & client record) */}
                 <ContactNotes phone={lead.phone} source="crm" />
 
+                {/* Lead's own notes — e.g. the address + operator captured by the
+                    inbound webhook/form. Shown whenever present (or being edited)
+                    so those answers stay visible, as they were before. */}
+                {(lead.notes || isEditingNotes) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Notas
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Textarea
+                        value={editNotes}
+                        onChange={(e) => setEditNotes(e.target.value)}
+                        onFocus={() => setIsEditingNotes(true)}
+                        onBlur={() => { setIsEditingNotes(false); handleNotesBlur(); }}
+                        placeholder="Notas do lead..."
+                        className="min-h-[80px] text-sm"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Tarefas da conversa (Caixa de Entrada) */}
                 <RecordTasks phone={lead.phone} />
 

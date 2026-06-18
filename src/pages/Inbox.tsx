@@ -2899,7 +2899,8 @@ export default function Inbox() {
                   ref={composerRef}
                   // Grows with the text up to ~10 lines, then scrolls. min-h-0 + the
                   // resize effect override the component's default 80px min height.
-                  className="max-h-[240px] min-h-0 resize-none py-2"
+                  // text-base (16px) on mobile stops iOS from auto-zooming on focus.
+                  className="max-h-[240px] min-h-0 resize-none py-2 text-base sm:text-sm"
                 />
 
                 {draft.trim() || outAttachments.length > 0 ? (

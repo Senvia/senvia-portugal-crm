@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { OptionCard } from "@/components/conversational/OptionCard";
 import { CustomField } from "@/types";
-import { normalizeEmail, normalizePtPhone } from "@/lib/validation/contact";
+import { normalizeEmail, normalizeInternationalPhone } from "@/lib/validation/contact";
 
 interface DynamicStepProps {
   field: {
@@ -64,7 +64,7 @@ export const DynamicStep = ({
   let contactValidation: { ok: boolean; reason?: string } = { ok: true };
   if (hasValue) {
     if (field.type === 'phone') {
-      const r = normalizePtPhone(value);
+      const r = normalizeInternationalPhone(value);
       contactValidation = r.ok ? { ok: true } : { ok: false, reason: r.reason };
     } else if (field.type === 'email') {
       const r = normalizeEmail(value);

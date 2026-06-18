@@ -4,6 +4,11 @@ export interface StripePlan {
   priceId: string;
   productId: string;
   priceMonthly: number;
+  // Annual total (EUR). The monthly-equivalent shown to the user is priceYearly/12.
+  priceYearly: number;
+  // Stripe price id for the annual plan. Empty until configured in Stripe — the
+  // UI shows the annual price but blocks annual checkout while this is missing.
+  priceIdYearly?: string;
   description: string;
   features: string[];
   modules: string[];
@@ -17,6 +22,15 @@ export interface StripePlan {
 export const INBOX_EXPLAINER =
   "Caixas de entrada multicanal: liga WhatsApp, Instagram, Facebook e Email e responde a tudo num só lugar.";
 
+// Annual billing is ~35% cheaper than paying month-to-month.
+export const YEARLY_DISCOUNT_PCT = 35;
+
+export type BillingPeriod = "monthly" | "yearly";
+
+// What the customer effectively pays per month on each plan/period.
+export const monthlyPrice = (plan: StripePlan, period: BillingPeriod) =>
+  period === "yearly" ? Math.round(plan.priceYearly / 12) : plan.priceMonthly;
+
 export const STRIPE_PLANS: StripePlan[] = [
   {
     id: "starter",
@@ -24,6 +38,8 @@ export const STRIPE_PLANS: StripePlan[] = [
     priceId: "price_1T2uHzLWnA81DzXTHdexakfL",
     productId: "prod_U0wAc7Tuy8w6gA",
     priceMonthly: 49,
+    priceYearly: 384,
+    priceIdYearly: "price_1Tjgi1LWnA81DzXT4ohYyoNz",
     description: "Ideal para começar a organizar os seus leads e clientes.",
     modules: [
       "CRM Base (Leads + Clientes)",
@@ -46,6 +62,8 @@ export const STRIPE_PLANS: StripePlan[] = [
     priceId: "price_1T2uNiLWnA81DzXTMDKqXDEI",
     productId: "prod_U0wGoA4odOBHOZ",
     priceMonthly: 99,
+    priceYearly: 768,
+    priceIdYearly: "price_1Tjgi2LWnA81DzXTXi3Szxoj",
     highlighted: true,
     description: "Para equipas que querem vender mais com automação.",
     modules: [
@@ -71,6 +89,8 @@ export const STRIPE_PLANS: StripePlan[] = [
     priceId: "price_1T2uO5LWnA81DzXT1V2bp77s",
     productId: "prod_U0wG6doz0zgZFV",
     priceMonthly: 147,
+    priceYearly: 1152,
+    priceIdYearly: "price_1Tjgi2LWnA81DzXTSqJEfPOZ",
     description: "Controlo total do negócio, sem limites.",
     modules: [
       "Tudo do Pro +",

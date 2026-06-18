@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2, Search, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2, Search, MessageSquare, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";
@@ -10,6 +10,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
 import { InboxUnreadBadge } from "./InboxUnreadBadge";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
 interface NavItem {
   to: string;
@@ -50,6 +51,11 @@ export function MobileBottomNav() {
     open: false, feature: '', plan: ''
   });
 
+  // On mobile/PWA the on-screen keyboard shrinks the visual viewport, which makes
+  // a fixed bottom bar float up into the middle of the screen. Slide it out of
+  // the way while the keyboard is open; it returns when the keyboard closes.
+  const keyboardOpen = useKeyboardOpen();
+
   // Plan-locked items stay visible; admin-disabled or no-permission items are hidden
   const navItems = allNavItems.filter(item => {
     if (!item.moduleKey) return true;
@@ -82,7 +88,12 @@ export function MobileBottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-bottom overflow-hidden">
+      <nav
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-bottom overflow-hidden transition-transform duration-200",
+          keyboardOpen && "translate-y-full pointer-events-none",
+        )}
+      >
         <div className="flex items-center h-16 px-2 overflow-x-auto no-scrollbar gap-1">
           {allItems.map((item) => {
             const locked = 'moduleKey' in item && item.moduleKey ? isModuleLocked(item.moduleKey) : false;

@@ -4,6 +4,8 @@ import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch } from "@/lib/utils";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CommissionsPanel } from "@/components/sales/CommissionsPanel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -50,6 +52,7 @@ export default function Sales() {
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [salesTab, setSalesTab] = useState<'vendas' | 'comissoes'>('vendas');
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -267,6 +270,20 @@ export default function Sales() {
         />
       </div>
 
+      {/* Vendas / Comissões */}
+      <div className="px-4 pt-4 md:px-6">
+        <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'vendas' | 'comissoes')}>
+          <TabsList>
+            <TabsTrigger value="vendas">Vendas</TabsTrigger>
+            <TabsTrigger value="comissoes">Comissões</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {salesTab === 'comissoes' && <CommissionsPanel />}
+
+      {salesTab === 'vendas' && (
+      <>
       {/* Summary Cards */}
       <div className="p-4 md:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
         <Card className="bg-card/50 border-border/50">
@@ -437,6 +454,8 @@ export default function Sales() {
           ))
         )}
       </div>
+      </>
+      )}
 
         {/* Sale Details Modal */}
         <SaleDetailsModal

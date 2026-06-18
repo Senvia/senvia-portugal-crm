@@ -55,13 +55,13 @@ export default function Finance() {
     memberships: organizations,
     isSuperAdmin,
   }) && isAdmin;
+  // Commissions moved to the standalone /comissoes page (available with the
+  // Vendas module), so they are no longer tabs here.
   const validTabs = [
     "resumo",
     "contas",
     "faturas",
     "outros",
-    "comissoes",
-    ...(canViewCommissionAnalysis ? ["analise-comissoes"] : []),
   ];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
   const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", "resumo");
@@ -159,8 +159,6 @@ export default function Finance() {
           <TabsTrigger value="contas">Contas</TabsTrigger>
           <TabsTrigger value="faturas">Faturas</TabsTrigger>
           <TabsTrigger value="outros">Outros</TabsTrigger>
-          <TabsTrigger value="comissoes">Comissões</TabsTrigger>
-          {canViewCommissionAnalysis && <TabsTrigger value="analise-comissoes">Análise de Comissões</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="resumo" className="mt-0 space-y-6">
@@ -503,15 +501,6 @@ export default function Finance() {
           <InternalRequests />
         </TabsContent>
 
-        <TabsContent value="comissoes" className="mt-0">
-          <TeamCommissionsTab />
-        </TabsContent>
-
-        {canViewCommissionAnalysis && (
-          <TabsContent value="analise-comissoes" className="mt-0">
-            <CommissionAnalysisTab />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );

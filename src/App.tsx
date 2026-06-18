@@ -52,6 +52,7 @@ const EcommerceDiscounts = lazy(() => import("./pages/ecommerce/Discounts"));
 const EcommerceReports = lazy(() => import("./pages/ecommerce/Reports"));
 const PublicLeadForm = lazy(() => import("./pages/PublicLeadForm"));
 const ConversationalLeadForm = lazy(() => import("./pages/ConversationalLeadForm"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 const InviteRegister = lazy(() => import("./pages/InviteRegister"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="/c/:slug" element={<ConversationalLeadForm />} />
                 <Route path="/c/:slug/:formSlug" element={<ConversationalLeadForm />} />
                 <Route path="/invite/:token" element={<InviteRegister />} />
+                <Route path="/precos" element={<Pricing />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/install" element={<Install />} />
