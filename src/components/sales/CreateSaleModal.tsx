@@ -674,6 +674,22 @@ export function CreateSaleModal({
       return;
     }
 
+    // Date sanity for energy/telecom contracts.
+    for (const cpe of proposalCpes) {
+      if (cpe.contrato_inicio && cpe.contrato_fim && cpe.contrato_inicio > cpe.contrato_fim) {
+        toast.error(`CPE ${cpe.serial_number || ""}: o início do contrato é depois do fim.`);
+        return;
+      }
+    }
+    if (isTelecom && activationDate) {
+      const activationStr = format(activationDate, 'yyyy-MM-dd');
+      const fims = proposalCpes.map((c) => c.contrato_fim).filter(Boolean) as string[];
+      if (fims.length > 0 && activationStr > fims.reduce((a, b) => (a > b ? a : b))) {
+        toast.error("A data de ativação é posterior ao fim do contrato.");
+        return;
+      }
+    }
+
     try {
       // For plan sales, force recurring (no plan selection needed, value comes from Stripe)
       const isPlanRecurring = isPlanSale;

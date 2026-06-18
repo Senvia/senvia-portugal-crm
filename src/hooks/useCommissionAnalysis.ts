@@ -598,9 +598,10 @@ export function useImportCommissionChargebacks() {
 
 export interface SyncFileToSystemItem {
   proposalCpeId: string;
-  dbl: number;
-  consumoAnual: number;
-  duracaoContrato: number;
+  // null = invalid/empty in the file → do NOT overwrite the system value.
+  dbl: number | null;
+  consumoAnual: number | null;
+  duracaoContrato: number | null;
   contratoInicio: string | null;
   contratoFim: string | null;
 }
@@ -616,13 +617,16 @@ export function useSyncFileToSystem() {
       let updatedCount = 0;
 
       for (const item of items) {
-        const updatePayload: Record<string, unknown> = {
-          dbl: item.dbl,
-          consumo_anual: item.consumoAnual,
-          duracao_contrato: item.duracaoContrato,
-        };
+        // Only overwrite fields that have a valid value in the file. Invalid /
+        // empty values arrive as null and are skipped, so good system data is
+        // never clobbered with 0.
+        const updatePayload: Record<string, unknown> = {};
+        if (item.dbl != null) updatePayload.dbl = item.dbl;
+        if (item.consumoAnual != null) updatePayload.consumo_anual = item.consumoAnual;
+        if (item.duracaoContrato != null) updatePayload.duracao_contrato = item.duracaoContrato;
         if (item.contratoInicio) updatePayload.contrato_inicio = item.contratoInicio;
         if (item.contratoFim) updatePayload.contrato_fim = item.contratoFim;
+        if (Object.keys(updatePayload).length === 0) continue;
 
         const { data, error } = await (supabase as any)
           .from("proposal_cpes")

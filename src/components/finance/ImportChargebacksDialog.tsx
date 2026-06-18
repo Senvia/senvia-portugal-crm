@@ -105,6 +105,20 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
       .filter((row) => row.cpe.length > 0);
   }, [selectedAmountColumn, rows, selectedCpeColumn]);
 
+  // Preview before importing: how many rows have a CPE and a valid amount.
+  const previewStats = useMemo(() => {
+    let withAmount = 0;
+    let total = 0;
+    for (const row of preparedRows) {
+      const n = parseFloat(String(row.chargeback_amount).replace(/[^\d.,-]/g, "").replace(",", "."));
+      if (Number.isFinite(n) && n !== 0) {
+        withAmount += 1;
+        total += Math.abs(n);
+      }
+    }
+    return { withCpe: preparedRows.length, withAmount, total };
+  }, [preparedRows]);
+
   const handleImport = async () => {
     if (!fileName || preparedRows.length === 0 || !selectedCpeColumn) return;
 
@@ -177,11 +191,38 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
               />
             </section>
 
+            {headers.length > 0 && (
+              <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">2. Confirmar colunas</h3>
+                  <p className="text-sm text-muted-foreground">Detetámos automaticamente. Confirma ou corrige qual a coluna do CPE e a do valor do estorno.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cpe-col" className="text-sm">Coluna do CPE</Label>
+                    <select id="cpe-col" value={selectedCpeColumn} onChange={(e) => setSelectedCpeColumn(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">— escolher —</option>
+                      {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="amount-col" className="text-sm">Coluna do valor (estorno)</Label>
+                    <select id="amount-col" value={selectedAmountColumn} onChange={(e) => setSelectedAmountColumn(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">— escolher —</option>
+                      {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {headers.length > 0 && !selectedCpeColumn && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  Não foi possível detectar a coluna CPE automaticamente. Verifique se o ficheiro contém a coluna "Linha de Contrato: Local de Consumo" ou "CPE".
+                  Não foi possível detectar a coluna CPE automaticamente. Escolhe-a acima (ex.: "Linha de Contrato: Local de Consumo" ou "CPE").
                 </AlertDescription>
               </Alert>
             )}
@@ -201,7 +242,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   <div>
                     <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                       <CalendarDays className="h-4 w-4" />
-                      2. Mês de referência
+                      3. Mês de referência
                     </h3>
                     <p className="text-sm text-muted-foreground">A que mês se refere este ficheiro?</p>
                   </div>
@@ -215,6 +256,20 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                       className="flex h-10 w-full max-w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     />
                   </div>
+                </section>
+
+                <section className="space-y-2 rounded-xl border bg-card p-4 sm:p-5">
+                  <h3 className="text-sm font-semibold text-foreground">4. Pré-visualização</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{previewStats.withCpe}</span> linha(s) com CPE ·{" "}
+                    <span className="font-medium text-foreground">{previewStats.withAmount}</span> com valor de estorno ·{" "}
+                    total <span className="font-medium text-foreground">{previewStats.total.toFixed(2)}€</span>
+                  </p>
+                  {previewStats.withAmount === 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Nenhuma linha tem um valor de estorno válido. Confirma a coluna do valor acima.
+                    </p>
+                  )}
                 </section>
 
               </>

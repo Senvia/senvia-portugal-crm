@@ -181,10 +181,15 @@ export function CommissionAnalysisTab() {
     for (const commercial of data.commercials) {
       for (const row of commercial.comparisonData) {
         if (row.hasAnyDiscrepancy && row.matchedProposalCpeId) {
-          const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+          // null = não numérico/vazio no ficheiro → não sincroniza esse campo
+          // (evita sobrescrever dados bons com 0).
+          const parseNum = (s: string): number | null => {
+            const n = parseFloat(String(s ?? "").replace(/[^\d.,-]/g, "").replace(",", "."));
+            return Number.isFinite(n) ? n : null;
+          };
           // Calculate duration from dates if possible
           const fileDuracaoRaw = parseNum(row.file.duracaoContrato);
-          let duracao = fileDuracaoRaw;
+          let duracao: number | null = fileDuracaoRaw;
           if (row.file.dataInicio && row.file.dataFim) {
             const parseDateVal = (raw: string): Date | null => {
               const trimmed = raw.trim();
