@@ -50,13 +50,14 @@ export const STRIPE_PLANS: StripePlan[] = [
     description: "Para equipas que querem vender mais com automação.",
     modules: [
       "Tudo do Starter +",
-      "Módulo Vendas",
+      "Módulo Vendas + Comissões",
       "Módulo Marketing",
     ],
     integrations: ["WhatsApp", "Meta Pixels"],
     limits: { users: "Até 15", forms: "15 formulários", inboxes: "10 caixas de entrada" },
     features: [
       "Tudo do Starter +",
+      "Módulo Vendas + Comissões",
       "Módulo Marketing",
       "Integração WhatsApp",
       "Até 15 utilizadores",

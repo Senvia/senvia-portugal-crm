@@ -87,6 +87,7 @@ serve(async (req) => {
 
     // Effective limit: per-org override always wins; null/undefined = unlimited.
     // Billing-exempt orgs (demos, internal, partners) skip the limit entirely.
+    // (grandfathering / negociações pontuais via max_users_override por org)
     const overrideUsers = orgData?.max_users_override;
     const effectiveMaxUsers =
       overrideUsers !== null && overrideUsers !== undefined ? overrideUsers : planData?.max_users;

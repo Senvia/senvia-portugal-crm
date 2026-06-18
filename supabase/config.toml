@@ -1,5 +1,8 @@
 project_id = "chhmfwlimtbsyjmgtokn"
 
+[functions.notify-new-trials]
+verify_jwt = false
+
 [functions.create-team-member]
 verify_jwt = false
 

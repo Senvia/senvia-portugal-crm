@@ -11,6 +11,18 @@ export const TRIGGER_TYPES = [
   { value: 'sale_renewal_due_in_2_days', label: 'Renovação Vence em 2 Dias' },
   { value: 'proposal_created', label: 'Nova Proposta Criada' },
   { value: 'proposal_status_changed', label: 'Proposta Muda de Estado' },
+  // Ciclo de vida do trial (disparados pelo cron check-trial-status)
+  { value: 'trial_started', label: 'Trial: Início (Boas-vindas)' },
+  { value: 'trial_day_3', label: 'Trial: Dia 3' },
+  { value: 'trial_day_7', label: 'Trial: Dia 7' },
+  { value: 'trial_expiring_3d', label: 'Trial: Faltam 3 Dias' },
+  { value: 'trial_expiring_1d', label: 'Trial: Último Dia' },
+  { value: 'trial_expired', label: 'Trial: Expirou' },
+  // Subscrição Stripe (disparados pelo stripe-webhook)
+  { value: 'stripe_subscription_created', label: 'Subscrição: Ativada (pagou)' },
+  { value: 'stripe_subscription_renewed', label: 'Subscrição: Renovada' },
+  { value: 'stripe_subscription_past_due', label: 'Subscrição: Pagamento em Atraso' },
+  { value: 'stripe_subscription_canceled', label: 'Subscrição: Cancelada' },
 ] as const;
 
 export const DELAY_OPTIONS = [
