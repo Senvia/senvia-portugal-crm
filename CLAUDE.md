@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Multi-tenant CRM for Portuguese businesses. Manages leads, sales, proposals, clients, finance (payments, invoices, expenses, commissions), marketing (email campaigns, automations), e-commerce, and calendar. Built on Lovable, deployed via Vercel + Supabase.
+Multi-tenant CRM for Portuguese businesses. Manages leads, sales, proposals, clients, finance (payments, invoices, expenses, commissions), marketing (email campaigns, automations), e-commerce, and calendar. Deployed via Vercel (frontend) + Supabase (backend, DB, edge functions). Lovable is no longer used in this project.
 
 Current version: see `src/lib/constants.ts` → `APP_VERSION`.
 
@@ -14,7 +14,7 @@ Current version: see `src/lib/constants.ts` → `APP_VERSION`.
 | Styling | Tailwind CSS 3, shadcn/ui (Radix primitives), Framer Motion |
 | State | TanStack React Query (server), Zustand (client), localStorage (filter persistence) |
 | Backend | Supabase: PostgreSQL, Auth, RLS, Storage, Edge Functions (Deno) |
-| Deploy | Vercel (frontend, auto-deploy from `main`), Lovable (Edge Functions) |
+| Deploy | Vercel (frontend, auto-deploy from `main`); Supabase Edge Functions deployed manually via Supabase CLI |
 | External | Stripe (subscriptions/payments), InvoiceXpress (invoicing), Brevo (transactional email), Meta CAPI, Apify (prospect scraping) |
 | PWA | Service Worker (`public/sw.js`) for push notifications |
 
@@ -60,7 +60,8 @@ Edge Functions use Supabase-managed secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_S
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint check |
-| `git push origin main` | Deploy frontend (Vercel auto-deploys) + Edge Functions (Lovable auto-deploys) |
+| `git push origin main` | Deploy frontend (Vercel auto-deploys). Edge Functions are NOT auto-deployed |
+| `supabase functions deploy <name> --project-ref chhmfwlimtbsyjmgtokn` | Deploy an edge function (manual) |
 
 No test suite exists. Verify changes with `npx tsc --noEmit --skipLibCheck` before pushing.
 
@@ -125,8 +126,8 @@ See [agent_docs/edge_functions.md](agent_docs/edge_functions.md) for the full Ed
 
 1. **Never commit secrets** — `.env` is gitignored. Supabase secrets are managed in Dashboard.
 2. **Always verify TypeScript** before pushing: `npx tsc --noEmit --skipLibCheck`.
-3. **Deploy = git push to `main`**. Vercel and Lovable auto-deploy. Never push to `master`.
-4. **Edge Function deploy** happens automatically via Lovable on push to `main`.
+3. **Frontend deploy = git push to `main`** (Vercel auto-deploys). Never push to `master`.
+4. **Edge Functions deploy MANUALLY** via `supabase functions deploy <name> --project-ref chhmfwlimtbsyjmgtokn`. They do NOT auto-deploy (Lovable is no longer used). Requires a Supabase access token with privileges on the project.
 5. **SQL changes** run directly in Supabase SQL Editor. No migration CLI.
 6. **RLS is mandatory** on every new table. Use `is_org_member()` pattern.
 7. **Never delete data** without user confirmation. Prefer soft deletes where applicable.

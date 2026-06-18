@@ -45,15 +45,25 @@ export function useCommissionsDetail() {
     queryFn: async (): Promise<{ byUser: CommissionByUser[]; grandTotal: number }> => {
       if (!orgId || !commissionsEnabled) return { byUser: [], grandTotal: 0 };
 
-      const { data: sales, error: salesError } = await supabase
+      // Attribute a sale to a month by activation_date when set, else sale_date
+      // (same rule as the other commission views). Fetch sales whose activation
+      // OR sale date falls in the month, then keep the ones whose effective date
+      // (activation || sale) is in range.
+      const { data: salesRaw, error: salesError } = await supabase
         .from("sales")
-        .select("id, code, sale_date, total_value, created_by")
+        .select("id, code, sale_date, activation_date, total_value, created_by")
         .eq("organization_id", orgId)
         .in("status", ["fulfilled", "delivered"])
-        .gte("sale_date", monthStart)
-        .lte("sale_date", monthEnd);
+        .or(
+          `and(activation_date.gte.${monthStart},activation_date.lte.${monthEnd}),and(sale_date.gte.${monthStart},sale_date.lte.${monthEnd})`,
+        );
 
       if (salesError) throw salesError;
+
+      const sales = (salesRaw || []).filter((s) => {
+        const ref = s.activation_date || s.sale_date;
+        return ref != null && ref >= monthStart && ref <= monthEnd;
+      });
 
       const { data: members, error: membersError } = await supabase
         .from("organization_members")

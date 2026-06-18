@@ -108,7 +108,9 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="commission-renewal" className="text-xs">Renovação (€)</Label>
+                <Label htmlFor="commission-renewal" className="text-xs">
+                  Renovação (€){commissionValue && parseFloat(commissionValue) > 0 ? " *" : ""}
+                </Label>
                 <Input
                   id="commission-renewal"
                   type="number"
@@ -116,10 +118,16 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
                   min="0"
                   value={commissionRenewalValue}
                   onChange={(e) => setCommissionRenewalValue(e.target.value)}
-                  placeholder="(25% da angariação)"
+                  placeholder="0.00"
+                  required={!!commissionValue && parseFloat(commissionValue) > 0}
                 />
               </div>
             </div>
+            {commissionValue && parseFloat(commissionValue) > 0 && !commissionRenewalValue && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Define a comissão de renovação (já não existe o 25% automático).
+              </p>
+            )}
           </div>
 
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
