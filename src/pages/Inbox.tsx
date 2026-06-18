@@ -1777,13 +1777,19 @@ export default function Inbox() {
   // pinned at the top and the composer stays glued above the keyboard.
   const mobileConvOpen = isMobile && !!selectedId;
 
-  // Tell AppLayout to hide the app header / bottom nav / FAB while the immersive
-  // conversation is up, and always restore them when leaving the Inbox.
+  // Tell AppLayout to hide mobile chrome: the bottom nav is hidden across the
+  // whole Inbox on mobile, and the rest of the chrome (app header / FAB) is hidden
+  // too while a conversation is open. Always restored when leaving the Inbox.
   const setImmersive = useInboxImmersiveStore((s) => s.setImmersive);
+  const setHideNav = useInboxImmersiveStore((s) => s.setHideNav);
   useEffect(() => {
+    setHideNav(isMobile);
     setImmersive(mobileConvOpen);
-    return () => setImmersive(false);
-  }, [mobileConvOpen, setImmersive]);
+    return () => {
+      setHideNav(false);
+      setImmersive(false);
+    };
+  }, [isMobile, mobileConvOpen, setHideNav, setImmersive]);
 
   // Contact profile panel (QuickReply-style): right column on desktop, Sheet on
   // mobile — same content in both. Order: profile → assign → tags → details →
@@ -2163,13 +2169,12 @@ export default function Inbox() {
   return (
     <div className={cn(
       "flex flex-col overflow-hidden",
-      // Desktop fills the viewport; on mobile the AppLayout adds a header + bottom
-      // nav (~8.5rem), so cap the height to what's left or the composer hides
-      // behind the bottom nav. dvh accounts for the mobile browser chrome, and we
-      // also subtract the safe-area insets — 100dvh includes them but the header
-      // (safe-top) and bottom nav (safe-bottom) sit inside them, so without this
-      // the composer is pushed below the bottom nav on notched devices.
-      isMobile ? "h-[calc(100dvh-8.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-screen",
+      // Desktop fills the viewport. On mobile the bottom nav is hidden across the
+      // Inbox, so only the app header (3.5rem + safe-top) sits above; subtract that
+      // plus the bottom safe-area so the list clears the home indicator. dvh tracks
+      // the mobile browser chrome. (The conversation view ignores this — it's a
+      // fixed overlay sized to the visual viewport.)
+      isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-screen",
     )}>
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
       {!connected && (

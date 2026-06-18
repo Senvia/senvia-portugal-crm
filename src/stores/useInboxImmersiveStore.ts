@@ -1,16 +1,22 @@
 import { create } from "zustand";
 
-// When a conversation is open on mobile, the Inbox renders it as a full-screen
-// immersive view (like WhatsApp). This flag lets AppLayout hide the app header,
-// bottom nav and FAB while that view is up, so there's no double header and the
-// conversation's own header + composer own the whole screen. Transient (not
-// persisted): it always starts false and the Inbox drives it.
+// Lets the Inbox tell AppLayout to hide mobile chrome. Two levels:
+// - `hideNav`: the whole Inbox on mobile hides the bottom nav (it eats space and
+//   the messaging UI wants the full height; the app header's burger still gives a
+//   way out). True for the list AND the conversation.
+// - `immersive`: a conversation is open → full-screen view, also hide the app
+//   header and FAB so the conversation owns the whole screen (no double header).
+// Transient (not persisted): always starts false, the Inbox drives both.
 interface InboxImmersiveStore {
   immersive: boolean;
+  hideNav: boolean;
   setImmersive: (immersive: boolean) => void;
+  setHideNav: (hideNav: boolean) => void;
 }
 
 export const useInboxImmersiveStore = create<InboxImmersiveStore>((set) => ({
   immersive: false,
+  hideNav: false,
   setImmersive: (immersive) => set({ immersive }),
+  setHideNav: (hideNav) => set({ hideNav }),
 }));

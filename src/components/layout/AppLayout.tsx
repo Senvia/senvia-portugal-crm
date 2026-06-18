@@ -23,9 +23,10 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { subscriptionStatus, hasChecked } = useStripeSubscription();
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  // While a conversation is open on mobile, the Inbox renders it full-screen and
-  // owns the whole viewport — hide the app chrome so it's truly immersive.
+  // Inbox-driven mobile chrome control. `hideNav`: the whole Inbox hides the
+  // bottom nav. `immersive`: a conversation is open → also hide header + FAB.
   const immersive = useInboxImmersiveStore((s) => s.immersive);
+  const hideNav = useInboxImmersiveStore((s) => s.hideNav);
 
   const showTrialBanner = hasChecked && subscriptionStatus?.on_trial && !subscriptionStatus?.billing_exempt && (subscriptionStatus?.days_remaining ?? 0) > 0;
   // Paying customer overdue but still inside the grace window → warn (don't block).
@@ -63,14 +64,14 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           />
         )}
         <main
-          className={immersive ? undefined : "pb-20"}
+          className={immersive || hideNav ? undefined : "pb-20"}
           style={immersive || showBanner ? undefined : { paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
-          <div className={immersive ? undefined : "min-h-[calc(100vh-8.5rem)]"}>
+          <div className={immersive || hideNav ? undefined : "min-h-[calc(100vh-8.5rem)]"}>
             {children}
           </div>
         </main>
-        {!immersive && <MobileBottomNav />}
+        {!immersive && !hideNav && <MobileBottomNav />}
         {!immersive && <OttoFAB />}
       </div>
     );
