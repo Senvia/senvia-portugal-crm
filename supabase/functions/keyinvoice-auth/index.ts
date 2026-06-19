@@ -30,6 +30,45 @@ Deno.serve(async (req) => {
       })
     }
 
+    // AuthN + AuthZ: require a logged-in member of THIS org. Without this, anyone
+    // could POST an organization_id and receive a live KeyInvoice session token
+    // (full access to that org's billing account). A server-to-server call from
+    // another edge function (bearer == service-role key) is treated as trusted.
+    const authHeader = req.headers.get('Authorization') || ''
+    const bearer = authHeader.replace(/^Bearer\s+/i, '')
+    const isInternal = !!bearer && bearer === supabaseServiceKey
+    if (!isInternal) {
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      })
+      const { data: { user }, error: authError } = await authClient.auth.getUser()
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Utilizador não autenticado' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('is_active')
+        .eq('organization_id', organization_id)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (!membership) {
+        return new Response(JSON.stringify({ error: 'Sem acesso a esta organização' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at')

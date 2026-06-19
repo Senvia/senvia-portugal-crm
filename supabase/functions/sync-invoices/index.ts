@@ -315,6 +315,17 @@ Deno.serve(async (req) => {
 
     // Mode 1: sync_all - internal cron call
     if (sync_all) {
+      // Guard the cross-tenant cron path: when CRON_SECRET is set, require it so a
+      // public caller can't force a full sync of every org (InvoiceXpress cost/abuse).
+      const cronSecret = Deno.env.get('CRON_SECRET')
+      if (cronSecret) {
+        const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key')
+        if (provided !== cronSecret) {
+          return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
       console.log('Running sync_all mode for all organizations...')
       const { data: orgs, error: orgsError } = await supabase
         .from('organizations')

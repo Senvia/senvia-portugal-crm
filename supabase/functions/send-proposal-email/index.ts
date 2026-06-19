@@ -168,6 +168,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error("Missing required fields: to, clientName, proposalCode");
     }
 
+    // AuthN + AuthZ: only a member of this org may send proposal emails from its
+    // Brevo sender. Without this, anyone could send mail from any org's verified
+    // sender (phishing) by POSTing an organizationId. A server-to-server call
+    // (bearer == service-role key) is treated as trusted.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const isInternal = !!bearer && bearer === supabaseServiceKey;
+    if (!isInternal) {
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const authClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authErr } = await authClient.auth.getUser();
+      if (authErr || !user) {
+        return new Response(JSON.stringify({ error: "Utilizador não autenticado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: membership } = await supabaseClient
+        .from("organization_members")
+        .select("is_active")
+        .eq("organization_id", data.organizationId)
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!membership) {
+        return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Fetch organization's Brevo configuration
     const { data: orgData, error: orgError } = await supabaseClient
       .from("organizations")

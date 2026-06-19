@@ -61,6 +61,22 @@ async function getNetFee(stripe: Stripe, invoiceId: string): Promise<NetFee> {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Guard: this function rewrites financial records across ALL orgs and must not be
+  // publicly invokable. When CRON_SECRET is set, require it (x-cron-secret header or
+  // ?key=). NOTE: set CRON_SECRET in Supabase and pass it when invoking, otherwise
+  // this stays open (no regression, but no protection either).
+  {
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (cronSecret) {
+      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+      if (provided !== cronSecret) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+  }
+
   try {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");

@@ -66,11 +66,33 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get request details
+    // AuthZ: the caller must belong to organization_id. Without this, any logged-in
+    // user could look up another org's request and email its submitter a forged
+    // approval/rejection (financial-fraud / social engineering).
+    const userId = claimsData.claims.sub;
+    const { data: membership } = await adminClient
+      .from("organization_members")
+      .select("is_active")
+      .eq("organization_id", organization_id)
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!membership) {
+      return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Escape user-controlled values before interpolating into the email HTML.
+    const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+
+    // Get request details (scoped to the org so a forged request_id can't read another tenant's request)
     const { data: request, error: reqError } = await adminClient
       .from("internal_requests")
       .select("submitted_by, title, request_type")
       .eq("id", request_id)
+      .eq("organization_id", organization_id)
       .single();
 
     if (reqError || !request) {
@@ -114,7 +136,7 @@ Deno.serve(async (req) => {
     const notesHtml = review_notes
       ? `<tr>
            <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Notas</td>
-           <td style="padding: 8px; border-bottom: 1px solid #eee;">${review_notes}</td>
+           <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(review_notes)}</td>
          </tr>`
       : "";
 
@@ -134,17 +156,17 @@ Deno.serve(async (req) => {
             <p>O seu pedido foi atualizado com o seguinte estado:</p>
             <div style="text-align: center; margin: 24px 0;">
               <span style="display: inline-block; padding: 8px 24px; border-radius: 6px; background-color: ${statusColor}; color: #fff; font-size: 18px; font-weight: bold;">
-                ${statusLabel}
+                ${esc(statusLabel)}
               </span>
             </div>
             <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Título</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${request.title}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(request.title)}</td>
               </tr>
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Tipo</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${typeLabel}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(typeLabel)}</td>
               </tr>
               ${notesHtml}
             </table>

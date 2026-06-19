@@ -57,6 +57,26 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // AuthZ: the caller must belong to organization_id. Without this, any logged-in
+    // user could send a forged "internal request" email to ANY org's finance inbox
+    // (from that org's own sender), with attacker-controlled HTML.
+    const { data: membership } = await adminClient
+      .from("organization_members")
+      .select("is_active")
+      .eq("organization_id", organization_id)
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!membership) {
+      return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Escape user-controlled values before interpolating into the email HTML.
+    const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+
     const { data: org } = await adminClient
       .from("organizations")
       .select("finance_email, brevo_api_key, brevo_sender_email, name")
@@ -100,15 +120,15 @@ Deno.serve(async (req) => {
             <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Título</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${title}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(title)}</td>
               </tr>
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Tipo</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${typeLabel}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(typeLabel)}</td>
               </tr>
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Submetido por</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${submitterName}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${esc(submitterName)}</td>
               </tr>
             </table>
             <p style="color: #666; font-size: 14px;">Aceda à plataforma para validar e processar este pedido.</p>

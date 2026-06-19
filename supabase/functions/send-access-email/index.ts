@@ -55,8 +55,26 @@ serve(async (req) => {
       );
     }
 
-    // Get org Brevo config
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // AuthZ: the authenticated caller must belong to the org they're emailing on
+    // behalf of. Without this, any logged-in user could send a branded credential
+    // email from ANOTHER org's verified Brevo sender (strong phishing primitive).
+    const { data: membership } = await supabaseAdmin
+      .from('organization_members')
+      .select('is_active')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (!membership) {
+      return new Response(
+        JSON.stringify({ error: 'Sem acesso a esta organização' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get org Brevo config
     const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
       .select('brevo_api_key, brevo_sender_email, name')

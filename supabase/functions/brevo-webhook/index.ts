@@ -12,6 +12,20 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Webhook guard: Brevo posts unauthenticated. When BREVO_WEBHOOK_SECRET is set,
+    // require it (via ?key= in the configured webhook URL, or an x-webhook-secret
+    // header) so an attacker can't forge delivery/open/bounce/unsubscribe events.
+    const webhookSecret = Deno.env.get("BREVO_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const provided = new URL(req.url).searchParams.get("key") || req.headers.get("x-webhook-secret");
+      if (provided !== webhookSecret) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

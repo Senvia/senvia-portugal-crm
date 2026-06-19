@@ -110,6 +110,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // AuthZ: the caller must belong to organizationId. Without this, any logged-in
+    // user could launch a billable Apify scrape attributed to ANY other org.
+    {
+      const svc = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const { data: membership } = await svc
+        .from("organization_members")
+        .select("is_active")
+        .eq("organization_id", organizationId)
+        .eq("user_id", userData.user.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!membership) {
+        return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (!startUrls.length && (!searchStrings.length || !location)) {
       return new Response(JSON.stringify({ error: "searchStrings+location or startUrls are required" }), {
         status: 400,

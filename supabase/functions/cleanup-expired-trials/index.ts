@@ -17,6 +17,21 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Guard: this function PERMANENTLY DELETES data for expired-trial orgs and must
+  // not be publicly invokable. When CRON_SECRET is set, require it (x-cron-secret
+  // header or ?key=). Set CRON_SECRET in Supabase and pass it from the scheduler.
+  {
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (cronSecret) {
+      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+      if (provided !== cronSecret) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+  }
+
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",

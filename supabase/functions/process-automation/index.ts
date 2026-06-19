@@ -85,6 +85,9 @@ serve(async (req: Request): Promise<Response> => {
         .from('crm_clients')
         .select('email, name, company')
         .eq('id', clientId)
+        // Scope to the event's org — without this, a forged client_id could read a
+        // client (email/name/company) from ANY other tenant (cross-tenant leak).
+        .eq('organization_id', organization_id)
         .single();
 
       if (client) {

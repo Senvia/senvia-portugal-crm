@@ -95,6 +95,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // AuthZ: the caller must belong to the job's org. Without this, any logged-in
+    // user could read/process another org's prospect job by guessing its id (IDOR).
+    {
+      const { data: membership } = await serviceSupabase
+        .from("organization_members")
+        .select("is_active")
+        .eq("organization_id", job.organization_id)
+        .eq("user_id", userData.user.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!membership) {
+        return new Response(JSON.stringify({ error: "Sem acesso a este trabalho" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // If already completed/failed, return cached result
     if (job.status === "completed" || job.status === "failed") {
       return new Response(JSON.stringify({
