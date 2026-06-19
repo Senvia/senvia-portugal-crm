@@ -667,7 +667,11 @@ export default function Inbox() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
+  // The composer is a contentEditable div (WhatsApp-style) so iOS doesn't show the
+  // form-assistant bar above the keyboard. isComposingRef guards the IME (Portuguese
+  // accents) so we don't fight it while syncing the draft.
+  const composerRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
   const prevSelectedRef = useRef<number | null>(null);
   // True while a freshly-opened conversation still owes its initial scroll to the
   // bottom (messages and/or images load asynchronously after the switch).
@@ -1130,14 +1134,25 @@ export default function Inbox() {
 
   const visiblePending = pending.filter((p) => p.conversationId === selectedId);
 
-  // Auto-grow the composer with its content: reset to 1 line, then expand to fit
-  // (capped at ~10 lines by the CSS max-height, after which it scrolls). Runs on
-  // every draft change, including the reset to empty after a send.
+  // Sync the contentEditable composer with the `draft` state. While the user types,
+  // onInput already keeps draft === innerText, so this is a no-op (no caret jump).
+  // It only writes when the draft is changed from the outside (quick reply, AI
+  // suggestion, emoji, or the reset to empty after a send), and then drops the caret
+  // at the end. Skipped during IME composition so it never interrupts accents.
   useEffect(() => {
     const el = composerRef.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    if (isComposingRef.current) return;
+    if (el.innerText === draft) return;
+    el.innerText = draft;
+    if (document.activeElement === el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
   }, [draft, selectedId]);
 
   // Auto-scroll to the latest message — but DON'T yank the view to the bottom
@@ -3009,18 +3024,36 @@ export default function Inbox() {
                   </PopoverContent>
                 </Popover>
 
-                {/* WhatsApp-style pill: a single-line textarea that grows with the
-                    text, wrapped in a rounded container. Secondary actions (emoji,
-                    quick replies, AI, schedule, signature) all live in the "+" menu
-                    above to keep the bar uncluttered on mobile. */}
-                <div className="flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
-                  <Textarea
-                    value={draft}
-                    rows={1}
+                {/* WhatsApp-style pill. The input is a contentEditable div (NOT a
+                    textarea) on purpose: iOS shows its form-assistant bar (< > Done)
+                    above the keyboard for real form fields, but not for contentEditable.
+                    It grows naturally with the text up to ~6 lines, then scrolls.
+                    Secondary actions live in the "+" menu to keep the bar uncluttered. */}
+                <div className="relative flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
+                  {!draft.trim() && (
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none truncate pr-2 text-base text-muted-foreground sm:text-sm">
+                      {outAttachments.length > 0
+                        ? "Legenda (opcional)..."
+                        : isEmailSelected
+                          ? "Escreve a tua resposta ao email..."
+                          : "Mensagem"}
+                    </span>
+                  )}
+                  <div
+                    ref={composerRef}
+                    role="textbox"
+                    aria-multiline="true"
+                    contentEditable
+                    suppressContentEditableWarning
                     onFocus={() => setComposerFocused(true)}
                     onBlur={() => setComposerFocused(false)}
-                    onChange={(e) => {
-                      setDraft(e.target.value);
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={(e) => {
+                      isComposingRef.current = false;
+                      setDraft(e.currentTarget.innerText);
+                    }}
+                    onInput={(e) => {
+                      setDraft(e.currentTarget.innerText);
                       // Show "typing..." on the contact's WhatsApp (throttled, not for email).
                       if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
                         lastTypingRef.current = Date.now();
@@ -3033,26 +3066,24 @@ export default function Inbox() {
                     }}
                     onKeyDown={(e) => {
                       // Enter sends; Shift+Enter inserts a newline. Ignore while the
-                      // IME is composing (accents / Asian input) so it doesn't send mid-word.
-                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      // IME is composing (accents) so it doesn't send mid-word.
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isComposingRef.current) {
                         e.preventDefault();
-                        e.currentTarget.form?.requestSubmit();
+                        e.currentTarget.closest("form")?.requestSubmit();
                       }
                     }}
-                    placeholder={
-                      outAttachments.length > 0
-                        ? "Legenda (opcional)..."
-                        : isEmailSelected
-                          ? "Escreve a tua resposta ao email..."
-                          : "Mensagem"
-                    }
-                    autoComplete="off"
-                    ref={composerRef}
-                    // Starts on a single line and grows up to ~6 lines, then scrolls.
-                    // border-0/bg-transparent/ring-0 let the rounded wrapper own the
-                    // chrome; min-h-0 overrides the component's default 80px min height.
-                    // text-base (16px) on mobile stops iOS from auto-zooming on focus.
-                    className="max-h-[160px] min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-2.5 text-base focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-sm"
+                    onPaste={(e) => {
+                      // Force plain-text paste (no rich HTML). Images still bubble to
+                      // the form's onPaste (handlePaste) since we only handle text here.
+                      if (e.clipboardData?.files?.length) return;
+                      e.preventDefault();
+                      const text = e.clipboardData?.getData("text/plain") ?? "";
+                      document.execCommand("insertText", false, text);
+                    }}
+                    // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
+                    // collapses); leading-6 gives a stable line box. text-base (16px) on
+                    // mobile stops iOS from auto-zooming on focus.
+                    className="max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm"
                   />
                 </div>
 
