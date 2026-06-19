@@ -3,24 +3,23 @@ import { useEffect, useState } from "react";
 export interface VisualViewportState {
   /** Visible height in px (shrinks when the on-screen keyboard opens). */
   height: number;
-  /** Vertical scroll offset of the visual viewport (non-zero on iOS w/ keyboard). */
-  offsetTop: number;
   /** True once the visible area drops far enough below the layout viewport. */
   keyboardOpen: boolean;
 }
 
-// Tracks the visual viewport so a mobile/PWA conversation view can be sized and
-// positioned exactly to the visible area, keeping a fixed header + composer glued
-// in place while the on-screen keyboard opens and closes. Works on both Android
-// (viewport shrinks from the bottom) and iOS (viewport also shifts via offsetTop).
+// Tracks the visual viewport HEIGHT so a mobile/PWA conversation view can be sized
+// to the visible area, keeping a fixed header + composer in place while the
+// on-screen keyboard opens and closes.
 //
-// Relies on the default `interactive-widget=resizes-visual` behaviour: the layout
-// viewport (window.innerHeight) stays put while the keyboard only resizes the
-// visual viewport, which is how we detect the keyboard and measure the gap.
+// We deliberately track ONLY the height (and a derived keyboardOpen flag), not the
+// scroll offset. On iOS Safari the visual viewport fires a storm of `scroll` events
+// while you drag — if we turned those into layout changes (resizing/translating the
+// overlay), the conversation would shake/flicker and the inner list couldn't scroll.
+// The page itself is body-locked while the overlay is up, so the viewport top stays
+// aligned and no offset compensation is needed.
 export function useVisualViewport(): VisualViewportState {
   const [state, setState] = useState<VisualViewportState>(() => ({
     height: typeof window !== "undefined" ? window.innerHeight : 0,
-    offsetTop: 0,
     keyboardOpen: false,
   }));
 
@@ -29,14 +28,14 @@ export function useVisualViewport(): VisualViewportState {
     if (!vv) return;
 
     const update = () => {
+      // Round to whole px so sub-pixel jitter during a drag doesn't churn the layout.
+      const height = Math.round(vv.height);
       // A drop of >150px below the layout viewport is a keyboard, not a toolbar.
       const keyboardOpen = window.innerHeight - vv.height > 150;
-      // Skip the state update (and the re-render) when nothing actually changed —
-      // iOS fires a stream of scroll events during the keyboard animation.
+      // Only re-render when the height or keyboard state actually changes — this is
+      // what filters out the iOS scroll-event storm (which leaves height untouched).
       setState((prev) =>
-        prev.height === vv.height && prev.offsetTop === vv.offsetTop && prev.keyboardOpen === keyboardOpen
-          ? prev
-          : { height: vv.height, offsetTop: vv.offsetTop, keyboardOpen },
+        prev.height === height && prev.keyboardOpen === keyboardOpen ? prev : { height, keyboardOpen },
       );
     };
 
