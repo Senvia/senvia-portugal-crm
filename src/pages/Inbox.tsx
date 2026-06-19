@@ -615,9 +615,13 @@ export default function Inbox() {
   // Whether WE are actively typing — broadcast to teammates for collision warnings.
   const [selfTyping, setSelfTyping] = useState(false);
   const typingResetRef = useRef<number | null>(null);
-  // Composer "+" menu: 'menu' (actions) or 'emoji' (picker grid).
+  // Composer "+" menu: 'menu' (actions), 'emoji' (picker grid) or 'canned' (quick replies).
   const [plusOpen, setPlusOpen] = useState(false);
-  const [plusView, setPlusView] = useState<"menu" | "emoji">("menu");
+  const [plusView, setPlusView] = useState<"menu" | "emoji" | "canned">("menu");
+  // Whether the composer textarea is focused → the on-screen keyboard is open (or
+  // opening). On iOS the visualViewport metrics lag the focus event, so we use this
+  // to drop the bottom safe-area padding immediately and avoid a gap above the keyboard.
+  const [composerFocused, setComposerFocused] = useState(false);
   // Outgoing message signature (*Nome:*) — useful when several agents share the number.
   const [signing, setSigning] = useState<boolean>(() => localStorage.getItem("inbox-signature-v1") === "1");
   // Out-of-hours auto-reply settings dialog.
@@ -1196,6 +1200,40 @@ export default function Inbox() {
       setImmersive(false);
     };
   }, [isMobile, mobileConvOpen, setHideNav, setImmersive]);
+
+  // Lock the document body while the immersive conversation is open. Without this,
+  // iOS Safari scrolls the page *behind* the fixed overlay when the composer is
+  // focused (its native "scroll the focused field into view" logic), which leaves
+  // visualViewport.offsetTop non-zero and makes the conversation scroll jump around.
+  // Pinning the body keeps offsetTop ~0 so the overlay stays glued to the viewport.
+  useEffect(() => {
+    if (!mobileConvOpen) return;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [mobileConvOpen]);
 
   // When the visible viewport shrinks (keyboard opens) on the mobile overlay,
   // keep the latest message in view so it isn't hidden behind the keyboard —
@@ -1797,13 +1835,27 @@ export default function Inbox() {
   // notes → conversation actions.
   const contactPanel = selected && (
     <div className="flex h-full flex-col overflow-y-auto">
-      {/* Profile — gradient header */}
-      <div className="relative bg-gradient-to-br from-green-500/15 via-primary/5 to-transparent px-4 pb-4 pt-5">
+      {/* Profile — gradient header. On the mobile sheet it runs full-screen from the
+          top, so pad the top by the safe-area inset (notch / status bar) — the sheet
+          itself drops the inset because the panel overrides its padding with p-0. */}
+      <div
+        className="relative bg-gradient-to-br from-green-500/15 via-primary/5 to-transparent px-4 pb-4 pt-5"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
+      >
         <button
           type="button"
           title="Fechar painel"
-          onClick={() => { setSheetOpen(false); setPanelOpen(false); localStorage.setItem("inbox-panel-v1", "0"); }}
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm ring-1 ring-border transition-colors hover:bg-background"
+          // Mobile: just close the sheet. Desktop: collapse the pinned panel and
+          // remember it. (Closing the mobile sheet must NOT wipe the desktop choice.)
+          onClick={() => {
+            setSheetOpen(false);
+            if (!isMobile) {
+              setPanelOpen(false);
+              localStorage.setItem("inbox-panel-v1", "0");
+            }
+          }}
+          style={{ top: "calc(env(safe-area-inset-top) + 0.5rem)" }}
+          className="absolute right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm ring-1 ring-border transition-colors hover:bg-background"
         >
           <X className="h-4 w-4" />
         </button>
@@ -2161,6 +2213,8 @@ export default function Inbox() {
       )}
 
       </div>{/* end gap-3 flex col */}
+      {/* Bottom spacer so the last card clears the iOS home indicator on the mobile sheet. */}
+      <div style={{ height: "env(safe-area-inset-bottom)" }} />
     </div>
   );
 
@@ -2721,7 +2775,7 @@ export default function Inbox() {
             {recording ? (
               <div
                 className="flex shrink-0 items-center gap-3 border-t bg-background p-3"
-                style={mobileConvOpen && !vv.keyboardOpen ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" } : undefined}
+                style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" } : undefined}
               >
                 <span className="flex items-center gap-2 text-sm text-red-500">
                   <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
@@ -2738,7 +2792,7 @@ export default function Inbox() {
             ) : (
               <div
                 className="shrink-0 border-t bg-background"
-                style={mobileConvOpen && !vv.keyboardOpen ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" } : undefined}
+                style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" } : undefined}
               >
                 {isEmailSelected && selected.email_subject && (
                   <div className="flex items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5 text-xs text-muted-foreground">
@@ -2746,10 +2800,10 @@ export default function Inbox() {
                     <span className="truncate">Re: {selected.email_subject}</span>
                   </div>
                 )}
-              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-end gap-1.5 p-3">
+              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-end gap-2 p-2.5">
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
 
-                {/* "+" menu — groups attach / emoji / schedule / signature to keep the bar uncluttered */}
+                {/* "+" menu — single entry point for attach / emoji / quick replies / AI / schedule / signature */}
                 <Popover
                   open={plusOpen}
                   onOpenChange={(o) => {
@@ -2758,8 +2812,8 @@ export default function Inbox() {
                   }}
                 >
                   <PopoverTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" title="Mais opções">
-                      <Plus className="h-4 w-4" />
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0 rounded-full text-muted-foreground" title="Mais opções">
+                      <Plus className="h-5 w-5" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent side="top" align="start" className="w-60 p-1.5">
@@ -2785,6 +2839,69 @@ export default function Inbox() {
                           ))}
                         </div>
                       </div>
+                    ) : plusView === "canned" ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setPlusView("menu")}
+                          className="mb-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent"
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" /> Respostas rápidas
+                        </button>
+                        <p className="mb-2 px-2 text-[11px] text-muted-foreground">
+                          Usa <code className="rounded bg-muted px-1">{"{{nome}}"}</code> para o primeiro nome do contacto.
+                        </p>
+                        {canned.length === 0 && (
+                          <p className="mb-2 px-2 text-xs text-muted-foreground">Ainda não há respostas guardadas.</p>
+                        )}
+                        <div className="mb-2 max-h-48 space-y-1 overflow-y-auto">
+                          {canned.map((qr) => (
+                            <div key={qr.id} className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDraft(applyVars(qr.content, selected.contact_name));
+                                  setPlusOpen(false);
+                                }}
+                                className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                                title={qr.content}
+                              >
+                                {qr.content}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteCanned.mutate(qr.id)}
+                                className="rounded p-1 text-muted-foreground hover:bg-accent"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-1 px-1">
+                          <Input
+                            value={newQuickReply}
+                            onChange={(e) => setNewQuickReply(e.target.value)}
+                            placeholder="Nova resposta rápida..."
+                            className="h-8 text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && newQuickReply.trim()) {
+                                e.preventDefault();
+                                createCanned.mutate(newQuickReply.trim(), { onSuccess: () => setNewQuickReply("") });
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8"
+                            disabled={!newQuickReply.trim() || createCanned.isPending}
+                            onClick={() => createCanned.mutate(newQuickReply.trim(), { onSuccess: () => setNewQuickReply("") })}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex flex-col">
                         <button
@@ -2804,6 +2921,33 @@ export default function Inbox() {
                         >
                           <Smile className="h-4 w-4 text-muted-foreground" /> Emoji
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlusView("canned")}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                        >
+                          <Zap className="h-4 w-4 text-muted-foreground" /> Respostas rápidas
+                        </button>
+                        {!isEmailSelected && (
+                          <button
+                            type="button"
+                            disabled={suggestReply.isPending || thread.length === 0}
+                            onClick={() => {
+                              setPlusOpen(false);
+                              suggestReply.mutate(
+                                { conversationId: selected.id, altIds },
+                                {
+                                  onSuccess: (suggestion) => setDraft(suggestion),
+                                  onError: (err) =>
+                                    toast({ title: "Falha na sugestão", description: (err as Error).message, variant: "destructive" }),
+                                },
+                              );
+                            }}
+                            className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> : <Sparkles className="h-4 w-4 text-violet-500" />} Sugerir resposta com IA
+                          </button>
+                        )}
                         {selected.contact_phone && (
                           <button
                             type="button"
@@ -2844,126 +2988,52 @@ export default function Inbox() {
                   </PopoverContent>
                 </Popover>
 
-                {/* Quick replies (org-wide, with {{nome}} variable) */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" title="Respostas rápidas">
-                      <Zap className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent side="top" align="start" className="w-80 p-3">
-                    <p className="mb-1 text-xs font-semibold text-muted-foreground">Respostas rápidas da equipa</p>
-                    <p className="mb-2 text-[11px] text-muted-foreground">
-                      Usa <code className="rounded bg-muted px-1">{"{{nome}}"}</code> para o primeiro nome do contacto.
-                    </p>
-                    {canned.length === 0 && (
-                      <p className="mb-2 text-xs text-muted-foreground">Ainda não há respostas guardadas.</p>
-                    )}
-                    <div className="mb-2 max-h-48 space-y-1 overflow-y-auto">
-                      {canned.map((qr) => (
-                        <div key={qr.id} className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setDraft(applyVars(qr.content, selected.contact_name))}
-                            className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                            title={qr.content}
-                          >
-                            {qr.content}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteCanned.mutate(qr.id)}
-                            className="rounded p-1 text-muted-foreground hover:bg-accent"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-1">
-                      <Input
-                        value={newQuickReply}
-                        onChange={(e) => setNewQuickReply(e.target.value)}
-                        placeholder="Nova resposta rápida..."
-                        className="h-8 text-xs"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newQuickReply.trim()) {
-                            e.preventDefault();
-                            createCanned.mutate(newQuickReply.trim(), { onSuccess: () => setNewQuickReply("") });
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8"
-                        disabled={!newQuickReply.trim() || createCanned.isPending}
-                        onClick={() => createCanned.mutate(newQuickReply.trim(), { onSuccess: () => setNewQuickReply("") })}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* AI suggestion */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  title="Sugerir resposta com IA"
-                  disabled={suggestReply.isPending || thread.length === 0}
-                  onClick={() =>
-                    suggestReply.mutate(
-                      { conversationId: selected.id, altIds },
-                      {
-                        onSuccess: (suggestion) => setDraft(suggestion),
-                        onError: (err) =>
-                          toast({ title: "Falha na sugestão", description: (err as Error).message, variant: "destructive" }),
-                      },
-                    )
-                  }
-                >
-                  {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-violet-500" />}
-                </Button>
-
-                <Textarea
-                  value={draft}
-                  rows={1}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    // Show "typing..." on the contact's WhatsApp (throttled, not for email).
-                    if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
-                      lastTypingRef.current = Date.now();
-                      sendTyping(selected.contact_phone);
+                {/* WhatsApp-style pill: a single-line textarea that grows with the
+                    text, wrapped in a rounded container. Secondary actions (emoji,
+                    quick replies, AI, schedule, signature) all live in the "+" menu
+                    above to keep the bar uncluttered on mobile. */}
+                <div className="flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
+                  <Textarea
+                    value={draft}
+                    rows={1}
+                    onFocus={() => setComposerFocused(true)}
+                    onBlur={() => setComposerFocused(false)}
+                    onChange={(e) => {
+                      setDraft(e.target.value);
+                      // Show "typing..." on the contact's WhatsApp (throttled, not for email).
+                      if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
+                        lastTypingRef.current = Date.now();
+                        sendTyping(selected.contact_phone);
+                      }
+                      // Broadcast typing to teammates; auto-clear after a short pause.
+                      setSelfTyping(true);
+                      if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
+                      typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
+                    }}
+                    onKeyDown={(e) => {
+                      // Enter sends; Shift+Enter inserts a newline. Ignore while the
+                      // IME is composing (accents / Asian input) so it doesn't send mid-word.
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                    placeholder={
+                      outAttachments.length > 0
+                        ? "Legenda (opcional)..."
+                        : isEmailSelected
+                          ? "Escreve a tua resposta ao email..."
+                          : "Mensagem"
                     }
-                    // Broadcast typing to teammates; auto-clear after a short pause.
-                    setSelfTyping(true);
-                    if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
-                    typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
-                  }}
-                  onKeyDown={(e) => {
-                    // Enter sends; Shift+Enter inserts a newline. Ignore while the
-                    // IME is composing (accents / Asian input) so it doesn't send mid-word.
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      e.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  placeholder={
-                    outAttachments.length > 0
-                      ? "Legenda (opcional)..."
-                      : isEmailSelected
-                        ? "Escreve a tua resposta ao email..."
-                        : "Escreve uma mensagem... (Enter envia, Shift+Enter nova linha)"
-                  }
-                  autoComplete="off"
-                  ref={composerRef}
-                  // Grows with the text up to ~10 lines, then scrolls. min-h-0 + the
-                  // resize effect override the component's default 80px min height.
-                  // text-base (16px) on mobile stops iOS from auto-zooming on focus.
-                  className="max-h-[240px] min-h-0 resize-none py-2 text-base sm:text-sm"
-                />
+                    autoComplete="off"
+                    ref={composerRef}
+                    // Starts on a single line and grows up to ~6 lines, then scrolls.
+                    // border-0/bg-transparent/ring-0 let the rounded wrapper own the
+                    // chrome; min-h-0 overrides the component's default 80px min height.
+                    // text-base (16px) on mobile stops iOS from auto-zooming on focus.
+                    className="max-h-[160px] min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-2.5 text-base focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-sm"
+                  />
+                </div>
 
                 {draft.trim() || outAttachments.length > 0 ? (
                   <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={sendMessage.isPending || startConversation.isPending}>
