@@ -35,7 +35,7 @@ export function ProductsTab() {
     memberships: organizations,
     isSuperAdmin,
   });
-  const hasInvoiceXpress = !!(organization as any)?.invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
+  const hasInvoiceXpress = !!(organization as any)?.has_invoicexpress_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);

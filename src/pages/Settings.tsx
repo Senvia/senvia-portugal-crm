@@ -155,20 +155,21 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
+        // Secrets (whatsapp_api_key, brevo_api_key, invoicexpress_api_key,
+        // keyinvoice_password) are intentionally NOT selected — they are write-only
+        // for the client now (read access is revoked). Configured-state comes from
+        // the org's has_* flags (useAuth). The inputs stay empty unless replacing.
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, form_settings, brevo_sender_email, invoicexpress_account_name, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_company_code, keyinvoice_api_url')
         .eq('id', organization.id)
         .single();
 
       if (!error && data) {
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
-        setWhatsappApiKey(data.whatsapp_api_key || '');
-        setBrevoApiKey(data.brevo_api_key || '');
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
-        setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
-        setKeyinvoiceApiKey((data as any).keyinvoice_password || '');
         setKeyinvoiceApiUrl((data as any).keyinvoice_api_url || '');
+        // Secret key fields are left empty (write-only); user types only to replace.
 
         const tc = (data as any).tax_config;
         if (tc) {
@@ -210,33 +211,34 @@ export default function Settings() {
   };
 
 
+  // Secrets are write-only: only include the key in the update when the user typed a
+  // new value, so leaving the field blank PRESERVES the saved key (we can no longer
+  // read it back to know it). An empty field never clears an existing secret here.
   const handleSaveWhatsApp = () => {
-    updateOrganization.mutate({
+    const payload: Record<string, unknown> = {
       whatsapp_base_url: whatsappBaseUrl.trim() || null,
       whatsapp_instance: whatsappInstance.trim() || null,
-      whatsapp_api_key: whatsappApiKey.trim() || null,
-    });
+    };
+    if (whatsappApiKey.trim()) payload.whatsapp_api_key = whatsappApiKey.trim();
+    updateOrganization.mutate(payload as any);
   };
 
   const handleSaveBrevo = () => {
-    updateOrganization.mutate({
-      brevo_api_key: brevoApiKey.trim() || null,
-      brevo_sender_email: brevoSenderEmail.trim() || null,
-    });
+    const payload: Record<string, unknown> = { brevo_sender_email: brevoSenderEmail.trim() || null };
+    if (brevoApiKey.trim()) payload.brevo_api_key = brevoApiKey.trim();
+    updateOrganization.mutate(payload as any);
   };
 
   const handleSaveInvoiceXpress = () => {
-    updateOrganization.mutate({
-      invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
-      invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
-    });
+    const payload: Record<string, unknown> = { invoicexpress_account_name: invoiceXpressAccountName.trim() || null };
+    if (invoiceXpressApiKey.trim()) payload.invoicexpress_api_key = invoiceXpressApiKey.trim();
+    updateOrganization.mutate(payload as any);
   };
 
   const handleSaveKeyInvoice = () => {
-    updateOrganization.mutate({
-      keyinvoice_password: keyinvoiceApiKey.trim() || null,
-      keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
-    });
+    const payload: Record<string, unknown> = { keyinvoice_api_url: keyinvoiceApiUrl.trim() || null };
+    if (keyinvoiceApiKey.trim()) payload.keyinvoice_password = keyinvoiceApiKey.trim();
+    updateOrganization.mutate(payload as any);
   };
 
   const handleSaveFiscal = () => {

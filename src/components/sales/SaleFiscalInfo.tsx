@@ -155,12 +155,12 @@ export function isInvoiceXpressActive(organization: any): boolean {
   const enabled = organization?.integrations_enabled as Record<string, boolean> | null;
   
   // Check if InvoiceXpress is enabled and has credentials
-  if (enabled?.invoicexpress !== false && organization?.invoicexpress_account_name && organization?.invoicexpress_api_key) {
+  if (enabled?.invoicexpress !== false && organization?.invoicexpress_account_name && (organization as any)?.has_invoicexpress_key) {
     return true;
   }
-  
+
   // Check if KeyInvoice is enabled and has API key
-  if (enabled?.keyinvoice === true && organization?.keyinvoice_password) {
+  if (enabled?.keyinvoice === true && (organization as any)?.has_keyinvoice) {
     return true;
   }
   

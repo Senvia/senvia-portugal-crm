@@ -28,10 +28,16 @@ interface Organization {
   enabled_modules?: unknown;
   logo_url?: string | null;
   invoicexpress_account_name?: string | null;
-  invoicexpress_api_key?: string | null;
   whatsapp_instance?: string | null;
-  whatsapp_api_key?: string | null;
   whatsapp_base_url?: string | null;
+  // Integration secrets are no longer sent to the client. These flags indicate
+  // whether each is configured (see get_active_organization RPC).
+  has_brevo_key?: boolean;
+  has_invoicexpress_key?: boolean;
+  has_whatsapp_key?: boolean;
+  has_keyinvoice?: boolean;
+  has_chatwoot_token?: boolean;
+  has_meta_token?: boolean;
   integrations_enabled?: any;
   tax_config?: any;
   sales_settings?: any;
@@ -111,16 +117,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMfaStatus('verified');
   }, []);
 
-  // Load organization by ID
+  // Load organization by ID. Uses the get_active_organization RPC, which returns the
+  // org WITHOUT integration secrets (replaced by has_* flags) and checks membership.
   const loadOrganization = useCallback(async (orgId: string) => {
-    const { data: orgData } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('id', orgId)
-      .maybeSingle();
-    
+    const { data: orgData } = await (supabase as any)
+      .rpc('get_active_organization', { p_org_id: orgId });
+
     if (orgData) {
-      setOrganization(orgData);
+      setOrganization(orgData as Organization);
       localStorage.setItem(ACTIVE_ORG_KEY, orgId);
       setNeedsOrgSelection(false);
     }

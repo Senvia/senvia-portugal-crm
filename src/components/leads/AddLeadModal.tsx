@@ -137,13 +137,13 @@ export function AddLeadModal({ open, onOpenChange, initialData, onCreated }: Add
       integrationsEnabled?.whatsapp !== false &&
       Boolean(organization?.whatsapp_base_url?.trim()) &&
       Boolean(organization?.whatsapp_instance?.trim()) &&
-      Boolean(organization?.whatsapp_api_key?.trim())
+      Boolean(organization?.has_whatsapp_key)
     );
   }, [
     organization?.integrations_enabled,
     organization?.whatsapp_base_url,
     organization?.whatsapp_instance,
-    organization?.whatsapp_api_key,
+    organization?.has_whatsapp_key,
   ]);
 
   const form = useForm<AddLeadFormData>({

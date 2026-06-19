@@ -159,10 +159,12 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       case 'webhook': return webhooks.length > 0;
       case 'webhook_inbound': return true; // Always configured (auto-generated token)
       case 'inboxes': return connectedChannels > 0;
-      case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
-      case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
-      case 'keyinvoice': return !!keyinvoiceApiKey;
-      case 'meta': return !!(org as { meta_conversions_api_token?: string } | null)?.meta_conversions_api_token;
+      // Configured-state comes from the org's has_* flags (secrets are write-only now);
+      // brevoApiKey etc. props are only used as the input value when entering a new key.
+      case 'brevo': return !!((org as any)?.has_brevo_key && brevoSenderEmail);
+      case 'invoicexpress': return !!(invoiceXpressAccountName && (org as any)?.has_invoicexpress_key);
+      case 'keyinvoice': return !!(org as any)?.has_keyinvoice;
+      case 'meta': return !!(org as any)?.has_meta_token;
     }
   };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Eye, EyeOff, Loader2, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,12 @@ export function MetaConversionsForm() {
   const [token, setToken] = useState("");
   const [show, setShow] = useState(false);
 
-  // The column isn't in the generated Supabase types yet, so read it via a cast.
-  const storedToken =
-    (org as { meta_conversions_api_token?: string | null } | null | undefined)?.meta_conversions_api_token ?? "";
+  // The token is write-only for the client (never sent back by the API). We only
+  // know WHETHER it's configured, via the has_meta_token flag from the org RPC.
+  const hasToken = !!(org as { has_meta_token?: boolean } | null | undefined)?.has_meta_token;
 
-  // Seed the field once the org loads.
-  useEffect(() => {
-    setToken(storedToken);
-  }, [storedToken]);
-
-  const dirty = token !== storedToken;
+  // The field starts empty: the user types a new token only to set/replace it.
+  const dirty = token.trim().length > 0;
 
   if (isLoading) {
     return (
@@ -51,7 +47,7 @@ export function MetaConversionsForm() {
               type={show ? "text" : "password"}
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="EAAG..."
+              placeholder={hasToken ? "Token configurado — escreve para substituir" : "EAAG..."}
               autoComplete="off"
               className="pr-10"
             />

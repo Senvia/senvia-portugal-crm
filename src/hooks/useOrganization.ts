@@ -15,11 +15,10 @@ export function useOrganization() {
     queryFn: async () => {
       if (!organization?.id) return null;
 
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', organization.id)
-        .single();
+      // Uses the get_active_organization RPC: returns the org WITHOUT integration
+      // secrets (replaced by has_* flags). Direct column reads are revoked.
+      const { data, error } = await (supabase as any)
+        .rpc('get_active_organization', { p_org_id: organization.id });
 
       if (error) throw error;
       return data;
