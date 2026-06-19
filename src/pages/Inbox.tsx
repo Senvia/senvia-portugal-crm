@@ -2448,7 +2448,15 @@ export default function Inbox() {
             ? "fixed inset-x-0 top-0 z-40 flex"
             : cn("flex-1", selectedId ? "flex" : "hidden md:flex"),
         )}
-        style={mobileConvOpen ? { height: vv.height, transform: `translateY(${vv.offsetTop}px)` } : undefined}
+        // Only translate when iOS actually shifted the visual viewport (offsetTop != 0).
+        // A CSS transform on this overlay breaks touch scrolling of the messages list
+        // inside it on iOS Safari, and the body-lock keeps offsetTop at 0 anyway — so
+        // we skip the transform in the normal case and keep it only as a fallback.
+        style={
+          mobileConvOpen
+            ? { height: vv.height, ...(vv.offsetTop ? { transform: `translateY(${vv.offsetTop}px)` } : null) }
+            : undefined
+        }
         onDragOver={(e) => {
           if (selectedId) e.preventDefault();
         }}
@@ -2622,7 +2630,11 @@ export default function Inbox() {
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
+            <div
+              ref={scrollRef}
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               {draftConv ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
                   {pendingSelectPhone ? (
