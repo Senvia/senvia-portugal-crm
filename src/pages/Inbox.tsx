@@ -2928,26 +2928,24 @@ export default function Inbox() {
                         >
                           <Zap className="h-4 w-4 text-muted-foreground" /> Respostas rápidas
                         </button>
-                        {!isEmailSelected && (
-                          <button
-                            type="button"
-                            disabled={suggestReply.isPending || thread.length === 0}
-                            onClick={() => {
-                              setPlusOpen(false);
-                              suggestReply.mutate(
-                                { conversationId: selected.id, altIds },
-                                {
-                                  onSuccess: (suggestion) => setDraft(suggestion),
-                                  onError: (err) =>
-                                    toast({ title: "Falha na sugestão", description: (err as Error).message, variant: "destructive" }),
-                                },
-                              );
-                            }}
-                            className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> : <Sparkles className="h-4 w-4 text-violet-500" />} Sugerir resposta com IA
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          disabled={suggestReply.isPending || thread.length === 0}
+                          onClick={() => {
+                            setPlusOpen(false);
+                            suggestReply.mutate(
+                              { conversationId: selected.id, altIds },
+                              {
+                                onSuccess: (suggestion) => setDraft(suggestion),
+                                onError: (err) =>
+                                  toast({ title: "Falha na sugestão", description: (err as Error).message, variant: "destructive" }),
+                              },
+                            );
+                          }}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> : <Sparkles className="h-4 w-4 text-violet-500" />} Sugerir resposta com IA
+                        </button>
                         {selected.contact_phone && (
                           <button
                             type="button"
