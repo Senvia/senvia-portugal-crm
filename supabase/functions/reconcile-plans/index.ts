@@ -34,6 +34,20 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Cron guard: when CRON_SECRET is set, require it (x-cron-secret header or ?key=)
+  // so this global billing reconcile (mutates plan/billing_exempt) isn't public.
+  {
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (cronSecret) {
+      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+      if (provided !== cronSecret) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",

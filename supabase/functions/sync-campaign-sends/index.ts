@@ -34,6 +34,44 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // AuthN + AuthZ: called from the app (user JWT) and possibly server-to-server.
+    // Internal calls (bearer == service-role) are trusted; otherwise require a member
+    // of organizationId. Without this, a guessed (campaignId, organizationId) pair
+    // would drive that org's Brevo and rewrite its campaign stats.
+    {
+      const authHeader = req.headers.get("Authorization") || "";
+      const bearer = authHeader.replace(/^Bearer\s+/i, "");
+      const isInternal = !!bearer && bearer === supabaseServiceKey;
+      if (!isInternal) {
+        if (!authHeader) {
+          return new Response(JSON.stringify({ error: "Não autorizado" }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const authClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user }, error: authErr } = await authClient.auth.getUser();
+        if (authErr || !user) {
+          return new Response(JSON.stringify({ error: "Utilizador não autenticado" }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const { data: membership } = await supabase
+          .from("organization_members")
+          .select("is_active")
+          .eq("organization_id", organizationId)
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (!membership) {
+          return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     // Get campaign details
     const { data: campaign, error: campaignError } = await supabase
       .from("email_campaigns")

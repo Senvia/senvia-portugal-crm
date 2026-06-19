@@ -11,6 +11,20 @@ serve(async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Cron guard: when CRON_SECRET is set, require it (x-cron-secret header or ?key=)
+  // so recurring-expense generation across all orgs can't be triggered publicly.
+  {
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (cronSecret) {
+      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+      if (provided !== cronSecret) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
