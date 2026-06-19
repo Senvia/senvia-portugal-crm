@@ -2448,11 +2448,11 @@ export default function Inbox() {
             ? "fixed inset-x-0 top-0 z-40 flex"
             : cn("flex-1", selectedId ? "flex" : "hidden md:flex"),
         )}
-        // Size to the visible viewport (above the keyboard). No CSS transform here:
-        // a transform on this overlay breaks touch scrolling of the messages list on
-        // iOS Safari and makes the view shake while dragging. The body is locked, so
-        // the viewport top stays aligned and the overlay needs no offset compensation.
-        style={mobileConvOpen ? { height: vv.height } : undefined}
+        // Glue the overlay to the visible viewport (above the keyboard). We offset
+        // with `top` — NOT a CSS transform: a transform here breaks touch scrolling
+        // of the messages list on iOS Safari and makes the view shake. `top` keeps
+        // the composer pinned above the keyboard without moving with the content.
+        style={mobileConvOpen ? { height: vv.height, top: vv.offsetTop } : undefined}
         onDragOver={(e) => {
           if (selectedId) e.preventDefault();
         }}
