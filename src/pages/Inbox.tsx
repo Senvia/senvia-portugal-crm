@@ -1351,6 +1351,10 @@ export default function Inbox() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Keep the composer focused so the keyboard stays up after sending (WhatsApp-like)
+    // and the overlay keeps tracking the visual viewport instead of snapping to full
+    // height. Synchronous focus inside the gesture handler preserves the keyboard on iOS.
+    if (isMobile) composerRef.current?.focus();
     const content = draft.trim();
 
     // Draft conversation: create it by sending the first message (start_conversation),
@@ -2452,7 +2456,18 @@ export default function Inbox() {
         // with `top` — NOT a CSS transform: a transform here breaks touch scrolling
         // of the messages list on iOS Safari and makes the view shake. `top` keeps
         // the composer pinned above the keyboard without moving with the content.
-        style={mobileConvOpen ? { height: vv.height, top: vv.offsetTop } : undefined}
+        //
+        // Only trust visualViewport while the composer is focused (keyboard up). When
+        // it's not, fall back to the full dynamic viewport: iOS sometimes doesn't
+        // restore visualViewport.height after the keyboard closes, which would leave
+        // a blank strip under the composer.
+        style={
+          mobileConvOpen
+            ? composerFocused
+              ? { height: vv.height, top: vv.offsetTop }
+              : { height: "100dvh", top: 0 }
+            : undefined
+        }
         onDragOver={(e) => {
           if (selectedId) e.preventDefault();
         }}
