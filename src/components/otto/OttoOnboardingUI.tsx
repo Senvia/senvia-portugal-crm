@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { OttoSpotlight } from "./OttoSpotlight";
 import { OttoModalHost } from "./OttoModalHost";
 import { useOttoOnboarding } from "@/hooks/useOttoOnboarding";
@@ -20,16 +21,20 @@ export function OttoOnboardingUI() {
   const messageCount = useOttoStore((s) => s.messages.length);
   const { organization } = useAuth();
   const orgId = organization?.id;
+  const { pathname } = useLocation();
   const openedRef = useRef(false);
 
   useEffect(() => {
     if (loading || !showBadge || !orgId) return;
     if (openedRef.current) return;     // only once per page load
     if (messageCount > 0) return;      // don't intrude on an existing conversation
+    // On the dashboard the big OttoDashboardSetup card already guides setup, so
+    // don't also pop the chat open over it.
+    if (pathname.startsWith("/dashboard")) return;
     openedRef.current = true;
     const t = window.setTimeout(() => setOpen(true), 800); // let the page settle after the wizard
     return () => window.clearTimeout(t);
-  }, [loading, showBadge, orgId, messageCount, setOpen]);
+  }, [loading, showBadge, orgId, messageCount, setOpen, pathname]);
 
   return (
     <>

@@ -20,6 +20,7 @@ import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
 import { PaidTrafficCard } from "@/components/dashboard/PaidTrafficCard";
+import { OttoDashboardSetup } from "@/components/otto/OttoDashboardSetup";
 
 export default function Dashboard() {
   useRealtimeSubscription([
@@ -64,6 +65,8 @@ export default function Dashboard() {
           </>
         }
       />
+
+      <OttoDashboardSetup />
 
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
