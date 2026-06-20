@@ -536,3 +536,31 @@
     color: #dc2626 !important;
   }
 }
+
+/* ─── Otto spotlight / tour effects ─────────────────────────────────────────── */
+/* The "hole": a transparent box whose huge box-shadow dims everything around it.
+   pointer-events stay none (set on the container) so the target stays clickable. */
+.otto-spotlight-hole {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+
+/* Pulsing attention ring around the target. */
+.otto-pulse {
+  pointer-events: none;
+  animation: otto-pulse-glow 1.6s ease-in-out infinite;
+}
+@keyframes otto-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.6), 0 0 6px 2px rgba(56, 189, 248, 0.35); }
+  50%      { box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.9), 0 0 20px 6px rgba(56, 189, 248, 0.75); }
+}
+
+/* Softer continuous glow (used for input fields). */
+.otto-glow {
+  pointer-events: none;
+  animation: otto-soft-glow 2s ease-in-out infinite;
+}
+@keyframes otto-soft-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(245, 200, 0, 0.4); }
+  50%      { box-shadow: 0 0 18px 3px rgba(245, 200, 0, 0.85); }
+}

@@ -84,6 +84,21 @@ export default function Settings() {
     }
   }, []);
 
+  // Generic deep-link used by Otto's guided tours to land directly on a settings
+  // sub-section (e.g. ?og=sales&os=sales-pipeline). Its own effect on
+  // [searchParams] so it also fires when navigating while already on /settings.
+  useEffect(() => {
+    const og = searchParams.get('og');
+    const os = searchParams.get('os');
+    if (!og) return;
+    setActiveGroup(og as SettingsSection);
+    if (os) setActiveSub(os as SettingsSubSection);
+    const next = new URLSearchParams(searchParams);
+    next.delete('og');
+    next.delete('os');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
 
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
 

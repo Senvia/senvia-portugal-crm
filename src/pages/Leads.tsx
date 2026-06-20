@@ -684,7 +684,7 @@ export default function Leads() {
                     </Button>
                   </div>
                   
-                  <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="shrink-0 h-9 lg:h-10">
+                  <Button variant="outline" data-otto-target="leads-import-btn" onClick={() => setIsImportModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                     <Upload className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Importar</span>
                   </Button>

@@ -1048,6 +1048,7 @@ function InboxesManager() {
           </p>
         </div>
         <Button
+          data-otto-target="integrations-whatsapp-connect"
           onClick={() => { if (blockIfAtLimit()) return; setNewOpen(true); }}
           size="sm"
           className="shrink-0 gap-1.5"
@@ -1329,7 +1330,7 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
       <div className="space-y-2">
         <Label htmlFor="brevo-api-key">API Key do Brevo</Label>
         <div className="relative">
-          <Input id="brevo-api-key" type={showBrevoApiKey ? 'text' : 'password'} placeholder="xkeysib-..." value={brevoApiKey} onChange={(e) => setBrevoApiKey(e.target.value)} />
+          <Input id="brevo-api-key" data-otto-target="settings-brevo-api" type={showBrevoApiKey ? 'text' : 'password'} placeholder="xkeysib-..." value={brevoApiKey} onChange={(e) => setBrevoApiKey(e.target.value)} />
           <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowBrevoApiKey(!showBrevoApiKey)}>
             {showBrevoApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>
@@ -1390,7 +1391,7 @@ function InvoiceXpressForm({ invoiceXpressAccountName, setInvoiceXpressAccountNa
       <div className="space-y-2">
         <Label htmlFor="ix-api-key">API Key</Label>
         <div className="relative">
-          <Input id="ix-api-key" type={showInvoiceXpressApiKey ? 'text' : 'password'} placeholder="Chave de autenticação" value={invoiceXpressApiKey} onChange={(e) => setInvoiceXpressApiKey(e.target.value)} />
+          <Input id="ix-api-key" data-otto-target="settings-invoicexpress-api" type={showInvoiceXpressApiKey ? 'text' : 'password'} placeholder="Chave de autenticação" value={invoiceXpressApiKey} onChange={(e) => setInvoiceXpressApiKey(e.target.value)} />
           <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowInvoiceXpressApiKey(!showInvoiceXpressApiKey)}>
             {showInvoiceXpressApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>

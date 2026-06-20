@@ -455,7 +455,7 @@ export function PipelineEditor() {
                 Arrasta para reordenar ou edita cada etapa
               </CardDescription>
             </div>
-            <Button onClick={handleAddStage} size="sm">
+            <Button data-otto-target="settings-pipeline-add" onClick={handleAddStage} size="sm">
               <Plus className="h-4 w-4 mr-1" />
               Adicionar
             </Button>

@@ -8,6 +8,7 @@ import { PaymentOverdueBanner } from "./PaymentOverdueBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { OttoFAB } from "@/components/otto/OttoFAB";
+import { OttoOnboardingUI } from "@/components/otto/OttoOnboardingUI";
 import { useSidebarStore } from "@/stores/useSidebarStore";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
         </main>
         {!immersive && !hideNav && <MobileBottomNav />}
         {!immersive && <OttoFAB />}
+        <OttoOnboardingUI />
       </div>
     );
   }
@@ -89,6 +91,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
         </div>
       </main>
       <OttoFAB />
+      <OttoOnboardingUI />
     </div>
   );
 }

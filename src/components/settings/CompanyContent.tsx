@@ -73,6 +73,7 @@ export const CompanyContent = ({
                 <div className="flex gap-2">
                   <Input
                     id="org-name"
+                    data-otto-target="settings-company-name"
                     value={orgName}
                     onChange={(e) => setOrgName(e.target.value)}
                     placeholder="Nome da organização"

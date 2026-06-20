@@ -390,7 +390,7 @@ export function TeamTab() {
           </div>
           <Dialog open={isAddOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
             <DialogTrigger asChild>
-              <Button onClick={() => setIsAddOpen(true)}>
+              <Button data-otto-target="settings-invite-member" onClick={() => setIsAddOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Adicionar Acesso
               </Button>

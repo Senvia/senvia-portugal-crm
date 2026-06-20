@@ -217,6 +217,36 @@ export const onboardingTools: Tool[] = [
     },
   },
   {
+    name: "configure_whatsapp",
+    description: "Iniciar a ligação do WhatsApp. Não liga sozinho (o utilizador tem de ler o QR no telemóvel); abre o guia visual que o leva à caixa e mostra onde carregar.",
+    parameters: { type: "object", properties: {}, required: [] },
+    adminOnly: true,
+    execute: async (_args, _ctx) => ({
+      success: true,
+      _instruction: "Diz UMA frase curta a explicar que vais abrir a ligação do WhatsApp, e TERMINA a resposta com o token [modal:whatsapp]. O modal mostra o QR e as instruções; não descrevas os passos por texto.",
+    }),
+  },
+  {
+    name: "invite_member",
+    description: "Ajudar a convidar um membro da equipa. Abre o guia visual que leva ao botão de adicionar acesso em Definições > Equipa.",
+    parameters: { type: "object", properties: {}, required: [] },
+    adminOnly: true,
+    execute: async (_args, _ctx) => ({
+      success: true,
+      _instruction: "Diz UMA frase curta e TERMINA a resposta com o token [tour:invite_member]. O guia visual leva o utilizador ao botão de adicionar membro.",
+    }),
+  },
+  {
+    name: "import_leads",
+    description: "Ajudar a importar leads de um ficheiro CSV/Excel. Abre o guia visual que leva ao botão Importar na página de Leads.",
+    parameters: { type: "object", properties: {}, required: [] },
+    adminOnly: true,
+    execute: async (_args, _ctx) => ({
+      success: true,
+      _instruction: "Diz UMA frase curta e TERMINA a resposta com o token [tour:import_leads]. O guia visual leva o utilizador ao botão Importar.",
+    }),
+  },
+  {
     name: "complete_onboarding",
     description: "Marcar a configuração inicial (onboarding) como concluída. Usa quando os passos essenciais estiverem feitos e o utilizador confirmar que quer terminar.",
     parameters: { type: "object", properties: {}, required: [] },

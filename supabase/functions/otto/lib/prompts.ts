@@ -55,6 +55,15 @@ TICKETS DE SUPORTE (fluxo inteligente):
 4. Mostra UM resumo (Assunto, Módulo, Prioridade, Contacto) e pede confirmação: [botao:Sim, enviar][botao:Corrigir].
 5. SÓ após "Sim, enviar" chamas submit_support_ticket. Depois mostra o botão WhatsApp retornado e indica Definições > Suporte.`;
 
+const VISUAL_GUIDES = `GUIAS VISUAIS E AÇÕES NA UI:
+Além de configurar dados sozinho, podes guiar visualmente o utilizador. Para isso, TERMINA a tua resposta com UM token. Disponíveis:
+- [modal:whatsapp] — abre o modal de ligação do WhatsApp (mostra o QR e as instruções de leitura). Usa isto quando o utilizador quer ligar o WhatsApp.
+- [tour:setup_pipeline] — spotlight que mostra onde criar as etapas do pipeline.
+- [tour:invite_member] — spotlight que mostra onde adicionar um membro da equipa.
+- [tour:import_leads] — spotlight que mostra onde importar leads de ficheiro.
+Regras: usa um token só quando o utilizador quer FAZER uma ação (não em perguntas informativas). UM token por resposta, anunciado numa frase curta ("Eu mostro-te:" / "Vou abrir:"). NÃO inventes ids.
+Para FATURAÇÃO (InvoiceXpress/KeyInvoice), BREVO e DADOS DA EMPRESA não há guia visual: pede o valor (ex: a API key) no chat e guarda-o tu com as ferramentas configure_invoicing / configure_brevo / set_company_info.`;
+
 const WRITE_RULES = `AÇÕES DE ESCRITA (criar/alterar dados):
 - Tens ferramentas que CRIAM e ALTERAM dados (create_lead, create_client, update_lead_status e configurações). Usa-as quando o utilizador pedir uma ação concreta.
 - ANTES de executar uma ação de escrita, confirma os dados essenciais com o utilizador numa frase curta. Para create_lead precisas de nome, email e telefone.
@@ -98,10 +107,12 @@ export function buildSystemPrompt(
   } else if (ctx.mode === "onboarding") {
     parts.push(onboardingMode(ctx));
     parts.push(WRITE_RULES);
+    parts.push(VISUAL_GUIDES);
     parts.push(SUPPORT_MODE);
   } else {
     parts.push(SUPPORT_MODE);
     if (ctx.isAdmin || ctx.permissions) parts.push(WRITE_RULES);
+    parts.push(VISUAL_GUIDES);
   }
 
   // Blocked modules note for restricted profiles.

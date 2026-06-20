@@ -1,9 +1,29 @@
 import ReactMarkdown from "react-markdown";
-import { User, ExternalLink, MessageCircle } from "lucide-react";
+import { User, ExternalLink, MessageCircle, Sparkles } from "lucide-react";
 const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import type { OttoMessage as OttoMessageType } from "@/hooks/useOttoChat";
+import { useTourStore } from "@/stores/useTourStore";
+import { useModalStore, type OttoManagedModal } from "@/stores/useModalStore";
+import { useOttoStore } from "@/stores/useOttoStore";
+import { getTour } from "./tours";
+
+// [tour:id] launches a deterministic guided tour. [modal:name] opens a managed modal.
+function parseTours(content: string) {
+  const re = /\[tour:(.+?)\]/g;
+  const ids: string[] = [];
+  let m;
+  while ((m = re.exec(content)) !== null) ids.push(m[1].trim());
+  return { cleanContent: content.replace(re, "").trim(), tourIds: ids };
+}
+function parseModals(content: string) {
+  const re = /\[modal:(.+?)\]/g;
+  const ids: string[] = [];
+  let m;
+  while ((m = re.exec(content)) !== null) ids.push(m[1].trim());
+  return { cleanContent: content.replace(re, "").trim(), modalIds: ids };
+}
 
 interface OttoMessageProps {
   message: OttoMessageType;
@@ -48,17 +68,32 @@ function parseWhatsAppLinks(content: string) {
 export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isStreaming }: OttoMessageProps) {
   const isUser = message.role === "user";
   const navigate = useNavigate();
-  
+  const startTour = useTourStore((s) => s.start);
+  const openModal = useModalStore((s) => s.openModal);
+  const setOttoOpen = useOttoStore((s) => s.setOpen);
+
   const parsed = isUser
-    ? { cleanContent: message.content, buttons: [], links: [], waLinks: [] }
+    ? { cleanContent: message.content, buttons: [], links: [], waLinks: [], tourIds: [], modalIds: [] }
     : (() => {
         const { cleanContent: c1, buttons } = parseButtons(message.content);
         const { cleanContent: c2, links } = parseLinks(c1);
         const { cleanContent: c3, waLinks } = parseWhatsAppLinks(c2);
-        return { cleanContent: c3, buttons, links, waLinks };
+        const { cleanContent: c4, tourIds } = parseTours(c3);
+        const { cleanContent: c5, modalIds } = parseModals(c4);
+        return { cleanContent: c5, buttons, links, waLinks, tourIds, modalIds };
       })();
-  
-  const { cleanContent, buttons, links, waLinks } = parsed;
+
+  const { cleanContent, buttons, links, waLinks, tourIds, modalIds } = parsed;
+
+  // Launch a guided tour: close the chat so the spotlight over the real UI is visible.
+  const launchTour = (id: string) => {
+    setOttoOpen(false);
+    startTour(id);
+  };
+  const launchModal = (id: string) => {
+    setOttoOpen(false);
+    openModal(id as Exclude<OttoManagedModal, null>);
+  };
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -129,6 +164,36 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
             ))}
           </div>
         )}
+
+        {/* Guided tours + managed modals */}
+        {!isStreaming && tourIds.map((id, i) => {
+          const tour = getTour(id);
+          if (!tour) return null;
+          return (
+            <Button
+              key={`tour-${i}`}
+              variant="default"
+              size="sm"
+              className="h-auto w-full justify-start gap-1.5 rounded-full py-1.5 px-3 text-xs"
+              onClick={() => launchTour(id)}
+            >
+              <Sparkles className="h-3 w-3 flex-shrink-0" />
+              Mostra-me: {tour.title}
+            </Button>
+          );
+        })}
+        {!isStreaming && modalIds.map((id, i) => (
+          <Button
+            key={`modal-${i}`}
+            variant="default"
+            size="sm"
+            className="h-auto w-full justify-start gap-1.5 rounded-full py-1.5 px-3 text-xs"
+            onClick={() => launchModal(id)}
+          >
+            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+            Abrir
+          </Button>
+        ))}
 
         {/* WhatsApp links */}
         {waLinks.length > 0 && !isStreaming && (

@@ -21,11 +21,12 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   moduleKey?: keyof EnabledModules;
+  ottoTarget?: string;
 }
 
 const allNavItems: NavItem[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
-  { to: "/leads", icon: Users, label: "Leads" },
+  { to: "/leads", icon: Users, label: "Leads", ottoTarget: "sidebar-leads" },
   { to: "/inbox", icon: MessageSquare, label: "Caixa de Entrada", moduleKey: 'inbox' },
   { to: "/clients", icon: UserCheck, label: "Clientes", moduleKey: 'clients' },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
@@ -35,7 +36,7 @@ const allNavItems: NavItem[] = [
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
   { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
-  { to: "/settings", icon: Settings, label: "Definições" },
+  { to: "/settings", icon: Settings, label: "Definições", ottoTarget: "sidebar-settings" },
 ];
 
 // Hover tooltip shown only when the sidebar is collapsed (parent must be `group`).
@@ -147,6 +148,7 @@ export function AppSidebar({
                 <NavLink
                   key={item.to}
                   to={locked ? "#" : item.to}
+                  data-otto-target={item.ottoTarget}
                   onClick={(e) => handleLockedClick(e, item)}
                   title={collapsed ? item.label : undefined}
                   className={cn(

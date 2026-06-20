@@ -89,6 +89,46 @@ secret novo é obrigatório. Opcionais para trocar de modelo:
   `useOttoOnboarding` usa um cast pontual. Regenera os tipos depois da migração
   para remover o cast.
 
+## Camada visual (Fase 4 do spec) — spotlight + avatar + tours
+
+Otto agora pode guiar visualmente, não só por texto. Peças:
+- `OttoAvatar` (mascote animado por expressão, via framer-motion), `OttoSpotlight`
+  (overlay com recorte + seta + pulse), `OttoStepCard`, `OttoModal` (primitivo para
+  modais de config), montados por `OttoOnboardingUI` no `AppLayout`.
+- Stores: `useTourStore` (tour ativo + passo) e `useModalStore` (abrir modais reais).
+- Tours determinísticos em `src/components/otto/tours.ts`. O Otto NÃO inventa passos:
+  só dispara um tour por id via um token no texto.
+
+### Como o Otto aciona
+- `[modal:whatsapp]` → abre o `ConnectWhatsAppModal` real (QR + instruções). É o
+  fluxo do teu exemplo "Otto ajuda a ligar o WhatsApp".
+- `[tour:setup_pipeline]` → spotlight no botão Adicionar do pipeline.
+- `[tour:invite_member]` → spotlight no botão Adicionar Acesso da equipa.
+- `[tour:import_leads]` → spotlight no botão Importar dos Leads.
+No chat aparece um botão "Mostra-me: ..." / "Abrir"; ao clicar, o chat fecha e o
+spotlight aparece sobre a UI real.
+
+### Como testar
+1. Abre o Otto e diz "ajuda-me a ligar o WhatsApp" → deve aparecer o botão que abre
+   o modal do QR.
+2. "como configuro o pipeline?" / "quero importar leads" / "convidar a equipa" →
+   botão "Mostra-me" → navega e ilumina o sítio certo com o avatar a apontar.
+3. Faturação/Brevo/dados da empresa: NÃO há spotlight (de propósito). O Otto pede a
+   API key no chat e guarda-a sozinho (tools configure_invoicing/brevo/set_company_info).
+
+### Decisões e limites (precisos)
+- WhatsApp abre o modal real (cria uma caixa nova ao ligar) — certo para onboarding;
+  para uma org que já tenha WhatsApp, criaria uma caixa adicional.
+- O deep-link de tours para sub-secções de Definições (`?og=&os=`) funciona ao
+  navegar de fora; se já estiveres exatamente nessa página, o spotlight cai no
+  cartão centrado (degradação suave, ainda narra).
+- `data-otto-target` adicionados em: sidebar (leads/settings), Nova caixa (WhatsApp),
+  inputs de API (IX/Brevo), nome da empresa, Adicionar etapa, Adicionar Acesso,
+  Importar leads.
+- Estes tokens são interpretados no frontend, por isso **a camada visual funciona
+  mesmo sem o deploy da função** `otto` (só o cérebro do Otto é que precisa do deploy
+  para escolher quando os emitir).
+
 ## Rollback rápido
 
 Se algo correr mal, reverte só uma linha em `src/hooks/useOttoChat.ts`:
