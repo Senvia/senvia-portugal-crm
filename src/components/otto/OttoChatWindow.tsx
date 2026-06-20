@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOttoChat } from "@/hooks/useOttoChat";
 import { OttoMessageComponent } from "./OttoMessage";
 import { OttoQuickActions } from "./OttoQuickActions";
+import { OttoOnboardingProgress } from "./OttoOnboardingProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useOttoStore } from "@/stores/useOttoStore";
 import { motion } from "framer-motion";
@@ -133,14 +134,17 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       <ScrollArea ref={scrollAreaRef} className="flex-1">
         <div className="p-4 space-y-4">
           {messages.length === 0 && (
-            <div className="flex gap-2.5">
-              <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden">
-                <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
+            <>
+              <OttoOnboardingProgress />
+              <div className="flex gap-2.5">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden">
+                  <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
+                </div>
+                <div className="max-w-[85%]">
+                  <OttoQuickActions onSelect={handleQuickAction} />
+                </div>
               </div>
-              <div className="max-w-[85%]">
-                <OttoQuickActions onSelect={handleQuickAction} />
-              </div>
-            </div>
+            </>
           )}
           {messages.map((msg, i) => (
             <OttoMessageComponent

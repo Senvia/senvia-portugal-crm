@@ -6,7 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type { OttoMessage } from "@/stores/useOttoStore";
 
-const OTTO_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/otto-chat`;
+// Otto 2.0 backend. The legacy `otto-chat` function is kept deployed as a
+// fallback; this branch points at the new modular `otto` function.
+const OTTO_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/otto`;
 
 export function useOttoChat() {
   const { messages, isLoading, pendingAttachments, addMessage, updateLastMessage, clearMessages, setLoading, clearAttachments } = useOttoStore();
