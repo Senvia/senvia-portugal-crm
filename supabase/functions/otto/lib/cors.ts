@@ -15,7 +15,7 @@ export function jsonError(message: string, status = 500): Response {
 // Build a Server-Sent-Events stream that emits `text` progressively in small
 // chunks (so the client renders it word-by-word) followed by [DONE]. The wire
 // format matches the OpenAI/Gemini delta shape the frontend already parses.
-export function streamText(text: string): Response {
+export function streamText(text: string, extraHeaders?: Record<string, string>): Response {
   const encoder = new TextEncoder();
   // Split on word boundaries but keep the separators so spacing is preserved.
   const chunks = text.match(/\S+\s*/g) ?? [text];
@@ -30,6 +30,6 @@ export function streamText(text: string): Response {
     },
   });
   return new Response(stream, {
-    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    headers: { ...corsHeaders, "Content-Type": "text/event-stream", ...(extraHeaders ?? {}) },
   });
 }

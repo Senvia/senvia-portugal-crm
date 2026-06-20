@@ -11,7 +11,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders, jsonError, streamText } from "./lib/cors.ts";
 import { loadContext } from "./lib/context.ts";
 import { buildSystemPrompt } from "./lib/prompts.ts";
-import { getAIConfig, chatCompletion } from "./lib/ai.ts";
+import { getAIConfigs, chatCompletionResilient } from "./lib/ai.ts";
 import { ALL_TOOLS, getToolsForModel, canUseTool, runTool } from "./lib/tools/registry.ts";
 
 const MAX_ITERATIONS = 5;
@@ -29,9 +29,9 @@ serve(async (req) => {
   try {
     const { messages, organization_id, attachment_paths } = await req.json();
 
-    let aiConfig;
+    let aiConfigs;
     try {
-      aiConfig = getAIConfig();
+      aiConfigs = getAIConfigs();
     } catch (e) {
       return jsonError((e as Error).message, 500);
     }
@@ -64,12 +64,13 @@ serve(async (req) => {
 
     // ── Tool-calling loop ──
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const resp = await chatCompletion(aiConfig, {
+      const { resp, provider, model } = await chatCompletionResilient(aiConfigs, {
         messages: conversationMessages,
         tools: toolsForModel,
         stream: false,
         temperature: 0,
       });
+      const providerHeaders = { "x-otto-provider": provider, "x-otto-model": model };
 
       if (!resp.ok) {
         const status = resp.status;
@@ -110,7 +111,7 @@ serve(async (req) => {
       // (no second model call, so multi-step flows like tickets stay consistent);
       // streamText just chunks it so the client renders word-by-word.
       if (assistantMessage.content) {
-        return streamText(assistantMessage.content);
+        return streamText(assistantMessage.content, providerHeaders);
       }
       return jsonError("Resposta vazia do Otto.", 500);
     }
