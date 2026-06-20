@@ -4,7 +4,6 @@ import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, S
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";
-import { useOttoOnboarding } from "@/hooks/useOttoOnboarding";
 import { useSidebarStore } from "@/stores/useSidebarStore";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -68,7 +67,6 @@ export function AppSidebar({
   const navigate = useNavigate();
   const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
   const { setOpen: setOttoOpen } = useOttoStore();
-  const { showBadge: ottoOnboardingPending } = useOttoOnboarding();
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggleCollapsed = useSidebarStore((s) => s.toggle);
   const { modules } = useModules();
@@ -184,16 +182,8 @@ export function AppSidebar({
                 collapsed && "justify-center",
               )}
             >
-              <span className="relative shrink-0">
-                <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 rounded-full" />
-                {ottoOnboardingPending && (
-                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-sidebar" title="Configuração pendente" />
-                )}
-              </span>
+              <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 shrink-0 rounded-full" />
               {!collapsed && <span className="flex-1 text-left">Suporte / Otto</span>}
-              {!collapsed && ottoOnboardingPending && (
-                <span className="ml-auto rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">Configurar</span>
-              )}
               {collapsed && <CollapsedTooltip label="Suporte / Otto" />}
             </button>
 
