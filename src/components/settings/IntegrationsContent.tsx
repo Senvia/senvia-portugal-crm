@@ -17,6 +17,7 @@ import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeW
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
+import { OrgPixelsForm } from "./OrgPixelsForm";
 import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
@@ -262,7 +263,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}
-          {active === 'meta' && <MetaConversionsForm />}
+          {active === 'meta' && <><MetaConversionsForm /><OrgPixelsForm /></>}
         </div>
       )}
     </div>
