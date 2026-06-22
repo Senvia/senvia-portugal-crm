@@ -7,6 +7,7 @@ import { useOttoStore } from "@/stores/useOttoStore";
 import { useSidebarStore } from "@/stores/useSidebarStore";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useActivationProgress } from "@/hooks/useActivationProgress";
 import { useSubscription } from "@/hooks/useSubscription";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
@@ -72,6 +73,8 @@ export function AppSidebar({
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
+  const activation = useActivationProgress();
+  const showSetupBadge = activation.isAdmin && !activation.loading && activation.done < activation.total;
   const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
     organizationId: organization?.id,
     memberships: organizations,
@@ -165,6 +168,15 @@ export function AppSidebar({
                     <span className={cn(collapsed && "absolute right-0.5 top-0.5 scale-90")}>
                       <InboxUnreadBadge />
                     </span>
+                  )}
+                  {item.to === "/settings" && showSetupBadge && (
+                    collapsed ? (
+                      <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" title={`Configurar (${activation.done}/${activation.total})`} />
+                    ) : (
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary" title="Passos de configuração concluídos">
+                        {activation.done}/{activation.total}
+                      </span>
+                    )
                   )}
                   {!collapsed && locked && <Lock className="h-3.5 w-3.5 text-sidebar-muted/60" />}
                   {collapsed && <CollapsedTooltip label={item.label} />}

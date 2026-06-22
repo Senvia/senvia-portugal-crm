@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { OttoFAB } from "@/components/otto/OttoFAB";
 import { OttoOnboardingUI } from "@/components/otto/OttoOnboardingUI";
+import { ModuleOnboardingPeek } from "@/components/otto/ModuleOnboardingPeek";
 import { useSidebarStore } from "@/stores/useSidebarStore";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
         {!immersive && !hideNav && <MobileBottomNav />}
         {!immersive && <OttoFAB />}
         <OttoOnboardingUI />
+        {!immersive && <ModuleOnboardingPeek />}
       </div>
     );
   }
@@ -92,6 +94,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
       </main>
       <OttoFAB />
       <OttoOnboardingUI />
+      <ModuleOnboardingPeek />
     </div>
   );
 }
