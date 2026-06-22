@@ -20,17 +20,20 @@ function slugify(s: string): string {
 export const onboardingTools: Tool[] = [
   {
     name: "get_onboarding_status",
-    description: "Verificar em que ponto da configuração inicial está a organização (dados da empresa, faturação, integrações, pipeline, equipa, leads). Usa para saber o próximo passo a sugerir.",
+    description: "Verificar em que ponto da configuração e ativação está a organização (dados da empresa, pipeline, importar leads, primeiro cliente, primeira venda, primeira proposta, faturação, integrações, equipa). Usa para saber o próximo passo a sugerir.",
     parameters: { type: "object", properties: {}, required: [] },
     execute: async (_args, ctx) => {
       const c = ctx.onboarding.checks;
       const steps = [
         { key: "COMPANY_INFO", done: c.company_info },
+        { key: "PIPELINE", done: c.pipeline },
+        { key: "LEADS_IMPORT", done: c.leads },
+        { key: "FIRST_CLIENT", done: c.clients },
+        { key: "FIRST_SALE", done: c.sales },
+        { key: "FIRST_PROPOSAL", done: c.proposals },
         { key: "INVOICING", done: c.invoicing },
         { key: "INTEGRATIONS", done: c.integrations },
-        { key: "PIPELINE", done: c.pipeline },
         { key: "TEAM", done: c.team },
-        { key: "LEADS_IMPORT", done: c.leads },
       ];
       const doneCount = steps.filter((s) => s.done).length;
       const next = steps.find((s) => !s.done);

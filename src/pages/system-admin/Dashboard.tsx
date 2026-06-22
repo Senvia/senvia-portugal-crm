@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Users, Building, Sparkles, ShieldCheck } from "lucide-react";
+import { Users, Building, Sparkles, ShieldCheck, Activity } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -154,6 +154,12 @@ export default function SystemAdminDashboard() {
             <Link to="/system-admin/announcements">
               <Sparkles className="h-4 w-4 mr-2" />
               Gerir Novidades
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/system-admin/activation">
+              <Activity className="h-4 w-4 mr-2" />
+              Ativação de Trials
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>

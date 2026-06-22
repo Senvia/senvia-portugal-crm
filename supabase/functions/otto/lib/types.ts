@@ -20,14 +20,19 @@ export interface OnboardingState {
   stages_completed: string[];
   dismissed: boolean;
   completed: boolean;
-  // Real-world checks, independent of the stored row.
+  // Real-world checks, independent of the stored row. Ordered as the value path:
+  // configure the basics, then create the first client/sale/proposal (activation),
+  // then the heavier optional config.
   checks: {
     company_info: boolean;
+    pipeline: boolean;
+    leads: boolean;
+    clients: boolean;
+    sales: boolean;
+    proposals: boolean;
     invoicing: boolean;
     integrations: boolean;
-    pipeline: boolean;
     team: boolean;
-    leads: boolean;
   };
 }
 

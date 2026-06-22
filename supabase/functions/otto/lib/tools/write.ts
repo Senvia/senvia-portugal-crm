@@ -143,4 +143,105 @@ export const writeTools: Tool[] = [
       };
     },
   },
+  {
+    name: "create_sale",
+    description: "Registar uma nova venda no CRM. É o momento-chave da ativação (o utilizador vê dinheiro a entrar). Usa APENAS depois de confirmares o valor com o utilizador. O valor total é obrigatório.",
+    parameters: {
+      type: "object",
+      properties: {
+        total_value: { type: "number", description: "Valor total da venda em euros (obrigatório)" },
+        client_id: { type: "string", description: "UUID do cliente associado (opcional, obtém-no com search_clients)" },
+        lead_id: { type: "string", description: "UUID da lead de origem (opcional, obtém-no com search_leads)" },
+        notes: { type: "string", description: "Notas sobre a venda (opcional)" },
+      },
+      required: ["total_value"],
+    },
+    permission: { module: "sales", subarea: "sales", action: "create" },
+    isWrite: true,
+    execute: async (args, ctx) => {
+      if (typeof args.total_value !== "number" || !(args.total_value > 0)) {
+        return { error: "Valor em falta", _instruction: "Pede o valor total da venda (um número maior que zero) antes de a registar. NÃO inventes valores." };
+      }
+      // If a client_id was given, confirm it belongs to this org (avoid cross-tenant linkage).
+      if (args.client_id) {
+        const { data: client } = await ctx.supabaseAdmin
+          .from("crm_clients")
+          .select("id")
+          .eq("organization_id", ctx.orgId)
+          .eq("id", args.client_id)
+          .maybeSingle();
+        if (!client) return { error: "Cliente não encontrado", _instruction: "O cliente indicado não existe nesta organização. Usa search_clients para confirmar. NÃO inventes." };
+      }
+      const { data, error } = await ctx.supabaseAdmin
+        .from("sales")
+        .insert({
+          organization_id: ctx.orgId,
+          total_value: args.total_value,
+          status: "pending",
+          client_id: args.client_id || null,
+          lead_id: args.lead_id || null,
+          notes: args.notes || null,
+          created_by: ctx.userId || null,
+        })
+        .select("id, total_value")
+        .single();
+      if (error) {
+        return { error: error.message, _instruction: "ERRO ao registar a venda. Informa o utilizador que houve um problema técnico. NÃO digas que foi registada." };
+      }
+      return {
+        success: true,
+        sale_id: data.id,
+        _instruction: `Venda de **${data.total_value}€** registada com sucesso. Celebra com o utilizador (este é o momento em que vê dinheiro a entrar no Senvia OS) e oferece um link. [link:Ver Vendas|/sales]`,
+      };
+    },
+  },
+  {
+    name: "create_proposal",
+    description: "Criar uma proposta para uma lead. Precisa do ID da lead (obtém-no com search_leads) e do valor total. Usa APENAS depois de confirmares os dados.",
+    parameters: {
+      type: "object",
+      properties: {
+        lead_id: { type: "string", description: "UUID da lead destinatária (obrigatório, obtém-no com search_leads)" },
+        total_value: { type: "number", description: "Valor total da proposta em euros (obrigatório)" },
+        notes: { type: "string", description: "Notas / descrição da proposta (opcional)" },
+      },
+      required: ["lead_id", "total_value"],
+    },
+    permission: { module: "proposals", subarea: "proposals", action: "create" },
+    isWrite: true,
+    execute: async (args, ctx) => {
+      if (!args.lead_id) return { error: "Lead em falta", _instruction: "Uma proposta tem de estar associada a uma lead. Usa search_leads para encontrar a lead. NÃO inventes." };
+      if (typeof args.total_value !== "number" || !(args.total_value > 0)) {
+        return { error: "Valor em falta", _instruction: "Pede o valor total da proposta (um número maior que zero) antes de a criar. NÃO inventes valores." };
+      }
+      // Confirm the lead exists in this org before linking (proposals.lead_id is NOT NULL + FK).
+      const { data: lead } = await ctx.supabaseAdmin
+        .from("leads")
+        .select("id, name")
+        .eq("organization_id", ctx.orgId)
+        .eq("id", args.lead_id)
+        .maybeSingle();
+      if (!lead) return { error: "Lead não encontrada", _instruction: "A lead indicada não existe nesta organização. Usa search_leads para confirmar. NÃO inventes." };
+      const { data, error } = await ctx.supabaseAdmin
+        .from("proposals")
+        .insert({
+          organization_id: ctx.orgId,
+          lead_id: args.lead_id,
+          total_value: args.total_value,
+          status: "draft",
+          notes: args.notes || null,
+          created_by: ctx.userId || null,
+        })
+        .select("id, total_value")
+        .single();
+      if (error) {
+        return { error: error.message, _instruction: "ERRO ao criar a proposta. Informa o utilizador que houve um problema técnico. NÃO digas que foi criada." };
+      }
+      return {
+        success: true,
+        proposal_id: data.id,
+        _instruction: `Proposta de **${data.total_value}€** para **${lead.name}** criada com sucesso. Informa o utilizador e oferece um link. [link:Ver Propostas|/proposals]`,
+      };
+    },
+  },
 ];

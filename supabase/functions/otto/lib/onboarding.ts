@@ -4,25 +4,36 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import type { OnboardingState, OrgInfo } from "./types.ts";
 
+// Order matters: the VALUE PATH (company -> pipeline -> import leads -> first
+// client -> first sale -> first proposal) comes first, because seeing money
+// (the first sale) is the activation "aha". The heavier, optional config
+// (invoicing, integrations, team) is pushed to the end so a solo trial reaches
+// the aha without first having to wire every integration.
 export const ONBOARDING_ORDER = [
   "WELCOME",
   "COMPANY_INFO",
+  "PIPELINE",
+  "LEADS_IMPORT",
+  "FIRST_CLIENT",
+  "FIRST_SALE",
+  "FIRST_PROPOSAL",
   "INVOICING",
   "INTEGRATIONS",
-  "PIPELINE",
   "TEAM",
-  "LEADS_IMPORT",
   "COMPLETE",
 ] as const;
 
 export const STAGE_LABELS: Record<string, string> = {
   WELCOME: "Boas-vindas",
   COMPANY_INFO: "Dados da empresa",
+  PIPELINE: "Pipeline",
+  LEADS_IMPORT: "Importar leads",
+  FIRST_CLIENT: "Primeiro cliente",
+  FIRST_SALE: "Primeira venda",
+  FIRST_PROPOSAL: "Primeira proposta",
   INVOICING: "Faturação",
   INTEGRATIONS: "Integrações",
-  PIPELINE: "Pipeline",
   TEAM: "Equipa",
-  LEADS_IMPORT: "Importar leads",
   COMPLETE: "Concluído",
 };
 
@@ -35,11 +46,14 @@ export async function computeOnboardingState(
   const orgId = org.id;
 
   // Run the independent checks together.
-  const [stagesRes, leadsRes, membersRes] = await Promise.all([
+  const [stagesRes, leadsRes, membersRes, clientsRes, salesRes, proposalsRes] = await Promise.all([
     admin.from("pipeline_stages").select("id").eq("organization_id", orgId).limit(1),
     admin.from("leads").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
     admin.from("organization_members").select("id", { count: "exact", head: true })
       .eq("organization_id", orgId).eq("is_active", true),
+    admin.from("crm_clients").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+    admin.from("sales").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+    admin.from("proposals").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
   ]);
 
   // Company info: a name beyond the default plus at least a contact phone.
@@ -57,15 +71,21 @@ export async function computeOnboardingState(
   const pipeline = (stagesRes.data?.length ?? 0) > 0;
   const team = (membersRes.count ?? 0) > 1;
   const leads = (leadsRes.count ?? 0) > 0;
+  const clients = (clientsRes.count ?? 0) > 0;
+  const sales = (salesRes.count ?? 0) > 0;
+  const proposals = (proposalsRes.count ?? 0) > 0;
   const company_full = company_info && !!orgCfg?.contact_phone;
 
   const checks = {
     company_info: company_full,
+    pipeline,
+    leads,
+    clients,
+    sales,
+    proposals,
     invoicing,
     integrations,
-    pipeline,
     team,
-    leads,
   };
 
   // Read the stored row (may not exist). It carries dismissal + completion.
@@ -79,17 +99,25 @@ export async function computeOnboardingState(
     stored = data as any;
   } catch { /* table may not exist yet — degrade gracefully */ }
 
-  // Derive the current stage from the first incomplete real check.
+  // Derive the current stage from the first incomplete real check, following the
+  // value-path-first order declared in ONBOARDING_ORDER.
   const stageCheck: Record<string, boolean> = {
     COMPANY_INFO: checks.company_info,
+    PIPELINE: checks.pipeline,
+    LEADS_IMPORT: checks.leads,
+    FIRST_CLIENT: checks.clients,
+    FIRST_SALE: checks.sales,
+    FIRST_PROPOSAL: checks.proposals,
     INVOICING: checks.invoicing,
     INTEGRATIONS: checks.integrations,
-    PIPELINE: checks.pipeline,
     TEAM: checks.team,
-    LEADS_IMPORT: checks.leads,
   };
   let derivedStage = "COMPLETE";
-  for (const stage of ["COMPANY_INFO", "INVOICING", "INTEGRATIONS", "PIPELINE", "TEAM", "LEADS_IMPORT"]) {
+  for (const stage of [
+    "COMPANY_INFO", "PIPELINE", "LEADS_IMPORT",
+    "FIRST_CLIENT", "FIRST_SALE", "FIRST_PROPOSAL",
+    "INVOICING", "INTEGRATIONS", "TEAM",
+  ]) {
     if (!stageCheck[stage]) { derivedStage = stage; break; }
   }
 
