@@ -7,9 +7,7 @@ import { useOttoChat } from "@/hooks/useOttoChat";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
-  useModuleOnboarding,
-  ROUTE_TO_MODULE,
-  PHASE1_MODULES,
+  useOnboardingPeek,
   type ActivationModuleKey,
 } from "@/hooks/useActivationProgress";
 
@@ -36,25 +34,31 @@ const SCRIPTS: Record<ActivationModuleKey, { title: string; body: string; seed: 
     body: "Aqui montas propostas para os teus clientes. Posso guiar-te a criar a primeira em poucos passos.",
     seed: "Ajuda-me a criar a minha primeira proposta.",
   },
-  // Fase 2 (peeks ainda não montados, mas o script fica pronto):
-  finance: { title: "Configura a faturação", body: "", seed: "Quero configurar a faturação da minha empresa." },
-  integrations: { title: "Liga as tuas integrações", body: "", seed: "Quero ligar as minhas integrações (Brevo, WhatsApp...)." },
-  inbox: { title: "Liga o teu WhatsApp", body: "", seed: "Quero ligar o meu WhatsApp à caixa de entrada." },
-  team: { title: "Convida a tua equipa", body: "", seed: "Quero convidar um colega para a minha equipa." },
+  finance: {
+    title: "Configura a faturação",
+    body: "Aqui controlas faturas, despesas e comissões. Para emitires faturas, ligo a tua faturação (InvoiceXpress ou KeyInvoice). Queres configurar agora?",
+    seed: "Quero configurar a faturação da minha empresa.",
+  },
+  integrations: {
+    title: "Liga as tuas ferramentas",
+    body: "Liga o email marketing (Brevo), o WhatsApp e outras integrações. Posso ajudar-te a ligar a primeira. Por onde queres começar?",
+    seed: "Quero ligar as minhas integrações (Brevo, WhatsApp...).",
+  },
+  inbox: {
+    title: "Liga o teu WhatsApp",
+    body: "Aqui recebes e respondes a mensagens num só sítio. Mostro-te como ligar o WhatsApp (com leitura de QR no telemóvel).",
+    seed: "Quero ligar o meu WhatsApp à caixa de entrada.",
+  },
+  team: {
+    title: "Convida a tua equipa",
+    body: "Aqui dás acesso aos teus colegas e defines as permissões de cada um. Queres convidar alguém agora?",
+    seed: "Quero convidar um colega para a minha equipa.",
+  },
 };
 
-function moduleForPath(pathname: string): ActivationModuleKey | null {
-  for (const [route, mod] of Object.entries(ROUTE_TO_MODULE)) {
-    if (pathname === route || pathname.startsWith(route + "/")) {
-      return PHASE1_MODULES.includes(mod) ? mod : null;
-    }
-  }
-  return null;
-}
-
-// Single mount point (in AppLayout). Picks the module from the current route and
-// shows a soft, non-modal Otto bubble the first time the user lands on it, until
-// they engage, complete it, or dismiss it. Never a blocking modal.
+// Single mount point (in AppLayout). Resolves the module from the current route
+// and shows a soft, non-modal Otto bubble the first time the user lands on it,
+// until they engage, complete it, or dismiss it. Never a blocking modal.
 export function ModuleOnboardingPeek() {
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -62,8 +66,7 @@ export function ModuleOnboardingPeek() {
   const setOttoOpen = useOttoStore((s) => s.setOpen);
   const { sendMessage } = useOttoChat();
 
-  const moduleKey = moduleForPath(location.pathname);
-  const { shouldShow, dismiss } = useModuleOnboarding(moduleKey);
+  const { moduleKey, shouldShow, dismiss } = useOnboardingPeek(location.pathname);
 
   // Hide while the chat is open (no point peeking over the open assistant).
   const visible = !!moduleKey && shouldShow && !ottoOpen;

@@ -28,7 +28,9 @@ Implementação completa do plano de ativação proposto pela Amora, adaptado ao
 Implementação do `unificacao-onboarding.md` (aprovado). Um modelo único, sem tabela nova.
 - `supabase/migrations/20260622123000_onboarding_module_dismissed.sql`: coluna `module_dismissed jsonb` na `org_onboarding_state` já existente + política INSERT para membros (o frontend precisa de criar a linha ao dispensar).
 - `src/hooks/useActivationProgress.ts`: badge derivado de **sinais reais** (os 8 módulos: leads/clientes/vendas/propostas via `first_*_at`, faturação via `billing_provider`, integrações via `brevo`/`integrations_enabled`, inbox via `messaging_channels`/`whatsapp_instance`, equipa via contagem de membros). `useModuleOnboarding` decide o peek + dispensar.
-- `src/components/otto/ModuleOnboardingPeek.tsx`: bolha suave (não-modal) montada uma vez no [AppLayout.tsx](src/components/layout/AppLayout.tsx); aparece nos 4 módulos de valor (Leads, Clientes, Vendas, Propostas), abre o Otto com mensagem semente ao aceitar, persiste o dispensar. **Sem dados de exemplo** (cria sempre dados reais). WhatsApp continua via QR.
+- `src/components/otto/ModuleOnboardingPeek.tsx`: bolha suave (não-modal) montada uma vez no [AppLayout.tsx](src/components/layout/AppLayout.tsx); abre o Otto com mensagem semente ao aceitar, persiste o dispensar. **Sem dados de exemplo** (cria sempre dados reais). WhatsApp continua via QR.
+  - **Fase 1:** Leads, Clientes, Vendas, Propostas (rotas próprias).
+  - **Fase 2:** Faturação (`/financeiro`), Inbox/WhatsApp (`/inbox`), Marketing (`/marketing`, corre no sinal de Brevo/integrações) e, em `/settings`, Integrações e Equipa (mostra o primeiro que faltar, já que vivem em tabs das Definições). Resolução por rota em `useOnboardingPeek` a partir dos sinais reais.
 - Badge `(X/8)` na sidebar ([AppSidebar.tsx](src/components/layout/AppSidebar.tsx)) no item Definições, só admin, só enquanto incompleto.
 - Sistema atual (`onboarding.ts`, `tours.ts`, FAB) mantém-se como fallback.
 

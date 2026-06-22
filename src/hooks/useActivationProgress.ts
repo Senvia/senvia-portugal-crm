@@ -14,16 +14,27 @@ export const ACTIVATION_MODULE_ORDER: ActivationModuleKey[] = [
   "finance", "integrations", "inbox", "team",
 ];
 
-// Fase 1 ships peek bubbles only for the value path. The badge still counts all 8.
-export const PHASE1_MODULES: ActivationModuleKey[] = ["leads", "clients", "sales", "proposals"];
+// Routes that trigger a module peek, in priority order per route prefix. Settings
+// hosts two setup areas (integrations + team), so it lists both and the first one
+// not yet done is offered. /marketing runs on the integrations (Brevo) signal,
+// since email marketing needs Brevo connected.
+const PEEK_CANDIDATES: Array<{ prefix: string; modules: ActivationModuleKey[] }> = [
+  { prefix: "/leads", modules: ["leads"] },
+  { prefix: "/clients", modules: ["clients"] },
+  { prefix: "/sales", modules: ["sales"] },
+  { prefix: "/proposals", modules: ["proposals"] },
+  { prefix: "/financeiro", modules: ["finance"] },
+  { prefix: "/inbox", modules: ["inbox"] },
+  { prefix: "/marketing", modules: ["integrations"] },
+  { prefix: "/settings", modules: ["integrations", "team"] },
+];
 
-// Maps an app route to the activation module it represents (for the peek).
-export const ROUTE_TO_MODULE: Record<string, ActivationModuleKey> = {
-  "/leads": "leads",
-  "/clients": "clients",
-  "/sales": "sales",
-  "/proposals": "proposals",
-};
+function candidatesForPath(pathname: string): ActivationModuleKey[] {
+  for (const { prefix, modules } of PEEK_CANDIDATES) {
+    if (pathname === prefix || pathname.startsWith(prefix + "/")) return modules;
+  }
+  return [];
+}
 
 export interface ActivationProgress {
   loading: boolean;
@@ -143,27 +154,27 @@ function useModuleDismissals() {
   return { dismissed: data ?? {}, loading: isLoading, dismiss: dismiss.mutate };
 }
 
-export interface ModuleOnboarding {
+export interface OnboardingPeek {
+  moduleKey: ActivationModuleKey | null;
   shouldShow: boolean;
   dismiss: () => void;
 }
 
-// Decides whether a module's peek bubble should appear, and how to dismiss it.
-// Shows when: admin, the module is not yet completed (real signal false), and the
-// user has not dismissed it before. Completion/dismissal are both persistent.
-export function useModuleOnboarding(moduleKey: ActivationModuleKey | null): ModuleOnboarding {
+// Resolves which module peek (if any) to show for the current route, derived from
+// real signals + per-module dismissals. For a route hosting multiple setup areas
+// (e.g. /settings), offers the first one not yet completed and not dismissed.
+// Shows only for admins. Completion and dismissal are both persistent.
+export function useOnboardingPeek(pathname: string): OnboardingPeek {
   const { signals, isAdmin, loading: progressLoading } = useActivationProgress();
   const { dismissed, loading: dismissLoading, dismiss } = useModuleDismissals();
 
-  const shouldShow =
-    !!moduleKey &&
-    isAdmin &&
-    !progressLoading &&
-    !dismissLoading &&
-    !signals[moduleKey] &&
-    !dismissed[moduleKey];
+  const candidates = candidatesForPath(pathname);
+  const moduleKey = candidates.find((m) => !signals[m] && !dismissed[m]) ?? null;
+
+  const shouldShow = !!moduleKey && isAdmin && !progressLoading && !dismissLoading;
 
   return {
+    moduleKey,
     shouldShow,
     dismiss: () => moduleKey && dismiss(moduleKey),
   };
