@@ -3508,7 +3508,7 @@ function bodyForIframe(content: string | null | undefined, isHtml: boolean): str
   const body = content ?? '';
   if (isHtml) {
     // Inject a base style so the iframe doesn't use browser defaults with huge fonts.
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
       *{box-sizing:border-box}
       body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;overflow-wrap:break-word}
       a{color:#2563eb}
@@ -3516,7 +3516,7 @@ function bodyForIframe(content: string | null | undefined, isHtml: boolean): str
     </style></head><body>${body}</body></html>`;
   }
   const escaped = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
     body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;white-space:pre-wrap;word-break:break-word}
   </style></head><body>${escaped}</body></html>`;
 }
@@ -3565,7 +3565,7 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
           <iframe
             ref={iframeRef}
             srcDoc={bodyForIframe(rawBody, isHtml)}
-            sandbox="allow-same-origin"
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             className="w-full border-0"
             style={{ height: '120px' }}
             title="Email"

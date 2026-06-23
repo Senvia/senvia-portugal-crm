@@ -74,7 +74,7 @@ export function AppSidebar({
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
   const activation = useActivationProgress();
-  const showSetupBadge = activation.isAdmin && !activation.loading && activation.done < activation.total;
+  const showSetupBadge = activation.isAdmin && activation.ready && activation.done < activation.total;
   const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
     organizationId: organization?.id,
     memberships: organizations,

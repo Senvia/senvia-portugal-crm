@@ -27,7 +27,7 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
   const srcDoc = useMemo(() => {
     const font = "-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
     if (html) {
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
         *{box-sizing:border-box}
         body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;word-break:break-word;overflow-wrap:break-word}
         a{color:#2563eb}img{max-width:100%;height:auto}
@@ -35,7 +35,7 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
       </style></head><body>${html}</body></html>`;
     }
     const escaped = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
       body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;white-space:pre-wrap;word-break:break-word}
     </style></head><body>${escaped}</body></html>`;
   }, [html, text]);
@@ -44,7 +44,7 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
     <iframe
       ref={ref}
       srcDoc={srcDoc}
-      sandbox="allow-same-origin allow-popups"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       title="Email"
       className="w-full border-0"
       style={{ height: 200 }}

@@ -38,6 +38,10 @@ function candidatesForPath(pathname: string): ActivationModuleKey[] {
 
 export interface ActivationProgress {
   loading: boolean;
+  // True only when the signal query succeeded. If the activation columns/view are
+  // not deployed yet (backend migrations not run), this stays false so the badge
+  // and peeks stay dormant instead of misfiring on a failed query.
+  ready: boolean;
   isAdmin: boolean;
   signals: Record<ActivationModuleKey, boolean>;
   done: number;
@@ -51,10 +55,11 @@ export function useActivationProgress(): ActivationProgress {
   const { isAdmin } = usePermissions();
   const orgId = organization?.id;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["activation-progress", orgId],
     enabled: !!orgId,
     staleTime: 30_000,
+    retry: false,
     queryFn: async (): Promise<Record<ActivationModuleKey, boolean>> => {
       const [orgRes, membersRes, channelsRes] = await Promise.all([
         // Cast: first_*_at columns are newer than the generated types.
@@ -105,6 +110,7 @@ export function useActivationProgress(): ActivationProgress {
 
   return {
     loading: isLoading,
+    ready: !!orgId && !isLoading && !isError && !!data,
     isAdmin,
     signals,
     done,
@@ -118,10 +124,11 @@ function useModuleDismissals() {
   const queryClient = useQueryClient();
   const orgId = organization?.id;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["onboarding-module-dismissed", orgId],
     enabled: !!orgId,
     staleTime: 60_000,
+    retry: false,
     queryFn: async (): Promise<Record<string, string | null>> => {
       // Cast: module_dismissed is newer than the generated types.
       const { data, error } = await (supabase as any)
@@ -151,7 +158,7 @@ function useModuleDismissals() {
     },
   });
 
-  return { dismissed: data ?? {}, loading: isLoading, dismiss: dismiss.mutate };
+  return { dismissed: data ?? {}, ready: !!orgId && !isLoading && !isError, dismiss: dismiss.mutate };
 }
 
 export interface OnboardingPeek {
@@ -165,13 +172,16 @@ export interface OnboardingPeek {
 // (e.g. /settings), offers the first one not yet completed and not dismissed.
 // Shows only for admins. Completion and dismissal are both persistent.
 export function useOnboardingPeek(pathname: string): OnboardingPeek {
-  const { signals, isAdmin, loading: progressLoading } = useActivationProgress();
-  const { dismissed, loading: dismissLoading, dismiss } = useModuleDismissals();
+  const { signals, isAdmin, ready: progressReady } = useActivationProgress();
+  const { dismissed, ready: dismissReady, dismiss } = useModuleDismissals();
 
   const candidates = candidatesForPath(pathname);
   const moduleKey = candidates.find((m) => !signals[m] && !dismissed[m]) ?? null;
 
-  const shouldShow = !!moduleKey && isAdmin && !progressLoading && !dismissLoading;
+  // Only show once both signal + dismissal data are loaded successfully. If the
+  // backend migrations are not deployed yet, the queries error and ready stays
+  // false, so the peek stays dormant instead of misfiring.
+  const shouldShow = !!moduleKey && isAdmin && progressReady && dismissReady;
 
   return {
     moduleKey,

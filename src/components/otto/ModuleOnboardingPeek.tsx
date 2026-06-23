@@ -79,14 +79,16 @@ export function ModuleOnboardingPeek() {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {visible && script && (
         <motion.div
           key={moduleKey}
           initial={{ opacity: 0, y: 24, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.96 }}
-          transition={{ delay: 0.6, type: "spring", stiffness: 320, damping: 26 }}
+          animate={{
+            opacity: 1, y: 0, scale: 1,
+            transition: { delay: 0.45, type: "spring", stiffness: 320, damping: 26 },
+          }}
+          exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.15 } }}
           className={cn(
             "fixed z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-border bg-card p-4 shadow-xl",
             isMobile ? "bottom-24 right-3" : "bottom-6 right-6",
