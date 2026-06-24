@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History, Archive, Layers, CheckSquare } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, endOfDay, startOfDay } from "date-fns";
 import { matchesSearch } from "@/lib/utils";
@@ -860,10 +861,24 @@ export default function Leads() {
               <p className="text-lg font-medium">Nenhum resultado encontrado</p>
             </div>
           ) : filteredLeads.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
-              <Users className="h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">{showArchived ? 'Sem leads arquivadas' : 'Sem leads por agora'}</p>
-            </div>
+            showArchived ? (
+              <EmptyState icon={Users} title="Sem leads arquivadas" />
+            ) : (
+              <EmptyState
+                icon={Users}
+                title="Ainda não tens leads"
+                description="Importa os teus contactos ou cria a primeira lead. O Otto pode ajudar-te a começar."
+              >
+                <Button onClick={() => setIsAddModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar primeira lead
+                </Button>
+                <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar
+                </Button>
+              </EmptyState>
+            )
           ) : effectiveViewMode === 'kanban' ? (
             <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} onArchive={handleArchiveOne} />
           ) : (

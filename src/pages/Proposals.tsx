@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Search, Filter, Plus, Zap, Wrench } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from 'react-day-picker';
@@ -198,16 +199,20 @@ export default function Proposals() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : filteredProposals.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">
-                {proposals.length === 0
-                  ? 'Ainda não existem propostas.'
-                  : 'Nenhuma proposta corresponde aos filtros.'}
-              </p>
-            </CardContent>
-          </Card>
+          proposals.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="Ainda não tens propostas"
+              description="Cria a tua primeira proposta para enviares aos teus clientes."
+            >
+              <Button onClick={() => setCreateModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Criar primeira proposta
+              </Button>
+            </EmptyState>
+          ) : (
+            <EmptyState icon={FileText} title="Nenhuma proposta encontrada" description="Nenhuma proposta corresponde aos filtros." />
+          )
         ) : (
           <div className="space-y-3">
             {filteredProposals.map((proposal) => (

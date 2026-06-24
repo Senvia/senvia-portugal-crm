@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch } from "@/lib/utils";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommissionsPanel } from "@/components/sales/CommissionsPanel";
@@ -390,15 +391,20 @@ export default function Sales() {
             <Skeleton className="h-24 w-full" />
           </>
         ) : filteredSales.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <ShoppingBag className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">Nenhuma venda encontrada</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== "all" 
-                ? "Tente ajustar os filtros de pesquisa."
-                : "Crie a sua primeira venda ou aceite uma proposta."}
-            </p>
-          </div>
+          (search || statusFilter !== "all") ? (
+            <EmptyState icon={ShoppingBag} title="Nenhuma venda encontrada" description="Tenta ajustar os filtros de pesquisa." />
+          ) : (
+            <EmptyState
+              icon={ShoppingBag}
+              title="Ainda não tens vendas"
+              description="Regista a tua primeira venda ou aceita uma proposta para começares a faturar."
+            >
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Registar primeira venda
+              </Button>
+            </EmptyState>
+          )
         ) : (
           filteredSales.map((sale) => (
             <Card 

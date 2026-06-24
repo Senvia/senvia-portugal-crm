@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, Users, Crown, UserMinus, Euro, Shield, Upload, UserCheck } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useClients, useClientStats, useDeleteClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
@@ -394,6 +395,19 @@ export default function Clients() {
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : filteredClients.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={search ? "Nenhum cliente encontrado" : "Ainda não tens clientes"}
+            description={search ? "Tenta ajustar a pesquisa." : "Cria o teu primeiro cliente ou converte uma lead ganha. O Otto pode ajudar."}
+          >
+            {!search && (
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Criar primeiro cliente
+              </Button>
+            )}
+          </EmptyState>
         ) : (
           <ClientsTable
             clients={filteredClients}

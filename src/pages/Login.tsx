@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
@@ -24,9 +25,9 @@ const signupSchema = z.object({
   confirmPassword: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
   organizationName: z.string().min(2, 'O nome da empresa deve ter pelo menos 2 caracteres'),
   organizationSlug: z.string()
-    .min(2, 'O slug deve ter pelo menos 2 caracteres')
-    .max(50, 'O slug deve ter no máximo 50 caracteres')
-    .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
+    .min(2, 'O código da empresa deve ter pelo menos 2 caracteres')
+    .max(50, 'O código da empresa deve ter no máximo 50 caracteres')
+    .regex(/^[a-z0-9-]+$/, 'O código só pode conter letras minúsculas, números e hífens'),
   contactPhone: z.string().min(9, 'O WhatsApp deve ter pelo menos 9 caracteres'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As palavras-passe não coincidem',
@@ -255,8 +256,8 @@ export default function Login() {
 
     if (isSlugAvailable === false) {
       toast({
-        title: 'Slug indisponível',
-        description: 'Este slug já está em uso. Por favor, escolha outro.',
+        title: 'Código indisponível',
+        description: 'Este código já está em uso. Por favor, escolha outro.',
         variant: 'destructive',
       });
       return;
@@ -616,26 +617,23 @@ export default function Login() {
                         </div>
                       </div>
                       <p className="text-xs text-slate-500">
-                        senvia.app/<span className="text-primary">{organizationSlug || 'slug'}</span>
+                        senvia.app/<span className="text-primary">{organizationSlug || 'a-tua-empresa'}</span>
                       </p>
                       {isSlugAvailable === false && (
-                        <p className="text-xs text-red-400">Este slug já está em uso</p>
+                        <p className="text-xs text-red-400">Este código já está em uso</p>
                       )}
                     </div>
 
                     <div className="space-y-2 mt-3">
-                      <Label htmlFor="org-phone" className="text-slate-300">WhatsApp da Empresa *</Label>
-                      <Input
-                        id="org-phone"
-                        type="tel"
-                        placeholder="+351 912 345 678"
+                      <Label className="text-slate-300">WhatsApp da Empresa *</Label>
+                      <PhoneInput
                         value={contactPhone}
-                        onChange={(e) => setContactPhone(e.target.value)}
-                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                        required
+                        onChange={setContactPhone}
+                        placeholder="912 345 678"
+                        className="[&_button]:h-12 [&_button]:bg-slate-800 [&_button]:border-slate-700 [&_button]:text-white [&_button]:hover:bg-slate-700 [&_input]:h-12 [&_input]:bg-slate-800 [&_input]:border-slate-700 [&_input]:text-white [&_input]:placeholder:text-slate-500"
                       />
                       <p className="text-xs text-slate-500">
-                        Número de contacto principal da empresa
+                        Escolhe o país e introduz o número. Usado para contacto e mensagens de WhatsApp.
                       </p>
                     </div>
                     
