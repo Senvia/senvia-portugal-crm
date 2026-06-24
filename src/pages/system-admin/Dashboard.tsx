@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Activity, Users, Sparkles } from "lucide-react";
+import { Activity, Users, Sparkles, MessageCircle } from "lucide-react";
 import { AdminOverview } from "@/components/system-admin/AdminOverview";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
 import type { OrgStripeData, AdminContact } from "@/components/system-admin/OrganizationsTable";
@@ -36,6 +36,7 @@ interface StripeStatsResponse {
 
 const SECONDARY = [
   { to: "/system-admin/activation", icon: Activity, label: "Ativação" },
+  { to: "/system-admin/trial-whatsapp", icon: MessageCircle, label: "WhatsApp" },
   { to: "/system-admin/users", icon: Users, label: "Utilizadores" },
   { to: "/system-admin/announcements", icon: Sparkles, label: "Novidades" },
 ];
