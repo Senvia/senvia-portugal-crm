@@ -63,7 +63,23 @@ export default function SystemAdminDashboard() {
         counts[m.organization_id] = (counts[m.organization_id] || 0) + 1;
       });
 
-      return (orgs || []).map((o: any) => ({ ...o, member_count: counts[o.id] || 0 }));
+      // Fold the latest member login into "última atividade" so an account that
+      // is USED (logins, admin work) but doesn't create new entities isn't shown
+      // as dead. The stored last_active_at stays creation-only for the activation
+      // funnel; this GREATEST is display-only. Non-fatal if the RPC is unavailable.
+      const loginMap: Record<string, string> = {};
+      try {
+        const { data: logins } = await (supabase as any).rpc("admin_org_last_sign_in");
+        (logins || []).forEach((r: any) => {
+          if (r.org_id && r.last_login) loginMap[r.org_id] = r.last_login;
+        });
+      } catch { /* fall back to last_active_at */ }
+
+      return (orgs || []).map((o: any) => {
+        const candidates = [o.last_active_at, loginMap[o.id]].filter(Boolean) as string[];
+        const lastActive = candidates.length ? candidates.sort().pop()! : o.last_active_at;
+        return { ...o, last_active_at: lastActive, member_count: counts[o.id] || 0 };
+      });
     },
   });
 
