@@ -25,6 +25,15 @@ function parseModals(content: string) {
   return { cleanContent: content.replace(re, "").trim(), modalIds: ids };
 }
 
+// Friendly labels for the "open this form" button (defaults to "Abrir").
+const MODAL_LABELS: Record<string, string> = {
+  whatsapp: "Ligar WhatsApp",
+  add_lead: "Criar lead",
+  add_client: "Criar cliente",
+  create_sale: "Registar venda",
+  create_proposal: "Criar proposta",
+};
+
 interface OttoMessageProps {
   message: OttoMessageType;
   onButtonClick?: (text: string) => void;
@@ -191,7 +200,7 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
             onClick={() => launchModal(id)}
           >
             <ExternalLink className="h-3 w-3 flex-shrink-0" />
-            Abrir
+            {MODAL_LABELS[id] || "Abrir"}
           </Button>
         ))}
 

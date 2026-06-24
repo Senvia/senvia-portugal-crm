@@ -3,7 +3,13 @@ import { create } from "zustand";
 // Lets Otto (and its tours) open real configuration modals from anywhere, without
 // each modal owning its open state locally. A global host (OttoModalHost) renders
 // the right modal for `activeModal`.
-export type OttoManagedModal = "whatsapp" | null;
+export type OttoManagedModal =
+  | "whatsapp"
+  | "add_lead"
+  | "add_client"
+  | "create_sale"
+  | "create_proposal"
+  | null;
 
 interface ModalStore {
   activeModal: OttoManagedModal;

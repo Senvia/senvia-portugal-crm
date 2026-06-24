@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules, type EnabledModules } from "@/hooks/useModules";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 // A single setup task Otto guides. `module` gates it to an enabled module (null =
 // always relevant). `kind`/`target` describe the action (see runSetupTask).
@@ -23,8 +24,10 @@ export interface OttoOnboardingStatus {
   steps: OttoSetupTask[];      // alias of tasks (back-compat for the progress panel)
   pending: OttoSetupTask[];    // tasks not yet done
   completed: boolean;          // every active-module task is configured
-  dismissed: boolean;          // reserved; setup is driven purely by pending tasks
-  showBadge: boolean;          // admin + something still pending
+  dismissed: boolean;          // admin explicitly closed the dashboard setup card
+  showBadge: boolean;          // admin + something still pending (drives chat kickoff + progress panel)
+  showSetupCard: boolean;      // admin + not dismissed: the dashboard hero stays until closed
+  dismissSetup: () => void;    // close the dashboard setup card (persisted per org)
   progress: { done: number; total: number };
 }
 
@@ -33,6 +36,14 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
   const { isAdmin } = usePermissions();
   const { modules } = useModules();
   const orgId = organization?.id;
+
+  // Dashboard setup card dismissal, persisted per org. Stable key indexed by orgId
+  // (not a per-org key) so the value rehydrates correctly once the org loads.
+  const [dismissedMap, setDismissedMap] = usePersistedState<Record<string, boolean>>("otto-setup-dismissed-v1", {});
+  const dismissed = !!orgId && !!dismissedMap[orgId];
+  const dismissSetup = () => {
+    if (orgId) setDismissedMap((m) => ({ ...m, [orgId]: true }));
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["otto-setup", orgId],
@@ -82,8 +93,10 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
     steps: tasks,
     pending,
     completed: tasks.length > 0 && pending.length === 0,
-    dismissed: false,
+    dismissed,
     showBadge: !!orgId && isAdmin && !isLoading && pending.length > 0,
+    showSetupCard: !!orgId && isAdmin && !isLoading && tasks.length > 0 && !dismissed,
+    dismissSetup,
     progress: { done: tasks.length - pending.length, total: tasks.length },
   };
 }

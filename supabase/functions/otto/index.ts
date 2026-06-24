@@ -78,6 +78,9 @@ serve(async (req) => {
         if (status === 402) return jsonError("Créditos de IA esgotados. Contacta o administrador.", 402);
         const errorText = await resp.text();
         console.error("AI gateway error:", status, errorText);
+        // Transient gateway/model overload (already retried in chatCompletionResilient):
+        // surface a soft "try again" instead of a scary 500.
+        if (status >= 500) return jsonError("O Otto está com muita procura neste momento. Tenta novamente em alguns segundos.", 503);
         return jsonError("Erro ao contactar o Otto. Tenta novamente.", 500);
       }
 

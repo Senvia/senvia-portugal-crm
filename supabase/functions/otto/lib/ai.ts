@@ -90,21 +90,39 @@ export interface ResilientResult {
   model: string;
 }
 
-// Try the primary config; on a hard failure (network throw, or non-ok that is not
-// a rate-limit/quota signal) retry once with the Gemini fallback. Reports which
-// provider actually answered so the caller can surface it (diagnostics header).
+// Statuses worth a retry: transient gateway/model errors (Gemini frequently
+// returns 503 "model overloaded" under load). Rate-limit/quota (429/402) are NOT
+// retried — they need a specific user-facing message, not a retry.
+const TRANSIENT_STATUS = new Set([500, 502, 503, 504]);
+
+// One config attempt, with a single short-backoff retry on a transient 5xx. This
+// absorbs the occasional Gemini "overloaded" blip that previously surfaced as a
+// hard 500 to the user.
+async function attemptWithRetry(cfg: AIConfig, payload: ChatPayload): Promise<Response> {
+  const resp = await chatCompletion(cfg, payload);
+  if (resp.ok || resp.status === 429 || resp.status === 402 || !TRANSIENT_STATUS.has(resp.status)) {
+    return resp;
+  }
+  console.error(`[otto] ${cfg.model} returned ${resp.status}; retrying once after backoff.`);
+  await new Promise((r) => setTimeout(r, 600));
+  return await chatCompletion(cfg, payload);
+}
+
+// Try the primary config (each attempt self-retries on a transient 5xx); on a hard
+// failure that is not a rate-limit/quota signal, retry with the Gemini fallback.
+// Reports which provider actually answered so the caller can surface it (header).
 export async function chatCompletionResilient(cfgs: AIConfigs, payload: ChatPayload): Promise<ResilientResult> {
   try {
-    const resp = await chatCompletion(cfgs.primary, payload);
+    const resp = await attemptWithRetry(cfgs.primary, payload);
     if (resp.ok || !cfgs.fallback || resp.status === 429 || resp.status === 402) {
       return { resp, provider: "primary", model: cfgs.primary.model };
     }
     console.error(`[otto] primary AI returned ${resp.status}; falling back to Gemini.`);
-    return { resp: await chatCompletion(cfgs.fallback, payload), provider: "fallback", model: cfgs.fallback.model };
+    return { resp: await attemptWithRetry(cfgs.fallback, payload), provider: "fallback", model: cfgs.fallback.model };
   } catch (e) {
     if (cfgs.fallback) {
       console.error(`[otto] primary AI threw (${(e as Error).message}); falling back to Gemini.`);
-      return { resp: await chatCompletion(cfgs.fallback, payload), provider: "fallback", model: cfgs.fallback.model };
+      return { resp: await attemptWithRetry(cfgs.fallback, payload), provider: "fallback", model: cfgs.fallback.model };
     }
     throw e;
   }
