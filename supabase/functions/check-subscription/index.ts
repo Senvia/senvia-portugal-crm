@@ -177,14 +177,22 @@ serve(async (req) => {
     const isHealthy = status === "active" || status === "trialing";
     const isOverdue = status === "past_due" || status === "unpaid";
 
+    // The org counts as a paying customer only on a REAL payment (status
+    // 'active'). A Stripe 'trialing'/'past_due'/'unpaid'/'incomplete' sub means no
+    // money was collected, so it must NOT stamp first_paid_at — doing so inflated
+    // the conversion metric (Stripe-trialing/failed subs looked converted). The
+    // webhook (markFirstPaid) is the primary setter on the first successful charge;
+    // this is just the self-heal backup.
+    const firstPaidAt = orgData?.first_paid_at ?? (status === "active" ? new Date().toISOString() : null);
+
     // Persist the renewal date + first-paid stamp so the cleanup cron, the
     // protected route and the blocker components have a single source of truth.
     if (orgId) {
       const orgUpdates: Record<string, any> = { plan: planId };
       if (subscriptionEnd) orgUpdates.current_period_end = subscriptionEnd;
-      if (!orgData?.first_paid_at) {
-        // First time we see this org with a sub in a payer status — stamp now.
-        orgUpdates.first_paid_at = new Date().toISOString();
+      if (!orgData?.first_paid_at && firstPaidAt) {
+        // First time we see this org actually paying (active) — stamp now.
+        orgUpdates.first_paid_at = firstPaidAt;
       }
       // Sub healthy again → clear any lingering failure clock (self-heal in case
       // the webhook's clear was missed).
@@ -226,7 +234,7 @@ serve(async (req) => {
       block_at: overdue.block_at,
       days_until_block: overdue.days_until_block,
       payment_failed_at: failedAt,
-      first_paid_at: orgData?.first_paid_at ?? new Date().toISOString(),
+      first_paid_at: firstPaidAt,
       current_period_end: subscriptionEnd,
     });
   } catch (error) {
