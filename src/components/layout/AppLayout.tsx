@@ -42,7 +42,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
   // Mobile layout
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-dvh bg-background">
         {!immersive && (
           <MobileHeader
             onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -69,7 +69,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           className={immersive || hideNav ? undefined : "pb-20"}
           style={immersive || showBanner ? undefined : { paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
-          <div className={immersive || hideNav ? undefined : "min-h-[calc(100vh-8.5rem)]"}>
+          <div className={immersive || hideNav ? undefined : "min-h-[calc(100dvh-8.5rem)]"}>
             {children}
           </div>
         </main>
@@ -83,12 +83,12 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
 
   // Desktop layout
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <AppSidebar userName={userName} organizationName={organizationName} />
       <main className={cn("transition-[padding] duration-200", sidebarCollapsed ? "pl-16" : "pl-64")}>
         {showTrialBanner && <TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} />}
         {showOverdueBanner && <PaymentOverdueBanner daysUntilBlock={subscriptionStatus!.days_until_block ?? 0} blockAt={subscriptionStatus!.block_at} />}
-        <div className="min-h-screen">
+        <div className="min-h-dvh">
           {children}
         </div>
       </main>

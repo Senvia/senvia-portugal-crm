@@ -1828,7 +1828,7 @@ export default function Inbox() {
   // ---- Empty state: no caixa connected yet ----
   if (!channelConfigured) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="rounded-2xl bg-primary/10 p-5">
           <InboxIcon className="h-12 w-12 text-primary" />
         </div>
@@ -2248,7 +2248,7 @@ export default function Inbox() {
       // plus the bottom safe-area so the list clears the home indicator. dvh tracks
       // the mobile browser chrome. (The conversation view ignores this — it's a
       // fixed overlay sized to the visual viewport.)
-      isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-screen",
+      isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-dvh",
     )}>
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
       {!connected && (

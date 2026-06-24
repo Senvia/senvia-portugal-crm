@@ -238,7 +238,7 @@ export default function Sales() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-dvh bg-background">
         {/* Header */}
       <div className="p-4 md:p-6 border-b border-border/50">
         <PageHeader

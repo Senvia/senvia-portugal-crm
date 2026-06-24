@@ -16,6 +16,14 @@ export default {
       screens: {
         'xs': '475px',
       },
+      minHeight: {
+        'dvh': '100dvh',
+        'screen': '100dvh',
+      },
+      height: {
+        'dvh': '100dvh',
+        'screen': '100dvh',
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },

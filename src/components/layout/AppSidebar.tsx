@@ -112,7 +112,7 @@ export function AppSidebar({
   return (
     <>
       <aside className={cn(
-        "fixed left-0 top-0 z-40 h-screen gradient-sidebar border-r border-sidebar-border transition-[width] duration-200",
+        "fixed left-0 top-0 z-40 h-dvh gradient-sidebar border-r border-sidebar-border transition-[width] duration-200",
         collapsed ? "w-16" : "w-64",
       )}>
         <div className="flex h-full flex-col">

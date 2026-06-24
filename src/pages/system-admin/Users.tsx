@@ -5,7 +5,7 @@ import { ArrowLeft, Users } from "lucide-react";
 
 export default function SystemAdminUsers() {
   return (
-    <div className="min-h-screen bg-background p-6 lg:p-8">
+    <div className="min-h-dvh bg-background p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>

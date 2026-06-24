@@ -51,14 +51,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { phase: P
   render() {
     if (this.state.phase === "reloading") {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
+        <div className="min-h-dvh flex items-center justify-center bg-background text-muted-foreground text-sm">
           A atualizar…
         </div>
       );
     }
     if (this.state.phase === "error") {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background text-center p-6">
+        <div className="min-h-dvh flex flex-col items-center justify-center gap-4 bg-background text-center p-6">
           <h1 className="text-xl font-semibold">Ocorreu um erro</h1>
           <p className="text-sm text-muted-foreground max-w-sm">
             Algo correu mal ao carregar a página. Tenta recarregar.

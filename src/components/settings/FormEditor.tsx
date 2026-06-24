@@ -904,7 +904,7 @@ Campos opcionais vazios significam Frio`}
 
   // Desktop layout with resizable panels
   return (
-    <div className="h-[calc(100vh-12rem)] min-h-[600px]">
+    <div className="h-[calc(100dvh-12rem)] min-h-[600px]">
       <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
         <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
           <div className="flex h-full flex-col">
