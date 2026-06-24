@@ -110,7 +110,7 @@ export default function SystemAdminTrialActivation() {
   );
 
   return (
-    <div className="min-h-screen bg-background p-4 lg:p-8">
+    <div className="min-h-dvh bg-background p-4 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">

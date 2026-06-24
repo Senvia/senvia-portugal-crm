@@ -17,7 +17,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, ArrowLeft, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -141,7 +141,7 @@ export default function SystemAdminAnnouncements() {
 
   return (
     <div className="min-h-dvh bg-background p-4 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -199,7 +199,9 @@ export default function SystemAdminAnnouncements() {
         )}
 
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/system-admin"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Link>
+          <Link to="/system-admin"><ChevronRight className="h-3.5 w-3.5 -rotate-180" />
+            Voltar ao Painel Super Admin
+          </Link>
         </Button>
       </div>
 
