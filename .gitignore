@@ -28,6 +28,10 @@ dist-ssr
 .claude
 supabase/.temp
 
+# Agent skills (instaladas via `skills` CLI — locais, nao versionadas)
+.agents/
+skills-lock.json
+
 # Migration toolkit (local only — never commit credentials or DB dumps)
 migration/.env
 migration/dumps/

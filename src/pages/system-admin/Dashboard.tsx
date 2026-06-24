@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
-import { Activity, Building, Sparkles, Users, ShieldCheck, Search, ChevronRight } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminMetricsCards } from "@/components/system-admin/AdminMetricsCards";
+import { useAuth } from "@/contexts/AuthContext";
+import { Activity, Users, Sparkles } from "lucide-react";
+import { AdminOverview } from "@/components/system-admin/AdminOverview";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
-import type { OrgStripeData } from "@/components/system-admin/OrganizationsTable";
-import { cn } from "@/lib/utils";
+import type { OrgStripeData, AdminContact } from "@/components/system-admin/OrganizationsTable";
 
 interface OrgRow {
   id: string;
@@ -18,6 +17,10 @@ interface OrgRow {
   billing_exempt: boolean | null;
   created_at: string | null;
   contact_phone: string | null;
+  first_paid_at: string | null;
+  current_period_end: string | null;
+  payment_failed_at: string | null;
+  last_active_at: string | null;
 }
 
 interface OrgWithMembers extends OrgRow {
@@ -31,11 +34,10 @@ interface StripeStatsResponse {
   org_stats: OrgStripeData[];
 }
 
-const QUICK_ACTIONS = [
-  { to: "/system-admin/organizations", icon: Building, label: "Gerir Organizações", desc: "Consultar e editar organizações" },
-  { to: "/system-admin/users", icon: Users, label: "Gerir Utilizadores", desc: "Gerir contas e permissões" },
-  { to: "/system-admin/announcements", icon: Sparkles, label: "Gerir Novidades", desc: "Pop-ups de novidades do sistema" },
-  { to: "/system-admin/activation", icon: Activity, label: "Ativação de Trials", desc: "Funil de conversão e ativação" },
+const SECONDARY = [
+  { to: "/system-admin/activation", icon: Activity, label: "Ativação" },
+  { to: "/system-admin/users", icon: Users, label: "Utilizadores" },
+  { to: "/system-admin/announcements", icon: Sparkles, label: "Novidades" },
 ];
 
 export default function SystemAdminDashboard() {
@@ -44,9 +46,10 @@ export default function SystemAdminDashboard() {
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ["super-admin-all-orgs"],
     queryFn: async (): Promise<OrgWithMembers[]> => {
-      const { data: orgs, error } = await supabase
+      // Cast: last_active_at is newer than the generated types.
+      const { data: orgs, error } = await (supabase as any)
         .from("organizations")
-        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone")
+        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone, first_paid_at, current_period_end, payment_failed_at, last_active_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -60,16 +63,13 @@ export default function SystemAdminDashboard() {
         counts[m.organization_id] = (counts[m.organization_id] || 0) + 1;
       });
 
-      return (orgs || []).map((o) => ({
-        ...o,
-        member_count: counts[o.id] || 0,
-      }));
+      return (orgs || []).map((o: any) => ({ ...o, member_count: counts[o.id] || 0 }));
     },
   });
 
-  const { data: adminEmails = {} } = useQuery({
-    queryKey: ["super-admin-admin-emails"],
-    queryFn: async (): Promise<Record<string, string>> => {
+  const { data: adminInfo = {} } = useQuery({
+    queryKey: ["super-admin-admin-info"],
+    queryFn: async (): Promise<Record<string, AdminContact>> => {
       const { data, error } = await supabase
         .from("organization_members")
         .select("organization_id, user_id, role")
@@ -82,19 +82,19 @@ export default function SystemAdminDashboard() {
 
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("id, email")
+        .select("id, email, full_name")
         .in("id", adminUserIds);
       if (pErr) throw pErr;
 
-      const emailMap: Record<string, string> = {};
+      const profMap: Record<string, AdminContact> = {};
       (profiles || []).forEach((p: any) => {
-        if (p.email) emailMap[p.id] = p.email;
+        profMap[p.id] = { name: p.full_name || undefined, email: p.email || undefined };
       });
 
-      const orgAdminMap: Record<string, string> = {};
+      const orgAdminMap: Record<string, AdminContact> = {};
       (data || []).forEach((m: any) => {
-        if (!orgAdminMap[m.organization_id] && emailMap[m.user_id]) {
-          orgAdminMap[m.organization_id] = emailMap[m.user_id];
+        if (!orgAdminMap[m.organization_id] && profMap[m.user_id]) {
+          orgAdminMap[m.organization_id] = profMap[m.user_id];
         }
       });
       return orgAdminMap;
@@ -102,7 +102,7 @@ export default function SystemAdminDashboard() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: stripeStats, isLoading: stripeLoading } = useQuery({
+  const { data: stripeStats } = useQuery({
     queryKey: ["super-admin-stripe-stats"],
     queryFn: async (): Promise<StripeStatsResponse> => {
       const { data, error } = await supabase.functions.invoke("admin-stripe-stats");
@@ -114,91 +114,43 @@ export default function SystemAdminDashboard() {
   });
 
   return (
-    <div className="min-h-dvh bg-background p-4 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        {/* Page header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
-              Painel Super Admin
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Gestão global do sistema Senvia OS.
-              {stripeStats && (
-                <span className="ml-2 text-[11px] text-muted-foreground/60">
-                  {stripeStats.paying_count} pagantes · €{stripeStats.mrr} MRR
-                </span>
-              )}
-            </p>
+    <div className="min-h-dvh bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8 lg:py-8">
+        {/* Header */}
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Visão geral</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Assinaturas, receita e clientes do Senvia OS.</p>
           </div>
-        </div>
-
-        {/* Métricas */}
-        <AdminMetricsCards
-          organizations={organizations}
-          stripeStats={stripeStats ? { mrr: stripeStats.mrr, paying_count: stripeStats.paying_count, total_subscriptions: stripeStats.total_subscriptions } : null}
-          stripeLoading={stripeLoading}
-        />
-
-        {/* Ações rápidas — hub de navegação */}
-        <div>
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Navegação
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {QUICK_ACTIONS.map((action) => (
+          <nav className="flex items-center gap-1">
+            {SECONDARY.map((s) => (
               <Link
-                key={action.to}
-                to={action.to}
-                className={cn(
-                  "group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3.5",
-                  "transition-all duration-150 hover:border-primary/30 hover:bg-accent/50 hover:shadow-sm",
-                  "active:scale-[0.99]",
-                )}
+                key={s.to}
+                to={s.to}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
-                    <action.icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium leading-none text-card-foreground">
-                      {action.label}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{action.desc}</p>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <s.icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{s.label}</span>
               </Link>
             ))}
-          </div>
-        </div>
+          </nav>
+        </header>
 
-        {/* Tabela de organizações */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        ) : (
+        {/* Overview: metrics + chart + subscription status */}
+        <AdminOverview organizations={organizations} stripeStats={stripeStats} loading={isLoading} />
+
+        {/* Clients */}
+        <section className="mt-8 space-y-3">
+          <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
           <OrganizationsTable
             organizations={organizations}
+            loading={isLoading}
             currentOrgId={organization?.id}
             onAccessOrg={(id) => switchOrganization(id)}
             stripeData={stripeStats?.org_stats}
-            adminEmails={adminEmails}
+            adminInfo={adminInfo}
           />
-        )}
-
-        {/* Voltar ao dashboard principal */}
-        <div className="border-t border-border pt-4">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronRight className="h-3.5 w-3.5 -rotate-180" />
-            Voltar ao Dashboard
-          </Link>
-        </div>
+        </section>
       </div>
     </div>
   );

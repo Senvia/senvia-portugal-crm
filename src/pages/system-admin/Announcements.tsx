@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -17,10 +16,11 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, ChevronRight, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
+import { AdminShell, AdminTableSkeleton } from "@/components/system-admin/AdminShell";
 
 interface Announcement {
   id: string;
@@ -140,70 +140,77 @@ export default function SystemAdminAnnouncements() {
   }
 
   return (
-    <div className="min-h-dvh bg-background p-4 lg:p-8">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Sparkles className="h-5 w-5 shrink-0 text-primary" /> Gerir Novidades
-            </h1>
-            <p className="text-sm text-muted-foreground">Pop-ups de novidades para utilizadores.</p>
-          </div>
-          <Button onClick={openCreate} size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Novidade</Button>
-        </div>
-
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">A carregar...</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma novidade criada.</p>
-        ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Versão</TableHead>
-                  <TableHead>Publicação</TableHead>
-                  <TableHead>Expira em</TableHead>
-                  <TableHead>Ativo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.title}</TableCell>
-                    <TableCell>{a.version || "—"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(a.published_at), "dd MMM yyyy HH:mm", { locale: pt })}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {a.expires_at
-                        ? new Date(a.expires_at) < new Date()
-                          ? <span className="text-destructive">Expirado</span>
-                          : format(new Date(a.expires_at), "dd MMM yyyy", { locale: pt })
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Switch checked={a.is_active} onCheckedChange={(v) => toggle.mutate({ id: a.id, is_active: v })} />
-                    </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/system-admin"><ChevronRight className="h-3.5 w-3.5 -rotate-180" />
-            Voltar ao Painel Super Admin
-          </Link>
+    <AdminShell
+      title="Novidades"
+      description="Pop-ups de novidades mostrados uma vez a cada utilizador."
+      icon={Sparkles}
+      maxWidth="4xl"
+      action={
+        <Button onClick={openCreate} size="sm">
+          <Plus className="mr-1 h-4 w-4" /> Nova
         </Button>
-      </div>
+      }
+    >
+      {isLoading ? (
+        <div className="overflow-hidden rounded-xl border">
+          <AdminTableSkeleton rows={4} cols={4} />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-dashed py-12 text-center">
+          <Sparkles className="mx-auto h-6 w-6 text-muted-foreground/60" />
+          <p className="mt-3 text-sm font-medium text-foreground">Ainda não há novidades</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cria um pop-up para anunciar uma funcionalidade ou versão nova.
+          </p>
+          <Button onClick={openCreate} size="sm" className="mt-4">
+            <Plus className="mr-1 h-4 w-4" /> Criar a primeira
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Título</TableHead>
+                <TableHead className="hidden sm:table-cell">Versão</TableHead>
+                <TableHead className="hidden md:table-cell">Publicação</TableHead>
+                <TableHead>Expira em</TableHead>
+                <TableHead>Ativo</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">{a.title}</TableCell>
+                  <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{a.version || "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                    {format(new Date(a.published_at), "dd MMM yyyy HH:mm", { locale: pt })}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {a.expires_at
+                      ? new Date(a.expires_at) < new Date()
+                        ? <span className="text-destructive">Expirado</span>
+                        : format(new Date(a.expires_at), "dd MMM yyyy", { locale: pt })
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Switch checked={a.is_active} onCheckedChange={(v) => toggle.mutate({ id: a.id, is_active: v })} />
+                  </TableCell>
+                  <TableCell className="space-x-1 text-right">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(a)} title="Editar">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(a.id)} title="Excluir">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
@@ -237,7 +244,7 @@ export default function SystemAdminAnnouncements() {
                 value={form.expires_at}
                 onChange={(e) => setForm({ ...form, expires_at: e.target.value })}
               />
-              <p className="text-xs text-muted-foreground mt-1">Deixa em branco para não expirar automaticamente. Por omissão: 7 dias.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Deixa em branco para não expirar automaticamente. Por omissão: 7 dias.</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
@@ -268,6 +275,6 @@ export default function SystemAdminAnnouncements() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AdminShell>
   );
 }

@@ -75,7 +75,7 @@ import {
   Youtube,
   Globe
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
@@ -145,6 +145,7 @@ export function LeadDetailsModal({
   const [editValue, setEditValue] = useState<string>("");
   const [editConsumo, setEditConsumo] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const [editName, setEditName] = useState<string>("");
   const [editEmail, setEditEmail] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
@@ -271,6 +272,15 @@ export function LeadDetailsModal({
       if (!isEditingCpe) setEditCpe((lead.custom_data as Record<string, unknown>)?.cpe as string || "");
     }
   }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, isEditingCpe, editValue, editConsumo]);
+
+  // Auto-grow the notes textarea so long notes are fully visible instead of
+  // trapped in a tiny 80px scroll box. Caps at ~60vh, then it scrolls.
+  useEffect(() => {
+    const el = notesRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editNotes]);
 
   if (!lead) return null;
 
@@ -569,12 +579,14 @@ export function LeadDetailsModal({
                     </CardHeader>
                     <CardContent>
                       <Textarea
+                        ref={notesRef}
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
                         onFocus={() => setIsEditingNotes(true)}
                         onBlur={() => { setIsEditingNotes(false); handleNotesBlur(); }}
                         placeholder="Notas do lead..."
-                        className="min-h-[80px] text-sm"
+                        rows={3}
+                        className="min-h-[96px] max-h-[60vh] resize-none overflow-y-auto text-sm leading-relaxed"
                       />
                     </CardContent>
                   </Card>
