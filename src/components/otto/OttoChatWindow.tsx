@@ -9,6 +9,7 @@ import { OttoQuickActions } from "./OttoQuickActions";
 import { OttoOnboardingKickoff } from "./OttoOnboardingKickoff";
 import { useOttoOnboarding } from "@/hooks/useOttoOnboarding";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useOttoStore } from "@/stores/useOttoStore";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -26,6 +27,10 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
   const { showBadge: onboardingPending } = useOttoOnboarding();
   const [input, setInput] = useState("");
   const isMobile = useIsMobile();
+  // Keep the chat sized to the VISIBLE viewport so the input never hides behind
+  // the on-screen keyboard (same approach as the inbox). iOS: position with CSS
+  // top/height, never a transform.
+  const { height: vvHeight, offsetTop: vvOffsetTop } = useVisualViewport();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,10 +107,12 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.95 }}
       transition={{ duration: 0.2 }}
-      style={{ pointerEvents: 'auto' }}
+      style={isMobile
+        ? { pointerEvents: 'auto', top: vvOffsetTop, height: vvHeight }
+        : { pointerEvents: 'auto' }}
       className={
         isMobile
-          ? "fixed inset-0 z-[9999] bg-background flex flex-col"
+          ? "fixed left-0 right-0 z-[9999] bg-background flex flex-col overflow-hidden"
           : "fixed bottom-20 right-4 z-[9999] w-[380px] h-[520px] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       }
     >
@@ -239,6 +246,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
             onKeyDown={handleKeyDown}
             placeholder="Escreve aqui..."
             disabled={isLoading}
+            style={isMobile ? { fontSize: 16 } : undefined}
             className="flex-1 h-10 px-3 rounded-xl bg-background border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           />
           <Button
