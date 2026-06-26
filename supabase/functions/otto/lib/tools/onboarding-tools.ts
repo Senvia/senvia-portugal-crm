@@ -191,6 +191,118 @@ export const onboardingTools: Tool[] = [
     },
   },
   {
+    name: "setup_lead_autoreply",
+    description: "Configura a RESPOSTA AUTOMÁTICA de WhatsApp aos leads novos: cria/atualiza o formulário de captação com perguntas de qualificação + as regras de IA + as mensagens por temperatura (quente/morno/frio). Usa APENAS depois de mostrares as perguntas, regras e mensagens ao utilizador e ele confirmar. Para a MESMA resposta a todos, põe o mesmo texto nos 3 templates. NOTA: o WhatsApp tem de estar LIGADO à parte para as mensagens saírem.",
+    parameters: {
+      type: "object",
+      properties: {
+        questions: {
+          type: "array",
+          description: "Perguntas de qualificação a pôr no formulário (3 a 5 ideais). Prefere 'select' com opções para qualificar bem (orçamento, prazo, etc.).",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Texto da pergunta (ex.: 'Qual o teu orçamento?')" },
+              type: { type: "string", description: "text | number | select | checkbox | textarea", enum: ["text", "number", "select", "checkbox", "textarea"] },
+              options: { type: "array", description: "Opções (só para type 'select')", items: { type: "string" } },
+              required: { type: "boolean", description: "Obrigatória? (default true)" },
+            },
+            required: ["label", "type"],
+          },
+        },
+        qualification_rules: { type: "string", description: "Regras para a IA classificar a temperatura a partir das respostas. Ex.: 'Quente: orçamento alto ou prazo urgente. Morno: interesse sem urgência. Frio: só pede informação.'" },
+        template_hot: { type: "string", description: "Mensagem para lead QUENTE. Usa variáveis: {{nome}}, {{empresa}}, {{campo:Etiqueta}}." },
+        template_warm: { type: "string", description: "Mensagem para lead MORNO." },
+        template_cold: { type: "string", description: "Mensagem para lead FRIO." },
+      },
+      required: ["qualification_rules"],
+    },
+    adminOnly: true,
+    isWrite: true,
+    execute: async (args, ctx) => {
+      const supabase = ctx.supabaseAdmin;
+      const orgId = ctx.orgId;
+      const hot = (args.template_hot || "").trim();
+      const warm = (args.template_warm || "").trim();
+      const cold = (args.template_cold || "").trim();
+      if (!hot && !warm && !cold) {
+        return { error: "Sem mensagens", _instruction: "Redige pelo menos uma mensagem (quente/morno/frio, ou a mesma para todos) e mostra ao utilizador antes de configurar." };
+      }
+      const TYPES = ["text", "number", "select", "checkbox", "textarea"];
+      const incoming = Array.isArray(args.questions) ? args.questions : [];
+      const newFields = incoming.map((q: any) => ({
+        id: crypto.randomUUID(),
+        type: TYPES.includes(q?.type) ? q.type : "text",
+        label: String(q?.label || "Pergunta"),
+        placeholder: q?.placeholder ? String(q.placeholder) : "",
+        required: q?.required !== false,
+        options: Array.isArray(q?.options) ? q.options.map(String) : undefined,
+        order: 0,
+      }));
+      // Find the org's form (default first); update it, or create one if none.
+      const { data: form } = await supabase
+        .from("forms")
+        .select("id, slug, form_settings")
+        .eq("organization_id", orgId)
+        .order("is_default", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const base = (form?.form_settings && typeof form.form_settings === "object" && !Array.isArray(form.form_settings)) ? form.form_settings as Record<string, any> : {};
+      const existing = Array.isArray(base.custom_fields) ? base.custom_fields : [];
+      const existingLabels = new Set(existing.map((f: any) => String(f?.label || "").toLowerCase()));
+      const merged = [...existing, ...newFields.filter((f) => !existingLabels.has(f.label.toLowerCase()))]
+        .map((f: any, i: number) => ({ ...f, order: i }));
+      const bf = base.fields || {};
+      const form_settings = {
+        mode: base.mode || "traditional",
+        title: base.title || "Deixe o seu Contacto",
+        subtitle: base.subtitle || "Preencha os dados e entraremos em contacto consigo.",
+        logo_url: base.logo_url ?? null,
+        primary_color: base.primary_color || "#3B82F6",
+        // Phone is visible + REQUIRED: it's what the auto-WhatsApp needs.
+        fields: {
+          name: { visible: true, required: true, label: bf.name?.label || "Nome" },
+          email: { visible: true, required: false, label: bf.email?.label || "Email" },
+          phone: { visible: true, required: true, label: bf.phone?.label || "Telemóvel" },
+          message: bf.message || { visible: false, required: false, label: "Mensagem" },
+        },
+        success_message: base.success_message || { title: "Obrigado!", description: "Recebemos o seu contacto e entraremos em contacto brevemente." },
+        error_message: base.error_message || "Não foi possível enviar o formulário. Tente novamente.",
+        submit_button_text: base.submit_button_text || "Enviar",
+        custom_fields: merged,
+      };
+      const payload: Record<string, any> = {
+        form_settings,
+        ai_qualification_rules: (args.qualification_rules || "").trim() || null,
+        msg_template_hot: hot || null,
+        msg_template_warm: warm || null,
+        msg_template_cold: cold || null,
+      };
+      let slug = form?.slug as string | undefined;
+      if (form?.id) {
+        const { error } = await supabase.from("forms").update(payload).eq("id", form.id);
+        if (error) return { error: error.message, _instruction: "ERRO ao guardar a configuração. Avisa o utilizador que houve um problema técnico." };
+      } else {
+        slug = "leads-" + crypto.randomUUID().slice(0, 8);
+        const { data: created, error } = await supabase
+          .from("forms")
+          .insert({ organization_id: orgId, name: "Captação de Leads", slug, is_default: true, is_active: true, ...payload })
+          .select("slug")
+          .single();
+        if (error) return { error: error.message, _instruction: "ERRO ao criar o formulário. Avisa o utilizador." };
+        slug = created.slug;
+      }
+      // Per-form mode so the form's own templates/rules apply to its leads.
+      await supabase.from("organizations").update({ ai_response_mode: "per_form" }).eq("id", orgId);
+      return {
+        success: true,
+        form_slug: slug,
+        questions: merged.length,
+        _instruction: `Resposta automática configurada: ${merged.length} pergunta(s) de qualificação + regras + mensagens, no formulário (telemóvel obrigatório, para o WhatsApp). DIZ AO UTILIZADOR com clareza: (1) tem de ter o WhatsApp LIGADO para as mensagens saírem (oferece ligar agora com [modal:whatsapp] se ainda não estiver); (2) pode rever e ajustar tudo em Definições > Formulários de Captação [link:Rever formulário|/settings]; (3) o link público do formulário para usar nos anúncios é senvia.app/f/${slug}.`,
+      };
+    },
+  },
+  {
     name: "set_modules",
     description: `Ativar ou desativar módulos da organização. Módulos válidos: ${VALID_MODULES.join(", ")}.`,
     parameters: {

@@ -42,6 +42,19 @@ const SYSTEM_KNOWLEDGE = `CONHECIMENTO DO SISTEMA (resumo):
 - PWA: instalável no telemóvel via browser > "Adicionar ao ecrã inicial".
 - TELECOM (só nicho telecom): dashboards especializados, alertas de fidelização CPE/CUI, Portal Total Link.`;
 
+const AUTO_REPLY = `RESPOSTA AUTOMÁTICA A LEADS (WhatsApp por temperatura) — funcionalidade central:
+Quando um lead entra por um FORMULÁRIO do Senvia (/f/... ou /c/...), o sistema envia-lhe sozinho uma 1ª mensagem de WhatsApp em segundos, escolhida pela TEMPERATURA (quente/morno/frio). (Ainda NÃO funciona para leads de webhook/Meta Lead Ads nativos.)
+São precisas 3 coisas: (a) WhatsApp LIGADO (Definições > Integrações, ou [modal:whatsapp]); (b) PERGUNTAS de qualificação no formulário (para a IA ter dados para classificar); (c) REGRAS de qualificação + as MENSAGENS por temperatura.
+
+Tens a ferramenta setup_lead_autoreply que cria/atualiza o formulário com (b)+(c) de uma vez. FLUXO quando o utilizador quer "responder leads automaticamente" / "resposta automática" / "contactar os leads sozinho":
+1. Pergunta o NEGÓCIO em 1-2 perguntas curtas: o que vende e como qualifica um bom cliente.
+2. GERA à medida: 3-5 perguntas de qualificação (prefere type 'select' com opções, ex.: serviço, prazo, orçamento), as REGRAS de temperatura que usam essas respostas, e as 3 MENSAGENS (quente/morno/frio) personalizadas com variáveis ({{nome}}, {{campo:Etiqueta}}).
+3. MOSTRA tudo (perguntas + regras + as 3 mensagens) e pede confirmação: [botao:Sim, aplicar][botao:Quero ajustar].
+4. SÓ após "Sim", chama setup_lead_autoreply. Depois lembra: ligar o WhatsApp se ainda não estiver, e que pode rever/ajustar em Definições > Formulários de Captação.
+Se quiser a MESMA mensagem para todos (sem distinguir temperatura), põe o mesmo texto nos 3 templates.
+
+Exemplo (serviços): questions=[{label:"Que serviço procura?",type:"select",options:["Instalação","Reparação","Orçamento"]},{label:"Para quando?",type:"select",options:["Urgente","Este mês","Sem pressa"]},{label:"Orçamento aproximado?",type:"select",options:["<500€","500-2000€",">2000€"]}]; qualification_rules="Quente: 'Urgente' ou orçamento >2000€. Morno: 'Este mês' ou interesse claro. Frio: 'Sem pressa' ou só pede informação."; template_hot="Olá {{nome}}! Recebi o seu pedido de {{campo:Que serviço procura?}}. Como é urgente, posso ligar-lhe já. Está disponível?".`;
+
 const SUPPORT_MODE = `MODO SUPORTE:
 - Interpreta a intenção e mapeia para os módulos do Senvia OS.
 - Se faltar contexto, faz UMA pergunta curta com 2-3 botões [botao:...] para o utilizador escolher o cenário. Se já houver informação suficiente, usa a ferramenta diretamente.
@@ -116,7 +129,7 @@ export function buildSystemPrompt(
   ctx: ToolContext | null,
   opts: { hasDataAccess: boolean; blockedLabels: string[] },
 ): string {
-  const parts: string[] = [CORE_IDENTITY, ANTI_HALLUCINATION, ROUTE_MAP, SYSTEM_KNOWLEDGE];
+  const parts: string[] = [CORE_IDENTITY, ANTI_HALLUCINATION, ROUTE_MAP, SYSTEM_KNOWLEDGE, AUTO_REPLY];
 
   if (!opts.hasDataAccess || !ctx) {
     parts.push(SUPPORT_MODE);

@@ -50,13 +50,14 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
     enabled: !!orgId,
     staleTime: 30_000,
     queryFn: async () => {
-      const [stagesRes, leadsRes, membersRes, productsRes, channelsRes, orgRes] = await Promise.all([
+      const [stagesRes, leadsRes, membersRes, productsRes, channelsRes, orgRes, autoreplyRes] = await Promise.all([
         supabase.from("pipeline_stages").select("id", { count: "exact", head: true }).eq("organization_id", orgId!),
         supabase.from("leads").select("id", { count: "exact", head: true }).eq("organization_id", orgId!),
         supabase.from("organization_members").select("id", { count: "exact", head: true }).eq("organization_id", orgId!).eq("is_active", true),
         supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", orgId!),
         supabase.from("messaging_channels").select("id", { count: "exact", head: true }).eq("organization_id", orgId!).eq("status", "connected"),
         supabase.from("organizations").select("invoicexpress_api_key, keyinvoice_username, brevo_api_key").eq("id", orgId!).maybeSingle(),
+        supabase.from("forms").select("id", { count: "exact", head: true }).eq("organization_id", orgId!).or("msg_template_hot.not.is.null,msg_template_warm.not.is.null,msg_template_cold.not.is.null"),
       ]);
       const org = orgRes.data as any;
       return {
@@ -67,16 +68,18 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
         channels: channelsRes.count ?? 0,
         invoicing: !!(org?.invoicexpress_api_key || org?.keyinvoice_username),
         marketing: !!org?.brevo_api_key,
+        autoreply: (autoreplyRes.count ?? 0) > 0,
       };
     },
   });
 
-  const c = data ?? { stages: 0, leads: 0, members: 0, products: 0, channels: 0, invoicing: false, marketing: false };
+  const c = data ?? { stages: 0, leads: 0, members: 0, products: 0, channels: 0, invoicing: false, marketing: false, autoreply: false };
 
   // Every possible task; filtered below to the org's active modules.
   const all: OttoSetupTask[] = [
     { key: "pipeline", label: "Configurar o pipeline de vendas", description: "As etapas por onde passam os teus negócios.", icon: "kanban", module: null, done: c.stages > 0, kind: "tour", target: "setup_pipeline" },
     { key: "inbox", label: "Ligar um canal de mensagens", description: "Liga o WhatsApp para falar com clientes dentro do CRM.", icon: "message", module: "inbox", done: c.channels > 0, kind: "modal", target: "whatsapp" },
+    { key: "autoreply", label: "Ativar resposta automática a leads", description: "Cada lead recebe uma 1ª mensagem no WhatsApp em segundos, pela temperatura.", icon: "message", module: "inbox", done: c.autoreply, kind: "chat", target: "Quero configurar a resposta automática aos meus leads." },
     { key: "finance", label: "Configurar a faturação", description: "InvoiceXpress ou KeyInvoice para emitires faturas.", icon: "receipt", module: "finance", done: c.invoicing, kind: "chat", target: "Quero configurar a faturação da minha empresa." },
     { key: "marketing", label: "Ligar o email marketing", description: "Liga o Brevo para campanhas e emails automáticos.", icon: "mail", module: "marketing", done: c.marketing, kind: "chat", target: "Quero ligar o Brevo para email marketing." },
     { key: "ecommerce", label: "Adicionar o primeiro produto", description: "Cria o teu catálogo para começares a vender.", icon: "bag", module: "ecommerce", done: c.products > 0, kind: "nav", target: "/ecommerce/products" },
