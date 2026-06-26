@@ -12,6 +12,7 @@ import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
 import { FormSettings, migrateFormSettings, CustomField, MetaPixel } from "@/types";
 import { normalizeEmail, normalizeInternationalPhone } from "@/lib/validation/contact";
+import { getBrandStyle } from "@/lib/color";
 
 // Declare fbq for TypeScript
 declare global {
@@ -565,8 +566,9 @@ const ConversationalLeadForm = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Card Container */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl shadow-xl border border-border/50 overflow-hidden">
+        {/* Card Container. The brand style re-points --primary at the org color
+            so the progress bar, option cards and CTA button match the brand. */}
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl shadow-xl border border-border/50 overflow-hidden" style={getBrandStyle(primaryColor)}>
           {/* Progress Bar */}
           {!isComplete && totalSteps > 0 && (
             <div className="px-6 pt-6">

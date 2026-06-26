@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings, MetaPixel } from '@/types';
 import { normalizeEmail, normalizeInternationalPhone } from '@/lib/validation/contact';
+import { readableTextColor } from '@/lib/color';
 
 // Declare fbq for TypeScript
 declare global {
@@ -544,10 +545,10 @@ export default function PublicLeadForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {settings.logo_url ? (
-            <img src={settings.logo_url} alt={formData?.org_name || 'Logo'} className="h-12 w-auto object-contain mx-auto mb-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src={settings.logo_url} alt={formData?.org_name || 'Logo'} className="h-12 w-auto max-w-full object-contain mx-auto mb-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           ) : (
             <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: `linear-gradient(135deg, ${settings.primary_color}, ${settings.primary_color}dd)` }}>
-              <Zap className="w-6 h-6 text-white" />
+              <Zap className="w-6 h-6" style={{ color: readableTextColor(settings.primary_color) }} />
             </div>
           )}
           <CardTitle className="text-slate-900">{settings.title}</CardTitle>
@@ -623,11 +624,11 @@ export default function PublicLeadForm() {
               </Label>
             </div>
             
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isSubmitting}
-              style={{ backgroundColor: settings.primary_color }}
+              style={{ backgroundColor: settings.primary_color, color: readableTextColor(settings.primary_color) }}
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : settings.submit_button_text}
             </Button>

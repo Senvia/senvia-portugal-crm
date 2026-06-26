@@ -19,7 +19,7 @@ export const OptionCard = ({ icon, label, onClick, selected, disabled }: OptionC
       disabled={disabled}
       className={`
         flex flex-col items-center justify-center gap-3 p-4 rounded-xl
-        border-2 transition-colors w-full h-[80px] min-w-[100px]
+        border-2 transition-colors w-full h-full min-h-[80px] min-w-[100px]
         ${disabled 
           ? "opacity-50 cursor-not-allowed" 
           : "cursor-pointer"
@@ -37,7 +37,7 @@ export const OptionCard = ({ icon, label, onClick, selected, disabled }: OptionC
           {icon}
         </div>
       )}
-      <span className={`font-medium text-sm text-center leading-tight ${selected ? "text-primary" : "text-foreground"}`}>
+      <span className={`font-medium text-sm text-center leading-tight break-words ${selected ? "text-primary" : "text-foreground"}`}>
         {label}
       </span>
     </motion.button>
