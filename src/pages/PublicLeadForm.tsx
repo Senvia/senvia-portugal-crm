@@ -435,7 +435,7 @@ export default function PublicLeadForm() {
               type={field.type}
               placeholder={field.placeholder}
               value={customData[field.id] as string || ''}
-              onChange={(e) => updateCustomField(field.id, field.type === 'number' ? Number(e.target.value) : e.target.value)}
+              onChange={(e) => updateCustomField(field.id, e.target.value)}
             />
           </div>
         );
@@ -480,7 +480,20 @@ export default function PublicLeadForm() {
           </div>
         );
       default:
-        return null;
+        // Unknown/legacy field type — render a text input so a required field is
+        // never invisible (which would make the form impossible to submit).
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>{field.label} {field.required && '*'}</Label>
+            <Input
+              id={field.id}
+              type="text"
+              placeholder={field.placeholder}
+              value={customData[field.id] as string || ''}
+              onChange={(e) => updateCustomField(field.id, e.target.value)}
+            />
+          </div>
+        );
     }
   };
 
@@ -606,7 +619,7 @@ export default function PublicLeadForm() {
             <div className="flex items-start space-x-2 pt-2">
               <Checkbox id="gdpr" checked={gdprConsent} onCheckedChange={(checked) => setGdprConsent(checked === true)} />
               <Label htmlFor="gdpr" className="text-xs text-slate-500 leading-tight cursor-pointer">
-                Li e aceito a <a href="/privacy" target="_blank" className="underline hover:text-slate-700">Política de Privacidade</a> *
+                Li e aceito a <a href={`${window.location.origin}/privacy`} target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-700">Política de Privacidade</a> *
               </Label>
             </div>
             

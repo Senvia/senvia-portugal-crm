@@ -143,13 +143,20 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
 
       // Only send through a connected WhatsApp channel (the new Chatwoot/Evolution
       // instance), so the welcome lands in the inbox.
-      const { data: channel } = await supabase
+      // Pick a connected WhatsApp channel. Orgs can have several (the multi-account
+      // migration dropped the 1-per-type constraint), so .maybeSingle() would throw
+      // on 2+ rows — select the connected ones and take the oldest deterministically.
+      const { data: channels, error: channelErr } = await supabase
         .from('messaging_channels')
         .select('evolution_instance, status')
         .eq('organization_id', org.id)
         .eq('channel_type', 'whatsapp')
-        .maybeSingle();
-      if (!channel?.evolution_instance || channel.status !== 'connected') {
+        .eq('status', 'connected')
+        .order('created_at', { ascending: true })
+        .limit(1);
+      if (channelErr) console.error('[welcome] channel lookup failed:', channelErr.message);
+      const channel = channels?.[0];
+      if (!channel?.evolution_instance) {
         console.log('[welcome] skip — WhatsApp channel not connected for org', org.id);
         return;
       }
@@ -336,9 +343,11 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   // Lead Ads / Zapier / Make to retry indefinitely.
   let cleanPhone: string | null = null;
   if (phone) {
-    const r = normalizePtPhone(phone);
+    // Same normalization + storage format as the form (E.164), so the same contact
+    // dedupes across form/webhook and international numbers aren't silently dropped.
+    const r = normalizeInternationalPhone(phone);
     if (r.ok) {
-      cleanPhone = r.value.replace(/^\+351/, ''); // store 9 national digits
+      cleanPhone = r.value; // store E.164 (e.g. +351912345678)
     } else {
       console.warn('[submit-lead webhook] phone rejected:', r.reason, phone);
     }
@@ -891,7 +900,7 @@ Deno.serve(async (req) => {
         gdpr_consent: true,
         source: body.source || formSettings.form_name || 'Formulário Público',
         status: formSettings.target_stage || 'new',
-        notes: formSettings.form_name ? `Formulário: ${formSettings.form_name}` : (body.notes || null),
+        notes: [formSettings.form_name ? `Formulário: ${formSettings.form_name}` : null, body.notes?.trim() || null].filter(Boolean).join('\n') || null,
         custom_data: body.custom_data || {},
       })
       .select()
@@ -904,6 +913,11 @@ Deno.serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // True only for a genuinely new lead. When the dedup trigger turns the INSERT
+    // into an UPDATE of an existing lead, it returns no row — so this is false and
+    // we must NOT re-send the welcome message for a returning contact.
+    const wasInserted = !!lead;
 
     // If the de-duplication trigger updated an existing lead, the insert
     // returns no row — fetch that lead instead.
@@ -933,39 +947,42 @@ Deno.serve(async (req) => {
     // Proactive first-contact WhatsApp (replaces the retired n8n flow). Sends the
     // form's temperature template via the org's connected Evolution instance so it
     // appears in the Chatwoot inbox. Background; never blocks the response.
-    sendWelcomeMessage(supabase, org, lead, formSettings);
-
-    // Function to map custom_data IDs to human-readable labels
+    // Map custom_data keys from field IDs to human-readable labels. Idempotent for
+    // the conversational form (already label-keyed). This MUST run before the welcome
+    // so the {{campo:Etiqueta}} variables resolve, and we persist it so the lead, the
+    // notifications and the message all use labels.
     const mapCustomDataToLabels = (
       customData: Record<string, unknown> | null,
       formSettingsData: { custom_fields?: Array<{ id: string; label: string }> } | null
     ): Record<string, unknown> => {
       if (!customData) return {};
       if (!formSettingsData?.custom_fields) return customData;
-      
       const result: Record<string, unknown> = {};
-      
       for (const [fieldId, value] of Object.entries(customData)) {
-        // Find field by ID
-        const field = formSettingsData.custom_fields.find(f => f.id === fieldId);
-        
-        if (field) {
-          // Use label as key
-          result[field.label] = value;
-        } else {
-          // Keep ID if no match (UTM params or other fields)
-          result[fieldId] = value;
-        }
+        const field = formSettingsData.custom_fields.find((f) => f.id === fieldId);
+        result[field ? field.label : fieldId] = value;
       }
-      
       return result;
     };
-
-    // Transform custom_data IDs to human-readable labels
     const transformedCustomData = mapCustomDataToLabels(
       body.custom_data || null,
       formSettings.form_settings as any
     );
+
+    // Persist label-keyed custom_data on the lead (better display + so the welcome
+    // template's {{campo:...}} variables resolve against labels, not field IDs).
+    if (Object.keys(transformedCustomData).length > 0) {
+      lead.custom_data = transformedCustomData;
+      supabase.from('leads').update({ custom_data: transformedCustomData }).eq('id', lead.id).then(() => {}, () => {});
+    }
+
+    // Proactive first-contact WhatsApp (replaces the retired n8n flow). Sends the
+    // form's temperature template via the org's connected Evolution instance so it
+    // appears in the Chatwoot inbox. Background; never blocks the response. Only for a
+    // genuinely NEW lead, so a returning contact isn't messaged again.
+    if (wasInserted) {
+      sendWelcomeMessage(supabase, org, lead, formSettings);
+    }
 
     // Fetch active webhooks from organization_webhooks table
     const { data: activeWebhooks } = await supabase
@@ -1087,15 +1104,20 @@ Deno.serve(async (req) => {
       const clientUserAgent = req.headers.get('user-agent') || '';
 
       // Extract fbclid/fbp from custom_data for Meta attribution
-      const fbclid = (body.custom_data as Record<string, unknown>)?.fbclid as string | undefined;
-      const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
-      const fbp = (body.custom_data as Record<string, unknown>)?.fbp as string | undefined;
+      const cd = body.custom_data as Record<string, unknown> | undefined;
+      const fbclid = cd?.fbclid as string | undefined;
+      // Prefer the real _fbc cookie (sent in custom_data, has the correct click
+      // timestamp); only reconstruct from fbclid as a fallback.
+      const fbc = (cd?.fbc as string | undefined) || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined);
+      const fbp = cd?.fbp as string | undefined;
       
       if (fbc) console.log('CAPI: fbc constructed from fbclid:', fbc);
       
-      // Determine which pixels to fire — form-level overrides org-level
-      const pixelsToFire: Array<{ pixel_id: string; enabled: boolean }> = 
-        (formSettings.meta_pixels && formSettings.meta_pixels.length > 0)
+      // Determine which pixels to fire — form-level overrides org-level. A form that
+      // configures pixels (even an empty list = intentionally none) wins; only inherit
+      // the org's pixels when the form sets none at all (null).
+      const pixelsToFire: Array<{ pixel_id: string; enabled: boolean }> =
+        Array.isArray(formSettings.meta_pixels)
           ? formSettings.meta_pixels
           : (Array.isArray(org.meta_pixels) ? org.meta_pixels : []);
       

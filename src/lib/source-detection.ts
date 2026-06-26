@@ -137,7 +137,19 @@ export const detectLeadSource = (): SourceDetectionResult => {
   if (fbclid) tracking.fbclid = fbclid;
   if (gclid) tracking.gclid = gclid;
   if (ttclid) tracking.ttclid = ttclid;
-  
+
+  // Meta cookies set by the Pixel (_fbp / _fbc) — needed for strong CAPI matching
+  // and Pixel<->CAPI dedup. The backend forwards these to the Conversions API.
+  const readCookie = (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]+)'));
+    return m ? decodeURIComponent(m[1]) : undefined;
+  };
+  const fbpCookie = readCookie('_fbp');
+  const fbcCookie = readCookie('_fbc');
+  if (fbpCookie) tracking.fbp = fbpCookie;
+  if (fbcCookie) tracking.fbc = fbcCookie;
+
   // Referrer
   const referrer = document.referrer;
   if (referrer) tracking.referrer = referrer;

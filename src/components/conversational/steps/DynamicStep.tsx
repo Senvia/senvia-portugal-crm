@@ -134,6 +134,7 @@ export const DynamicStep = ({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={field.placeholder || field.label}
+            aria-label={field.label}
             className="text-base min-h-[100px]"
           />
         ) : field.fieldType === 'number' ? (
@@ -142,6 +143,7 @@ export const DynamicStep = ({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={field.placeholder || field.label}
+            aria-label={field.label}
             className="text-base h-12 text-center"
           />
         ) : field.fieldType === 'checkbox' ? (
@@ -163,6 +165,7 @@ export const DynamicStep = ({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={field.placeholder || field.label}
+            aria-label={field.label}
             className="text-base h-12 text-center"
           />
         )}

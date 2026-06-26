@@ -11,6 +11,7 @@ import { WelcomeStep } from "@/components/conversational/steps/WelcomeStep";
 import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
 import { FormSettings, migrateFormSettings, CustomField, MetaPixel } from "@/types";
+import { normalizeEmail, normalizeInternationalPhone } from "@/lib/validation/contact";
 
 // Declare fbq for TypeScript
 declare global {
@@ -116,6 +117,7 @@ const ConversationalLeadForm = () => {
   const [formData, setFormData] = useState<FormData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stepData, setStepData] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchForm = async () => {
@@ -392,6 +394,22 @@ const ConversationalLeadForm = () => {
 
     const settings = formData.form_settings;
 
+    setSubmitError(null);
+
+    // Validate + normalize contact fields (same rules as the traditional form), so
+    // the phone is stored E.164 (WhatsApp works) and we never send a fake email.
+    const phoneRaw = (data.phone || "").trim();
+    const phoneResult = phoneRaw ? normalizeInternationalPhone(phoneRaw) : null;
+    const emailRaw = (data.email || "").trim();
+    const emailResult = emailRaw ? normalizeEmail(emailRaw) : null;
+    const phoneRequired = !!settings.fields?.phone?.required;
+    if ((phoneRequired && !phoneResult?.ok) || (emailResult && !emailResult.ok)) {
+      setSubmitError(settings.error_message || "Verifica o telefone e o email e tenta novamente.");
+      setHasSubmitted(false);
+      setIsSubmitting(false);
+      return;
+    }
+
     // Build custom_data from custom fields
     const customData: Record<string, string> = {};
     settings.custom_fields.forEach((field) => {
@@ -402,8 +420,8 @@ const ConversationalLeadForm = () => {
 
     const leadData = {
       name: data.welcome || data.name || "Lead Conversacional",
-      email: data.email || `lead.${Date.now()}@conversational.form`,
-      phone: data.phone || "",
+      email: emailResult?.ok ? emailResult.value : null,
+      phone: phoneResult?.ok ? phoneResult.value : (data.phone || ""),
       source: detectedSource,
       public_key: formData.public_key,
       form_id: formData.form_id,  // Include form_id for form-specific settings
@@ -426,8 +444,8 @@ const ConversationalLeadForm = () => {
 
       if (error) {
         console.error("Error submitting lead:", error);
-        // Still show success for UX but don't track pixel
-        setIsComplete(true);
+        setSubmitError(settings.error_message || "Não foi possível enviar. Verifica os dados e tenta novamente.");
+        setHasSubmitted(false);
         return;
       }
 
@@ -448,7 +466,8 @@ const ConversationalLeadForm = () => {
       setIsComplete(true);
     } catch (err) {
       console.error("Error:", err);
-      setIsComplete(true); // Still show success for UX but don't track pixel
+      setSubmitError(settings.error_message || "Ocorreu um erro de ligação. Tenta novamente.");
+      setHasSubmitted(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -569,6 +588,17 @@ const ConversationalLeadForm = () => {
             <StepContainer stepKey={isComplete ? 99 : currentStep}>
               {renderStep()}
             </StepContainer>
+
+            {submitError && (
+              <p className="mt-4 text-center text-sm text-red-500" role="alert">{submitError}</p>
+            )}
+
+            {!isComplete && (
+              <p className="mt-6 text-center text-[11px] text-muted-foreground">
+                Ao enviar, aceitas a{" "}
+                <a href={`${window.location.origin}/privacy`} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Política de Privacidade</a>.
+              </p>
+            )}
           </div>
         </div>
 

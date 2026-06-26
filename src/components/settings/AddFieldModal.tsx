@@ -99,7 +99,7 @@ export function AddFieldModal({
       label: label.trim(),
       placeholder: placeholder.trim() || undefined,
       required,
-      options: type === 'select' ? options.filter(o => o.trim()) : undefined,
+      options: type === 'select' ? [...new Set(options.map(o => o.trim()).filter(Boolean))] : undefined,
     };
 
     onAdd(field);

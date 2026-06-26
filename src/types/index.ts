@@ -243,12 +243,15 @@ export function migrateFormSettings(settings: any): FormSettings {
   // Sanitize custom_fields to ensure all have labels
   const sanitizeCustomFields = (fields: any[]): CustomField[] => {
     if (!Array.isArray(fields)) return [];
-    return fields.map((f: any) => ({
+    return fields.map((f: any, idx: number) => ({
       ...f,
+      // Always have a stable unique id — legacy/corrupted fields without one break
+      // React keys and the edit/remove-by-id logic (and submission keys).
+      id: f.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `field-${idx}-${Date.now()}`),
       label: f.label || '',
       type: f.type || 'text',
       required: f.required ?? false,
-      order: f.order ?? 0,
+      order: typeof f.order === 'number' ? f.order : idx,
     }));
   };
 

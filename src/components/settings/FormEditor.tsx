@@ -140,17 +140,31 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   };
 
   const handleSave = () => {
+    if (!name.trim()) {
+      toast({ title: "Nome em falta", description: "Dá um nome ao formulário.", variant: "destructive" });
+      return;
+    }
+    if (!form.is_default && !slug.trim()) {
+      toast({ title: "Endereço em falta", description: "O formulário precisa de um endereço (slug) para o link público.", variant: "destructive" });
+      return;
+    }
+    if (assignMode === 'rotate' && assignedUserIds.length < 2) {
+      toast({ title: "Rotação precisa de 2+ pessoas", description: "Seleciona pelo menos 2 colaboradores para a rotação, ou muda o modo de atribuição.", variant: "destructive" });
+      return;
+    }
+    // Drop invalid/empty pixels so they are never persisted (matches the inline warning).
+    const validPixels = metaPixels.filter((p) => p.pixel_id && isValidPixelId(p.pixel_id));
     updateForm.mutate(
-      { 
-        id: form.id, 
-        name, 
-        slug, 
+      {
+        id: form.id,
+        name: name.trim(),
+        slug: slug.trim(),
         form_settings: settings,
         msg_template_hot: msgTemplateHot || null,
         msg_template_warm: msgTemplateWarm || null,
         msg_template_cold: msgTemplateCold || null,
         ai_qualification_rules: aiQualificationRules || null,
-        meta_pixels: metaPixels,
+        meta_pixels: validPixels,
         // Single mental model: mode (none/fixed/rotate) maps to the persisted
         // fields; assigned_to is kept in sync so any older reader still works.
         ...assignmentToFields(assignMode, assignedUserIds),

@@ -215,7 +215,14 @@ export function FormsManager() {
                         <DropdownMenuItem onClick={() => handleCopyEmbed(form, 'redirect')}>
                           <Code className="h-4 w-4 mr-2" />Copiar Embed (Botão)
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => duplicateForm.mutate(form.id)}>
+                        <DropdownMenuItem onClick={() => {
+                          if (limits.maxForms !== null && forms && forms.length >= limits.maxForms) {
+                            toast.error(`Limite de ${limits.maxForms} formulários atingido no plano ${planName}`);
+                            setShowUpgradeModal(true);
+                            return;
+                          }
+                          duplicateForm.mutate(form.id);
+                        }}>
                           <Copy className="h-4 w-4 mr-2" />Duplicar
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
