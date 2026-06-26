@@ -162,7 +162,7 @@ export function FormCustomizationSection({ onSettingsSaved }: FormCustomizationS
   }
 
   return (
-    <div className="h-[calc(100dvh-12rem)] min-h-[600px]">
+    <div className="h-[calc(100dvh-12rem)] min-h-[50dvh] sm:min-h-[600px]">
       <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
         {/* Editor Panel */}
         <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>

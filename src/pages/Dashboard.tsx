@@ -107,7 +107,7 @@ export default function Dashboard() {
             <TeamPerformanceTable />
           )}
           
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <PaidTrafficCard />
             {visibleWidgets.filter(w => w.widget_type !== 'team_performance_table').map((widget) => (
               <DynamicWidget

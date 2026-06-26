@@ -94,7 +94,7 @@ export function MobileBottomNav() {
           keyboardOpen && "translate-y-full pointer-events-none",
         )}
       >
-        <div className="flex items-center h-16 px-2 overflow-x-auto no-scrollbar gap-1">
+          <div className="flex items-center h-16 px-2 overflow-x-auto no-scrollbar gap-2">
           {allItems.map((item) => {
             const locked = 'moduleKey' in item && item.moduleKey ? isModuleLocked(item.moduleKey) : false;
             const isActive = location.pathname === item.to || 
@@ -106,7 +106,7 @@ export function MobileBottomNav() {
                 to={locked ? "#" : item.to}
                 onClick={(e) => 'moduleKey' in item ? handleLockedClick(e, item as NavItem) : undefined}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all min-w-[60px] relative",
+                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all min-w-[64px] relative",
                   locked
                     ? "text-muted-foreground/40"
                     : isActive

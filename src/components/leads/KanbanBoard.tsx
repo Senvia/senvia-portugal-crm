@@ -267,7 +267,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
 
   if (stagesLoading) {
     return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-8">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div key={i} className="w-80 min-w-[320px]">
             <Skeleton className="h-12 w-full mb-2" />
@@ -307,7 +307,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
       <div
         ref={bottomScrollRef}
         onScroll={handleBottomScroll}
-        className="flex gap-4 overflow-x-auto pb-4"
+        className="flex gap-4 overflow-x-auto pb-8"
       >
         {/* Orphan Leads Column - Only show if there are orphans */}
         {orphanLeads.length > 0 && (

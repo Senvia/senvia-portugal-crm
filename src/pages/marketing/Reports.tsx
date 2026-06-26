@@ -87,7 +87,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-nav-safe md:pb-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export default function Reports() {
                     <CardTitle className="text-sm font-medium">Envios e Entregas</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[250px]">
+                    <div className="h-[180px] sm:h-[250px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -225,7 +225,7 @@ export default function Reports() {
                     <CardTitle className="text-sm font-medium">Aberturas e Cliques</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[250px]">
+                    <div className="h-[180px] sm:h-[250px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />

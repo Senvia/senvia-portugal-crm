@@ -73,7 +73,7 @@ export default function Ecommerce() {
         description="Gestão completa da sua loja online"
       />
       
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+      <div className="space-y-6 p-4 md:p-6 pb-nav-safe md:pb-6">
         <PageHeader icon={Store} title="E-commerce" subtitle="Gestão completa da sua loja online" />
 
         {/* Quick Stats */}

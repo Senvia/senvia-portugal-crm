@@ -17,7 +17,7 @@ export default function EcommerceReports() {
     <>
       <SEO title="Relatórios | E-commerce | Senvia OS" description="Análise e métricas da loja" />
 
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+      <div className="space-y-6 p-4 md:p-6 pb-nav-safe md:pb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/ecommerce">

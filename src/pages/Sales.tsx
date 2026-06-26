@@ -286,7 +286,7 @@ export default function Sales() {
       {salesTab === 'vendas' && (
       <>
       {/* Summary Cards */}
-      <div className="p-4 md:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+      <div className="p-4 md:p-6 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
         <Card className="bg-card/50 border-border/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -383,7 +383,7 @@ export default function Sales() {
       </div>
 
       {/* Sales List */}
-      <div className="flex-1 px-4 md:px-6 pb-24 md:pb-6 space-y-3">
+      <div className="flex-1 px-4 md:px-6 pb-nav-safe md:pb-6 space-y-3">
         {isLoading ? (
           <>
             <Skeleton className="h-24 w-full" />

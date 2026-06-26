@@ -76,7 +76,7 @@ export function DayView({ currentDate, events, onEventClick }: DayViewProps) {
       )}
 
       {/* Time Grid */}
-      <div className="relative max-h-[600px] overflow-y-auto">
+      <div className="relative max-h-[50dvh] sm:max-h-[600px] overflow-y-auto">
         {HOURS.map((hour) => (
           <div key={hour} className="flex border-b">
             <div className="w-16 py-4 text-xs text-muted-foreground text-right pr-2 flex-shrink-0">

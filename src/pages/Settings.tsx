@@ -434,7 +434,7 @@ export default function Settings() {
             </div>
 
             {groupSubs.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-6 border-b border-border">
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-6 border-b border-border" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {groupSubs.map((sub) => {
                   const Icon = sub.icon;
                   const active = activeSub === sub.id;

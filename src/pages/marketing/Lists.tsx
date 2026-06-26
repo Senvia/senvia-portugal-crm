@@ -18,7 +18,7 @@ export default function Lists() {
 
   return (
     <>
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+      <div className="space-y-6 p-4 md:p-6 pb-nav-safe md:pb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/marketing")}>
