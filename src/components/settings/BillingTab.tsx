@@ -31,7 +31,7 @@ export function BillingTab() {
   const [extraSeatsDelta, setExtraSeatsDelta] = useState(0);
 
   // Fetch org data directly for the current org (works for super admin viewing other orgs)
-  const { data: orgData } = useQuery({
+  const { data: orgData, isLoading: orgLoading } = useQuery({
     queryKey: ['org-extra-seats', organization?.id],
     enabled: !!organization?.id,
     queryFn: async () => {
@@ -67,6 +67,7 @@ export function BillingTab() {
   const planLimit = baseUsers + currentSeats;
   const availableSlots = Math.max(0, planLimit - activeMembers);
   const currentPlanIdFromOrg = orgData?.plan ?? subscriptionStatus?.plan_id;
+  const showExtraSeats = organization?.id && !orgLoading;
 
   // Smart recommendation
   const smartRecommendation = useMemo(() => {
@@ -236,7 +237,7 @@ export function BillingTab() {
       )}
 
       {/* Extra Seats — available for Starter and Pro plans only */}
-      {(currentPlanIdFromOrg || orgData) && currentPlanIdFromOrg !== 'elite' && (
+      {showExtraSeats && orgData && orgData.plan !== 'elite' && (
         <div className="rounded-xl border border-primary/10 bg-card p-4 md:p-5">
           <div className="flex items-center gap-2 mb-3">
             <Users className="h-4 w-4 text-primary" />
