@@ -12,6 +12,25 @@ const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wG6doz0zgZFV": "elite",
 };
 
+const PLAN_BASE_USERS: Record<string, number> = {
+  starter: 5,
+  pro: 15,
+  elite: 999999,
+};
+
+const EXTRA_SEAT_PRICE = "price_1TncdBLWnA81DzXTh3crx8iN";
+
+function baseUsersForPlan(planId: string): number {
+  return PLAN_BASE_USERS[planId] || 5;
+}
+
+function maxUsersForOrg(orgData: any): number {
+  if (orgData?.max_users_override != null) return Number(orgData.max_users_override);
+  const base = baseUsersForPlan(orgData?.plan ?? "starter");
+  const extra = Number(orgData?.extra_seats ?? 0);
+  return base + extra;
+}
+
 // How many days after a failed payment the org keeps full access while the
 // customer settles the renewal. The clock is anchored on payment_failed_at
 // (the real failure date) — NOT current_period_end, which can be stale. Within
@@ -107,11 +126,21 @@ serve(async (req) => {
     if (orgId) {
       const { data, error: orgErr } = await supabase
         .from('organizations')
-        .select('billing_exempt, trial_ends_at, payment_failed_at, first_paid_at, current_period_end')
+        .select('billing_exempt, trial_ends_at, payment_failed_at, first_paid_at, current_period_end, plan, extra_seats, max_users_override')
         .eq('id', orgId)
         .maybeSingle();
       orgData = data;
       if (orgErr) console.error("[check-subscription] org fetch error", orgErr);
+
+      // Active member count for extra seats UI
+      if (orgData) {
+        const { count: memCount } = await supabase
+          .from('organization_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId)
+          .eq('is_active', true);
+        orgData.active_member_count = memCount ?? 0;
+      }
     }
 
     console.log("[check-subscription] entry", {
@@ -309,6 +338,10 @@ function buildTrialResponse(orgData: any) {
       payment_overdue: overdue.payment_overdue,
       block_at: overdue.block_at,
       days_until_block: overdue.days_until_block,
+      extra_seats: orgData?.extra_seats ?? 0,
+      plan_base_users: baseUsersForPlan(orgData?.plan ?? 'starter'),
+      active_members: orgData?.active_member_count ?? 0,
+      max_users: maxUsersForOrg(orgData),
     };
   }
 
@@ -329,6 +362,10 @@ function buildTrialResponse(orgData: any) {
       trial_expired: false,
       first_paid_at: null,
       ...po,
+      extra_seats: orgData?.extra_seats ?? 0,
+      plan_base_users: baseUsersForPlan(orgData?.plan ?? 'starter'),
+      active_members: orgData?.active_member_count ?? 0,
+      max_users: maxUsersForOrg(orgData),
     };
   }
   const diffMs = new Date(orgData.trial_ends_at).getTime() - Date.now();
@@ -344,6 +381,10 @@ function buildTrialResponse(orgData: any) {
       trial_expired: false,
       first_paid_at: null,
       ...po,
+      extra_seats: orgData?.extra_seats ?? 0,
+      plan_base_users: baseUsersForPlan(orgData?.plan ?? 'starter'),
+      active_members: orgData?.active_member_count ?? 0,
+      max_users: maxUsersForOrg(orgData),
     };
   }
   return {
@@ -356,5 +397,9 @@ function buildTrialResponse(orgData: any) {
     trial_expired: true,
     first_paid_at: null,
     ...po,
+    extra_seats: orgData?.extra_seats ?? 0,
+    plan_base_users: baseUsersForPlan(orgData?.plan ?? 'starter'),
+    active_members: orgData?.active_member_count ?? 0,
+    max_users: maxUsersForOrg(orgData),
   };
 }

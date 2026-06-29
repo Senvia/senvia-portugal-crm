@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite, TeamMember } from '@/hooks/useTeam';
 import { useManageTeamMember } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useStripeSubscription } from '@/hooks/useStripeSubscription';
+import { STRIPE_PLANS } from '@/lib/stripe-plans';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail, Pencil, Phone, Trash2, Lightbulb, ArrowRight, AlertTriangle, Crown, Info } from 'lucide-react';
 
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -42,6 +44,7 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 export function TeamTab() {
   const { user, organization } = useAuth();
   const { data: orgData } = useOrganization();
+  const { subscriptionStatus, checkSubscription } = useStripeSubscription();
   const queryClient = useQueryClient();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
@@ -56,6 +59,40 @@ export function TeamTab() {
   const commissionsEnabled = !!salesSettings.commissions_enabled;
   const globalRate = salesSettings.commission_percentage;
   const showIndividualCommission = commissionsEnabled && (!globalRate || globalRate <= 0);
+
+  // User limit and upgrade recommendation
+  const memberCount = members?.length ?? 0;
+  const maxUsers = subscriptionStatus?.max_users ?? 999999;
+  const baseUsers = subscriptionStatus?.plan_base_users ?? 5;
+  const extraSeats = subscriptionStatus?.extra_seats ?? 0;
+  const availableSlots = Math.max(0, maxUsers - memberCount);
+  const isAtLimit = memberCount >= maxUsers;
+  const isNearLimit = !isAtLimit && memberCount >= maxUsers - 2;
+
+  const upgradeRecommendation = useMemo(() => {
+    const planId = subscriptionStatus?.plan_id;
+    if (!planId) return null;
+    const planIndex = STRIPE_PLANS.findIndex(p => p.id === planId);
+    if (planIndex < 0 || planIndex >= STRIPE_PLANS.length - 1) return null;
+    const currentPlan = STRIPE_PLANS[planIndex];
+    const nextPlan = STRIPE_PLANS[planIndex + 1];
+    const nextPlanUsers = parseInt(nextPlan.limits.users) || 999999;
+    const upgradeCost = nextPlan.priceMonthly - currentPlan.priceMonthly;
+    const extraCostForSameUsers = nextPlanUsers * 5;
+
+    return {
+      currentPlan,
+      nextPlan,
+      nextPlanUsers,
+      upgradeCost,
+      extraCostForSameUsers,
+      upgradeCheaper: upgradeCost < extraCostForSameUsers,
+      seatsNeededToCover: nextPlanUsers - baseUsers,
+    };
+  }, [subscriptionStatus?.plan_id, baseUsers]);
+
+  // Upgrade dialog state
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   // Modal state - Add member
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -388,9 +425,62 @@ export function TeamTab() {
               Gerencie os utilizadores e permissões da sua organização.
             </CardDescription>
           </div>
+
+          {/* User limit warning banner */}
+          {(isAtLimit || isNearLimit) && (
+            <div className={`rounded-lg px-3 py-2 flex items-start gap-2 text-sm border ${
+              isAtLimit
+                ? 'bg-red-500/10 border-red-500/20'
+                : 'bg-amber-500/10 border-amber-500/20'
+            }`}>
+              {isAtLimit ? (
+                <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+              ) : (
+                <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs ${isAtLimit ? 'text-red-600' : 'text-amber-600'}`}>
+                  {isAtLimit
+                    ? `Atingiu o limite de ${maxUsers} utilizadores. Adicione mais utilizadores extra ou faça upgrade do plano.`
+                    : `Restam apenas ${availableSlots} vaga${availableSlots !== 1 ? 's' : ''} de ${maxUsers} utilizadores.`}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {upgradeRecommendation && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => setShowUpgradeDialog(true)}
+                      >
+                        <ArrowRight className="h-3 w-3" />
+                        Ver opções
+                      </Button>
+                      {upgradeRecommendation.upgradeCheaper && (
+                        <Badge variant="secondary" className="text-[10px] gap-1">
+                          <Crown className="h-3 w-3" />
+                          Upgrade compensa mais
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <Dialog open={isAddOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
             <DialogTrigger asChild>
-              <Button data-otto-target="settings-invite-member" onClick={() => setIsAddOpen(true)}>
+              <Button
+                data-otto-target="settings-invite-member"
+                onClick={() => {
+                  if (isAtLimit) {
+                    setShowUpgradeDialog(true);
+                  } else {
+                    setIsAddOpen(true);
+                  }
+                }}
+              >
                 <UserPlus className="mr-2 h-4 w-4" />
                 Adicionar Acesso
               </Button>
@@ -1064,6 +1154,135 @@ export function TeamTab() {
           </CardContent>
         </Card>
       )}
+      {/* Upgrade / Extra Seats Dialog */}
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Limite de Utilizadores Atingido
+            </DialogTitle>
+            <DialogDescription>
+              A sua organização tem {memberCount} utilizadores ativos e o limite do plano é {maxUsers}.
+              Escolha a opção que compensa mais para o seu negócio.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Option 1: Extra Seat */}
+            <div className="rounded-lg border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Utilizador Extra</span>
+                </div>
+                <Badge variant="secondary">5€/mês</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Adiciona um utilizador extra ao plano atual. Pode cancelar quando quiser.
+              </p>
+              <Button
+                size="sm"
+                className="w-full gap-2"
+                onClick={async () => {
+                  setShowUpgradeDialog(false);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('buy-extra-seats', {
+                      body: { quantity: (subscriptionStatus?.extra_seats ?? 0) + 1 },
+                    });
+                    if (error) throw error;
+                    if (data?.url) {
+                      window.open(data.url, '_blank');
+                    }
+                  } catch (err: any) {
+                    toast({
+                      title: 'Erro',
+                      description: err.message || 'Erro ao adquirir utilizador extra',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar 1 Utilizador Extra (5€/mês)
+              </Button>
+            </div>
+
+            {/* Option 2: Upgrade */}
+            {upgradeRecommendation && upgradeRecommendation.nextPlanUsers > memberCount && (
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-amber-500" />
+                    <span className="font-medium text-sm">
+                      Upgrade para {upgradeRecommendation.nextPlan.name}
+                    </span>
+                  </div>
+                  <Badge>+{upgradeRecommendation.upgradeCost}€/mês</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Até {upgradeRecommendation.nextPlanUsers} utilizadores incluídos.
+                  {upgradeRecommendation.upgradeCheaper
+                    ? ' Compensa mais que adicionar utilizadores extra avulso.'
+                    : upgradeRecommendation.seatsNeededToCover > 5
+                      ? ' Ótimo se precisar de crescer a equipa.'
+                      : ''}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => {
+                    setShowUpgradeDialog(false);
+                    window.location.href = '/settings?tab=billing';
+                  }}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Fazer Upgrade para {upgradeRecommendation.nextPlan.name}
+                </Button>
+              </div>
+            )}
+
+            {/* Savings comparison */}
+            {upgradeRecommendation && upgradeRecommendation.upgradeCheaper && (
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-emerald-700">Recomendação inteligente</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Fazer upgrade para {upgradeRecommendation.nextPlan.name} (+{upgradeRecommendation.upgradeCost}€/mês)
+                      fica mais barato que adicionar {upgradeRecommendation.seatsNeededToCover} utilizadores extra
+                      ({upgradeRecommendation.seatsNeededToCover} × 5€ = {upgradeRecommendation.extraCostForSameUsers}€/mês).
+                      E ainda ganha mais funcionalidades.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Current usage summary */}
+            <div className="text-xs text-muted-foreground border-t pt-3">
+              <p>
+                <span className="font-medium">Plano atual:</span>{' '}
+                {subscriptionStatus?.plan_id ? STRIPE_PLANS.find(p => p.id === subscriptionStatus.plan_id)?.name ?? subscriptionStatus.plan_id : '—'}{' '}
+                ({baseUsers} utilizadores incluídos
+                {extraSeats > 0 ? ` + ${extraSeats} extra` : ''})
+              </p>
+              <p className="mt-0.5">
+                <span className="font-medium">Utilizadores ativos:</span> {memberCount} de {maxUsers}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpgradeDialog(false)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete member confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

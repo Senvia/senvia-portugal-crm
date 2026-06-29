@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock, Inbox } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock, Inbox, Plus, Minus, AlertTriangle, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,9 @@ import { STRIPE_PLANS, type StripePlan, type BillingPeriod } from '@/lib/stripe-
 import { PricingPlans, PricingCtaButton } from '@/components/billing/PricingPlans';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { monthlyPrice } from '@/lib/stripe-plans';
 
 const INTEGRATION_ICONS: Record<string, React.ElementType> = {
   WhatsApp: MessageSquare,
@@ -19,9 +22,88 @@ const INTEGRATION_ICONS: Record<string, React.ElementType> = {
 
 export function BillingTab() {
   const { organization } = useAuth();
+  const { toast } = useToast();
   const { isLoading, subscriptionStatus, hasChecked, checkSubscription, createCheckout, openCustomerPortal } = useStripeSubscription();
   const [checkingPlan, setCheckingPlan] = useState<string | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
+  const [extraSeatsLoading, setExtraSeatsLoading] = useState(false);
+  const [extraSeatsDelta, setExtraSeatsDelta] = useState(0);
+
+  // Extra seats logic
+  const currentSeats = subscriptionStatus?.extra_seats ?? 0;
+  const baseUsers = subscriptionStatus?.plan_base_users ?? 5;
+  const activeMembers = subscriptionStatus?.active_members ?? 0;
+  const planLimit = baseUsers + currentSeats;
+  const availableSlots = Math.max(0, planLimit - activeMembers);
+
+  // Smart recommendation
+  const smartRecommendation = useMemo(() => {
+    if (!currentPlanId) return null;
+    const planIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
+    const memberOverage = activeMembers - baseUsers;
+    
+    // How many extra seats we'd need if upgrading to next plan
+    const nextPlan = planIndex < STRIPE_PLANS.length - 1 ? STRIPE_PLANS[planIndex + 1] : null;
+    const nextPlanUsers = nextPlan ? (parseInt(nextPlan.limits.users) || 999999) : 999999;
+    
+    if (nextPlan && activeMembers > 0) {
+      const currentPlanMonthly = STRIPE_PLANS[planIndex].priceMonthly;
+      const nextPlanMonthly = nextPlan.priceMonthly;
+      const upgradeCost = nextPlanMonthly - currentPlanMonthly;
+      
+      // Cost of individual extra seats vs cost of upgrade
+      const seatsNeeded = nextPlanUsers - baseUsers;
+      const extraSeatCost = seatsNeeded * 5;
+      
+      if (memberOverage >= 2) {
+        // Already paying for 2+ extra seats
+        const currentExtraCost = memberOverage * 5;
+        if (upgradeCost < currentExtraCost && nextPlanUsers >= activeMembers) {
+          return {
+            type: 'upgrade' as const,
+            message: `Com ${memberOverage} utilizadores extra (${currentExtraCost}€/mês), compensa fazer upgrade para ${nextPlan.name} (mais ${upgradeCost - currentExtraCost}€/mês) e ganhar mais funcionalidades.`,
+            plan: nextPlan,
+            savings: currentExtraCost - upgradeCost,
+          };
+        }
+      }
+      
+      if (memberOverage === 1 && upgradeCost >= 5 && upgradeCost <= 10) {
+        // Almost worth upgrading but not yet
+        return {
+          type: 'info' as const,
+          message: `Com mais ${seatsNeeded - memberOverage} utilizador(es) extra (${extraSeatCost}€/mês no total), talvez compense fazer upgrade para ${nextPlan.name} (+${upgradeCost}€/mês) com mais funcionalidades.`,
+          plan: nextPlan,
+        };
+      }
+    }
+    
+    return null;
+  }, [currentPlanId, activeMembers, baseUsers, currentSeats]);
+
+  const handleBuyExtraSeats = async (quantity: number) => {
+    setExtraSeatsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('buy-extra-seats', {
+        body: { quantity },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      } else {
+        await checkSubscription();
+      }
+      setExtraSeatsDelta(0);
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Erro ao adquirir utilizadores extra',
+        variant: 'destructive',
+      });
+    } finally {
+      setExtraSeatsLoading(false);
+    }
+  };
 
   const isOnTrial = subscriptionStatus?.on_trial === true;
   const hasActiveSubscription = subscriptionStatus?.subscribed === true;
@@ -113,6 +195,111 @@ export function BillingTab() {
             <ExternalLink className="h-3.5 w-3.5" />
             Gerir Subscrição
           </Button>
+        </div>
+      )}
+
+      {/* Extra Seats — available for Starter and Pro plans only */}
+      {hasActiveSubscription && currentPlanId && currentPlanId !== 'elite' && (
+        <div className="rounded-xl border border-primary/10 bg-card p-4 md:p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm">Utilizadores Adicionais</span>
+            <Badge variant="secondary" className="text-[10px]">{currentSeats} extra</Badge>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 mb-3">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{activeMembers}</span> de{" "}
+                <span className="font-medium">{planLimit}</span> utilizadores em uso
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Base do plano: {baseUsers} utilizadores + {currentSeats} extra{currentSeats > 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setExtraSeatsDelta(Math.max(-currentSeats, extraSeatsDelta - 1))}
+                disabled={extraSeatsLoading}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="font-semibold text-lg tabular-nums w-8 text-center">
+                {Math.max(0, currentSeats + extraSeatsDelta)}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setExtraSeatsDelta(extraSeatsDelta + 1)}
+                disabled={extraSeatsLoading}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Price per extra seat */}
+          <p className="text-xs text-muted-foreground mb-3">
+            5€/mês por utilizador extra. Ao fazer upgrade para um plano superior,
+            os utilizadores extra são automaticamente absorvidos — não paga a dobrar.
+          </p>
+
+          {/* Smart recommendation */}
+          {smartRecommendation && (
+            <div className={`rounded-lg p-3 mb-3 text-sm flex items-start gap-2 ${
+              smartRecommendation.type === 'upgrade'
+                ? 'bg-emerald-500/10 border border-emerald-500/20'
+                : 'bg-amber-500/10 border border-amber-500/20'
+            }`}>
+              {smartRecommendation.type === 'upgrade' ? (
+                <Lightbulb className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+              ) : (
+                <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              )}
+              <div>
+                <p className="text-xs">{smartRecommendation.message}</p>
+                {smartRecommendation.type === 'upgrade' && smartRecommendation.plan && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs mt-1"
+                    onClick={() => handleSelectPlan(smartRecommendation.plan!)}
+                  >
+                    Fazer upgrade para {smartRecommendation.plan.name}
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Purchase button */}
+          {extraSeatsDelta !== 0 && (
+            <Button
+              size="sm"
+              onClick={() => handleBuyExtraSeats(Math.max(0, currentSeats + extraSeatsDelta))}
+              disabled={extraSeatsLoading}
+              className="gap-2"
+            >
+              {extraSeatsLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : extraSeatsDelta > 0 ? (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Adicionar {extraSeatsDelta} utilizador{extraSeatsDelta > 1 ? 'es' : ''} extra
+                </>
+              ) : (
+                <>
+                  <Minus className="h-4 w-4" />
+                  Remover {Math.abs(extraSeatsDelta)} utilizador{Math.abs(extraSeatsDelta) > 1 ? 'es' : ''} extra
+                </>
+              )}
+            </Button>
+          )}
         </div>
       )}
 

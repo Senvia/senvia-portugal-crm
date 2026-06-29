@@ -28,6 +28,14 @@ interface SubscriptionStatus {
   /** Whole days left before the block. */
   days_until_block?: number | null;
   status?: string;
+  /** Extra seats purchased beyond the base plan limit. */
+  extra_seats?: number;
+  /** Base user limit for the current plan. */
+  plan_base_users?: number;
+  /** Number of active members in the org. */
+  active_members?: number;
+  /** Total allowed users (base + extra_seats or max_users_override). */
+  max_users?: number;
 }
 
 export function useStripeSubscription() {
