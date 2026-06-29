@@ -12,6 +12,7 @@ import { pt } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { monthlyPrice } from '@/lib/stripe-plans';
+import { useQuery } from '@tanstack/react-query';
 
 const INTEGRATION_ICONS: Record<string, React.ElementType> = {
   WhatsApp: MessageSquare,
@@ -29,17 +30,50 @@ export function BillingTab() {
   const [extraSeatsLoading, setExtraSeatsLoading] = useState(false);
   const [extraSeatsDelta, setExtraSeatsDelta] = useState(0);
 
-  // Extra seats logic
-  const currentSeats = subscriptionStatus?.extra_seats ?? 0;
-  const baseUsers = subscriptionStatus?.plan_base_users ?? 5;
-  const activeMembers = subscriptionStatus?.active_members ?? 0;
+  // Fetch org data directly for the current org (works for super admin viewing other orgs)
+  const { data: orgData } = useQuery({
+    queryKey: ['org-extra-seats', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('plan, extra_seats, max_users_override')
+        .eq('id', organization!.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch active member count for the current org
+  const { data: memberCountData } = useQuery({
+    queryKey: ['org-member-count', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('organization_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organization!.id)
+        .eq('is_active', true);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  // Extra seats logic — use org data directly (works for super admin)
+  const currentSeats = orgData?.extra_seats ?? subscriptionStatus?.extra_seats ?? 0;
+  const baseUsers = orgData ? (orgData.plan === 'elite' ? 999999 : orgData.plan === 'pro' ? 15 : 5) : (subscriptionStatus?.plan_base_users ?? 5);
+  const activeMembers = memberCountData ?? subscriptionStatus?.active_members ?? 0;
   const planLimit = baseUsers + currentSeats;
   const availableSlots = Math.max(0, planLimit - activeMembers);
+  const currentPlanIdFromOrg = orgData?.plan ?? subscriptionStatus?.plan_id;
 
   // Smart recommendation
   const smartRecommendation = useMemo(() => {
-    if (!currentPlanId) return null;
-    const planIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
+    const planId = currentPlanIdFromOrg;
+    if (!planId) return null;
+    const planIndex = STRIPE_PLANS.findIndex(p => p.id === planId);
+    if (planIndex < 0) return null;
     const memberOverage = activeMembers - baseUsers;
     
     // How many extra seats we'd need if upgrading to next plan
@@ -79,13 +113,16 @@ export function BillingTab() {
     }
     
     return null;
-  }, [currentPlanId, activeMembers, baseUsers, currentSeats]);
+  }, [currentPlanIdFromOrg, activeMembers, baseUsers, currentSeats]);
 
   const handleBuyExtraSeats = async (quantity: number) => {
     setExtraSeatsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('buy-extra-seats', {
-        body: { quantity },
+        body: {
+          quantity,
+          organization_id: organization?.id,
+        },
       });
       if (error) throw error;
       if (data?.url) {
@@ -199,7 +236,7 @@ export function BillingTab() {
       )}
 
       {/* Extra Seats — available for Starter and Pro plans only */}
-      {hasActiveSubscription && currentPlanId && currentPlanId !== 'elite' && (
+      {(currentPlanIdFromOrg || orgData) && currentPlanIdFromOrg !== 'elite' && (
         <div className="rounded-xl border border-primary/10 bg-card p-4 md:p-5">
           <div className="flex items-center gap-2 mb-3">
             <Users className="h-4 w-4 text-primary" />

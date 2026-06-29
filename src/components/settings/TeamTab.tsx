@@ -1188,7 +1188,10 @@ export function TeamTab() {
                   setShowUpgradeDialog(false);
                   try {
                     const { data, error } = await supabase.functions.invoke('buy-extra-seats', {
-                      body: { quantity: (subscriptionStatus?.extra_seats ?? 0) + 1 },
+                      body: { 
+                        quantity: (subscriptionStatus?.extra_seats ?? 0) + 1,
+                        organization_id: organization?.id,
+                      },
                     });
                     if (error) throw error;
                     if (data?.url) {
