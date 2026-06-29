@@ -15,3 +15,4 @@ A Infraestrutura de Vendas para Empresas de Serviços High-Ticket.
 npm i
 npm run dev
 ```
+<!-- deploy trigger -->
