@@ -139,6 +139,7 @@ export function EmailComposer({
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -274,12 +275,12 @@ export function EmailComposer({
 
   const onFiles = async (files: FileList | null) => {
     if (!files) return;
-    const MAX = 15 * 1024 * 1024;
+    const MAX = 25 * 1024 * 1024;
     let running = attachments.reduce((s, a) => s + a.size, 0);
     const added: Attached[] = [];
     for (const f of Array.from(files)) {
       running += f.size;
-      if (running > MAX) { toast({ title: `${f.name} excede o limite (15 MB no total)`, variant: 'destructive' }); continue; }
+      if (running > MAX) { toast({ title: `${f.name} excede o limite (25 MB no total)`, variant: 'destructive' }); continue; }
       const b64 = await new Promise<string>((res, rej) => {
         const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f);
       });
@@ -298,10 +299,25 @@ export function EmailComposer({
   const rightPx = 24 + stackIndex * (COMPOSER_W + COMPOSER_GAP);
   const isMobile = useIsMobile();
 
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length) onFiles(e.dataTransfer.files);
+  };
+
   return (
     <div
       className="fixed bottom-0 z-50 flex flex-col shadow-2xl inset-x-0 md:inset-x-auto"
       style={isMobile ? undefined : { width: COMPOSER_W, right: rightPx }}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Header */}
       <div
@@ -318,7 +334,7 @@ export function EmailComposer({
       </div>
 
       {!minimized && (
-        <div className="flex flex-col border border-t-0 border-border bg-background">
+        <div className="relative flex flex-col border border-t-0 border-border bg-background overflow-hidden">
           {/* Para */}
           <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
             <span className="w-12 shrink-0 text-xs text-muted-foreground">Para</span>
@@ -414,6 +430,16 @@ export function EmailComposer({
       )}
 
       <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
+
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-b-xl border-2 border-dashed border-primary bg-background/90">
+          <div className="flex flex-col items-center gap-2 text-primary">
+            <Paperclip className="h-8 w-8" />
+            <span className="text-sm font-medium">Solte os ficheiros aqui para anexar</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

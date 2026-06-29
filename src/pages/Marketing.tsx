@@ -52,7 +52,7 @@ const modules = [
 
 export default function Marketing() {
   return (
-    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-nav-safe md:pb-6">
       <PageHeader icon={Megaphone} title="Marketing" subtitle="Gestão de templates de email e campanhas de marketing" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -22,7 +22,7 @@ export function MobileHeader({
         </Button>
         <img 
           alt={organization?.name || "SENVIA"} 
-          className="h-8 w-28 object-contain" 
+          className="h-7 w-24 object-contain" 
           src={organization?.logo_url || "/lovable-uploads/7d06b8aa-41ca-4a96-a4b1-699608629148.png"} 
         />
         <div className="w-10" />

@@ -190,7 +190,7 @@ export default function Finance() {
             />
           ) : (
             <>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setDetailView("faturado")}
@@ -401,7 +401,8 @@ export default function Finance() {
                 {isLoading ? (
                   <Skeleton className="h-64 w-full" />
                 ) : (
-                  <ResponsiveContainer width="100%" height={250}>
+                  <div className="h-[180px] sm:h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
@@ -479,6 +480,7 @@ export default function Finance() {
                       />
                     </AreaChart>
                   </ResponsiveContainer>
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -2233,7 +2233,7 @@ export default function Inbox() {
 
       </div>{/* end gap-3 flex col */}
       {/* Bottom spacer so the last card clears the iOS home indicator on the mobile sheet. */}
-      <div style={{ height: "env(safe-area-inset-bottom)" }} />
+      <div style={{ height: "var(--safe-area-bottom, env(safe-area-inset-bottom, 0px))" }} />
     </div>
   );
 
@@ -2248,7 +2248,7 @@ export default function Inbox() {
       // plus the bottom safe-area so the list clears the home indicator. dvh tracks
       // the mobile browser chrome. (The conversation view ignores this — it's a
       // fixed overlay sized to the visual viewport.)
-      isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top)-var(--safe-area-bottom))]" : "h-dvh",
+      isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px))]" : "h-dvh",
     )}>
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
       {!connected && (
@@ -2557,70 +2557,80 @@ export default function Inbox() {
                 </div>
               </div>
 
-              {/* Arquivar / Restaurar */}
-              <Button
-                size="sm"
-                title={isArchived ? "Restaurar conversa" : "Arquivar conversa"}
-                onClick={handleToggleArchive}
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                {isArchived ? <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" /> : <Archive className="mr-1.5 h-3.5 w-3.5" />}
-                {isArchived ? "Restaurar" : "Arquivar"}
-              </Button>
-
-              {/* CRM: contacto associado → ficha + alterar; desconhecido → adicionar */}
-              {contactMatch ? (
-                <div className="hidden items-center gap-1 sm:flex">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                        {contactMatch.kind === "client" ? "Cliente" : "Lead"}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(contactMatch.kind === "client" ? `/clients?highlight=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)}>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Ver ficha completa
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setEditCrmOpen(true)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Editar ficha
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ) : selected.contact_phone ? (
+              <div className={cn(mobileConvOpen && composerFocused ? "hidden" : "flex items-center gap-1")}>
+                {/* Arquivar / Restaurar */}
                 <Button
-                  variant="outline"
                   size="sm"
-                  className="hidden sm:flex"
-                  onClick={() => setAddToCrmOpen(true)}
+                  title={isArchived ? "Restaurar conversa" : "Arquivar conversa"}
+                  onClick={handleToggleArchive}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
                 >
-                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                  Adicionar ao CRM
+                  {isArchived ? <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" /> : <Archive className="mr-1.5 h-3.5 w-3.5" />}
+                  {isArchived ? "Restaurar" : "Arquivar"}
                 </Button>
-              ) : null}
 
-              {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Painel do contacto"
-                onClick={() => {
-                  // The pinned column only fits on very wide screens (2xl); below
-                  // that the panel opens as an overlay so it never clips the layout.
-                  if (window.innerWidth >= 1536) {
-                    const next = !panelOpen;
-                    setPanelOpen(next);
-                    localStorage.setItem("inbox-panel-v1", next ? "1" : "0");
-                  } else {
-                    setSheetOpen(true);
-                  }
-                }}
-              >
-                <PanelRight className={cn("h-4 w-4", panelOpen && "text-primary")} />
-              </Button>
+                {/* CRM: contacto associado → ficha + alterar; desconhecido → adicionar */}
+                {contactMatch ? (
+                  <>
+                    <div className="hidden items-center gap-1 sm:flex">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            {contactMatch.kind === "client" ? "Cliente" : "Lead"}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(contactMatch.kind === "client" ? `/clients?highlight=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)}>
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Ver ficha completa
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditCrmOpen(true)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Editar ficha
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <Button variant="outline" size="icon" className="sm:hidden" onClick={() => navigate(contactMatch.kind === "client" ? `/clients?highlight=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)} title="Ver ficha">
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : selected.contact_phone ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="hidden sm:flex"
+                      onClick={() => setAddToCrmOpen(true)}
+                    >
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                      Adicionar ao CRM
+                    </Button>
+                    <Button variant="outline" size="icon" className="sm:hidden" onClick={() => setAddToCrmOpen(true)} title="Adicionar ao CRM">
+                      <UserPlus className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : null}
+
+                {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Painel do contacto"
+                  onClick={() => {
+                    if (window.innerWidth >= 1536) {
+                      const next = !panelOpen;
+                      setPanelOpen(next);
+                      localStorage.setItem("inbox-panel-v1", next ? "1" : "0");
+                    } else {
+                      setSheetOpen(true);
+                    }
+                  }}
+                >
+                  <PanelRight className={cn("h-4 w-4", panelOpen && "text-primary")} />
+                </Button>
+              </div>
 
             </div>
 
@@ -3083,7 +3093,7 @@ export default function Inbox() {
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
                     // mobile stops iOS from auto-zooming on focus.
-                    className="max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm"
+                    className="max-h-[240px] sm:max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm"
                   />
                 </div>
 

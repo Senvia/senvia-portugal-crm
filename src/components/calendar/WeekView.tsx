@@ -120,7 +120,7 @@ export function WeekView({ currentDate, events, selectedDay, onDayClick, onEvent
       )}
 
       {/* Time Grid */}
-      <div className="grid grid-cols-8 max-h-[600px] overflow-y-auto">
+      <div className="grid grid-cols-8 max-h-[50dvh] sm:max-h-[600px] overflow-y-auto">
         {/* Hours column */}
         <div className="border-r">
           {HOURS.map((hour) => (

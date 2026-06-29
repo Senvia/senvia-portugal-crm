@@ -64,7 +64,7 @@ export function AddRevenueModal({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-4 md:p-0">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Landmark className="h-4 w-4 text-muted-foreground" />
