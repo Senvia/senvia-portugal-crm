@@ -1,3 +1,4 @@
+// Force rebuild - fix Plus import issue
 import { useEffect, useState, useMemo } from 'react';
 import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock, Inbox, Plus, Minus, AlertTriangle, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
