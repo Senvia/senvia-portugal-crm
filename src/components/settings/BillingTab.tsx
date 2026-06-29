@@ -1,5 +1,6 @@
-// Force rebuild - fix Plus import issue
 import { useEffect, useState, useMemo } from 'react';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _version = '2026-06-29-force-rebuild';
 import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock, Inbox, Plus, Minus, AlertTriangle, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
