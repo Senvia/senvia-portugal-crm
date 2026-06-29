@@ -64,7 +64,10 @@ export function BillingTab() {
   const currentSeats = orgData?.extra_seats ?? subscriptionStatus?.extra_seats ?? 0;
   const baseUsers = orgData ? (orgData.plan === 'elite' ? 999999 : orgData.plan === 'pro' ? 15 : 5) : (subscriptionStatus?.plan_base_users ?? 5);
   const activeMembers = memberCountData ?? subscriptionStatus?.active_members ?? 0;
-  const planLimit = baseUsers + currentSeats;
+  // Use max_users_override if set, otherwise calculate from base + extra
+  const planLimit = orgData?.max_users_override != null
+    ? Number(orgData.max_users_override)
+    : baseUsers + currentSeats;
   const availableSlots = Math.max(0, planLimit - activeMembers);
   const currentPlanIdFromOrg = orgData?.plan ?? subscriptionStatus?.plan_id;
   const showExtraSeats = organization?.id && !orgLoading;
