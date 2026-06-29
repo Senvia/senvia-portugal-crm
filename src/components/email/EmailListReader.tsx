@@ -521,6 +521,15 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                       <span className="truncate text-xs text-muted-foreground">{m.snippet || ''}</span>
                     </div>
                   </div>
+                  {/* Trash button — appears on hover */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); actions.trash(m.id); }}
+                    className="shrink-0 self-start pt-1.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    title="Apagar"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               );
             })
