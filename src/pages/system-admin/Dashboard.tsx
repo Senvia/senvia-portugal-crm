@@ -21,6 +21,7 @@ interface OrgRow {
   current_period_end: string | null;
   payment_failed_at: string | null;
   last_active_at: string | null;
+  extra_seats: number | null;
 }
 
 interface OrgWithMembers extends OrgRow {
@@ -50,7 +51,7 @@ export default function SystemAdminDashboard() {
       // Cast: last_active_at is newer than the generated types.
       const { data: orgs, error } = await (supabase as any)
         .from("organizations")
-        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone, first_paid_at, current_period_end, payment_failed_at, last_active_at")
+        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone, first_paid_at, current_period_end, payment_failed_at, last_active_at, extra_seats")
         .order("created_at", { ascending: false });
       if (error) throw error;
 

@@ -25,6 +25,7 @@ interface Organization {
   first_paid_at: string | null;
   payment_failed_at: string | null;
   last_active_at: string | null;
+  extra_seats: number | null;
 }
 
 export interface OrgStripeData {
@@ -208,6 +209,7 @@ export function OrganizationsTable({
                   <TableHead className="hidden md:table-cell">Responsável</TableHead>
                   <SortHead label="Última atividade" k="activity" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
                   <SortHead label="€/mês" k="mrr" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
+                  <TableHead className="hidden xl:table-cell text-right">Extra</TableHead>
                   <SortHead label="Membros" k="members" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" align="right" />
                   <SortHead label="Criada" k="created" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" align="right" />
                   <TableHead className="w-8" />
@@ -272,6 +274,15 @@ export function OrganizationsTable({
                       <TableCell className="hidden lg:table-cell text-right">
                         {stripeInfo?.has_stripe_subscription ? (
                           <span className="text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400">€{stripeInfo.stripe_amount}</span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell text-right">
+                        {org.extra_seats && org.extra_seats > 0 ? (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-cyan-500/10 px-1.5 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400">
+                            +{org.extra_seats} ({org.extra_seats * 5}€)
+                          </span>
                         ) : (
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
