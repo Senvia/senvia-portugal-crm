@@ -1,14 +1,11 @@
 // send-scheduled-messages — pg_cron invokes this every minute; it sends the due
 // scheduled WhatsApp messages through each org's Evolution instance.
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders, json, getConfig, evolutionFetch, instanceNameForOrg } from '../_shared/multicanal.ts';
+import { corsHeaders, json, getConfig, evolutionFetch } from '../_shared/multicanal.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-  // Cron guard: when CRON_SECRET is configured, require it (header or ?key=) so
-  // this function can't be invoked publicly to push messages. Permissive until
-  // the secret is set so the existing pg_cron job keeps working during rollout.
   const cronSecret = Deno.env.get('CRON_SECRET');
   if (cronSecret) {
     const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
@@ -28,10 +25,26 @@ Deno.serve(async (req) => {
       .limit(50);
     if (error) throw error;
 
+    // Group messages by org so we only resolve each instance once
+    const orgIds = [...new Set((due ?? []).map((m) => m.organization_id))];
+    const instanceMap = new Map<string, string>();
+
+    if (orgIds.length > 0) {
+      const { data: channels } = await admin
+        .from('messaging_channels')
+        .select('organization_id, evolution_instance')
+        .in('organization_id', orgIds)
+        .eq('channel_type', 'whatsapp')
+        .eq('status', 'connected')
+        .not('evolution_instance', 'is', null);
+      for (const ch of channels ?? []) {
+        instanceMap.set(ch.organization_id, ch.evolution_instance);
+      }
+    }
+
     let sent = 0;
     let failed = 0;
     for (const msg of due ?? []) {
-      // Claim the row first — a concurrent cron run must not double-send.
       const { data: claimed } = await admin
         .from('scheduled_messages')
         .update({ status: 'processing' })
@@ -41,7 +54,16 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!claimed) continue;
 
-      const instance = instanceNameForOrg(msg.organization_id);
+      const instance = instanceMap.get(msg.organization_id);
+      if (!instance) {
+        await admin
+          .from('scheduled_messages')
+          .update({ status: 'failed', error: 'No WhatsApp channel connected for this org' })
+          .eq('id', msg.id);
+        failed++;
+        continue;
+      }
+
       const number = String(msg.phone).replace(/\D/g, '');
       try {
         const res = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
