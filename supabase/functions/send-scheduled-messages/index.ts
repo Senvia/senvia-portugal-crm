@@ -3,6 +3,19 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders, json, getConfig, evolutionFetch } from '../_shared/multicanal.ts';
 
+function normalizePhone(raw: string): string {
+  // Remove everything except digits and leading +
+  let cleaned = raw.replace(/[^\d+]/g, '');
+  // If it already has a leading +, keep as-is
+  if (cleaned.startsWith('+')) return cleaned;
+  // 9-digit Portuguese number: prepend +351
+  if (/^\d{9}$/.test(cleaned)) return '+351' + cleaned;
+  // 11-digit Brazilian number: prepend +55
+  if (/^\d{11}$/.test(cleaned)) return '+55' + cleaned;
+  // Otherwise just return digits
+  return cleaned;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -64,7 +77,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const number = String(msg.phone).replace(/\D/g, '');
+      const number = normalizePhone(String(msg.phone));
       try {
         const res = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
           number,
