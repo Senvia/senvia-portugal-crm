@@ -75,6 +75,12 @@ BEGIN
       AND COALESCE(o.wa_nudge_count, 0) < v_max
       AND COALESCE(o.last_active_at, o.created_at) <= now() - v_threshold
       AND (o.wa_nudge_last_sent_at IS NULL OR o.wa_nudge_last_sent_at <= now() - v_cooldown)
+      -- Exclude contacts marked as lost/perdido/churned in leads
+      AND o.contact_phone NOT IN (
+        SELECT phone FROM leads
+        WHERE phone IS NOT NULL AND phone <> ''
+          AND status IN ('lost', 'perdido', 'churned')
+      )
   LOOP
     v_step := r.cnt + 1;
     -- Real first name of the person who registered (profiles.full_name of the
