@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch } from "@/lib/utils";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,9 +29,13 @@ import type { DateRange } from "react-day-picker";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 import { useModules } from "@/hooks/useModules";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export default function Sales() {
@@ -47,7 +51,9 @@ export default function Sales() {
   });
   const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
-  const [search, setSearch] = usePersistedState("sales-search-v1", "");
+  const { isAdmin } = usePermissions();
+const queryClient = useQueryClient();
+const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
   const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('sales-type-v1', 'all');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
@@ -59,7 +65,22 @@ export default function Sales() {
   const [isExporting, setIsExporting] = useState(false);
   const [searchParams] = useSearchParams();
 
-  // Deep-link: ?sale=<id> opens the sale modal directly
+  // Delete sale mutation (admin only)
+const deleteSale = useMutation({
+  mutationFn: async (saleId: string) => {
+    const { error } = await supabase.from("sales").delete().eq("id", saleId);
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["sales"] });
+    toast.success("Venda excluída com sucesso");
+  },
+  onError: (err) => {
+    toast.error("Erro ao excluir venda: " + (err instanceof Error ? err.message : "Erro desconhecido"));
+  },
+});
+
+// Deep-link: ?sale=<id> opens the sale modal directly
   useEffect(() => {
     const id = searchParams.get("sale");
     if (id) setPendingSaleId(id);
@@ -452,6 +473,21 @@ export default function Sales() {
                     <p className="text-lg font-semibold">{formatCurrency(sale.total_value)}</p>
                     {sale.proposal && (
                       <p className="text-xs text-muted-foreground">Via proposta</p>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm("Tem certeza que deseja excluir esta venda? Esta ação não pode ser desfeita.")) {
+                            deleteSale.mutate(sale.id);
+                          }
+                        }}
+                        className="mt-2 rounded p-1 text-destructive/70 hover:bg-destructive/10 transition-colors"
+                        title="Excluir venda"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mx-auto" />
+                      </button>
                     )}
                   </div>
                 </div>

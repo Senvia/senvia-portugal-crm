@@ -95,6 +95,42 @@ import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
+  // autolink: converte URLs em links clicaveis
+function autolink(text: string): React.ReactNode {
+  if (!text) return text;
+  const urlRegex = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    let url = match[0];
+    let href = url;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      href = "https://" + url;
+    }
+    parts.push(
+      <a
+        key={match.index}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:opacity-80"
+      >
+        {url}
+      </a>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
+
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
@@ -264,11 +300,14 @@ function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
 }
 
-const EMOJIS = [
-  "😀", "😂", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡",
-  "👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "❤️",
-  "🎉", "🔥", "⭐", "✅", "❌", "⚠️", "📅", "📞", "💰", "🚀",
-];
+const EMOJI_CATEGORIES: Record<string, string[]> = {
+  "Carinhas": ["😀", "😂", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡", "🤩", "🥳", "😏", "😴", "🤗", "🙃", "😇", "🤠", "🤡", "🥺", "😤", "😭", "😱", "🤯", "🥶", "🥵", "🤢", "🤮", "🤧"],
+  "Gestos": ["👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "🖐️", "✋", "🤙", "👋", "🤘", "🫵", "🙌", "🤲", "👐", "🙏", "🤝", "💅", "👀", "🫣"],
+  "Coracoes": ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💗", "💖", "💘", "💝", "❣️", "💓", "💔", "🫰"],
+  "Objetos": ["🎉", "🔥", "⭐", "✅", "❌", "⚠️", "📅", "📞", "💰", "🚀", "🎯", "🎁", "🎈", "🏆", "🪄", "💡", "📌", "🔑", "🛡️", "🎵", "📝", "✏️", "🖥️", "📱", "☕", "🍕"],
+  "Animais": ["🐶", "🐱", "🐼", "🐸", "🐦", "🐝", "🦋", "🐙", "🦀", "🐬", "🦈", "🐘", "🦒", "🦊", "🐰", "🐻", "🐨", "🦁", "🐯", "🐮"],
+};
+const EMOJIS = Object.values(EMOJI_CATEGORIES).flat();
 
 const PINNED_KEY = "inbox-pinned-v1";
 
@@ -618,6 +657,9 @@ export default function Inbox() {
   // Composer "+" menu: 'menu' (actions), 'emoji' (picker grid) or 'canned' (quick replies).
   const [plusOpen, setPlusOpen] = useState(false);
   const [plusView, setPlusView] = useState<"menu" | "emoji" | "canned">("menu");
+  const [emojiSearch, setEmojiSearch] = useState("");
+  const [emojiSuggestions, setEmojiSuggestions] = useState<string[]>([]);
+  const [emojiSuggestQuery, setEmojiSuggestQuery] = useState("");
   // Whether the composer textarea is focused → the on-screen keyboard is open (or
   // opening). On iOS the visualViewport metrics lag the focus event, so we use this
   // to drop the bottom safe-area padding immediately and avoid a gap above the keyboard.
@@ -776,6 +818,10 @@ export default function Inbox() {
   // Associate-to-existing combobox.
   // Edit client / lead modal — opens inline without leaving inbox.
   const [editCrmOpen, setEditCrmOpen] = useState(false);
+  // Edit message state (Task 9)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
   const editClientId = editCrmOpen && contactMatch?.kind === "client" ? contactMatch.id : null;
   const editLeadId   = editCrmOpen && contactMatch?.kind === "lead"   ? contactMatch.id : null;
   const { data: editClientData } = useClient(editClientId);
@@ -3093,7 +3139,7 @@ export default function Inbox() {
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
                     // mobile stops iOS from auto-zooming on focus.
-                    className="max-h-[240px] sm:max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm"
+                    className="max-h-[240px] sm:max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm" onKeyDown={(e) => { if (emojiSuggestions.length > 0 && e.key === "Tab") { e.preventDefault(); const sel = emojiSuggestions[0]; const cur = e.currentTarget.value; const colonIdx = cur.lastIndexOf(":"); setDraft(cur.slice(0, colonIdx) + sel + " "); setEmojiSuggestions([]); } }}
                   />
                 </div>
 
@@ -3637,7 +3683,7 @@ const MessageBubble = memo(function MessageBubble({
   if (emailMode) {
     return (
       <div className={cn("group", firstOfGroup ? "mt-3" : "mt-1")}>
-        {taskButton && <div className="mb-1 flex justify-end">{taskButton}</div>}
+        {taskButton && <div className="mb-1 flex justify-end">{taskButton}{m.outgoing && (() => { const diff = Date.now() - new Date(m.created_at).getTime(); const canEdit = diff < 5 * 60 * 1000; return canEdit ? <button type="button" title="Editar mensagem" onClick={() => { setEditingMessageId(m.id); setEditText(m.content); }} className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button> : null; })()}</div>}
         <EmailMessageCard m={m} onPreview={onPreview} />
       </div>
     );
@@ -3645,7 +3691,9 @@ const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
-      className={cn(
+      onTouchStart={(e) => { const t = e.touches[0]; swipeHandlers.current.set(m.id, { startX: t.clientX }); }}
+        onTouchEnd={(e) => { const start = swipeHandlers.current.get(m.id); if (!start) return; swipeHandlers.current.delete(m.id); const dx = start.startX - e.changedTouches[0].clientX; if (dx > 50 && !m.outgoing) { onReply(m); } }}
+        className={cn(
         "group flex items-end gap-1",
         firstOfGroup ? "mt-2.5" : "mt-0.5",
         m.outgoing ? "justify-end" : "justify-start",
@@ -3695,7 +3743,7 @@ const MessageBubble = memo(function MessageBubble({
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
         ))}
-        {body && <p className="whitespace-pre-wrap break-words">{body}</p>}
+        {body && <p className="whitespace-pre-wrap break-words">{autolink(body)}</p>}
         {lastOfGroup && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {formatTime(m.created_at)}

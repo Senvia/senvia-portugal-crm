@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePersistedState } from "@/hooks/usePersistedState";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
 import { useProposalsRealtime } from '@/hooks/useRealtimeSubscription';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
@@ -218,9 +219,19 @@ export default function Proposals() {
             {filteredProposals.map((proposal) => (
               <Card
                 key={proposal.id}
-                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                className="cursor-pointer hover:bg-muted/50 transition-colors relative"
                 onClick={() => setSelectedProposal(proposal)}
               >
+                {proposal.status === 'accepted' && !(proposal as any).has_sale && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="absolute top-2 right-2 z-10 h-7 text-xs"
+                    onClick={(e) => { e.stopPropagation(); const url = `/sales?newSale=true&proposal_id=${proposal.id}&client_id=${proposal.client_id || ''}&total_value=${proposal.total_value}`; navigate(url); }}
+                  >
+                    Criar Venda
+                  </Button>
+                )}
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
