@@ -300,12 +300,30 @@ function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
 }
 
+const EMOJI_MAP: Record<string, string> = {
+  ":sorriso": "😀", ":alegria": "😂", ":gargalhada": "😂", ":chorar": "😂", ":feliz": "😍", ":olhos": "😍", ":coracao": "😍", ":apaixonado": "🥰", ":piscar": "😉",
+  ":sunga": "😎", ":fixe": "😎", ":legal": "😎", ":pensando": "🤔", ":pensativo": "🤔", ":refletir": "🤔", ":suor": "😅", ":triste": "😢", ":raiva": "😡",
+  ":joia": "👍", ":like": "👍", ":gosto": "👍", ":joinha": "👍", ":nao_gosto": "👎", ":ruim": "👎", ":rezar": "🙏", ":obrigado": "🙏", ":por_favor": "🙏",
+  ":palmas": "👏", ":parabens": "👏", ":forca": "💪", ":musculo": "💪", ":aperto_mao": "🤝", ":combinado": "🤝", ":ok": "👌", ":beleza": "👌",
+  ":gesto_coracao": "🫶", ":ama": "🫶", ":amor": "❤️", ":coracao_vermelho": "❤️", ":coracao_azul": "💙", ":coracao_roxo": "💜", ":coracao_preto": "🖤",
+  ":festa": "🎉", ":comemorar": "🎉", ":fogo": "🔥", ":incrivel": "🔥", ":top": "🔥", ":estrela": "⭐", ":sim": "✅", ":check": "✅", ":nao": "❌",
+  ":errado": "❌", ":aviso": "⚠️", ":alerta": "⚠️", ":calendario": "📅", ":data": "📅", ":telefone": "📞", ":ligar": "📞", ":dinheiro": "💰",
+  ":foguete": "🚀", ":lancar": "🚀", ":acelerar": "🚀", ":alvo": "🎯", ":acertar": "🎯", ":presente": "🎁", ":presentear": "🎁", ":trofeu": "🏆",
+  ":vencedor": "🏆", ":lampada": "💡", ":ideia": "💡", ":pino": "📌", ":fixar": "📌", ":chave": "🔑", ":escudo": "🛡️", ":seguro": "🛡️",
+  ":nota": "🎵", ":musica": "🎵", ":documento": "📝", ":escrever": "📝", ":lapis": "✏️", ":editar": "✏️", ":computador": "🖥️", ":pc": "🖥️",
+  ":telemovel": "📱", ":mobile": "📱", ":cafe": "☕", ":pizza": "🍕", ":pizza": "🍕",
+  ":cao": "🐶", ":cachorro": "🐶", ":gato": "🐱", ":panda": "🐼", ":sapo": "🐸", ":passaro": "🐦", ":abelha": "🐝", ":borboleta": "🦋", ":polvo": "🐙",
+  ":golfinho": "🐬", ":tubarao": "🦈", ":elefante": "🐘", ":girafa": "🦒", ":raposa": "🦊", ":coelho": "🐰", ":urso": "🐻", ":leao": "🦁", ":tigre": "🐯",
+  ":onda": "👋", ":tchau": "👋", ":adeus": "👋", ":boa_sorte": "🤞", ":cruzado": "🤞", ":paz": "✌️", ":vitoria": "✌️",
+  ":chorar_riso": "🤣", ":morto_riso": "💀", ":corno": "🤘", ":rock": "🤘", ":show": "🙌",
+};
+
 const EMOJI_CATEGORIES: Record<string, string[]> = {
-  "Carinhas": ["😀", "😂", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡", "🤩", "🥳", "😏", "😴", "🤗", "🙃", "😇", "🤠", "🤡", "🥺", "😤", "😭", "😱", "🤯", "🥶", "🥵", "🤢", "🤮", "🤧"],
-  "Gestos": ["👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "🖐️", "✋", "🤙", "👋", "🤘", "🫵", "🙌", "🤲", "👐", "🙏", "🤝", "💅", "👀", "🫣"],
+  "Carinhas": ["😀", "😂", "🤣", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡", "🤩", "🥳", "😏", "😴", "🤗", "🙃", "😇", "🤠", "🤡", "🥺", "😤", "😭", "😱", "🤯", "🥶", "🥵", "🤢", "🤮", "🤧", "💀"],
+  "Gestos": ["👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "🖐️", "✋", "🤙", "👋", "🤘", "🫵", "🙌", "🤲", "👐", "💅", "👀", "🫣", "🤞"],
   "Coracoes": ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💗", "💖", "💘", "💝", "❣️", "💓", "💔", "🫰"],
   "Objetos": ["🎉", "🔥", "⭐", "✅", "❌", "⚠️", "📅", "📞", "💰", "🚀", "🎯", "🎁", "🎈", "🏆", "🪄", "💡", "📌", "🔑", "🛡️", "🎵", "📝", "✏️", "🖥️", "📱", "☕", "🍕"],
-  "Animais": ["🐶", "🐱", "🐼", "🐸", "🐦", "🐝", "🦋", "🐙", "🦀", "🐬", "🦈", "🐘", "🦒", "🦊", "🐰", "🐻", "🐨", "🦁", "🐯", "🐮"],
+  "Animais": ["🐶", "🐱", "🐼", "🐸", "🐦", "🐝", "🦋", "🐙", "🦀", "🐬", "🦈", "🐘", "🦒", "🦊", "🐰", "🐻", "🐨", "🦁", "🐯", "🐮", "🦄"],
 };
 const EMOJIS = Object.values(EMOJI_CATEGORIES).flat();
 
@@ -3085,6 +3103,38 @@ export default function Inbox() {
                     above the keyboard for real form fields, but not for contentEditable.
                     It grows naturally with the text up to ~6 lines, then scrolls.
                     Secondary actions live in the "+" menu to keep the bar uncluttered. */}
+                {emojiSuggestions.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1 mx-auto max-w-[320px] flex items-center gap-1 rounded-xl border bg-card p-1.5 shadow-lg">
+                    {emojiSuggestions.slice(0, 6).map((e, i) => (
+                      <button
+                        key={e}
+                        className="rounded-lg px-2 py-1 text-lg hover:bg-muted transition-colors"
+                        onClick={() => {
+                          const text = composerRef.current?.innerText || draft;
+                          const colonIdx = text.lastIndexOf(":");
+                          const before = text.slice(0, colonIdx);
+                          const after = text.slice(colonIdx + 1 + emojiSuggestQuery.length);
+                          const newText = before + e + " " + after;
+                          setDraft(newText);
+                          setEmojiSuggestions([]);
+                          if (composerRef.current) {
+                            composerRef.current.innerText = newText;
+                            // Move caret to end
+                            const sel = window.getSelection();
+                            const range = document.createRange();
+                            range.selectNodeContents(composerRef.current);
+                            range.collapse(false);
+                            sel?.removeAllRanges();
+                            sel?.addRange(range);
+                          }
+                        }}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                    <span className="ml-auto text-[10px] text-muted-foreground opacity-60">Tab</span>
+                  </div>
+                )}
                 <div className="relative flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
                   {!draft.trim() && (
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none truncate pr-2 text-base text-muted-foreground sm:text-sm">
@@ -3109,7 +3159,32 @@ export default function Inbox() {
                       setDraft(e.currentTarget.innerText);
                     }}
                     onInput={(e) => {
-                      setDraft(e.currentTarget.innerText);
+                      const text = e.currentTarget.innerText;
+                      setDraft(text);
+                      // Detetar ":" para sugerir emojis
+                      const colonIdx = text.lastIndexOf(":");
+                      if (colonIdx !== -1) {
+                        const query = text.slice(colonIdx + 1).toLowerCase().trim();
+                        if (query.length > 0 && query.indexOf(" ") === -1 && query.indexOf("\n") === -1) {
+                          // Search emojis by character match OR by name (:sorriso -> 😀)
+                          const charMatches = Object.values(EMOJI_CATEGORIES).flat()
+                            .filter(e => e.toLowerCase().includes(query));
+                          const nameMatches = Object.entries(EMOJI_MAP)
+                            .filter(([key]) => key.replace(":", "").includes(query))
+                            .map(([, emoji]) => emoji);
+                          const matches = [...new Set([...charMatches, ...nameMatches])].slice(0, 6);
+                          if (matches.length > 0) {
+                            setEmojiSuggestions(matches);
+                            setEmojiSuggestQuery(query);
+                          } else {
+                            setEmojiSuggestions([]);
+                          }
+                        } else {
+                          setEmojiSuggestions([]);
+                        }
+                      } else {
+                        setEmojiSuggestions([]);
+                      }
                       // Show "typing..." on the contact's WhatsApp (throttled, not for email).
                       if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
                         lastTypingRef.current = Date.now();
@@ -3121,6 +3196,25 @@ export default function Inbox() {
                       typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
                     }}
                     onKeyDown={(e) => {
+                      // Tab = select first emoji suggestion
+                      if (emojiSuggestions.length > 0 && e.key === "Tab") {
+                        e.preventDefault();
+                        const sel = emojiSuggestions[0];
+                        const cur = e.currentTarget.innerText || draft;
+                        const colonIdx = cur.lastIndexOf(":");
+                        const before = cur.slice(0, colonIdx);
+                        const after = cur.slice(colonIdx + 1 + emojiSuggestQuery.length);
+                        const newText = before + sel + " " + after;
+                        setDraft(newText);
+                        e.currentTarget.innerText = newText;
+                        setEmojiSuggestions([]);
+                        const rng = document.createRange();
+                        rng.selectNodeContents(e.currentTarget);
+                        rng.collapse(false);
+                        window.getSelection()?.removeAllRanges();
+                        window.getSelection()?.addRange(rng);
+                        return;
+                      }
                       // Enter sends; Shift+Enter inserts a newline. Ignore while the
                       // IME is composing (accents) so it doesn't send mid-word.
                       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isComposingRef.current) {
@@ -3139,7 +3233,7 @@ export default function Inbox() {
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
                     // mobile stops iOS from auto-zooming on focus.
-                    className="max-h-[240px] sm:max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm" onKeyDown={(e) => { if (emojiSuggestions.length > 0 && e.key === "Tab") { e.preventDefault(); const sel = emojiSuggestions[0]; const cur = e.currentTarget.value; const colonIdx = cur.lastIndexOf(":"); setDraft(cur.slice(0, colonIdx) + sel + " "); setEmojiSuggestions([]); } }}
+                    className="max-h-[240px] sm:max-h-[160px] min-h-[1.5rem] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words py-2.5 text-base leading-6 outline-none sm:text-sm"
                   />
                 </div>
 
