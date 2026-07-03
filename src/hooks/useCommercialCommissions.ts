@@ -111,15 +111,30 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         return (s.code as string) || 'Venda';
       };
 
-      // --- Recurring commissions (Stripe) — both pending and paid in month ---
-      const { data: records, error: recErr } = await (supabase as any)
-        .from('stripe_commission_records')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .gte('created_at', `${monthStartStr}T00:00:00`)
-        .lte('created_at', `${monthEndStr}T23:59:59`);
-      if (recErr) throw recErr;
-      const recs = (records || []) as any[];
+      // --- Recurring commissions (Stripe) ---
+      // PENDING = outstanding debt: must show EVERY month until paid, so never
+      // filter it by created_at (a June commission left unpaid still shows in July).
+      // PAID = historical: keep it scoped to the month it landed in.
+      const [pendingRecsRes, paidRecsRes] = await Promise.all([
+        (supabase as any)
+          .from('stripe_commission_records')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('status', 'pending')
+          // Carry forward, not backward: a pending commission shows from its month
+          // onwards (created on/before the period end), never in an earlier month.
+          .lte('created_at', `${monthEndStr}T23:59:59`),
+        (supabase as any)
+          .from('stripe_commission_records')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('status', 'paid')
+          .gte('created_at', `${monthStartStr}T00:00:00`)
+          .lte('created_at', `${monthEndStr}T23:59:59`),
+      ]);
+      if (pendingRecsRes.error) throw pendingRecsRes.error;
+      if (paidRecsRes.error) throw paidRecsRes.error;
+      const recs = [...(pendingRecsRes.data || []), ...(paidRecsRes.data || [])] as any[];
       const recOrgIds = [...new Set(recs.map(r => r.client_org_id).filter(Boolean))] as string[];
       const orgsRes = recOrgIds.length
         ? await supabase.from('organizations').select('id, name').in('id', recOrgIds)
@@ -249,13 +264,19 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
         if (fraction > 0) { total += Number(s.comissao || 0) * fraction; count += 1; }
       }
 
+      // Pending recurring commissions are outstanding debt until paid. They carry
+      // FORWARD — counted from their month onwards (created on/before the period
+      // end) — but never backward into a month before the debt existed.
+      const periodEnd = dateRange?.to
+        ? endOfDay(dateRange.to)
+        : dateRange?.from ? endOfDay(dateRange.from) : null;
       const { data: recs } = await (supabase as any)
         .from('stripe_commission_records')
-        .select('commission_amount, created_at, status')
+        .select('commission_amount, status, created_at')
         .eq('organization_id', orgId)
         .eq('status', 'pending');
       for (const r of (recs || []) as any[]) {
-        if (inRange(r.created_at)) total += Number(r.commission_amount || 0);
+        if (!periodEnd || parseISO(r.created_at) <= periodEnd) total += Number(r.commission_amount || 0);
       }
 
       return { total, count };

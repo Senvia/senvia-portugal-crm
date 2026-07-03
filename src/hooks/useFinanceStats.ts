@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { addDays, endOfDay, format, isSameMonth, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
+import { addDays, endOfDay, format, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
 import type { CashflowPoint, FinanceStats, PaymentWithSale } from '@/types/finance';
 import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/types/sales';
 import { DateRange } from 'react-day-picker';
@@ -24,10 +24,13 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       if (!organizationId) return [];
       const { data, error } = await supabase
         .from('sales')
-        .select('id, total_value, created_at, sale_date')
+        .select('id, total_value, created_at, sale_date, status')
         .eq('organization_id', organizationId);
       if (error) throw error;
-      return (data || []).map((sale) => ({ ...sale, total_value: Number(sale.total_value || 0) }));
+      // Cancelled sales are not real revenue — exclude them from every total.
+      return (data || [])
+        .filter((sale) => sale.status !== 'cancelled')
+        .map((sale) => ({ ...sale, total_value: Number(sale.total_value || 0) }));
     },
     enabled: !!organizationId,
   });
@@ -64,7 +67,10 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         throw error;
       }
 
-      return (data || []).map((payment): PaymentWithSale => ({
+      return (data || [])
+        // Payments of cancelled sales must not count as received / pending / billed.
+        .filter((payment) => (payment.sales as { status?: string } | null)?.status !== 'cancelled')
+        .map((payment): PaymentWithSale => ({
         id: payment.id,
         organization_id: payment.organization_id,
         sale_id: payment.sale_id,
@@ -192,12 +198,21 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     // Faturado = vendas criadas no período + cada renovação de venda recorrente
     // no período (usando o recurring_value/preço do plano). Exclui o pagamento do
     // mês de criação (já contado no total_value da venda) para não duplicar.
+    // A subscription's FIRST paid payment covers the original contracted value
+    // (already in the sale's total_value); only LATER paid payments are renewals,
+    // billed at their actual amount and counted once each. Identifying the first
+    // payment per sale (payments arrive ordered by date) is robust to month
+    // boundaries — the old "same calendar month" guard double-counted a sale whose
+    // first payment fell in the month after the sale date.
+    const firstPaidRecurringPaymentId = new Map<string, string>();
+    for (const p of (payments || [])) {
+      if (p.status !== 'paid' || !p.sale.has_recurring) continue;
+      if (!firstPaidRecurringPaymentId.has(p.sale_id)) firstPaidRecurringPaymentId.set(p.sale_id, p.id);
+    }
     const renewalBilled = filteredPayments.reduce((sum, payment) => {
-      const sale = payment.sale;
-      if (payment.status !== 'paid' || !sale.has_recurring || !sale.sale_date) return sum;
-      if (isSameMonth(parseISO(payment.payment_date), parseISO(sale.sale_date))) return sum;
-      const value = Number(sale.recurring_value) || Number(sale.total_value) || 0;
-      return sum + value;
+      if (payment.status !== 'paid' || !payment.sale.has_recurring) return sum;
+      if (firstPaidRecurringPaymentId.get(payment.sale_id) === payment.id) return sum;
+      return sum + payment.amount;
     }, 0);
 
     const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0) + renewalBilled;
@@ -210,7 +225,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       .filter((payment) => payment.status === 'pending')
       .reduce((sum, payment) => sum + payment.amount, 0);
 
-    const dueSoonPayments = eligibleFilteredPayments
+    // "A Vencer" is intrinsically about the next 7 real days, so — like Pending
+    // and Overdue — it uses the full history, never the selected period.
+    const dueSoonPayments = eligibleGlobalPayments
       .filter((payment) => {
         if (payment.status !== 'pending') return false;
         const date = parseISO(payment.payment_date);

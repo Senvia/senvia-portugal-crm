@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Plus } from 'lucide-react';
 import { useInternalRequests } from '@/hooks/useInternalRequests';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -15,6 +25,7 @@ export default function InternalRequests() {
   const [filterStatus, setFilterStatus] = usePersistedState<RequestStatus | 'all'>('requests-status-v1', 'all');
   const [showSubmit, setShowSubmit] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<InternalRequest | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filters = {
     ...(filterType !== 'all' && { type: filterType }),
@@ -45,7 +56,7 @@ export default function InternalRequests() {
         requests={requests}
         isLoading={isLoading}
         onSelect={setSelectedRequest}
-        onDelete={(id) => deleteRequest.mutate(id)}
+        onDelete={(id) => setDeleteId(id)}
         filterType={filterType}
         filterStatus={filterStatus}
         onFilterType={setFilterType}
@@ -59,6 +70,29 @@ export default function InternalRequests() {
         onOpenChange={(open) => !open && setSelectedRequest(null)}
         canApprove={canApprove}
       />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é irreversível. O pedido será permanentemente removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteId) deleteRequest.mutate(deleteId);
+                setDeleteId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

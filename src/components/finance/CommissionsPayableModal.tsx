@@ -15,6 +15,15 @@ interface CommissionsPayableModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// commission_rate is stored inconsistently across sources: some rows use a
+// percentage (25) and others a fraction (0.25). Normalize to a percentage for
+// display so a 25% commission never shows as "0.25%".
+function formatRatePct(rate: number | null | undefined): number {
+  const n = Number(rate) || 0;
+  const pct = n <= 1 ? n * 100 : n;
+  return Math.round(pct * 100) / 100;
+}
+
 export function CommissionsPayableModal({ open, onOpenChange }: CommissionsPayableModalProps) {
   const { data, isLoading } = useCommissionsDetail();
   const { data: stripeData, isLoading: stripeLoading } = useStripeCommissions();
@@ -155,7 +164,7 @@ export function CommissionsPayableModal({ open, onOpenChange }: CommissionsPayab
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right text-sm">{formatCurrency(record.amount)}</TableCell>
-                            <TableCell className="text-right text-sm">{record.commission_rate}%</TableCell>
+                            <TableCell className="text-right text-sm">{formatRatePct(record.commission_rate)}%</TableCell>
                             <TableCell className="text-right text-sm font-medium">{formatCurrency(record.commission_amount)}</TableCell>
                           </TableRow>
                         ))}

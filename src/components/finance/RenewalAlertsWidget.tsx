@@ -25,15 +25,21 @@ export function RenewalAlertsWidget() {
   const cancelRecurrence = useCancelRecurrence();
   const [cancelingSaleId, setCancelingSaleId] = useState<string | null>(null);
   const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [renewConfirmSale, setRenewConfirmSale] = useState<typeof recurringSales[0] | null>(null);
 
   const handleRenew = async (sale: typeof recurringSales[0]) => {
     setRenewingId(sale.id);
-    await renewSale.mutateAsync({
-      saleId: sale.id,
-      organizationId: sale.organization_id,
-      amount: sale.recurring_value,
-    });
-    setRenewingId(null);
+    try {
+      await renewSale.mutateAsync({
+        saleId: sale.id,
+        organizationId: sale.organization_id,
+        amount: sale.recurring_value,
+      });
+    } finally {
+      // Always clear the loading state, even if the mutation rejects
+      // (the hook already surfaces the error toast).
+      setRenewingId(null);
+    }
   };
 
   const handleCancel = () => {
@@ -150,7 +156,7 @@ export function RenewalAlertsWidget() {
                       <Button
                         size="sm"
                         className="flex-1 h-7 text-xs"
-                        onClick={() => handleRenew(sale)}
+                        onClick={() => setRenewConfirmSale(sale)}
                         disabled={isRenewing}
                       >
                         <RefreshCw className={`h-3 w-3 mr-1 ${isRenewing ? 'animate-spin' : ''}`} />
@@ -173,6 +179,33 @@ export function RenewalAlertsWidget() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Renew confirmation */}
+      <AlertDialog open={!!renewConfirmSale} onOpenChange={() => setRenewConfirmSale(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Renovar subscrição?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao renovar, será registado um novo pagamento
+              {renewConfirmSale ? ` de ${formatCurrency(renewConfirmSale.recurring_value)}` : ''} e a respetiva
+              comissão. A data da próxima renovação será atualizada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (renewConfirmSale) {
+                  handleRenew(renewConfirmSale);
+                  setRenewConfirmSale(null);
+                }
+              }}
+            >
+              Confirmar Renovação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Cancel confirmation */}
       <AlertDialog open={!!cancelingSaleId} onOpenChange={() => setCancelingSaleId(null)}>

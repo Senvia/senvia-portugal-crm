@@ -51,6 +51,22 @@ export function useInternalRequests(filters?: Filters) {
     enabled: !!organizationId && !!session,
   });
 
+  // Pending count for the whole organization, independent of the active status filter.
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['internal-requests-pending-count', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return 0;
+      const { count, error } = await supabase
+        .from('internal_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('status', 'pending');
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!organizationId && !!session,
+  });
+
   const submitRequest = useMutation({
     mutationFn: async (input: {
       request_type: RequestType;
@@ -74,6 +90,7 @@ export function useInternalRequests(filters?: Filters) {
     onSuccess: (_, input) => {
       toast.success('Pedido submetido com sucesso');
       queryClient.invalidateQueries({ queryKey: ['internal-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['internal-requests-pending-count'] });
       // Notify finance email silently
       supabase.functions.invoke('notify-finance-request', {
         body: {
@@ -114,6 +131,7 @@ export function useInternalRequests(filters?: Filters) {
       const labels = { approved: 'aprovado', rejected: 'rejeitado', paid: 'marcado como pago' };
       toast.success(`Pedido ${labels[vars.status]}`);
       queryClient.invalidateQueries({ queryKey: ['internal-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['internal-requests-pending-count'] });
       // Notify submitter via email
       if (['approved', 'rejected', 'paid'].includes(vars.status)) {
         supabase.functions.invoke('notify-request-status', {
@@ -137,6 +155,7 @@ export function useInternalRequests(filters?: Filters) {
     onSuccess: () => {
       toast.success('Pedido eliminado');
       queryClient.invalidateQueries({ queryKey: ['internal-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['internal-requests-pending-count'] });
     },
     onError: () => toast.error('Erro ao eliminar pedido'),
   });
@@ -150,8 +169,6 @@ export function useInternalRequests(filters?: Filters) {
     const { data } = supabase.storage.from('internal-requests').getPublicUrl(path);
     return data.publicUrl;
   };
-
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
 
   return {
     requests,

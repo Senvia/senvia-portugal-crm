@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { endOfMonth, format } from "date-fns";
 import { toast } from "sonner";
 
 export interface StripeCommissionRecord {
@@ -33,21 +33,23 @@ export function useStripeCommissions() {
   const { organization } = useAuth();
   const orgId = organization?.id;
   const { selectedMonth } = useDashboardPeriod();
-
-  const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
   const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
 
   return useQuery({
-    queryKey: ["stripe-commissions", orgId, monthStart],
+    queryKey: ["stripe-commissions", orgId, monthEnd],
     queryFn: async (): Promise<{ byUser: StripeCommissionByUser[]; grandTotal: number }> => {
       if (!orgId) return { byUser: [], grandTotal: 0 };
 
+      // "A pagar" = outstanding (pending) commissions. A pending record is a real
+      // debt until it's paid, so it carries FORWARD — shown from its month onwards
+      // (created on/before the selected month's end), never in an earlier month.
+      // The old code also had a start-of-month lower bound, so a June commission
+      // left unpaid vanished in July; we drop that lower bound but keep the upper.
       const { data: records, error } = await supabase
         .from("stripe_commission_records")
         .select("*")
         .eq("organization_id", orgId)
         .eq("status", "pending")
-        .gte("created_at", `${monthStart}T00:00:00`)
         .lte("created_at", `${monthEnd}T23:59:59`)
         .order("created_at", { ascending: false }) as any;
 

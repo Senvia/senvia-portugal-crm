@@ -14,6 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronDown, ChevronRight, FileX, Search, Wallet, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/format';
@@ -46,6 +47,8 @@ export function TeamCommissionsTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [payTarget, setPayTarget] = useState<CommercialCommission | null>(null);
   const [bankAccount, setBankAccount] = useState('none');
+  // Which pending commissions are ticked for payment (keyed by `${kind}-${id}`).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useCommercialCommissions(selectedMonth, effectiveUserIds);
   const payMutation = usePayCommercialCommissions();
@@ -63,20 +66,37 @@ export function TeamCommissionsTab() {
   const totalPending = data?.totalPending || 0;
   const filtered = commercials.filter(c => matchesSearch(searchTerm, c.name));
 
+  const itemKey = (item: { kind: string; id: string }) => `${item.kind}-${item.id}`;
+
   const openPay = (entry: CommercialCommission) => {
     setBankAccount('none');
     setPayTarget(entry);
+    // Default: every pending commission ticked — user can untick the ones to skip.
+    setSelectedIds(new Set(entry.items.filter(i => !i.paid).map(itemKey)));
+  };
+
+  // Pending commissions for the open target, and the subset ticked for payment.
+  const pendingItems = payTarget ? payTarget.items.filter(i => !i.paid) : [];
+  const selectedItems = pendingItems.filter(i => selectedIds.has(itemKey(i)));
+  const selectedTotal = selectedItems.reduce((s, i) => s + i.amount, 0);
+
+  const toggleSelected = (key: string, on: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      on ? next.add(key) : next.delete(key);
+      return next;
+    });
   };
 
   const confirmPay = () => {
-    if (!payTarget) return;
+    if (!payTarget || selectedItems.length === 0) return;
     payMutation.mutate(
       {
         fullName: payTarget.name,
         bankAccountId: bankAccount === 'none' ? null : bankAccount,
-        saleIds: payTarget.pendingSaleIds,
-        recordIds: payTarget.pendingRecordIds,
-        total: payTarget.totalPending,
+        saleIds: selectedItems.filter(i => i.kind === 'direct').map(i => i.id),
+        recordIds: selectedItems.filter(i => i.kind === 'recurring').map(i => i.id),
+        total: selectedTotal,
       },
       { onSuccess: () => setPayTarget(null) },
     );
@@ -269,15 +289,57 @@ export function TeamCommissionsTab() {
           <DialogHeader>
             <DialogTitle>Pagar comissões — {payTarget?.name}</DialogTitle>
             <DialogDescription>
-              Vais marcar como pagas as comissões pendentes deste comercial e registar a despesa.
+              Escolhe quais comissões pagar. As selecionadas são marcadas como pagas e é registada a despesa.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-1">
-            <div className="rounded-lg border bg-muted/30 p-4 flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Total a pagar</span>
-              <span className="text-xl font-bold text-primary">{formatCurrency(payTarget?.totalPending || 0)}</span>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-medium text-muted-foreground">{pendingItems.length} pendente(s)</span>
+              <button
+                type="button"
+                className="text-xs font-medium text-primary hover:underline"
+                onClick={() =>
+                  setSelectedIds(
+                    selectedItems.length === pendingItems.length
+                      ? new Set()
+                      : new Set(pendingItems.map(itemKey)),
+                  )
+                }
+              >
+                {selectedItems.length === pendingItems.length ? 'Desmarcar todas' : 'Selecionar todas'}
+              </button>
             </div>
+
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
+              {pendingItems.map(item => {
+                const key = itemKey(item);
+                return (
+                  <label key={key} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                    <Checkbox
+                      checked={selectedIds.has(key)}
+                      onCheckedChange={(v) => toggleSelected(key, v === true)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{item.label}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {item.kind === 'recurring' ? 'Recorrente' : 'Direta'}
+                        {item.date ? ` · ${format(new Date(item.date), 'dd MMM yyyy', { locale: pt })}` : ''}
+                      </span>
+                    </span>
+                    <span className="text-sm font-medium">{formatCurrency(item.amount)}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+              <span className="text-sm font-medium text-muted-foreground">
+                Selecionadas ({selectedItems.length}/{pendingItems.length})
+              </span>
+              <span className="text-xl font-bold text-primary">{formatCurrency(selectedTotal)}</span>
+            </div>
+
             <BankAccountSelect value={bankAccount} onChange={setBankAccount} label="Conta de onde sai" />
           </div>
 
@@ -285,8 +347,8 @@ export function TeamCommissionsTab() {
             <Button variant="outline" onClick={() => setPayTarget(null)} disabled={payMutation.isPending}>
               Cancelar
             </Button>
-            <Button onClick={confirmPay} disabled={payMutation.isPending}>
-              {payMutation.isPending ? 'A processar...' : `Pagar ${formatCurrency(payTarget?.totalPending || 0)}`}
+            <Button onClick={confirmPay} disabled={payMutation.isPending || selectedItems.length === 0}>
+              {payMutation.isPending ? 'A processar...' : `Pagar ${formatCurrency(selectedTotal)}`}
             </Button>
           </DialogFooter>
         </DialogContent>

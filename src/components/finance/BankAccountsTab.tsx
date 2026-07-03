@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Eye, Landmark } from 'lucide-react';
+import { Plus, Pencil, Eye, Landmark, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { formatCurrency, formatIban } from '@/lib/format';
 import { CreateBankAccountModal } from './CreateBankAccountModal';
@@ -12,7 +12,7 @@ import { BankAccountStatementDrawer } from './BankAccountStatementDrawer';
 import type { BankAccount } from '@/types/bank-accounts';
 
 export function BankAccountsTab() {
-  const { data: accounts, isLoading } = useBankAccounts();
+  const { data: accounts, isLoading, isError, refetch } = useBankAccounts();
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<BankAccount | null>(null);
   const [statementAccount, setStatementAccount] = useState<BankAccount | null>(null);
@@ -31,6 +31,22 @@ export function BankAccountsTab() {
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40" />)}
         </div>
+      ) : isError ? (
+        // Error state: distinguish a real fetch/RLS failure from an empty list,
+        // so we don't mask errors as "no accounts".
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-1">Não foi possível carregar as contas</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Ocorreu um erro ao carregar as suas contas correntes. Tenta novamente.
+            </p>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
       ) : !accounts?.length ? (
         <Card>
           <CardContent className="py-12 text-center">

@@ -122,41 +122,42 @@ function PaymentsDetailTable({ payments, allowMarkPaid = false }: { payments: Pa
       queryClient.invalidateQueries({ queryKey: [key] }));
   };
 
-  const handleMarkPaid = () => {
+  const handleMarkPaid = async () => {
     if (!confirm || receivedNum <= 0) return;
     const { id, sale_id } = confirm;
 
-    if (!isPartial) {
-      // Full amount received: just flip the parcel to paid on the chosen date.
-      updatePayment.mutate(
-        { paymentId: id, saleId: sale_id, updates: { status: "paid", payment_date: payDate } },
-        { onSuccess: invalidateDerived, onSettled: () => setConfirm(null) },
-      );
-      return;
+    try {
+      if (!isPartial) {
+        // Full amount received: just flip the parcel to paid on the chosen date.
+        await updatePayment.mutateAsync({
+          paymentId: id, saleId: sale_id, updates: { status: "paid", payment_date: payDate },
+        });
+      } else {
+        // Partial payment. Create the REMAINDER parcel FIRST, then mark the received
+        // part paid. Ordering matters: if the second write fails, the outstanding
+        // balance still exists (worst case a duplicate to reconcile) — never lost.
+        // The old order shrank the original first, so a failed insert silently
+        // destroyed the remaining balance.
+        await createPayment.mutateAsync({
+          sale_id,
+          organization_id: confirm.organization_id,
+          amount: remainder,
+          payment_date: confirm.payment_date,
+          status: "pending",
+          payment_method: confirm.payment_method ?? null,
+          notes: confirm.notes ?? null,
+        });
+        await updatePayment.mutateAsync({
+          paymentId: id, saleId: sale_id, updates: { amount: receivedNum, status: "paid", payment_date: payDate },
+        });
+      }
+      invalidateDerived();
+    } catch {
+      // The mutations surface their own error toast; nothing is lost because the
+      // remainder is created before the original parcel is modified.
+    } finally {
+      setConfirm(null);
     }
-
-    // Partial: mark the received part paid on the chosen date, then keep the
-    // remainder pending on the originally scheduled date.
-    updatePayment.mutate(
-      { paymentId: id, saleId: sale_id, updates: { amount: receivedNum, status: "paid", payment_date: payDate } },
-      {
-        onSuccess: () => {
-          createPayment.mutate(
-            {
-              sale_id,
-              organization_id: confirm.organization_id,
-              amount: remainder,
-              payment_date: confirm.payment_date,
-              status: "pending",
-              payment_method: confirm.payment_method ?? null,
-              notes: confirm.notes ?? null,
-            },
-            { onSuccess: invalidateDerived, onSettled: () => setConfirm(null) },
-          );
-        },
-        onError: () => setConfirm(null),
-      },
-    );
   };
 
   return (
@@ -259,7 +260,9 @@ interface RenewalRow { id: string; date: string; label: string; amount: number; 
 function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange; renewals?: RenewalRow[] }) {
   const { data: sales = [], isLoading } = useSales();
   const filtered = useMemo(
-    () => sales.filter((s) => inRange(s.sale_date, dateRange)),
+    // Exclude cancelled sales so this detail's total matches the card, which also
+    // drops them (useFinanceStats).
+    () => sales.filter((s) => s.status !== "cancelled" && inRange(s.sale_date, dateRange)),
     [sales, dateRange],
   );
   if (isLoading) return <Skeleton className="h-64 w-full" />;

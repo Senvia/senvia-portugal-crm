@@ -63,16 +63,29 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
   const { data: allSales = [], isLoading } = useMyCommissions();
   const [filter, setFilter] = useState<StatusFilter>('pending');
 
-  // Respect the selected period: filter by sale date (the "Data" column).
+  // Whether a date falls in the selected period (no range → always true).
+  const inPeriod = (dateStr?: string | null) => {
+    if (!dateRange?.from) return true;
+    if (!dateStr) return false;
+    const d = parseISO(dateStr);
+    return d >= startOfDay(dateRange.from) && d <= endOfDay(dateRange.to ?? dateRange.from);
+  };
+
+  // Filter by sale date for the selected period. An outstanding (pending)
+  // commission carries FORWARD: it stays visible in its own period and every LATER
+  // one until settled — but never earlier than the sale itself (a July sale must
+  // not show up when filtering June). Settled commissions show only in their period.
   const sales = useMemo(() => {
     if (!dateRange?.from) return allSales;
-    const from = startOfDay(dateRange.from);
-    const to = endOfDay(dateRange.to ?? dateRange.from);
+    const periodEnd = endOfDay(dateRange.to ?? dateRange.from);
     return allSales.filter((s) => {
-      if (!s.sale_date) return false;
-      const d = parseISO(s.sale_date);
-      return d >= from && d <= to;
+      if (hasPending(s)) {
+        if (!s.sale_date) return true;
+        return parseISO(s.sale_date) <= periodEnd;
+      }
+      return inPeriod(s.sale_date);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allSales, dateRange]);
 
   const stats = useMemo(() => {
@@ -90,7 +103,9 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
         pendingTotal += pending;
         pendingCount++;
       }
-      if (confirmed > EPS) {
+      // Confirmed amounts count only within their own period, so a pending sale
+      // carried forward from an earlier month never inflates this period's totals.
+      if (confirmed > EPS && inPeriod(s.sale_date)) {
         confirmedTotal += confirmed;
         confirmedCount++;
         const ref = s.approved_at
@@ -102,7 +117,8 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
       }
     }
     return { pendingTotal, pendingCount, confirmedTotal, confirmedCount, monthTotal };
-  }, [sales]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sales, dateRange]);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return sales;
