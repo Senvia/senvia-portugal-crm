@@ -2,8 +2,7 @@
 // categories and skin tones. Thin wrapper around emoji-mart so the inbox only
 // depends on our own small surface. Lazy-loaded by the composer.
 import Picker from "@emoji-mart/react";
-import { useEffect, useState } from "react";
-import { emojiDataPromise } from "@/lib/emoji";
+import data from "@emoji-mart/data";
 
 // pt-PT labels for the picker chrome (emoji-mart defaults to English).
 const I18N_PT = {
@@ -36,25 +35,6 @@ const I18N_PT = {
 };
 
 export function EmojiPicker({ onSelect }: { onSelect: (native: string) => void }) {
-  // Shares the single fetch of the ~420KB dataset with lib/emoji.tsx (kicked
-  // off as soon as the inbox module loaded) — usually already resolved by the
-  // time the user opens the picker, since opening it also waits on this
-  // component's own lazy chunk.
-  const [data, setData] = useState<unknown>(null);
-  useEffect(() => {
-    let cancelled = false;
-    emojiDataPromise.then((d) => { if (!cancelled) setData(d); });
-    return () => { cancelled = true; };
-  }, []);
-
-  if (!data) {
-    return (
-      <div className="flex h-72 w-72 items-center justify-center text-sm text-muted-foreground">
-        A carregar…
-      </div>
-    );
-  }
-
   return (
     <Picker
       data={data}
