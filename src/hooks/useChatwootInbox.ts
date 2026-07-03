@@ -58,6 +58,8 @@ export interface InboxMessage {
   status: string | null;
   // WhatsApp message id — used to quote/reply.
   wa_id: string | null;
+  // When this message is a reply, the Chatwoot id of the quoted message.
+  reply_to_id?: number | null;
   attachments: InboxAttachment[];
   // Email-specific fields (null for non-email channels)
   content_type: string | null;

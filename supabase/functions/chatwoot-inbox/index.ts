@@ -217,6 +217,9 @@ function normalizeMessage(m: any, base: string) {
     status: m?.status ?? null,
     // WhatsApp message id (WAID: prefix stripped) — used to quote/reply/delete.
     wa_id: m?.source_id ? String(m.source_id).replace(/^WAID:/i, '') : null,
+    // If this message is a reply/quote, the Chatwoot id of the message it replies
+    // to — lets the UI show the quoted message above this one (like WhatsApp).
+    reply_to_id: m?.content_attributes?.in_reply_to ?? null,
     attachments,
     // Email-specific fields (populated for email channel messages only)
     content_type: m?.content_type ?? null,

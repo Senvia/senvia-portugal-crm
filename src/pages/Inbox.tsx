@@ -1069,6 +1069,13 @@ export default function Inbox() {
     return all.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
   }, [olderByConv, selectedId, messages, deletedIds, editedContent]);
 
+  // Index messages by id so a reply can render a preview of the quoted message.
+  const messagesById = useMemo(() => {
+    const map = new Map<number, InboxMessage>();
+    for (const m of thread) map.set(m.id, m);
+    return map;
+  }, [thread]);
+
   // Thread rows with date separators + WhatsApp-style grouping. Memoized (and
   // kept ABOVE the early returns so the hook order is stable) — rebuilding this
   // in the render body cost on every keystroke.
@@ -2824,14 +2831,28 @@ export default function Inbox() {
                       </Button>
                     </div>
                   )}
-                  {threadRows.map((row) =>
-                    row.type === "sep" ? (
-                      <div key={row.key} className="flex justify-center py-2">
-                        <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          {row.label}
-                        </span>
-                      </div>
-                    ) : (
+                  {threadRows.map((row) => {
+                    if (row.type === "sep") {
+                      return (
+                        <div key={row.key} className="flex justify-center py-2">
+                          <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {row.label}
+                          </span>
+                        </div>
+                      );
+                    }
+                    // Preview of the quoted message (WhatsApp-style) when this is a reply.
+                    let quoted: { sender: string; content: string } | undefined;
+                    if (row.msg.reply_to_id != null) {
+                      const q = messagesById.get(row.msg.reply_to_id);
+                      quoted = q
+                        ? {
+                            sender: q.outgoing ? "Você" : (selected?.contact_name ?? "Contacto"),
+                            content: q.content || (q.attachments?.length ? "📎 Anexo" : "…"),
+                          }
+                        : { sender: "Resposta", content: "mensagem anterior" };
+                    }
+                    return (
                       <MessageBubble
                         key={row.key}
                         m={row.msg}
@@ -2840,14 +2861,15 @@ export default function Inbox() {
                         emailMode={isEmailSelected}
                         groupSender={row.groupSender}
                         displayContent={row.displayContent}
+                        quoted={quoted}
                         onPreview={setPreviewUrl}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
                       />
-                    ),
-                  )}
+                    );
+                  })}
                   {visiblePending.map((p) => (
                     <div key={p.key} className="mt-0.5 flex justify-end">
                       <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
@@ -3796,6 +3818,7 @@ const MessageBubble = memo(function MessageBubble({
   lastOfGroup = true,
   groupSender = null,
   displayContent,
+  quoted,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
@@ -3804,6 +3827,8 @@ const MessageBubble = memo(function MessageBubble({
   // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
   onSaveEdit?: (m: InboxMessage, text: string) => void;
   onTask?: (m: InboxMessage) => void;
+  // Preview of the quoted message when this one is a reply (sender + short text).
+  quoted?: { sender: string; content: string };
   emailMode?: boolean;
   firstOfGroup?: boolean;
   lastOfGroup?: boolean;
@@ -3935,6 +3960,19 @@ const MessageBubble = memo(function MessageBubble({
         )}
         {showGroupSender && firstOfGroup && (
           <p className={cn("text-[11px] font-semibold", senderColor(groupSender!))}>{groupSender}</p>
+        )}
+        {quoted && !editing && (
+          <div className={cn(
+            "mb-1 rounded-md border-l-2 px-2 py-1 text-xs",
+            m.outgoing ? "border-primary-foreground/50 bg-primary-foreground/10" : "border-primary/40 bg-muted",
+          )}>
+            <p className={cn("truncate font-medium", m.outgoing ? "text-primary-foreground/90" : "text-primary")}>
+              {quoted.sender}
+            </p>
+            <p className={cn("truncate opacity-80", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
+              {quoted.content}
+            </p>
+          </div>
         )}
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
