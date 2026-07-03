@@ -1197,6 +1197,24 @@ export default function Inbox() {
     prevUnreadRef.current = unreadTotal;
   }, [unreadTotal]);
 
+  // "Mensagens não lidas" divider: capture the conversation's unread count the
+  // instant it's opened, BEFORE the markRead call further below resets it to 0
+  // — this runs in the same effect-flush as markRead but reads `conversations`
+  // from the render that already happened, so it still sees the pre-read count.
+  // Approximate (Chatwoot's unread_count isn't guaranteed to count exactly the
+  // same message set the thread renders) but good enough as a visual cue.
+  // Declared here (before threadRows below, which reads it) — a useMemo's
+  // callback runs synchronously during render, so referencing a later const
+  // would be a genuine TDZ crash, not just a lint nit.
+  const [unreadBoundary, setUnreadBoundary] = useState<{ conversationId: number; count: number } | null>(null);
+  useEffect(() => {
+    if (!selectedId) { setUnreadBoundary(null); return; }
+    const conv = conversations.find((c) => c.id === selectedId);
+    const count = conv?.unread_count ?? 0;
+    setUnreadBoundary(count > 0 ? { conversationId: selectedId, count } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   // Thread = older pages (loaded on demand) + live page, deduped by id.
   const thread = useMemo(() => {
     const older = selectedId ? olderByConv[selectedId] ?? [] : [];
@@ -1590,21 +1608,6 @@ export default function Inbox() {
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
     if (nearBottom) requestAnimationFrame(() => bottomRef.current?.scrollIntoView());
   }, [vv.height, mobileConvOpen]);
-
-  // "Mensagens não lidas" divider: capture the conversation's unread count the
-  // instant it's opened, BEFORE the markRead call below resets it to 0 — this
-  // runs in the same effect-flush as markRead but reads `conversations` from
-  // the render that already happened, so it still sees the pre-read count.
-  // Approximate (Chatwoot's unread_count isn't guaranteed to count exactly the
-  // same message set the thread renders) but good enough as a visual cue.
-  const [unreadBoundary, setUnreadBoundary] = useState<{ conversationId: number; count: number } | null>(null);
-  useEffect(() => {
-    if (!selectedId) { setUnreadBoundary(null); return; }
-    const conv = conversations.find((c) => c.id === selectedId);
-    const count = conv?.unread_count ?? 0;
-    setUnreadBoundary(count > 0 ? { conversationId: selectedId, count } : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
   useEffect(() => {
