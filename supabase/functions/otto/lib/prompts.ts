@@ -33,6 +33,7 @@ const SYSTEM_KNOWLEDGE = `CONHECIMENTO DO SISTEMA (resumo):
 - PROPOSTAS/VENDAS: criar a partir de lead/cliente; campos e regras em Definições > Definições Gerais.
 - FINANCEIRO: faturas (InvoiceXpress/KeyInvoice), pagamentos, despesas (categorias em Definições > Financeiro), notas de crédito, pedidos internos. Config fiscal em Definições > Financeiro.
 - AGENDA: eventos/reuniões associados a leads/clientes. Alertas em Definições > Notificações.
+- NOTIFICAÇÕES PUSH: para RECEBER alertas no dispositivo (novos leads, venda fechada, tarefas, mensagens), CADA pessoa tem de as ATIVAR uma vez: Definições > Notificações > cartão "Notificações Push" > botão "Ativar", e depois aceitar a permissão que o browser pede. Há um botão "Testar" para confirmar que chega. No iPhone/iPad é preciso PRIMEIRO instalar a app (PWA): abrir no Safari > botão Partilhar > "Adicionar ao ecrã inicial", abrir a app a partir do ícone, e só aí ativar. Se alguém diz que "não recebe notificações", a causa nº1 é não ter feito este passo (ou ter negado a permissão do browser).
 - MARKETING: campanhas e templates via Brevo (Definições > Integrações > Brevo). Listas de contactos.
 - E-COMMERCE: produtos, encomendas, inventário, descontos.
 - FORMULÁRIOS de captação: Definições > Definições Gerais > Formulários (links /f/:slug e /c/:slug). NÃO estão em Marketing.
