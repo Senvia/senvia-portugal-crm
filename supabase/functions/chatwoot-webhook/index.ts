@@ -70,6 +70,10 @@ async function broadcastInboxMessage(
     sender_name: event.sender?.name ?? null,
     status: event.status ?? null,
     wa_id: event.source_id ? String(event.source_id).replace(/^WAID:/i, '') : null,
+    // If this message is a reply/quote, the Chatwoot id of the message it replies
+    // to — lets the open thread show the quoted preview instantly, matching what
+    // chatwoot-inbox's normalizeMessage exposes on refetch.
+    reply_to_id: event.content_attributes?.in_reply_to ?? null,
     attachments: atts,
     content_type: event.content_type ?? null,
     email_from: null, email_to: null, email_cc: null, email_subject: null, email_html_body: null,
@@ -284,9 +288,27 @@ Deno.serve(async (req) => {
       if (!claimed) return ok({ ok: true, duplicate: true });
     }
 
+    // Realtime nudge: open Senvia inboxes subscribe to `inbox-<org>` and refetch
+    // immediately, instead of waiting for the poll. Only for real messages —
+    // Evolution's bot status messages (isEvoStatus, computed above from the raw
+    // body) must never land in a thread. Fired here — right after the idempotency
+    // claim, BEFORE the channel lookup below — because the broadcast only needs
+    // `event`/`org.id`, not channel data; this shaves the channel query's
+    // ~50-150ms off what the user actually feels as delivery latency. We also ship
+    // the NORMALIZED message itself so the client can append it to the open thread
+    // instantly (no Chatwoot round-trip); the client still runs a debounced
+    // refetch afterwards to reconcile attachments/placeholders.
+    if (!isEvoStatus) {
+      try {
+        await broadcastInboxMessage(supabaseUrl, serviceKey, org.id, event);
+      } catch (e) {
+        console.error('realtime broadcast failed:', e);
+      }
+    }
+
     // ---- Evolution status messages (CONNECTION_UPDATE / QRCODE events) ----
-    // Handle before the realtime broadcast so these never trigger an inbox refetch.
-    // Also auto-resolve the Chatwoot conversation immediately so it never sits in
+    // The broadcast above already skips these (isEvoStatus guard), so they never
+    // trigger an inbox refetch. Also auto-resolve the Chatwoot conversation immediately so it never sits in
     // the Open queue — at 100 instances reconnecting every 20s this would saturate
     // Chatwoot. Channel resolution is still needed for the flap guard below.
     const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
@@ -373,17 +395,6 @@ Deno.serve(async (req) => {
         }
       }
       return ok({ ok: true, evo_status: true });
-    }
-
-    // Realtime nudge: open Senvia inboxes subscribe to `inbox-<org>` and refetch
-    // immediately, instead of waiting for the poll. Only for real messages.
-    // We also ship the NORMALIZED message itself so the client can append it to
-    // the open thread instantly (no Chatwoot round-trip); the client still runs a
-    // debounced refetch afterwards to reconcile attachments/placeholders.
-    try {
-      await broadcastInboxMessage(supabaseUrl, serviceKey, org.id, event);
-    } catch (e) {
-      console.error('realtime broadcast failed:', e);
     }
 
     // AI task suggestions — promises by the agent AND requests by the customer.

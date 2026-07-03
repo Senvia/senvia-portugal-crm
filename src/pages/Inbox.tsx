@@ -53,7 +53,9 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
-import { EmailListReader } from "@/components/email/EmailListReader";
+// Lazy: the email client (list+reader+composer) is a big chunk of code that
+// pure-WhatsApp users never touch — no reason to ship it in the initial Inbox bundle.
+const EmailListReader = lazy(() => import("@/components/email/EmailListReader").then(m => ({ default: m.EmailListReader })));
 import { ContactNotes } from "@/components/contacts/ContactNotes";
 import { useOpenInboxTasks, isTaskOverdue, phoneSuffix } from "@/hooks/useInboxTasks";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
@@ -66,7 +68,8 @@ const CreateClientModal = lazy(() => import("@/components/clients/CreateClientMo
 const EditClientModal = lazy(() => import("@/components/clients/EditClientModal").then(m => ({ default: m.EditClientModal })));
 const AddLeadModal = lazy(() => import("@/components/leads/AddLeadModal").then(m => ({ default: m.AddLeadModal })));
 const LeadDetailsModal = lazy(() => import("@/components/leads/LeadDetailsModal").then(m => ({ default: m.LeadDetailsModal })));
-import { ConnectWhatsAppModal } from "@/components/settings/ConnectWhatsAppModal";
+// Lazy: only needed the rare times the WhatsApp session needs (re)connecting.
+const ConnectWhatsAppModal = lazy(() => import("@/components/settings/ConnectWhatsAppModal").then(m => ({ default: m.ConnectWhatsAppModal })));
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -83,7 +86,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, MessageSquare, Send, ArrowLeft, Smartphone, Search, FileText, Clock,
   Check, CheckCheck, Download, Paperclip, Mic, Smile, Zap, X, Plus, Archive,
-  ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
+  ArchiveRestore, UserPlus, Reply, ChevronUp, ChevronDown, Trash2, Pin, PinOff,
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause,
@@ -98,7 +101,44 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
 import { renderWithEmoji } from "@/lib/emoji";
 const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
-  // autolink: converte URLs em links clicaveis
+// WhatsApp-style inline formatting: *bold*, _italic_, ~strikethrough~ and
+// ```monospace```. Mirrors WhatsApp's own (deliberately non-nesting) rule: the
+// delimiter must hug non-space text on both sides, so "* item" bullet lists and
+// "a * b" arithmetic are left untouched. Each plain-text run is still passed
+// through the Apple emoji renderer; a monospace span is left as raw text (a
+// code block shouldn't have its glyphs swapped for images).
+const WA_FORMAT_RE = /(\*[^\s*](?:[^*]*[^\s*])?\*)|(_[^\s_](?:[^_]*[^_])?_)|(~[^\s~](?:[^~]*[^~])?~)|(```[^`]+```)/g;
+function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  WA_FORMAT_RE.lastIndex = 0;
+  while ((match = WA_FORMAT_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(...renderWithEmoji(text.slice(lastIndex, match.index), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
+    }
+    const token = match[0];
+    const isMono = token.startsWith("```");
+    const inner = isMono ? token.slice(3, -3) : token.slice(1, -1);
+    const key = `${keyPrefix}f${match.index}`;
+    if (match[1]) {
+      parts.push(<strong key={key} className="font-semibold">{renderWithEmoji(inner, { keyPrefix: key })}</strong>);
+    } else if (match[2]) {
+      parts.push(<em key={key} className="italic">{renderWithEmoji(inner, { keyPrefix: key })}</em>);
+    } else if (match[3]) {
+      parts.push(<span key={key} className="line-through">{renderWithEmoji(inner, { keyPrefix: key })}</span>);
+    } else {
+      parts.push(<code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[0.9em] dark:bg-white/10">{inner}</code>);
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(...renderWithEmoji(text.slice(lastIndex), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
+  }
+  return parts.length > 0 ? parts : renderWithEmoji(text, { keyPrefix });
+}
+
+  // autolink: converte URLs em links clicaveis e aplica a formatacao WhatsApp
 function autolink(text: string): React.ReactNode {
   if (!text) return text;
   const urlRegex = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
@@ -107,7 +147,7 @@ function autolink(text: string): React.ReactNode {
   let match: RegExpExecArray | null;
   while ((match = urlRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(...renderWithEmoji(text.slice(lastIndex, match.index), { keyPrefix: `al${lastIndex}` }));
+      parts.push(...renderWhatsAppFormatting(text.slice(lastIndex, match.index), `al${lastIndex}`));
     }
     let url = match[0];
     let href = url;
@@ -128,9 +168,9 @@ function autolink(text: string): React.ReactNode {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    parts.push(...renderWithEmoji(text.slice(lastIndex), { keyPrefix: `al${lastIndex}` }));
+    parts.push(...renderWhatsAppFormatting(text.slice(lastIndex), `al${lastIndex}`));
   }
-  return parts.length > 0 ? parts : renderWithEmoji(text);
+  return parts.length > 0 ? parts : renderWhatsAppFormatting(text);
 }
 
 
@@ -341,6 +381,28 @@ function loadPinned(): number[] {
   }
 }
 
+// Per-conversation drafts (WhatsApp-style): what you were typing follows the
+// CONVERSATION, not the composer. sessionStorage (not localStorage) — drafts are
+// working memory for the session, not something to keep forever across days.
+const DRAFTS_KEY = "inbox-drafts-v1";
+function loadDraftsMap(): Map<number, string> {
+  try {
+    const raw = sessionStorage.getItem(DRAFTS_KEY);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw) as Record<string, string>;
+    return new Map(Object.entries(obj).map(([k, v]) => [Number(k), v]));
+  } catch {
+    return new Map();
+  }
+}
+function saveDraftsMap(map: Map<number, string>) {
+  try {
+    sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(Object.fromEntries(map)));
+  } catch {
+    /* quota or unavailable — the in-memory ref still works for this session */
+  }
+}
+
 // Short notification beep via WebAudio — no asset needed.
 function playNotificationBeep() {
   try {
@@ -513,9 +575,19 @@ function AttachmentView({
   if (!url) return <p className="text-xs italic opacity-70">📎 anexo indisponível</p>;
 
   if (attachment.file_type === "image") {
+    // Bubbles load the (much smaller) thumbnail — the full-size original is only
+    // fetched when the user opens the lightbox preview. min-h reserves some
+    // vertical space before the image loads so the thread jumps less as photos
+    // pop in (a real fix would need server-side dimensions, out of scope here).
+    const thumb = attachment.thumb_url ?? url;
     return (
       <button type="button" onClick={() => onPreview(url)} className="block cursor-zoom-in">
-        <img src={url} alt="Imagem" loading="lazy" className="max-h-64 max-w-full rounded-lg object-contain" />
+        <img
+          src={thumb}
+          alt="Imagem"
+          loading="lazy"
+          className="max-h-64 min-h-[120px] max-w-full rounded-lg object-contain"
+        />
       </button>
     );
   }
@@ -559,6 +631,16 @@ function StatusTicks({ status }: { status: string | null }) {
   if (status === "delivered") return <CheckCheck className="h-3 w-3" />;
   if (status === "failed") return <X className="h-3 w-3 text-red-300" />;
   return <Check className="h-3 w-3" />;
+}
+
+// Ticks for the CONVERSATION LIST preview — WhatsApp shows ✓/✓✓/blue-✓✓ before the
+// text of the last message YOU sent. Styled for the list's neutral row background
+// (StatusTicks above is tuned for the colored chat bubble instead).
+function ListStatusTicks({ status }: { status: string | null }) {
+  if (status === "read") return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-sky-500" />;
+  if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+  if (status === "failed") return <X className="h-3.5 w-3.5 shrink-0 text-destructive" />;
+  return <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 }
 
 // Contact avatar: shows the WhatsApp profile photo, falling back to initials.
@@ -645,6 +727,9 @@ export default function Inbox() {
   const [emailChannelId, setEmailChannelId] = useState<string | null>(null);
   const [emailFolderId, setEmailFolderId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // Per-conversation drafts (id -> unsent text), so the list can show "Rascunho:"
+  // and switching chats never carries one conversation's unsent text into another.
+  const [drafts, setDrafts] = useState<Map<number, string>>(() => loadDraftsMap());
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
   const [pending, setPending] = useState<Array<{ key: string; conversationId: number; content: string; at: number; sent?: boolean }>>([]);
@@ -738,6 +823,9 @@ export default function Inbox() {
   const composerRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
   const prevSelectedRef = useRef<number | null>(null);
+  // Tracks which conversation `draft` currently belongs to, so the swap effect
+  // below can save it under the right id BEFORE loading the next one.
+  const prevDraftConvRef = useRef<number | null>(null);
   // True while a freshly-opened conversation still owes its initial scroll to the
   // bottom (messages and/or images load asynchronously after the switch).
   const needsInitialScrollRef = useRef(false);
@@ -768,7 +856,7 @@ export default function Inbox() {
         id: -1, alt_ids: [], contact_id: null,
         contact_name: draftConv.name || `+${draftConv.phone}`,
         contact_phone: draftConv.phone, contact_email: null, contact_identifier: null,
-        contact_thumbnail: null, last_message: null, email_subject: null,
+        contact_thumbnail: null, last_message: null, last_outgoing: false, last_status: null, email_subject: null,
         unread_count: 0, status: "open", channel: "whatsapp",
         inbox_id: draftConv.inboxId, updated_at: null, waiting_since: null,
         labels: [], assigned_id: null, assigned_name: null,
@@ -1216,6 +1304,28 @@ export default function Inbox() {
 
   const visiblePending = pending.filter((p) => p.conversationId === selectedId);
 
+  // Per-conversation draft swap: save whatever was being typed under the
+  // conversation we're LEAVING, then load (or start empty for) the one we're
+  // entering. Without this, a single shared `draft` state meant unsent text
+  // followed you into the NEXT conversation you opened — a bug WhatsApp doesn't
+  // have (it keeps a draft per chat). Runs before the DOM-sync effect below so
+  // that effect picks up the correct value once `draft` updates.
+  useEffect(() => {
+    const leavingId = prevDraftConvRef.current;
+    if (leavingId != null && leavingId !== selectedId) {
+      setDrafts((prev) => {
+        const next = new Map(prev);
+        if (draft.trim()) next.set(leavingId, draft);
+        else next.delete(leavingId);
+        saveDraftsMap(next);
+        return next;
+      });
+    }
+    prevDraftConvRef.current = selectedId;
+    if (selectedId != null) setDraft(drafts.get(selectedId) ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   // Sync the contentEditable composer with the `draft` state. While the user types,
   // onInput already keeps draft === innerText, so this is a no-op (no caret jump).
   // It only writes when the draft is changed from the outside (quick reply, AI
@@ -1277,6 +1387,39 @@ export default function Inbox() {
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId, jumpToBottom, isMobile]);
+
+  // WhatsApp-style "jump to bottom" FAB: shows once the agent has scrolled away
+  // from the bottom (reading history), with a badge counting messages that
+  // arrived while away — so a new message never gets missed just because it
+  // landed off-screen.
+  const [farFromBottom, setFarFromBottom] = useState(false);
+  const [newArrivedCount, setNewArrivedCount] = useState(0);
+  const prevThreadLastIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const far = el.scrollHeight - el.scrollTop - el.clientHeight > 300;
+      setFarFromBottom(far);
+      if (!far) setNewArrivedCount(0);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [selectedId]);
+  // Reset the counter per-conversation so switching chats never carries a stale count.
+  useEffect(() => {
+    prevThreadLastIdRef.current = null;
+    setNewArrivedCount(0);
+  }, [selectedId]);
+  useEffect(() => {
+    const lastId = thread.length > 0 ? thread[thread.length - 1].id : null;
+    const prevId = prevThreadLastIdRef.current;
+    if (prevId != null && lastId != null && lastId !== prevId && farFromBottom) {
+      setNewArrivedCount((n) => n + 1);
+    }
+    prevThreadLastIdRef.current = lastId;
+  }, [thread, farFromBottom]);
 
   // Mobile conversation = full-screen immersive view (like WhatsApp): the thread
   // becomes a fixed overlay sized to the visual viewport, so its header stays
@@ -1400,6 +1543,33 @@ export default function Inbox() {
     }
   }, [selectedId, thread, loadingOlder, loadOlder, toast]);
 
+  // Tapping a quoted-message preview jumps to (and briefly highlights) the
+  // original bubble — WhatsApp-style. Pure DOM manipulation (no React state), so
+  // it never forces every memoized MessageBubble to re-render just to support
+  // this. If the target isn't in the currently-loaded window, load a few pages
+  // of older history and retry before giving up.
+  const scrollToMessage = useCallback(async (id: number) => {
+    const highlight = (el: HTMLElement) => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const prevTransition = el.style.transition;
+      el.style.transition = "background-color 0.4s ease";
+      el.style.backgroundColor = "hsl(var(--primary) / 0.15)";
+      window.setTimeout(() => {
+        el.style.backgroundColor = "";
+        window.setTimeout(() => { el.style.transition = prevTransition; }, 400);
+      }, 900);
+    };
+    let el = document.getElementById(`m-${id}`);
+    if (el) { highlight(el); return; }
+    for (let i = 0; i < 4 && !el && selectedId && !noMoreOlder[selectedId]; i++) {
+      await handleLoadOlder();
+      await new Promise((r) => window.setTimeout(r, 150));
+      el = document.getElementById(`m-${id}`);
+    }
+    if (el) highlight(el);
+    else toast({ title: "Mensagem não encontrada no histórico carregado" });
+  }, [selectedId, noMoreOlder, handleLoadOlder, toast]);
+
   const myName = teamMembers.find((m) => m.user_id === user?.id)?.full_name || "";
 
   // Live presence of other agents: collision detection (who else is in this chat).
@@ -1493,6 +1663,15 @@ export default function Inbox() {
 
     if ((!content && outAttachments.length === 0) || !selectedId) return;
     setDraft("");
+    // A sent message is no longer a draft — clear it now rather than waiting for
+    // the swap effect to notice it's empty next time we leave this conversation.
+    setDrafts((prev) => {
+      if (!prev.has(selectedId)) return prev;
+      const next = new Map(prev);
+      next.delete(selectedId);
+      saveDraftsMap(next);
+      return next;
+    });
 
     if (outAttachments.length > 0) {
       const list = outAttachments;
@@ -2388,7 +2567,9 @@ export default function Inbox() {
           <Button size="sm" variant="destructive" onClick={() => setConnectOpen(true)}>
             Reconectar
           </Button>
-          <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
+          <Suspense fallback={null}>
+            <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
+          </Suspense>
         </div>
       )}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -2424,7 +2605,13 @@ export default function Inbox() {
         </SheetContent>
       </Sheet>
       {emailChannelId ? (
-        <EmailListReader channelId={emailChannelId} folderId={emailFolderId} onOpenRail={() => setRailSheetOpen(true)} />
+        <Suspense fallback={
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        }>
+          <EmailListReader channelId={emailChannelId} folderId={emailFolderId} onOpenRail={() => setRailSheetOpen(true)} />
+        </Suspense>
       ) : (
       <>
       {/* ---- Conversation list ---- */}
@@ -2584,6 +2771,7 @@ export default function Inbox() {
                       viewers={presence.get(c.id)}
                       caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
                       caixaColor={c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.color ?? null : null}
+                      draftPreview={c.id !== selectedId ? drafts.get(c.id) : undefined}
                       onSelect={setSelectedId}
                       onHover={prefetchMessages}
                     />
@@ -2806,6 +2994,7 @@ export default function Inbox() {
             )}
 
             {/* Messages */}
+            <div className="relative flex min-h-0 flex-1 flex-col">
             <div
               ref={scrollRef}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
@@ -2854,15 +3043,16 @@ export default function Inbox() {
                       );
                     }
                     // Preview of the quoted message (WhatsApp-style) when this is a reply.
-                    let quoted: { sender: string; content: string } | undefined;
+                    let quoted: { id: number; sender: string; content: string } | undefined;
                     if (row.msg.reply_to_id != null) {
                       const q = messagesById.get(row.msg.reply_to_id);
                       quoted = q
                         ? {
+                            id: row.msg.reply_to_id,
                             sender: q.outgoing ? "Você" : (selected?.contact_name ?? "Contacto"),
                             content: q.content || (q.attachments?.length ? "📎 Anexo" : "…"),
                           }
-                        : { sender: "Resposta", content: "mensagem anterior" };
+                        : { id: row.msg.reply_to_id, sender: "Resposta", content: "mensagem anterior" };
                     }
                     return (
                       <MessageBubble
@@ -2874,6 +3064,7 @@ export default function Inbox() {
                         groupSender={row.groupSender}
                         displayContent={row.displayContent}
                         quoted={quoted}
+                        onJumpToQuoted={scrollToMessage}
                         onPreview={setPreviewUrl}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
@@ -2896,6 +3087,24 @@ export default function Inbox() {
                 </>
               )}
               <div ref={bottomRef} />
+            </div>
+            {/* Jump-to-bottom FAB, WhatsApp-style: appears once scrolled away from
+                the bottom, with a badge counting messages that arrived meanwhile. */}
+            {farFromBottom && !draftConv && (
+              <button
+                type="button"
+                onClick={() => { jumpToBottom(); setNewArrivedCount(0); }}
+                title="Ir para o fim"
+                className="absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-transform hover:scale-105"
+              >
+                <ChevronDown className="h-5 w-5" />
+                {newArrivedCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                    {newArrivedCount > 9 ? "9+" : newArrivedCount}
+                  </span>
+                )}
+              </button>
+            )}
             </div>
 
             {/* Scheduled messages for this contact */}
@@ -3418,6 +3627,15 @@ export default function Inbox() {
                     onSuccess: () => {
                       setScheduleOpen(false);
                       setDraft("");
+                      if (selectedId != null) {
+                        setDrafts((prev) => {
+                          if (!prev.has(selectedId)) return prev;
+                          const next = new Map(prev);
+                          next.delete(selectedId);
+                          saveDraftsMap(next);
+                          return next;
+                        });
+                      }
                       toast({
                         title: "Mensagem agendada",
                         description: `Será enviada a ${new Date(scheduleAt).toLocaleString("pt-PT")}.`,
@@ -3831,6 +4049,7 @@ const MessageBubble = memo(function MessageBubble({
   groupSender = null,
   displayContent,
   quoted,
+  onJumpToQuoted,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
@@ -3839,8 +4058,11 @@ const MessageBubble = memo(function MessageBubble({
   // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
   onSaveEdit?: (m: InboxMessage, text: string) => void;
   onTask?: (m: InboxMessage) => void;
-  // Preview of the quoted message when this one is a reply (sender + short text).
-  quoted?: { sender: string; content: string };
+  // Preview of the quoted message when this one is a reply (sender + short text + id).
+  quoted?: { id: number; sender: string; content: string };
+  // Scrolls to (and briefly highlights) the quoted message — WhatsApp lets you
+  // tap the quote preview to jump to the original.
+  onJumpToQuoted?: (id: number) => void;
   emailMode?: boolean;
   firstOfGroup?: boolean;
   lastOfGroup?: boolean;
@@ -3881,6 +4103,7 @@ const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
+      id={`m-${m.id}`}
       onPointerDown={(e) => {
         // Left button only for mouse; don't start a drag while editing.
         if (editing || (e.pointerType === "mouse" && e.button !== 0)) return;
@@ -3974,17 +4197,22 @@ const MessageBubble = memo(function MessageBubble({
           <p className={cn("text-[11px] font-semibold", senderColor(groupSender!))}>{groupSender}</p>
         )}
         {quoted && !editing && (
-          <div className={cn(
-            "mb-1 rounded-md border-l-2 px-2 py-1 text-xs",
-            m.outgoing ? "border-primary-foreground/50 bg-primary-foreground/10" : "border-primary/40 bg-muted",
-          )}>
+          <button
+            type="button"
+            onClick={() => onJumpToQuoted?.(quoted.id)}
+            title="Ir para a mensagem original"
+            className={cn(
+              "mb-1 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80",
+              m.outgoing ? "border-primary-foreground/50 bg-primary-foreground/10" : "border-primary/40 bg-muted",
+            )}
+          >
             <p className={cn("truncate font-medium", m.outgoing ? "text-primary-foreground/90" : "text-primary")}>
               {quoted.sender}
             </p>
             <p className={cn("truncate opacity-80", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
               {quoted.content}
             </p>
-          </div>
+          </button>
         )}
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
@@ -4230,6 +4458,7 @@ const ConversationRow = memo(function ConversationRow({
   viewers,
   caixaLabel,
   caixaColor,
+  draftPreview,
   onSelect,
   onHover,
 }: {
@@ -4243,6 +4472,10 @@ const ConversationRow = memo(function ConversationRow({
   caixaLabel?: string | null;
   // Custom hex color set by the admin for this channel.
   caixaColor?: string | null;
+  // Unsent text for this conversation (WhatsApp-style "Rascunho:" preview).
+  // Undefined for the currently open conversation — its own thread/composer
+  // already shows it live, so the badge would be redundant there.
+  draftPreview?: string;
   // Stable parent callback (setSelectedId) so memo can skip re-renders on
   // unrelated parent state changes (e.g. composer typing).
   onSelect: (id: number) => void;
@@ -4308,10 +4541,22 @@ const ConversationRow = memo(function ConversationRow({
         )}
         <div className="flex items-center justify-between gap-2">
           <p className={cn(
-            "truncate text-xs",
+            "flex min-w-0 items-center gap-1 text-xs",
             conversation.unread_count > 0 ? "font-medium text-foreground/90" : "text-muted-foreground",
           )}>
-            {conversation.last_message ? translateActivity(conversation.last_message) : "—"}
+            {draftPreview ? (
+              <>
+                <span className="shrink-0 font-medium text-destructive">Rascunho:</span>
+                <span className="min-w-0 flex-1 truncate text-foreground/70">{draftPreview}</span>
+              </>
+            ) : (
+              <>
+                {conversation.last_outgoing && <ListStatusTicks status={conversation.last_status} />}
+                <span className="min-w-0 flex-1 truncate">
+                  {conversation.last_message ? renderWhatsAppFormatting(translateActivity(conversation.last_message)) : "—"}
+                </span>
+              </>
+            )}
           </p>
           {waiting && sla && (
             <span

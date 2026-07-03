@@ -16,6 +16,10 @@ export interface InboxConversation {
   contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
+  // Direction/state of the last message — shows ✓/✓✓ before the preview for a
+  // message WE sent, WhatsApp-style (never shown for an incoming last message).
+  last_outgoing: boolean;
+  last_status: string | null;
   // Email: subject line from Chatwoot additional_attributes.mail_subject
   email_subject: string | null;
   unread_count: number;
@@ -175,6 +179,27 @@ export function useInboxRealtime(): boolean {
         const msg = payload?.message as InboxMessage | undefined;
         if (convId && msg && msg.id != null) {
           appendMessageToCaches(queryClient, orgId, convId, msg);
+          // Patch the conversation ROW immediately too. Without this, the bubble
+          // appears in the open thread in <1s but the LIST (preview, unread badge,
+          // reordering, sound) only catches up 2-3s later on the debounced
+          // reconcile below — the list visibly "lags" behind the thread.
+          const createdAtSec = typeof msg.created_at === 'number'
+            ? msg.created_at
+            : msg.created_at
+              ? Math.floor(new Date(msg.created_at).getTime() / 1000)
+              : Math.floor(Date.now() / 1000);
+          patchConversations(
+            queryClient, orgId,
+            (c) => c.id === convId || (c.alt_ids ?? []).includes(convId),
+            (c) => ({
+              last_message: msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message),
+              last_outgoing: msg.outgoing,
+              last_status: msg.status ?? null,
+              updated_at: createdAtSec,
+              unread_count: msg.outgoing ? c.unread_count : c.unread_count + 1,
+              waiting_since: msg.outgoing ? null : createdAtSec,
+            }),
+          );
         }
         // AI task suggestions land a few seconds after the message — refresh
         // the tasks caches once the classifier has had time to run.
@@ -195,9 +220,30 @@ export function useInboxRealtime(): boolean {
         const next = status === 'SUBSCRIBED';
         return prev === next ? prev : next;
       }));
+
+    // Wake on tab focus. Desktop browsers throttle background tabs — timers slow
+    // down and the realtime socket is often suspended/dropped — so a PC left on
+    // another tab can sit stale for the ENTIRE time it wasn't focused, unlike a
+    // phone PWA (always foreground). Re-authenticating the socket and forcing one
+    // refresh the instant the tab becomes visible again is what makes switching
+    // back to the inbox feel like WhatsApp Web (already there) instead of waiting
+    // out the next poll tick.
+    let lastWake = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastWake < 2000) return; // debounce: visibilitychange can double-fire
+      lastWake = now;
+      supabase.realtime.setAuth();
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId] });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       if (taskTimer !== null) window.clearTimeout(taskTimer);
+      document.removeEventListener('visibilitychange', onVisible);
       setLive(false);
       supabase.removeChannel(channel);
     };
@@ -381,6 +427,12 @@ export function useInboxConversations(enabled = true, live = false) {
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
+    // Paint the last known inbox INSTANTLY from localStorage instead of a blank
+    // "A carregar conversas..." skeleton on every page load/reload. initialDataUpdatedAt: 0
+    // marks it as infinitely stale, so React Query still kicks off the real
+    // (fresh-mode) fetch in the background to reconcile — this is display-only.
+    initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
+    initialDataUpdatedAt: 0,
     // Gentle fallback polling (realtime is the primary freshness path). 5s was too
     // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
     refetchInterval: !enabled ? false : live ? 15000 : 6000,
@@ -481,10 +533,13 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     // patches to protect (sends use local `pending` state, not the cache), and a
     // background mark_read mutation was needlessly freezing the messages poll —
     // that was why incoming messages took so long to appear after a read receipt.
-    // Open-thread poll is the safety net behind realtime. Kept tight (3s) so an
-    // incoming message still lands fast even if a realtime broadcast is missed;
-    // it's a single conversation's fetch, so the Chatwoot load stays small.
-    refetchInterval: !conversationId ? false : live ? 6000 : 3000,
+    // Open-thread poll is the safety net behind realtime. Offline (no realtime)
+    // it's kept tight (3s) so an incoming message still lands fast. Connected
+    // (live), the append+invalidate on the broadcast event already does the real
+    // work — a poll every 6s was pure rework (each tick re-fetches EVERY merged
+    // alt conversation from Chatwoot, for every open thread, forever), so
+    // it's stretched to a relaxed safety net instead of a redundant fast poll.
+    refetchInterval: !conversationId ? false : live ? 25000 : 3000,
     // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
     // the poll already keep the open thread fresh.
     refetchOnWindowFocus: false,
@@ -653,6 +708,8 @@ export function useSendInboxMessage() {
         (c) => c.id === conversationId,
         {
           last_message: content?.trim() || (attachment ? '📎 Anexo' : ''),
+          last_outgoing: true,
+          last_status: 'sent',
           updated_at: Math.floor(Date.now() / 1000),
           waiting_since: null,
         },

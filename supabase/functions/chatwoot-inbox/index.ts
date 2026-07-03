@@ -31,6 +31,10 @@ interface NormalizedConversation {
   contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
+  // Direction/state of the last message — lets the list show ✓/✓✓ before the
+  // preview for a message WE sent, like WhatsApp (never shown for incoming).
+  last_outgoing: boolean;
+  last_status: string | null;
   // Email: subject from additional_attributes.mail_subject
   email_subject: string | null;
   unread_count: number;
@@ -91,6 +95,22 @@ function isEvoStatusContent(content: string | null): boolean {
   return EVO_STATUS_PREFIXES.some((p) => body.startsWith(p));
 }
 
+// WhatsApp GROUP messages arrive from Evolution with the individual sender
+// embedded as a bold prefix: "**+351 910 812 500 - Ana Silva:**\n\nactual text".
+// The thread already strips this for display (Inbox.tsx's parseGroupMessage) —
+// do the same for the LIST PREVIEW so it reads "Ana: mensagem" instead of the
+// raw markdown, matching how WhatsApp shows the sender's name in a group chat.
+const GROUP_SENDER_RE = /^\*\*\s*(.+?)\s*:\*\*\s*\n*/;
+function cleanGroupPreview(content: string): string {
+  const match = content.match(GROUP_SENDER_RE);
+  if (!match) return content;
+  const inner = match[1].trim();
+  const body = content.slice(match[0].length).trim();
+  const dash = inner.indexOf(' - ');
+  const name = dash > -1 ? inner.slice(dash + 3).trim() : inner;
+  return body ? `${name}: ${body}` : name;
+}
+
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
@@ -107,6 +127,7 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
     const ft = String(last.attachments[0]?.file_type ?? 'file');
     lastMessage = MEDIA_PLACEHOLDERS[ft] ?? '📎 Anexo';
   }
+  if (lastMessage) lastMessage = cleanGroupPreview(lastMessage);
   const custom = c?.custom_attributes ?? {};
   return {
     id: c?.id,
@@ -118,6 +139,8 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
     contact_identifier: sender?.identifier ?? null,
     contact_thumbnail: absoluteUrl(sender?.thumbnail, base),
     last_message: lastMessage,
+    last_outgoing: last ? (last.message_type === 1 || last.message_type === 3) : false,
+    last_status: last?.status ?? null,
     email_subject: c?.additional_attributes?.mail_subject ?? null,
     unread_count: c?.unread_count ?? 0,
     status: c?.status ?? 'open',
