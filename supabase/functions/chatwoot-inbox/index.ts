@@ -900,6 +900,9 @@ Deno.serve(async (req) => {
 
     if (action === 'typing') {
       // Show "typing..." on the contact's WhatsApp while the agent writes.
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ ok: false });
+      }
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!phone) return json({ ok: false });
       // Fire-and-forget; never block the composer on this.
@@ -967,6 +970,9 @@ Deno.serve(async (req) => {
     if (action === 'delete_message') {
       // Delete-for-everyone on WhatsApp via Evolution. The Chatwoot mirror keeps
       // the original text; the client hides it locally.
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      }
       const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
@@ -987,6 +993,9 @@ Deno.serve(async (req) => {
       // Receiving the contact's reaction back is NOT handled here — Chatwoot
       // doesn't expose WhatsApp reactions as a documented field, so wiring a
       // receive path without a real payload to verify against would be a guess.
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      }
       const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       const emoji = String(body.emoji ?? '');
@@ -1005,6 +1014,9 @@ Deno.serve(async (req) => {
     if (action === 'edit_message') {
       // Edit a sent message on WhatsApp via Evolution's updateMessage. WhatsApp
       // only allows editing your own recent messages (~15 min).
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      }
       const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       const text = String(body.content ?? '').trim();

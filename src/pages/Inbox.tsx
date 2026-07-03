@@ -2150,7 +2150,7 @@ export default function Inbox() {
         title: "Apagar mensagem?",
         description: "A mensagem será apagada para todos no WhatsApp.",
         action: () => deleteMessage.mutate(
-          { waId: m.wa_id!, phone: selectedPhone },
+          { waId: m.wa_id!, phone: selectedPhone, inboxId: selected?.inbox_id },
           {
             onSuccess: () => {
               setDeletedIds((prev) => new Set([...prev, m.id]));
@@ -2162,7 +2162,7 @@ export default function Inbox() {
         ),
       });
     },
-    [selectedPhone, deleteMessage, toast],
+    [selectedPhone, selected?.inbox_id, deleteMessage, toast],
   );
   const handleSaveEdit = useCallback(
     (m: InboxMessage, text: string) => {
@@ -2170,7 +2170,7 @@ export default function Inbox() {
       // Show the new text immediately (overlay), then push the edit to WhatsApp.
       setEditedContent((prev) => new Map(prev).set(m.id, text));
       editMessage.mutate(
-        { waId: m.wa_id, phone: selectedPhone, content: text },
+        { waId: m.wa_id, phone: selectedPhone, content: text, inboxId: selected?.inbox_id },
         {
           onSuccess: () => toast({ title: "Mensagem editada" }),
           onError: (err) => {
@@ -2185,7 +2185,7 @@ export default function Inbox() {
         },
       );
     },
-    [selectedPhone, editMessage, toast],
+    [selectedPhone, selected?.inbox_id, editMessage, toast],
   );
   // Send-only WhatsApp reaction (👍❤️😂...). No optimistic UI — receiving the
   // reaction back into the thread isn't wired up (see the edge function's
@@ -2194,11 +2194,11 @@ export default function Inbox() {
     (m: InboxMessage, emoji: string) => {
       if (!m.wa_id || !selectedPhone) return;
       reactToMessage.mutate(
-        { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji },
+        { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji, inboxId: selected?.inbox_id },
         { onError: (err) => toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" }) },
       );
     },
-    [selectedPhone, reactToMessage, toast],
+    [selectedPhone, selected?.inbox_id, reactToMessage, toast],
   );
 
   // Insert an emoji from the ":" suggestion bar: replace the ":query" the user was
@@ -3791,7 +3791,7 @@ export default function Inbox() {
                       // Show "typing..." on the contact's WhatsApp (throttled, not for email).
                       if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
                         lastTypingRef.current = Date.now();
-                        sendTyping(selected.contact_phone);
+                        sendTyping(selected.contact_phone, selected.inbox_id);
                       }
                       // Broadcast typing to teammates; auto-clear after a short pause.
                       setSelfTyping(true);

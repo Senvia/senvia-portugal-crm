@@ -1030,13 +1030,15 @@ export function useDeleteCannedResponse() {
 }
 
 // Delete-for-everyone on WhatsApp. The Chatwoot mirror keeps the original text;
-// the UI hides it locally after success.
+// the UI hides it locally after success. `inboxId` lets the edge function block
+// the action on a restricted caixa the caller isn't assigned to (same check
+// send_message already does) — omit only for caixas with no restriction.
 export function useDeleteMessage() {
   const { organization } = useAuth();
   return useMutation({
-    mutationFn: async ({ waId, phone }: { waId: string; phone: string }) => {
+    mutationFn: async ({ waId, phone, inboxId }: { waId: string; phone: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox(organization.id, { action: 'delete_message', wa_id: waId, phone });
+      return invokeInbox(organization.id, { action: 'delete_message', wa_id: waId, phone, inbox_id: inboxId ?? undefined });
     },
   });
 }
@@ -1047,9 +1049,9 @@ export function useDeleteMessage() {
 export function useEditMessage() {
   const { organization } = useAuth();
   return useMutation({
-    mutationFn: async ({ waId, phone, content }: { waId: string; phone: string; content: string }) => {
+    mutationFn: async ({ waId, phone, content, inboxId }: { waId: string; phone: string; content: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox(organization.id, { action: 'edit_message', wa_id: waId, phone, content });
+      return invokeInbox(organization.id, { action: 'edit_message', wa_id: waId, phone, content, inbox_id: inboxId ?? undefined });
     },
   });
 }
@@ -1062,9 +1064,9 @@ export function useEditMessage() {
 export function useReactToMessage() {
   const { organization } = useAuth();
   return useMutation({
-    mutationFn: async ({ waId, phone, fromMe, emoji }: { waId: string; phone: string; fromMe: boolean; emoji: string }) => {
+    mutationFn: async ({ waId, phone, fromMe, emoji, inboxId }: { waId: string; phone: string; fromMe: boolean; emoji: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox(organization.id, { action: 'react', wa_id: waId, phone, from_me: fromMe, emoji });
+      return invokeInbox(organization.id, { action: 'react', wa_id: waId, phone, from_me: fromMe, emoji, inbox_id: inboxId ?? undefined });
     },
   });
 }
@@ -1072,11 +1074,11 @@ export function useReactToMessage() {
 // Notify the contact's WhatsApp that we're typing (fire-and-forget).
 export function useTypingPresence() {
   const { organization } = useAuth();
-  return (phone: string | null | undefined) => {
+  return (phone: string | null | undefined, inboxId?: number | null) => {
     if (!organization?.id || !phone) return;
     supabase.functions
       .invoke('chatwoot-inbox', {
-        body: { organization_id: organization.id, action: 'typing', phone },
+        body: { organization_id: organization.id, action: 'typing', phone, inbox_id: inboxId ?? undefined },
       })
       .catch(() => {});
   };
