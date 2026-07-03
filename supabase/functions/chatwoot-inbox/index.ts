@@ -928,6 +928,25 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === 'edit_message') {
+      // Edit a sent message on WhatsApp via Evolution's updateMessage. WhatsApp
+      // only allows editing your own recent messages (~15 min).
+      const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
+      const phone = String(body.phone ?? '').replace(/\D/g, '');
+      const text = String(body.content ?? '').trim();
+      if (!waId || !phone || !text) return json({ error: 'Dados em falta' }, 400);
+      const res = await evolutionFetch(cfg, `/chat/updateMessage/${await getInstance()}`, 'POST', {
+        number: phone,
+        key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
+        text,
+      });
+      if (!res.ok) {
+        console.error('Evolution edit failed:', res.status, await res.text());
+        return json({ error: 'Falha ao editar a mensagem no WhatsApp' }, 502);
+      }
+      return json({ ok: true });
+    }
+
     if (action === 'download_attachment') {
       // Proxy the file through the edge function: the browser cannot fetch
       // Chatwoot attachments directly (no CORS headers on Active Storage).

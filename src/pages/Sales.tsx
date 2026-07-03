@@ -34,9 +34,11 @@ import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 import { useModules } from "@/hooks/useModules";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Sales() {
   // Subscribe to realtime updates
@@ -63,6 +65,8 @@ const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  // Sale pending deletion — drives the confirmation dialog (admin only).
+  const [saleToDelete, setSaleToDelete] = useState<SaleWithDetails | null>(null);
   const [searchParams] = useSearchParams();
 
   // Delete sale mutation (admin only)
@@ -479,9 +483,7 @@ const deleteSale = useMutation({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm("Tem certeza que deseja excluir esta venda? Esta ação não pode ser desfeita.")) {
-                            deleteSale.mutate(sale.id);
-                          }
+                          setSaleToDelete(sale);
                         }}
                         className="mt-2 rounded p-1 text-destructive/70 hover:bg-destructive/10 transition-colors"
                         title="Excluir venda"
@@ -528,6 +530,38 @@ const deleteSale = useMutation({
             setPendingSaleId(saleId);
           }}
         />
+
+        {/* Delete confirmation (admin only) */}
+        <AlertDialog open={!!saleToDelete} onOpenChange={(open) => !open && setSaleToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir venda?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {saleToDelete && (
+                  <>
+                    Vais excluir a venda de{" "}
+                    <span className="font-medium text-foreground">
+                      {saleToDelete.client?.name || saleToDelete.lead?.name || "Sem identificação"}
+                    </span>{" "}
+                    ({formatCurrency(saleToDelete.total_value)}). Esta ação não pode ser desfeita.
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (saleToDelete) deleteSale.mutate(saleToDelete.id);
+                  setSaleToDelete(null);
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }

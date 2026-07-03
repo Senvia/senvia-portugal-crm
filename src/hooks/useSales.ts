@@ -157,61 +157,6 @@ export function useCreateSale() {
   });
 }
 
-export function useCreateSaleFromProposal() {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-
-  return useMutation({
-    mutationFn: async (proposal: {
-      id: string;
-      organization_id: string;
-      lead_id: string | null;
-      client_id?: string | null;
-      total_value: number;
-    }) => {
-      // Check if sale already exists for this proposal
-      const { data: existingSale } = await supabase
-        .from("sales")
-        .select("id")
-        .eq("proposal_id", proposal.id)
-        .single();
-
-      if (existingSale) {
-        return { ...existingSale, alreadyExists: true }; // Sale already exists, don't create duplicate
-      }
-
-      const { data: sale, error } = await supabase
-        .from("sales")
-        .insert({
-          organization_id: proposal.organization_id,
-          proposal_id: proposal.id,
-          lead_id: proposal.lead_id || null,
-          client_id: proposal.client_id || null,
-          total_value: proposal.total_value,
-          subtotal: proposal.total_value,
-          created_by: user?.id || null,
-          status: "pending",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return sale;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
-      if (!(data as any).alreadyExists) {
-        toast.success("Proposta aceite! Venda criada automaticamente.");
-      }
-    },
-    onError: () => {
-      toast.error("Erro ao criar venda");
-    },
-  });
-}
-
 export function useUpdateSaleStatus() {
   const queryClient = useQueryClient();
 

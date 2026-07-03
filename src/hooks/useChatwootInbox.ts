@@ -961,6 +961,19 @@ export function useDeleteMessage() {
   });
 }
 
+// Edit a sent WhatsApp message (allowed by WhatsApp within ~15 min; we cap the UI
+// at 5 min). Evolution updates the message on WhatsApp; the UI overrides the text
+// locally so the edit shows immediately.
+export function useEditMessage() {
+  const { organization } = useAuth();
+  return useMutation({
+    mutationFn: async ({ waId, phone, content }: { waId: string; phone: string; content: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'edit_message', wa_id: waId, phone, content });
+    },
+  });
+}
+
 // Notify the contact's WhatsApp that we're typing (fire-and-forget).
 export function useTypingPresence() {
   const { organization } = useAuth();

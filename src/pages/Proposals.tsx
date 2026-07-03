@@ -19,6 +19,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from 'react-day-picker';
 import { ProposalDetailsModal } from '@/components/proposals/ProposalDetailsModal';
 import { CreateProposalModal } from '@/components/proposals/CreateProposalModal';
+import { CreateSaleModal } from '@/components/sales/CreateSaleModal';
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUS_COLORS, 
@@ -45,6 +46,8 @@ export default function Proposals() {
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('proposals-date-range-v1', undefined);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  // "Criar Venda" from the list: open a fully prefilled sale for this proposal.
+  const [saleProposal, setSaleProposal] = useState<Proposal | null>(null);
   const [searchParams] = useSearchParams();
 
   // Deep-link: ?proposal=<id> opens the proposal modal directly
@@ -227,7 +230,7 @@ export default function Proposals() {
                     variant="default"
                     size="sm"
                     className="absolute top-2 right-2 z-10 h-7 text-xs"
-                    onClick={(e) => { e.stopPropagation(); const url = `/sales?newSale=true&proposal_id=${proposal.id}&client_id=${proposal.client_id || ''}&total_value=${proposal.total_value}`; navigate(url); }}
+                    onClick={(e) => { e.stopPropagation(); setSaleProposal(proposal); }}
                   >
                     Criar Venda
                   </Button>
@@ -281,6 +284,26 @@ export default function Proposals() {
           proposal={selectedProposal}
           open={!!selectedProposal}
           onOpenChange={(open) => !open && setSelectedProposal(null)}
+        />
+      )}
+
+      {/* "Criar Venda" from the list — a fully prefilled sale (client, items,
+          values, commission, energy/CPEs, notes) via the proposal object. */}
+      {saleProposal && (
+        <CreateSaleModal
+          open={!!saleProposal}
+          onOpenChange={(open) => !open && setSaleProposal(null)}
+          prefillProposal={saleProposal}
+          prefillClientId={saleProposal.client_id}
+          prefillClient={saleProposal.client ? {
+            id: saleProposal.client.id,
+            name: saleProposal.client.name,
+            email: saleProposal.client.email,
+          } : null}
+          onSaleCreated={(saleId) => {
+            setSaleProposal(null);
+            navigate(`/sales?sale=${saleId}`);
+          }}
         />
       )}
     </>

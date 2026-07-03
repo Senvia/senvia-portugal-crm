@@ -26,6 +26,7 @@ import {
   useCreateCannedResponse,
   useDeleteCannedResponse,
   useDeleteMessage,
+  useEditMessage,
   useCrmRecord,
   useTypingPresence,
   useSuggestReply,
@@ -95,6 +96,8 @@ import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
+import { renderWithEmoji } from "@/lib/emoji";
+const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
   // autolink: converte URLs em links clicaveis
 function autolink(text: string): React.ReactNode {
   if (!text) return text;
@@ -104,7 +107,7 @@ function autolink(text: string): React.ReactNode {
   let match: RegExpExecArray | null;
   while ((match = urlRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(...renderWithEmoji(text.slice(lastIndex, match.index), { keyPrefix: `al${lastIndex}` }));
     }
     let url = match[0];
     let href = url;
@@ -125,9 +128,9 @@ function autolink(text: string): React.ReactNode {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+    parts.push(...renderWithEmoji(text.slice(lastIndex), { keyPrefix: `al${lastIndex}` }));
   }
-  return parts.length > 0 ? parts : text;
+  return parts.length > 0 ? parts : renderWithEmoji(text);
 }
 
 
@@ -811,6 +814,7 @@ export default function Inbox() {
   const createCanned = useCreateCannedResponse();
   const deleteCanned = useDeleteCannedResponse();
   const deleteMessage = useDeleteMessage();
+  const editMessage = useEditMessage();
   const { data: teamMembers = [] } = useTeamMembers();
   const createEvent = useCreateEvent();
 
@@ -837,8 +841,9 @@ export default function Inbox() {
   // Edit client / lead modal — opens inline without leaving inbox.
   const [editCrmOpen, setEditCrmOpen] = useState(false);
   // Edit message state (Task 9)
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
+  // Local overlay of edited message text (message id -> new content), applied over
+  // the fetched thread so an edit shows immediately and survives polls this session.
+  const [editedContent, setEditedContent] = useState<Map<number, string>>(new Map());
 
   const editClientId = editCrmOpen && contactMatch?.kind === "client" ? contactMatch.id : null;
   const editLeadId   = editCrmOpen && contactMatch?.kind === "lead"   ? contactMatch.id : null;
@@ -1053,10 +1058,14 @@ export default function Inbox() {
       // Private Chatwoot messages (legacy notes + send-failure system notices)
       // are not shown in the thread — notes now live in the DB-backed panel.
       if (m.is_private) continue;
-      if (!seen.has(m.id) && !deletedIds.has(m.id)) { seen.add(m.id); all.push(m); }
+      if (seen.has(m.id) || deletedIds.has(m.id)) continue;
+      seen.add(m.id);
+      // Apply the local edit overlay so an edited message shows the new text.
+      const edited = editedContent.get(m.id);
+      all.push(edited != null ? { ...m, content: edited } : m);
     }
     return all.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
-  }, [olderByConv, selectedId, messages, deletedIds]);
+  }, [olderByConv, selectedId, messages, deletedIds, editedContent]);
 
   // Thread rows with date separators + WhatsApp-style grouping. Memoized (and
   // kept ABOVE the early returns so the hook order is stable) — rebuilding this
@@ -1746,6 +1755,29 @@ export default function Inbox() {
       });
     },
     [selectedPhone, deleteMessage, toast],
+  );
+  const handleSaveEdit = useCallback(
+    (m: InboxMessage, text: string) => {
+      if (!m.wa_id || !selectedPhone) return;
+      // Show the new text immediately (overlay), then push the edit to WhatsApp.
+      setEditedContent((prev) => new Map(prev).set(m.id, text));
+      editMessage.mutate(
+        { waId: m.wa_id, phone: selectedPhone, content: text },
+        {
+          onSuccess: () => toast({ title: "Mensagem editada" }),
+          onError: (err) => {
+            // Roll back the overlay so the UI reflects reality.
+            setEditedContent((prev) => {
+              const next = new Map(prev);
+              next.delete(m.id);
+              return next;
+            });
+            toast({ title: "Falha ao editar", description: (err as Error).message, variant: "destructive" });
+          },
+        },
+      );
+    },
+    [selectedPhone, editMessage, toast],
   );
 
   // Keep the keyboard handler's data fresh without rebinding the listener.
@@ -2787,6 +2819,7 @@ export default function Inbox() {
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
+                        onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
                       />
                     ),
                   )}
@@ -2912,7 +2945,7 @@ export default function Inbox() {
                     <span className="truncate">Re: {selected.email_subject}</span>
                   </div>
                 )}
-              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-end gap-2 p-2.5">
+              <form onSubmit={handleSend} onPaste={handlePaste} className="relative flex items-end gap-2 p-2.5">
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
 
                 {/* "+" menu — single entry point for attach / emoji / quick replies / AI / schedule / signature */}
@@ -2928,7 +2961,7 @@ export default function Inbox() {
                       <Plus className="h-5 w-5" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent side="top" align="start" className="w-60 p-1.5">
+                  <PopoverContent side="top" align="start" className={cn(plusView === "emoji" ? "w-auto p-1" : "w-60 p-1.5")}>
                     {plusView === "emoji" ? (
                       <div>
                         <button
@@ -2938,18 +2971,9 @@ export default function Inbox() {
                         >
                           <ArrowLeft className="h-3.5 w-3.5" /> Emoji
                         </button>
-                        <div className="grid grid-cols-8 gap-0.5">
-                          {EMOJIS.map((e) => (
-                            <button
-                              key={e}
-                              type="button"
-                              onClick={() => setDraft((d) => d + e)}
-                              className="rounded p-1 text-lg hover:bg-accent"
-                            >
-                              {e}
-                            </button>
-                          ))}
-                        </div>
+                        <Suspense fallback={<div className="flex h-72 w-[352px] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
+                          <EmojiPicker onSelect={(native) => setDraft((d) => d + native)} />
+                        </Suspense>
                       </div>
                     ) : plusView === "canned" ? (
                       <div>
@@ -3104,22 +3128,27 @@ export default function Inbox() {
                     It grows naturally with the text up to ~6 lines, then scrolls.
                     Secondary actions live in the "+" menu to keep the bar uncluttered. */}
                 {emojiSuggestions.length > 0 && (
-                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1 mx-auto max-w-[320px] flex items-center gap-1 rounded-xl border bg-card p-1.5 shadow-lg">
-                    {emojiSuggestions.slice(0, 6).map((e, i) => (
+                  <div className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
+                    {emojiSuggestions.map((e) => (
                       <button
                         key={e}
-                        className="rounded-lg px-2 py-1 text-lg hover:bg-muted transition-colors"
-                        onClick={() => {
-                          const text = composerRef.current?.innerText || draft;
+                        type="button"
+                        title="Inserir emoji"
+                        // onMouseDown + preventDefault (not onClick): keeps the composer
+                        // focused and stops the button from submitting the form — that
+                        // form-submit was why picking an emoji "sent" instead of inserting.
+                        onMouseDown={(ev) => {
+                          ev.preventDefault();
+                          const text = composerRef.current?.innerText ?? draft;
                           const colonIdx = text.lastIndexOf(":");
-                          const before = text.slice(0, colonIdx);
-                          const after = text.slice(colonIdx + 1 + emojiSuggestQuery.length);
+                          const before = colonIdx >= 0 ? text.slice(0, colonIdx) : text;
+                          const after = colonIdx >= 0 ? text.slice(colonIdx + 1 + emojiSuggestQuery.length) : "";
                           const newText = before + e + " " + after;
                           setDraft(newText);
                           setEmojiSuggestions([]);
                           if (composerRef.current) {
                             composerRef.current.innerText = newText;
-                            // Move caret to end
+                            composerRef.current.focus();
                             const sel = window.getSelection();
                             const range = document.createRange();
                             range.selectNodeContents(composerRef.current);
@@ -3128,11 +3157,12 @@ export default function Inbox() {
                             sel?.addRange(range);
                           }
                         }}
+                        className="shrink-0 rounded-lg p-1 transition-colors hover:bg-muted"
                       >
-                        {e}
+                        <em-emoji native={e} set="apple" size="1.4em" fallback={e} />
                       </button>
                     ))}
-                    <span className="ml-auto text-[10px] text-muted-foreground opacity-60">Tab</span>
+                    <span className="ml-1 shrink-0 pr-1 text-[10px] text-muted-foreground opacity-60">Tab</span>
                   </div>
                 )}
                 <div className="relative flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
@@ -3740,6 +3770,7 @@ const MessageBubble = memo(function MessageBubble({
   onPreview,
   onReply,
   onDelete,
+  onSaveEdit,
   onTask,
   emailMode = false,
   firstOfGroup = true,
@@ -3751,6 +3782,8 @@ const MessageBubble = memo(function MessageBubble({
   onPreview: (url: string) => void;
   onReply: (m: InboxMessage) => void;
   onDelete?: (m: InboxMessage) => void;
+  // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
+  onSaveEdit?: (m: InboxMessage, text: string) => void;
   onTask?: (m: InboxMessage) => void;
   emailMode?: boolean;
   firstOfGroup?: boolean;
@@ -3763,6 +3796,13 @@ const MessageBubble = memo(function MessageBubble({
   // Show the per-participant avatar + name only for incoming group messages.
   const showGroupSender = !m.outgoing && !!groupSender;
   const body = displayContent ?? m.content;
+  // Inline edit — only offered for own recent messages (WhatsApp caps editing at ~15 min; we use 5).
+  const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 5 * 60 * 1000;
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState("");
+  // Swipe/drag-to-reply — Pointer Events unify touch (mobile) and mouse (desktop).
+  const dragRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const [dragX, setDragX] = useState(0);
   const taskButton = onTask ? (
     <button
       type="button"
@@ -3777,7 +3817,7 @@ const MessageBubble = memo(function MessageBubble({
   if (emailMode) {
     return (
       <div className={cn("group", firstOfGroup ? "mt-3" : "mt-1")}>
-        {taskButton && <div className="mb-1 flex justify-end">{taskButton}{m.outgoing && (() => { const diff = Date.now() - new Date(m.created_at).getTime(); const canEdit = diff < 5 * 60 * 1000; return canEdit ? <button type="button" title="Editar mensagem" onClick={() => { setEditingMessageId(m.id); setEditText(m.content); }} className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button> : null; })()}</div>}
+        {taskButton && <div className="mb-1 flex justify-end">{taskButton}</div>}
         <EmailMessageCard m={m} onPreview={onPreview} />
       </div>
     );
@@ -3785,16 +3825,59 @@ const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
-      onTouchStart={(e) => { const t = e.touches[0]; swipeHandlers.current.set(m.id, { startX: t.clientX }); }}
-        onTouchEnd={(e) => { const start = swipeHandlers.current.get(m.id); if (!start) return; swipeHandlers.current.delete(m.id); const dx = start.startX - e.changedTouches[0].clientX; if (dx > 50 && !m.outgoing) { onReply(m); } }}
-        className={cn(
-        "group flex items-end gap-1",
+      onPointerDown={(e) => {
+        // Left button only for mouse; don't start a drag while editing.
+        if (editing || (e.pointerType === "mouse" && e.button !== 0)) return;
+        dragRef.current = { x: e.clientX, y: e.clientY, active: false };
+      }}
+      onPointerMove={(e) => {
+        const st = dragRef.current;
+        if (!st) return;
+        const dx = e.clientX - st.x;
+        const dy = e.clientY - st.y;
+        // Lock to a horizontal drag only once it clearly dominates vertical scroll.
+        if (!st.active && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+          st.active = true;
+          try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* noop */ }
+        }
+        if (st.active) setDragX(Math.max(-90, Math.min(90, dx)));
+      }}
+      onPointerUp={() => {
+        const st = dragRef.current;
+        dragRef.current = null;
+        if (st?.active && Math.abs(dragX) > 55 && m.wa_id) onReply(m);
+        setDragX(0);
+      }}
+      onPointerCancel={() => { dragRef.current = null; setDragX(0); }}
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined, touchAction: "pan-y" }}
+      className={cn(
+        "group relative flex items-end gap-1",
         firstOfGroup ? "mt-2.5" : "mt-0.5",
         m.outgoing ? "justify-end" : "justify-start",
       )}
     >
+      {/* Reply hint that follows the drag (WhatsApp-style). */}
+      {dragX !== 0 && m.wa_id && (
+        <div className={cn(
+          "pointer-events-none absolute top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-primary/15 text-primary transition-opacity",
+          dragX > 0 ? "left-1" : "right-1",
+          Math.abs(dragX) > 55 ? "opacity-100" : "opacity-50",
+        )}>
+          <Reply className="h-4 w-4" />
+        </div>
+      )}
       {m.outgoing && (
         <div className="flex items-center">
+          {canEdit && !editing && (
+            <button
+              type="button"
+              title="Editar mensagem"
+              onClick={() => { setEditDraft(body); setEditing(true); }}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"
@@ -3837,8 +3920,41 @@ const MessageBubble = memo(function MessageBubble({
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
         ))}
-        {body && <p className="whitespace-pre-wrap break-words">{autolink(body)}</p>}
-        {lastOfGroup && (
+        {editing ? (
+          <div className="space-y-1.5">
+            <textarea
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              rows={2}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const t = editDraft.trim();
+                  if (t && t !== body) onSaveEdit?.(m, t);
+                  setEditing(false);
+                }
+              }}
+              className="w-full resize-none rounded-md border border-primary-foreground/30 bg-primary-foreground/10 p-1.5 text-sm text-inherit outline-none"
+            />
+            <div className="flex justify-end gap-1">
+              <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-0.5 text-[11px] opacity-80 hover:opacity-100">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => { const t = editDraft.trim(); if (t && t !== body) onSaveEdit?.(m, t); setEditing(false); }}
+                className="rounded bg-primary-foreground/20 px-2 py-0.5 text-[11px] font-medium hover:bg-primary-foreground/30"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        ) : (
+          body && <p className="whitespace-pre-wrap break-words">{autolink(body)}</p>
+        )}
+        {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {formatTime(m.created_at)}
             {m.outgoing && <StatusTicks status={m.status} />}
