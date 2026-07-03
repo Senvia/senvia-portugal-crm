@@ -112,9 +112,17 @@ const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m)
 // code block shouldn't have its glyphs swapped for images).
 const WA_FORMAT_RE = /(\*[^\s*](?:[^*]*[^\s*])?\*)|(_[^\s_](?:[^_]*[^_])?_)|(~[^\s~](?:[^~]*[^~])?~)|(```[^`]+```)/g;
 
-// Same URL pattern autolink() renders as clickable — reused to build the
-// contact panel's "Links" gallery tab from message text.
-const LINK_RE = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
+// Used to build the contact panel's "Links" gallery tab from message text.
+// The schemeless alternative requires a "www." prefix (unlike autolink()'s own
+// looser bare-domain matcher used for the thread bubbles) — a bare "word.Word"
+// match with no scheme or www is far too easy to false-positive on ordinary
+// pt-PT text with no space after a period (e.g. "ontem.Aguardo confirmação").
+const LINK_RE = /(https?:\/\/[^\s<]+|www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<]*)?)/gi;
+// A URL glued to trailing punctuation with no space ("confirma aqui: site.pt.")
+// would otherwise swallow the period into the link and 404 on click.
+function trimTrailingLinkPunct(url: string): string {
+  return url.replace(/[.,;:!?)\]}'"]+$/, "");
+}
 function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -1197,21 +1205,28 @@ export default function Inbox() {
     prevUnreadRef.current = unreadTotal;
   }, [unreadTotal]);
 
-  // "Mensagens não lidas" divider: capture the conversation's unread count the
-  // instant it's opened, BEFORE the markRead call further below resets it to 0
-  // — this runs in the same effect-flush as markRead but reads `conversations`
-  // from the render that already happened, so it still sees the pre-read count.
-  // Approximate (Chatwoot's unread_count isn't guaranteed to count exactly the
-  // same message set the thread renders) but good enough as a visual cue.
+  // "Mensagens não lidas" divider: anchored to a SPECIFIC message id, resolved
+  // once per conversation open — NOT recomputed as "last N of the current
+  // thread" (that slid forward every time a new message arrived while the
+  // chat stayed open, silently pulling the just-arrived message inside the
+  // "unread" bracket while pushing a genuinely-unread older one above the
+  // line, and likewise jumped backward if a trailing message got deleted).
   // Declared here (before threadRows below, which reads it) — a useMemo's
   // callback runs synchronously during render, so referencing a later const
   // would be a genuine TDZ crash, not just a lint nit.
-  const [unreadBoundary, setUnreadBoundary] = useState<{ conversationId: number; count: number } | null>(null);
+  const [unreadBoundary, setUnreadBoundary] = useState<{ conversationId: number; messageId: number } | null>(null);
+  // Pending capture: the pre-read unread_count, read BEFORE the markRead call
+  // further below resets it to 0 — but the anchor message id can only be
+  // resolved once `thread` actually has data (which may still be loading right
+  // when the conversation is selected), so this is consumed by the second
+  // effect below instead of being applied directly.
+  const unreadCaptureRef = useRef<{ conversationId: number; count: number } | null>(null);
   useEffect(() => {
-    if (!selectedId) { setUnreadBoundary(null); return; }
+    setUnreadBoundary(null);
+    if (!selectedId) { unreadCaptureRef.current = null; return; }
     const conv = conversations.find((c) => c.id === selectedId);
     const count = conv?.unread_count ?? 0;
-    setUnreadBoundary(count > 0 ? { conversationId: selectedId, count } : null);
+    unreadCaptureRef.current = count > 0 ? { conversationId: selectedId, count } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -1232,6 +1247,19 @@ export default function Inbox() {
     }
     return all.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
   }, [olderByConv, selectedId, messages, deletedIds, editedContent]);
+
+  // Resolve the pending unread-count capture into a fixed message-id anchor,
+  // exactly once per conversation open — as soon as `thread` has data for it.
+  // Consuming (nulling) the ref afterwards means later arrivals/deletions in
+  // `thread` never move the anchor again.
+  useEffect(() => {
+    const pending = unreadCaptureRef.current;
+    if (!pending || pending.conversationId !== selectedId || thread.length === 0) return;
+    const msgs = thread.filter((m) => !m.is_activity);
+    const anchor = msgs[Math.max(0, msgs.length - pending.count)];
+    if (anchor) setUnreadBoundary({ conversationId: selectedId, messageId: anchor.id });
+    unreadCaptureRef.current = null;
+  }, [thread, selectedId]);
 
   // Index messages by id so a reply can render a preview of the quoted message.
   const messagesById = useMemo(() => {
@@ -1260,7 +1288,7 @@ export default function Inbox() {
         LINK_RE.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = LINK_RE.exec(m.content)) !== null) {
-          links.push({ key: `${m.id}-${match.index}`, url: match[0], date: m.created_at });
+          links.push({ key: `${m.id}-${match.index}`, url: trimTrailingLinkPunct(match[0]), date: m.created_at });
         }
       }
     }
@@ -1281,11 +1309,12 @@ export default function Inbox() {
     const rows: ThreadRow[] = [];
     const GROUP_WINDOW = INBOX_CONFIG.GROUP_WINDOW_MS;
     const msgs = thread.filter((m) => !m.is_activity);
-    // Index (into `msgs`) where the "unread" divider goes — the last `count`
-    // messages. Stays correct as older history gets prepended (msgs.length
-    // grows, but the divider stays `count` messages from the end).
+    // Index (into `msgs`) where the "unread" divider goes — looked up by the
+    // anchored message id, so it never moves as new messages arrive or a
+    // trailing one gets deleted. -1 (hidden) if that message isn't in the
+    // currently-loaded window (e.g. it was deleted-for-everyone).
     const unreadStartIdx = unreadBoundary && unreadBoundary.conversationId === selectedId
-      ? Math.max(0, msgs.length - unreadBoundary.count)
+      ? msgs.findIndex((m) => m.id === unreadBoundary.messageId)
       : -1;
     // In a WhatsApp group, the individual sender is embedded in each incoming
     // body. Parse it once so grouping + rendering both share the same identity.
@@ -1715,6 +1744,14 @@ export default function Inbox() {
     scrollToMessage(threadSearchMatches[last]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadSearchQuery]);
+  // Re-clamp the index (without jumping/scrolling) whenever the match COUNT
+  // changes without the query changing — e.g. a matching message arrives,
+  // gets edited to no longer match, or is deleted-for-everyone while the
+  // search bar stays open. Without this, the index could point past the end
+  // of a shrunk match list and show a nonsensical counter like "4/3".
+  useEffect(() => {
+    setThreadSearchIndex((i) => (threadSearchMatches.length === 0 ? 0 : Math.min(i, threadSearchMatches.length - 1)));
+  }, [threadSearchMatches.length]);
   const gotoSearchMatch = useCallback((index: number) => {
     if (threadSearchMatches.length === 0) return;
     const wrapped = ((index % threadSearchMatches.length) + threadSearchMatches.length) % threadSearchMatches.length;

@@ -95,7 +95,16 @@ function applySignature(caixa, p) {
   // marker div) so the user sees it before sending, instead of it being a
   // server-side surprise appended after the quoted text. Skip re-adding it here
   // when it's already in the body — otherwise every send would carry two copies.
-  if (p.html && p.html.includes('senvia-signature')) return p;
+  // Only look at the part BEFORE any quoted history (marked "senvia-quote" by
+  // the composer's quoteHtml()) — a reply/forward thread almost always already
+  // carries an OLD signature inside the quoted original, which would otherwise
+  // make this check falsely think the NEW content already has one and skip
+  // adding it.
+  if (p.html) {
+    const quoteIdx = p.html.indexOf('senvia-quote');
+    const newPart = quoteIdx >= 0 ? p.html.slice(0, quoteIdx) : p.html;
+    if (newPart.includes('senvia-signature')) return p;
+  }
   const id = p.inReplyTo ? m.signature_default_reply : m.signature_default_new;
   const sig = id ? sigs.find((s) => s.id === id) : null;
   if (!sig || !String(sig.html || '').trim()) return p;
@@ -232,10 +241,12 @@ let running = false;
 async function drain() {
   if (running) return;
   running = true;
+  const touchedChannels = new Set();
   try {
     for (;;) {
       const [cmd] = await q(CLAIM);
       if (!cmd) break;
+      touchedChannels.add(cmd.channel_id);
       try {
         await execute(cmd);
         await q(`UPDATE email_commands SET status='done', processed_at=now() WHERE id=$1`, [cmd.id]);
@@ -246,7 +257,19 @@ async function drain() {
         log(`comando ${cmd.type} ERRO: ${e.message}`);
       }
     }
-  } finally { running = false; }
+  } finally {
+    running = false;
+    // Almost every command above does its IMAP work via getMailboxLock on the
+    // caixa's one shared client (the same connection idle.js keeps open in
+    // IDLE on the Inbox) — once the lock releases, autoIdle resumes on
+    // whatever mailbox that left selected, not automatically back on the
+    // Inbox. Reselect it for every caixa touched this cycle so real-time
+    // new-mail delivery doesn't quietly degrade to the 3-minute folder poll
+    // every time the user archives/flags/moves an email.
+    for (const channelId of touchedChannels) {
+      await getManager(channelId)?.reselectInbox();
+    }
+  }
 }
 
 export function startCommandLoop() {

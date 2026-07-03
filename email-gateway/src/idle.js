@@ -136,6 +136,7 @@ class CaixaManager {
       log(`[${this.caixa.label}] poll de pastas: falha a ler pastas: ${e.message}`);
       return;
     }
+    let touchedOtherMailbox = false;
     for (const folder of folders) {
       if (this.stopped || !this.client?.usable) break;
       try {
@@ -146,6 +147,7 @@ class CaixaManager {
           || (uidNextStr && uidNextStr !== folder.uidnext);
         if (!changed) continue;
         await syncFolderMessages(this.client, this.caixa, { id: folder.id, path: folder.path }, 25);
+        touchedOtherMailbox = true;
         await q(
           `UPDATE email_folders SET total_count=$2, unread_count=$3, uidnext=$4, updated_at=now() WHERE id=$1`,
           [folder.id, st.messages || 0, st.unseen || 0, uidNextStr],
@@ -153,6 +155,25 @@ class CaixaManager {
       } catch (e) {
         log(`[${this.caixa.label}] poll de pastas: falha em ${folder.path}: ${e.message}`);
       }
+    }
+    await this.reselectInbox(touchedOtherMailbox);
+  }
+
+  // `syncFolderMessages` SELECTs the target folder on our one shared client via
+  // getMailboxLock — once the lock is released, ImapFlow's autoIdle resumes
+  // IDLE on whatever mailbox ends up selected, NOT automatically back on the
+  // Inbox. Without reselecting, 'exists' stops firing for new Inbox mail until
+  // something else happens to reselect it — silently degrading "instant"
+  // delivery to "whenever the next 3-minute folder poll notices it". Called
+  // here after touching another folder, and also used by commands.js after it
+  // does the same kind of folder-switching for archive/move/flag/etc actions.
+  async reselectInbox(onlyIfTouched = true) {
+    if (onlyIfTouched === false) return;
+    if (!this.inboxFolder || !this.client?.usable) return;
+    try {
+      await this.client.mailboxOpen(this.inboxFolder.path);
+    } catch (e) {
+      log(`[${this.caixa.label}] falha ao reselecionar a Entrada: ${e.message}`);
     }
   }
 

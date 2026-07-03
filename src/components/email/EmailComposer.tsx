@@ -46,7 +46,12 @@ function quoteHtml(original: EmailMessage) {
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           .replace(/\n/g, '<br>')
       : '');
-  return `<br><br><div style="border-left:3px solid #e5e7eb;padding-left:10px;margin-left:4px;color:#6b7280">
+  // The "senvia-quote" marker lets the gateway's signature guard (commands.js
+  // applySignature) tell apart NEW content from quoted history — an old email
+  // already carrying a signature (from a previous reply in the same thread)
+  // otherwise falsely looks like "this send already has a signature" and the
+  // gateway would skip adding one to content that doesn't actually have it yet.
+  return `<br><br><div class="senvia-quote" style="border-left:3px solid #e5e7eb;padding-left:10px;margin-left:4px;color:#6b7280">
     <p style="margin:0 0 6px;font-size:13px">Em ${when}, ${who} escreveu:</p>
     <div style="font-size:13px">${body}</div>
   </div>`;

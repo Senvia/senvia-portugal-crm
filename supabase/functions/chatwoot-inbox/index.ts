@@ -12,6 +12,7 @@
 //   - list_labels / create_label { title } / set_labels { conversation_id, labels } / delete_label { label_id }
 //   - list_canned / create_canned { content } / delete_canned { canned_id }
 //   - delete_message        { wa_id, phone }
+//   - edit_message          { wa_id, phone, content }
 //   - react                 { wa_id, phone, from_me, emoji }  (send-only — see action body)
 //   - mark_read             { conversation_id | conversation_ids }
 //   - mark_unread           { conversation_id | conversation_ids }
@@ -351,11 +352,22 @@ async function getOrgChatwootCached(
   return v;
 }
 
-// Visibility (org role + per-caixa restrictions) cache (30s TTL), keyed by
-// org+user since isAdmin/canSee depend on the caller. Was previously resolved
-// with 3 DB queries on EVERY request (list_conversations polls every few
-// seconds) — this was the single biggest avoidable DB load in the function.
+// Visibility (org role + per-caixa restrictions) cache, keyed by org+user
+// since isAdmin/canSee depend on the caller. Was previously resolved with 3 DB
+// queries on EVERY request (list_conversations polls every few seconds) —
+// this was the single biggest avoidable DB load in the function.
+//
+// TTL is short (5s, not the 30s originally used) on purpose: `restricted`
+// (from messaging_channels.assigned_user_ids) and `isAdmin` (from
+// organization_members.role / user_roles) are both mutated directly by the
+// frontend elsewhere (Settings → caixa assignment, team role changes) — never
+// through this function — so there is no event to invalidate on when either
+// changes. `update_groups` below only clears the `groupsInboxes` half. A
+// removed/demoted user keeping stale access for up to one TTL window is an
+// accepted, bounded tradeoff; 5s keeps that window tight while still
+// collapsing the request bursts a single list_conversations poll causes.
 type VisibilityInfo = { isAdmin: boolean; restricted: Map<number, Set<string>>; groupsInboxes: Set<number> };
+const VISIBILITY_TTL_MS = 5_000;
 const visCache = new Map<string, { v: VisibilityInfo; at: number }>();
 
 // Run work after the response is sent (Supabase edge runtime); fall back to a
@@ -419,7 +431,7 @@ Deno.serve(async (req) => {
       if (_vis) return _vis;
       const cacheKey = `${organization_id}:${auth.userId}`;
       const hit = visCache.get(cacheKey);
-      if (hit && Date.now() - hit.at < 30_000) {
+      if (hit && Date.now() - hit.at < VISIBILITY_TTL_MS) {
         _vis = hit.v;
         return _vis;
       }
@@ -1125,7 +1137,7 @@ Deno.serve(async (req) => {
       const { error: dbErr } = await auth.admin.from('messaging_channels').update({ metadata: newMeta }).eq('id', channelId);
       if (dbErr) throw dbErr;
       // groupsInboxes just changed — drop cached visibility for this org so the
-      // toggle takes effect on the very next list_conversations, not up to 30s later.
+      // toggle takes effect on the very next list_conversations, not up to VISIBILITY_TTL_MS later.
       for (const k of [...visCache.keys()]) if (k.startsWith(`${organization_id}:`)) visCache.delete(k);
 
       // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
