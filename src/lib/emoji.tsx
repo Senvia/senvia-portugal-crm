@@ -1,14 +1,23 @@
 // Emoji rendering shared across the inbox. We render emojis with the Apple set
 // (via emoji-mart) so they look like iPhone/WhatsApp on every device — Windows,
 // Android, Mac — instead of each OS's own (flatter) style.
-import data from "@emoji-mart/data";
 import { init } from "emoji-mart";
 import emojiRegex from "emoji-regex";
 import React from "react";
 
-// Register the emoji data + Apple set once. This powers both the <em-emoji>
-// web component and the picker. Safe to import from anywhere — runs a single time.
-init({ data, set: "apple" });
+// The emoji dataset (~420KB of JSON) is fetched as its own chunk instead of
+// being inlined into the Inbox bundle — this module is imported eagerly (it
+// renders every emoji in every message), so a static import here used to pull
+// the whole dataset into Inbox's main chunk. EmojiPicker.tsx reuses this same
+// promise so the data is only ever fetched once.
+export const emojiDataPromise = import("@emoji-mart/data").then((m) => m.default);
+
+// Register the emoji data + Apple set once it arrives. This powers both the
+// <em-emoji> web component and the picker. Until it resolves, already-rendered
+// <em-emoji> elements sit un-upgraded (invisible) and pop in once `init` runs —
+// the fetch starts as soon as the inbox module loads, so this is normally done
+// well before the first message paints.
+emojiDataPromise.then((data) => init({ data, set: "apple" }));
 
 // Battle-tested matcher for full emoji grapheme clusters (ZWJ sequences like
 // 👨‍👩‍👧, flags, skin-tone modifiers, variation selectors).

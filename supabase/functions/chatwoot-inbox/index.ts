@@ -350,6 +350,13 @@ async function getOrgChatwootCached(
   return v;
 }
 
+// Visibility (org role + per-caixa restrictions) cache (30s TTL), keyed by
+// org+user since isAdmin/canSee depend on the caller. Was previously resolved
+// with 3 DB queries on EVERY request (list_conversations polls every few
+// seconds) — this was the single biggest avoidable DB load in the function.
+type VisibilityInfo = { isAdmin: boolean; restricted: Map<number, Set<string>>; groupsInboxes: Set<number> };
+const visCache = new Map<string, { v: VisibilityInfo; at: number }>();
+
 // Run work after the response is sent (Supabase edge runtime); fall back to a
 // floating promise locally.
 function runInBackground(p: Promise<unknown>): void {
@@ -406,9 +413,15 @@ Deno.serve(async (req) => {
     // A caixa (messaging_channels) with assigned_user_ids restricts who sees its
     // conversations. Admins see everything; caixas with no assignees (or whose
     // Chatwoot inbox id we don't know yet) are visible to everyone (non-breaking).
-    let _vis: { isAdmin: boolean; restricted: Map<number, Set<string>>; groupsInboxes: Set<number> } | null = null;
+    let _vis: VisibilityInfo | null = null;
     const getVisibility = async () => {
       if (_vis) return _vis;
+      const cacheKey = `${organization_id}:${auth.userId}`;
+      const hit = visCache.get(cacheKey);
+      if (hit && Date.now() - hit.at < 30_000) {
+        _vis = hit.v;
+        return _vis;
+      }
       const [{ data: member }, { data: superRole }, { data: chs }] = await Promise.all([
         auth.admin.from('organization_members').select('role').eq('organization_id', organization_id).eq('user_id', auth.userId).eq('is_active', true).maybeSingle(),
         auth.admin.from('user_roles').select('role').eq('user_id', auth.userId).eq('role', 'super_admin').maybeSingle(),
@@ -429,6 +442,7 @@ Deno.serve(async (req) => {
         }
       }
       _vis = { isAdmin, restricted, groupsInboxes };
+      visCache.set(cacheKey, { v: _vis, at: Date.now() });
       return _vis;
     };
     const canSee = (vis: { isAdmin: boolean; restricted: Map<number, Set<string>> }, inboxId: number | null | undefined) => {
@@ -1089,6 +1103,9 @@ Deno.serve(async (req) => {
       const newMeta = { ...((ch.metadata as Record<string, unknown>) ?? {}), groups_enabled: groupsEnabled };
       const { error: dbErr } = await auth.admin.from('messaging_channels').update({ metadata: newMeta }).eq('id', channelId);
       if (dbErr) throw dbErr;
+      // groupsInboxes just changed — drop cached visibility for this org so the
+      // toggle takes effect on the very next list_conversations, not up to 30s later.
+      for (const k of [...visCache.keys()]) if (k.startsWith(`${organization_id}:`)) visCache.delete(k);
 
       // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
       if (ch.evolution_instance) {

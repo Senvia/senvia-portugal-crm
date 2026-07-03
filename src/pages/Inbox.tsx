@@ -91,7 +91,7 @@ import {
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
-  MailOpen,
+  MailOpen, Image as ImageIcon, Link2,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -110,6 +110,10 @@ const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m)
 // through the Apple emoji renderer; a monospace span is left as raw text (a
 // code block shouldn't have its glyphs swapped for images).
 const WA_FORMAT_RE = /(\*[^\s*](?:[^*]*[^\s*])?\*)|(_[^\s_](?:[^_]*[^_])?_)|(~[^\s~](?:[^~]*[^~])?~)|(```[^`]+```)/g;
+
+// Same URL pattern autolink() renders as clickable — reused to build the
+// contact panel's "Links" gallery tab from message text.
+const LINK_RE = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
 function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -744,6 +748,9 @@ export default function Inbox() {
   }>>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Contact panel: media / docs / links gallery dialog.
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryTab, setGalleryTab] = useState<"media" | "docs" | "links">("media");
   // Pending outgoing attachments (picked/pasted/dropped files, not yet sent).
   const [outAttachments, setOutAttachments] = useState<Array<{ file: File; kind: OutgoingAttachment["kind"] }>>([]);
   // Reply/quote target.
@@ -1174,16 +1181,53 @@ export default function Inbox() {
     return map;
   }, [thread]);
 
+  // Media / docs / links gallery for the contact panel — built from the
+  // currently loaded thread only (same scoped limitation as in-thread search:
+  // older history not yet fetched via "Carregar mensagens anteriores" won't
+  // show up here until it's loaded).
+  const galleryData = useMemo(() => {
+    const media: { key: string; attachment: InboxAttachment; date: string | number | null }[] = [];
+    const docs: { key: string; attachment: InboxAttachment; date: string | number | null }[] = [];
+    const links: { key: string; url: string; date: string | number | null }[] = [];
+    for (const m of thread) {
+      if (m.is_activity || m.is_private) continue;
+      let i = 0;
+      for (const a of m.attachments ?? []) {
+        const key = `${m.id}-${i++}`;
+        if (a.file_type === "image" || a.file_type === "video") media.push({ key, attachment: a, date: m.created_at });
+        else if (a.file_type !== "audio") docs.push({ key, attachment: a, date: m.created_at });
+      }
+      if (m.content) {
+        LINK_RE.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = LINK_RE.exec(m.content)) !== null) {
+          links.push({ key: `${m.id}-${match.index}`, url: match[0], date: m.created_at });
+        }
+      }
+    }
+    media.reverse();
+    docs.reverse();
+    links.reverse();
+    return { media, docs, links };
+  }, [thread]);
+
   // Thread rows with date separators + WhatsApp-style grouping. Memoized (and
   // kept ABOVE the early returns so the hook order is stable) — rebuilding this
   // in the render body cost on every keystroke.
   type ThreadRow =
     | { type: "sep"; key: string; label: string }
+    | { type: "unread"; key: string }
     | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean; groupSender?: string | null; displayContent?: string };
   const threadRows = useMemo<ThreadRow[]>(() => {
     const rows: ThreadRow[] = [];
     const GROUP_WINDOW = INBOX_CONFIG.GROUP_WINDOW_MS;
     const msgs = thread.filter((m) => !m.is_activity);
+    // Index (into `msgs`) where the "unread" divider goes — the last `count`
+    // messages. Stays correct as older history gets prepended (msgs.length
+    // grows, but the divider stays `count` messages from the end).
+    const unreadStartIdx = unreadBoundary && unreadBoundary.conversationId === selectedId
+      ? Math.max(0, msgs.length - unreadBoundary.count)
+      : -1;
     // In a WhatsApp group, the individual sender is embedded in each incoming
     // body. Parse it once so grouping + rendering both share the same identity.
     const parsedSender = new Map<number, string | null>();
@@ -1211,6 +1255,7 @@ export default function Inbox() {
         lastDay = k;
         rows.push({ type: "sep", key: `sep-${k}`, label: dayLabel(ms) });
       }
+      if (i === unreadStartIdx) rows.push({ type: "unread", key: "unread-boundary" });
       const prev = msgs[i - 1];
       const next = msgs[i + 1];
       const firstOfGroup =
@@ -1231,7 +1276,7 @@ export default function Inbox() {
       });
     }
     return rows;
-  }, [thread, isGroupSelected]);
+  }, [thread, isGroupSelected, unreadBoundary, selectedId]);
 
   // DEV-only diagnostic for the inbox OOM/freeze: samples the JS heap + render
   // rate once a second so the next crash leaves a trail (console + sessionStorage
@@ -1505,6 +1550,21 @@ export default function Inbox() {
     if (nearBottom) requestAnimationFrame(() => bottomRef.current?.scrollIntoView());
   }, [vv.height, mobileConvOpen]);
 
+  // "Mensagens não lidas" divider: capture the conversation's unread count the
+  // instant it's opened, BEFORE the markRead call below resets it to 0 — this
+  // runs in the same effect-flush as markRead but reads `conversations` from
+  // the render that already happened, so it still sees the pre-read count.
+  // Approximate (Chatwoot's unread_count isn't guaranteed to count exactly the
+  // same message set the thread renders) but good enough as a visual cue.
+  const [unreadBoundary, setUnreadBoundary] = useState<{ conversationId: number; count: number } | null>(null);
+  useEffect(() => {
+    if (!selectedId) { setUnreadBoundary(null); return; }
+    const conv = conversations.find((c) => c.id === selectedId);
+    const count = conv?.unread_count ?? 0;
+    setUnreadBoundary(count > 0 ? { conversationId: selectedId, count } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
   useEffect(() => {
     if (selectedId) {
@@ -1516,6 +1576,8 @@ export default function Inbox() {
     setOutAttachments([]);
     setPendingVoice(null);
     setSelfTyping(false);
+    setThreadSearchOpen(false);
+    setThreadSearchQuery("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, markRead]);
 
@@ -1587,6 +1649,34 @@ export default function Inbox() {
     if (el) highlight(el);
     else toast({ title: "Mensagem não encontrada no histórico carregado" });
   }, [selectedId, noMoreOlder, handleLoadOlder, toast]);
+
+  // In-thread search ("find in this chat"): matches only messages already
+  // loaded client-side — older history not yet fetched via "Carregar mensagens
+  // anteriores" won't show up until loaded. A quick find-in-chat, not a
+  // full-text server search across all history.
+  const [threadSearchOpen, setThreadSearchOpen] = useState(false);
+  const [threadSearchQuery, setThreadSearchQuery] = useState("");
+  const [threadSearchIndex, setThreadSearchIndex] = useState(0);
+  const threadSearchMatches = useMemo(() => {
+    const q = threadSearchQuery.trim().toLowerCase();
+    if (!threadSearchOpen || q.length < 2) return [];
+    return thread
+      .filter((m) => !m.is_activity && !m.is_private && m.content?.toLowerCase().includes(q))
+      .map((m) => m.id);
+  }, [thread, threadSearchQuery, threadSearchOpen]);
+  useEffect(() => {
+    if (threadSearchMatches.length === 0) { setThreadSearchIndex(0); return; }
+    const last = threadSearchMatches.length - 1;
+    setThreadSearchIndex(last);
+    scrollToMessage(threadSearchMatches[last]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadSearchQuery]);
+  const gotoSearchMatch = useCallback((index: number) => {
+    if (threadSearchMatches.length === 0) return;
+    const wrapped = ((index % threadSearchMatches.length) + threadSearchMatches.length) % threadSearchMatches.length;
+    setThreadSearchIndex(wrapped);
+    scrollToMessage(threadSearchMatches[wrapped]);
+  }, [threadSearchMatches, scrollToMessage]);
 
   const myName = teamMembers.find((m) => m.user_id === user?.id)?.full_name || "";
 
@@ -2310,6 +2400,10 @@ export default function Inbox() {
           {isArchived ? <ArchiveRestore className="h-4 w-4 text-emerald-500" /> : <Archive className="h-4 w-4 text-destructive" />}
           <span>{isArchived ? "Restaurar" : "Arquivar"}</span>
         </button>
+        <button type="button" title="Media, documentos e links" onClick={() => { setGalleryTab("media"); setGalleryOpen(true); }}
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+          <ImageIcon className="h-4 w-4 text-purple-500" /><span>Media</span>
+        </button>
       </div>
 
       <div className="flex flex-col gap-3 p-4">
@@ -2994,6 +3088,16 @@ export default function Inbox() {
                   </>
                 ) : null}
 
+                {/* Find in this chat */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Pesquisar nesta conversa"
+                  onClick={() => setThreadSearchOpen((v) => !v)}
+                >
+                  <Search className={cn("h-4 w-4", threadSearchOpen && "text-primary")} />
+                </Button>
+
                 {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
                 <Button
                   variant="ghost"
@@ -3014,6 +3118,43 @@ export default function Inbox() {
               </div>
 
             </div>
+
+            {/* Find in this chat — search bar */}
+            {threadSearchOpen && (
+              <div className="flex shrink-0 items-center gap-1.5 border-b bg-background px-3 py-2">
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={threadSearchQuery}
+                  onChange={(e) => setThreadSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); gotoSearchMatch(threadSearchIndex - 1); }
+                    else if (e.key === "Escape") { setThreadSearchOpen(false); setThreadSearchQuery(""); }
+                  }}
+                  placeholder="Pesquisar nesta conversa..."
+                  className="h-8 flex-1"
+                />
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                  {threadSearchQuery.trim().length < 2
+                    ? ""
+                    : threadSearchMatches.length > 0
+                      ? `${threadSearchIndex + 1}/${threadSearchMatches.length}`
+                      : "Sem resultados"}
+                </span>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={threadSearchMatches.length === 0}
+                  title="Resultado anterior" onClick={() => gotoSearchMatch(threadSearchIndex - 1)}>
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={threadSearchMatches.length === 0}
+                  title="Próximo resultado" onClick={() => gotoSearchMatch(threadSearchIndex + 1)}>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Fechar pesquisa"
+                  onClick={() => { setThreadSearchOpen(false); setThreadSearchQuery(""); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Collision warning: another agent is in this same conversation */}
             {peersHere.length > 0 && (
@@ -3092,6 +3233,17 @@ export default function Inbox() {
                           <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] font-medium text-muted-foreground">
                             {row.label}
                           </span>
+                        </div>
+                      );
+                    }
+                    if (row.type === "unread") {
+                      return (
+                        <div key={row.key} className="my-2 flex items-center gap-2 px-1">
+                          <div className="h-px flex-1 bg-emerald-500/30" />
+                          <span className="shrink-0 rounded-full bg-emerald-500/15 px-3 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                            Mensagens não lidas
+                          </span>
+                          <div className="h-px flex-1 bg-emerald-500/30" />
                         </div>
                       );
                     }
@@ -3652,6 +3804,108 @@ export default function Inbox() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Contact panel: media / docs / links gallery */}
+      <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Media, documentos e links</DialogTitle>
+          </DialogHeader>
+          <div className="flex gap-1 border-b pb-2">
+            {([
+              { key: "media", label: `Media (${galleryData.media.length})` },
+              { key: "docs", label: `Documentos (${galleryData.docs.length})` },
+              { key: "links", label: `Links (${galleryData.links.length})` },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setGalleryTab(t.key)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                  galleryTab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {galleryTab === "media" && (
+              galleryData.media.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem imagens ou vídeos nesta conversa.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5 py-1">
+                  {galleryData.media.map(({ key, attachment }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="relative block aspect-square cursor-zoom-in overflow-hidden rounded-lg bg-muted"
+                      onClick={() => attachment.data_url && setPreviewUrl(attachment.data_url)}
+                    >
+                      {attachment.file_type === "video" ? (
+                        <>
+                          <video src={attachment.data_url ?? undefined} className="h-full w-full object-cover" muted />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Play className="h-6 w-6 text-white" fill="white" />
+                          </div>
+                        </>
+                      ) : (
+                        <img
+                          src={attachment.thumb_url ?? attachment.data_url ?? undefined}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+            {galleryTab === "docs" && (
+              galleryData.docs.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem documentos nesta conversa.</p>
+              ) : (
+                <div className="space-y-1.5 py-1">
+                  {galleryData.docs.map(({ key, attachment }) => (
+                    <div key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {attachment.extension ? `Documento .${attachment.extension}` : "Documento"}
+                      </span>
+                      {attachment.data_url && <DownloadButton url={attachment.data_url} extension={attachment.extension} />}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+            {galleryTab === "links" && (
+              galleryData.links.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem links nesta conversa.</p>
+              ) : (
+                <div className="space-y-1.5 py-1">
+                  {galleryData.links.map(({ key, url }) => {
+                    const href = url.startsWith("http") ? url : `https://${url}`;
+                    return (
+                      <a
+                        key={key}
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm underline-offset-2 hover:underline"
+                      >
+                        <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{url}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
