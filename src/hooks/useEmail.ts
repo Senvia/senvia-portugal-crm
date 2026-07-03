@@ -87,7 +87,7 @@ export function useEmailMessages(folderId: string | null) {
       if (!folderId) return [];
       const { data, error } = await db
         .from('email_messages')
-        .select('id, channel_id, folder_id, uid, from_name, from_address, to_addresses, cc_addresses, subject, snippet, date, seen, flagged, answered, has_attachments')
+        .select('id, channel_id, folder_id, uid, thread_id, from_name, from_address, to_addresses, cc_addresses, subject, snippet, date, seen, flagged, answered, has_attachments')
         .eq('folder_id', folderId)
         .order('date', { ascending: false })
         .limit(500);

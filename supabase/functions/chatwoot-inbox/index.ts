@@ -12,6 +12,7 @@
 //   - list_labels / create_label { title } / set_labels { conversation_id, labels } / delete_label { label_id }
 //   - list_canned / create_canned { content } / delete_canned { canned_id }
 //   - delete_message        { wa_id, phone }
+//   - react                 { wa_id, phone, from_me, emoji }  (send-only — see action body)
 //   - mark_read             { conversation_id | conversation_ids }
 //   - mark_unread           { conversation_id | conversation_ids }
 //   - download_attachment   { url }
@@ -965,6 +966,26 @@ Deno.serve(async (req) => {
       if (!res.ok) {
         console.error('Evolution delete failed:', res.status, await res.text());
         return json({ error: 'Falha ao apagar a mensagem no WhatsApp' }, 502);
+      }
+      return json({ ok: true });
+    }
+
+    if (action === 'react') {
+      // Send a WhatsApp emoji reaction via Evolution's Baileys-backed endpoint.
+      // Receiving the contact's reaction back is NOT handled here — Chatwoot
+      // doesn't expose WhatsApp reactions as a documented field, so wiring a
+      // receive path without a real payload to verify against would be a guess.
+      const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
+      const phone = String(body.phone ?? '').replace(/\D/g, '');
+      const emoji = String(body.emoji ?? '');
+      if (!waId || !phone || !emoji) return json({ error: 'Dados em falta' }, 400);
+      const res = await evolutionFetch(cfg, `/message/sendReaction/${await getInstance()}`, 'POST', {
+        key: { remoteJid: `${phone}@s.whatsapp.net`, fromMe: !!body.from_me, id: waId },
+        reaction: emoji,
+      });
+      if (!res.ok) {
+        console.error('Evolution reaction failed:', res.status, await res.text());
+        return json({ error: 'Falha ao reagir à mensagem' }, 502);
       }
       return json({ ok: true });
     }

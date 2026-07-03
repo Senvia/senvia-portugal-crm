@@ -28,6 +28,7 @@ import {
   useDeleteCannedResponse,
   useDeleteMessage,
   useEditMessage,
+  useReactToMessage,
   useCrmRecord,
   useTypingPresence,
   useSuggestReply,
@@ -688,6 +689,45 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+// WhatsApp's default quick-reaction set.
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+// Hover-revealed reaction trigger (desktop). `open` forces full opacity so the
+// button doesn't fade out from under the pointer while its popover is open —
+// group-hover alone can't track that once Radix portals the content out of
+// this bubble's DOM subtree.
+function ReactionButton({ onPick }: { onPick: (emoji: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title="Reagir"
+          className={cn(
+            "rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100",
+            open && "opacity-100",
+          )}
+        >
+          <Smile className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="center" className="flex w-auto gap-1 p-1.5">
+        {REACTION_EMOJIS.map((e) => (
+          <button
+            key={e}
+            type="button"
+            onClick={() => { onPick(e); setOpen(false); }}
+            className="rounded-full p-1 text-lg leading-none transition-transform hover:scale-125"
+          >
+            {e}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 type ListTab = "all" | "unread" | "waiting" | "mine" | "archived";
 
 // DEV / opt-in diagnostic switch for the inbox memory probe. Set
@@ -922,6 +962,7 @@ export default function Inbox() {
   const deleteCanned = useDeleteCannedResponse();
   const deleteMessage = useDeleteMessage();
   const editMessage = useEditMessage();
+  const reactToMessage = useReactToMessage();
   const { data: teamMembers = [] } = useTeamMembers();
   const createEvent = useCreateEvent();
 
@@ -2106,6 +2147,19 @@ export default function Inbox() {
     },
     [selectedPhone, editMessage, toast],
   );
+  // Send-only WhatsApp reaction (👍❤️😂...). No optimistic UI — receiving the
+  // reaction back into the thread isn't wired up (see the edge function's
+  // `react` action comment), so there's no local state to show it echoed back.
+  const handleReact = useCallback(
+    (m: InboxMessage, emoji: string) => {
+      if (!m.wa_id || !selectedPhone) return;
+      reactToMessage.mutate(
+        { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji },
+        { onError: (err) => toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" }) },
+      );
+    },
+    [selectedPhone, reactToMessage, toast],
+  );
 
   // Insert an emoji from the ":" suggestion bar: replace the ":query" the user was
   // typing with the chosen emoji. Shared by click, Tab and Enter/arrow selection.
@@ -3275,6 +3329,7 @@ export default function Inbox() {
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
+                        onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
                       />
                     );
                   })}
@@ -4367,6 +4422,7 @@ const MessageBubble = memo(function MessageBubble({
   onDelete,
   onSaveEdit,
   onTask,
+  onReact,
   emailMode = false,
   firstOfGroup = true,
   lastOfGroup = true,
@@ -4382,6 +4438,7 @@ const MessageBubble = memo(function MessageBubble({
   // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
   onSaveEdit?: (m: InboxMessage, text: string) => void;
   onTask?: (m: InboxMessage) => void;
+  onReact?: (m: InboxMessage, emoji: string) => void;
   // Preview of the quoted message when this one is a reply (sender + short text + id).
   quoted?: { id: number; sender: string; content: string };
   // Scrolls to (and briefly highlights) the quoted message — WhatsApp lets you
@@ -4511,6 +4568,7 @@ const MessageBubble = memo(function MessageBubble({
             </button>
           )}
           {taskButton}
+          {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
         </div>
       )}
@@ -4604,6 +4662,7 @@ const MessageBubble = memo(function MessageBubble({
       {!m.outgoing && (
         <div className="flex items-center">
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
+          {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
           {taskButton}
         </div>
       )}
@@ -4614,6 +4673,20 @@ const MessageBubble = memo(function MessageBubble({
       <Sheet open={actionsSheetOpen} onOpenChange={setActionsSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl">
           <div className="flex flex-col gap-0.5 pb-[env(safe-area-inset-bottom)] pt-2">
+            {onReact && m.wa_id && (
+              <div className="mb-1 flex items-center justify-around border-b pb-2">
+                {REACTION_EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setActionsSheetOpen(false); onReact(m, e); }}
+                    className="rounded-full p-1.5 text-2xl leading-none transition-transform active:scale-90"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
             {m.wa_id && (
               <button
                 type="button"

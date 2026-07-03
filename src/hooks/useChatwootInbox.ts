@@ -1054,6 +1054,21 @@ export function useEditMessage() {
   });
 }
 
+// Send a WhatsApp emoji reaction (👍❤️😂...) to a message via Evolution.
+// SEND-only: receiving a contact's reaction back into the thread isn't wired
+// up in this pass — Chatwoot doesn't surface WhatsApp reactions as a
+// documented, first-class field, so faking a receive path without a live
+// Evolution payload to verify against would be guesswork.
+export function useReactToMessage() {
+  const { organization } = useAuth();
+  return useMutation({
+    mutationFn: async ({ waId, phone, fromMe, emoji }: { waId: string; phone: string; fromMe: boolean; emoji: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'react', wa_id: waId, phone, from_me: fromMe, emoji });
+    },
+  });
+}
+
 // Notify the contact's WhatsApp that we're typing (fire-and-forget).
 export function useTypingPresence() {
   const { organization } = useAuth();

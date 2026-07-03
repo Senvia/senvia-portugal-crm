@@ -248,6 +248,22 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     if (starredOnly) list = list.filter((m) => m.flagged);
     return list;
   }, [baseMessages, searching, unreadOnly, starredOnly]);
+  // Threaded view (Gmail-style): group same-thread messages into one list row
+  // showing the newest, with a "×N" count badge. Skipped for search results
+  // (matches from different threads shouldn't hide inside a collapsed group).
+  // Scoped to the list only — opening a row still opens that single newest
+  // message, not an expanded multi-message thread reader.
+  const threadGroups = useMemo(() => {
+    if (searching) return messages.map((m) => [m]);
+    const byThread = new Map<string, EmailMessage[]>();
+    const order: string[] = [];
+    for (const m of messages) {
+      const key = m.thread_id || `solo-${m.id}`;
+      if (!byThread.has(key)) { byThread.set(key, []); order.push(key); }
+      byThread.get(key)!.push(m);
+    }
+    return order.map((key) => byThread.get(key)!);
+  }, [messages, searching]);
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened } = useEmailMessage(messageId);
 
@@ -578,8 +594,10 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               </div>
             )
           ) : (
-            messages.map((m) => {
-              const active = m.id === messageId;
+            threadGroups.map((group) => {
+              const m = group[0];
+              const threadCount = group.length;
+              const active = group.some((x) => x.id === messageId);
               const selected = selectedIds.has(m.id);
               const who = m.from_name || m.from_address || '(desconhecido)';
               return (
@@ -633,9 +651,16 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                       </button>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{fmtListDate(m.date)}</span>
                     </div>
-                    <span className={cn('truncate text-sm', !m.seen ? 'font-semibold text-foreground' : 'text-foreground/80')}>
-                      {m.subject || '(sem assunto)'}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className={cn('min-w-0 truncate text-sm', !m.seen ? 'font-semibold text-foreground' : 'text-foreground/80')}>
+                        {m.subject || '(sem assunto)'}
+                      </span>
+                      {threadCount > 1 && (
+                        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {threadCount}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5">
                       {m.has_attachments && <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />}
                       <span className="truncate text-xs text-muted-foreground">{m.snippet || ''}</span>
