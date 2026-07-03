@@ -1,7 +1,8 @@
--- Team push notification when a sale is CONCLUDED ("Concluída" = status 'delivered').
+-- Motivational push when a sale is CONCLUDED ("Concluída" = status 'delivered').
 -- Fires exactly once, on the transition INTO 'delivered' (regardless of which UI
--- path made the change), and broadcasts a celebratory push to the WHOLE team via
--- the existing send-push-notification function (no user_ids = everyone in the org).
+-- path made the change), and sends a celebratory push — via the existing
+-- send-push-notification function — to the SALES TEAM (salesperson) + ADMINS of
+-- that sale's organization (not viewers).
 --
 -- Fire-and-forget via pg_net so it can never block or fail the sale update. Mirrors
 -- the dispatch_meta_capi_purchase pattern.
@@ -16,6 +17,7 @@ DECLARE
   v_client_name text;
   v_body text;
   v_title text;
+  v_user_ids uuid[];
   -- A motivational headline is picked at random per sale so the alert stays fresh.
   v_titles text[] := ARRAY[
     '🔥 Bateu mais uma! 💰',
@@ -37,6 +39,21 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Recipients: only the SALES TEAM (salesperson) + ADMINS of this sale's org.
+  SELECT array_agg(DISTINCT ur.user_id)
+    INTO v_user_ids
+  FROM public.user_roles ur
+  JOIN public.organization_members om ON om.user_id = ur.user_id
+  WHERE om.organization_id = NEW.organization_id
+    AND om.is_active = true
+    AND ur.role IN ('admin', 'super_admin', 'salesperson');
+
+  -- No eligible recipient → send to nobody (never fall back to broadcasting to all,
+  -- which is what send-push-notification does when user_ids is empty/absent).
+  IF v_user_ids IS NULL THEN
+    RETURN NEW;
+  END IF;
+
   -- Resolve a friendly name (client, else lead, else generic).
   SELECT COALESCE(c.name, c.company, l.name, 'Cliente')
     INTO v_client_name
@@ -52,6 +69,7 @@ BEGIN
     url := 'https://chhmfwlimtbsyjmgtokn.supabase.co/functions/v1/send-push-notification',
     body := jsonb_build_object(
       'organization_id', NEW.organization_id,
+      'user_ids', to_jsonb(v_user_ids),
       'title', v_title,
       'body', v_body,
       'url', '/sales',
