@@ -2447,6 +2447,21 @@ export default function Inbox() {
               </button>
               <MessageSquare className="h-5 w-5 text-primary" />
               Caixa de Entrada
+              {/* Realtime status: green = messages arrive instantly; grey = falling
+                  back to polling (a few seconds' delay). Handy to spot a PC where the
+                  realtime socket isn't connecting (throttled tab, cache, firewall). */}
+              <span
+                title={live
+                  ? "Ligado em tempo real — as mensagens chegam na hora"
+                  : "Sem tempo real — as mensagens podem demorar alguns segundos. Tenta manter este separador ativo, ou faz Ctrl+Shift+R."}
+                className={cn(
+                  "ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                  live ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/50")} />
+                {live ? "ao vivo" : "offline"}
+              </span>
             </h1>
             <div className="flex gap-1.5">
               <Button
