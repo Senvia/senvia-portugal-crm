@@ -681,6 +681,8 @@ export default function Inbox() {
   const [emojiSearch, setEmojiSearch] = useState("");
   const [emojiSuggestions, setEmojiSuggestions] = useState<string[]>([]);
   const [emojiSuggestQuery, setEmojiSuggestQuery] = useState("");
+  // Which suggestion is highlighted (arrow-key navigable, like WhatsApp).
+  const [emojiSuggestIndex, setEmojiSuggestIndex] = useState(0);
   // Whether the composer textarea is focused → the on-screen keyboard is open (or
   // opening). On iOS the visualViewport metrics lag the focus event, so we use this
   // to drop the bottom safe-area padding immediately and avoid a gap above the keyboard.
@@ -1779,6 +1781,29 @@ export default function Inbox() {
     },
     [selectedPhone, editMessage, toast],
   );
+
+  // Insert an emoji from the ":" suggestion bar: replace the ":query" the user was
+  // typing with the chosen emoji. Shared by click, Tab and Enter/arrow selection.
+  const applyEmojiSuggestion = useCallback((native: string) => {
+    const text = composerRef.current?.innerText ?? draft;
+    const colonIdx = text.lastIndexOf(":");
+    const before = colonIdx >= 0 ? text.slice(0, colonIdx) : text;
+    const after = colonIdx >= 0 ? text.slice(colonIdx + 1 + emojiSuggestQuery.length) : "";
+    const newText = before + native + " " + after;
+    setDraft(newText);
+    setEmojiSuggestions([]);
+    setEmojiSuggestIndex(0);
+    if (composerRef.current) {
+      composerRef.current.innerText = newText;
+      composerRef.current.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(composerRef.current);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [draft, emojiSuggestQuery]);
 
   // Keep the keyboard handler's data fresh without rebinding the listener.
   kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
@@ -3129,40 +3154,27 @@ export default function Inbox() {
                     Secondary actions live in the "+" menu to keep the bar uncluttered. */}
                 {emojiSuggestions.length > 0 && (
                   <div className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
-                    {emojiSuggestions.map((e) => (
+                    {emojiSuggestions.map((e, i) => (
                       <button
                         key={e}
                         type="button"
                         title="Inserir emoji"
                         // onMouseDown + preventDefault (not onClick): keeps the composer
-                        // focused and stops the button from submitting the form — that
-                        // form-submit was why picking an emoji "sent" instead of inserting.
-                        onMouseDown={(ev) => {
-                          ev.preventDefault();
-                          const text = composerRef.current?.innerText ?? draft;
-                          const colonIdx = text.lastIndexOf(":");
-                          const before = colonIdx >= 0 ? text.slice(0, colonIdx) : text;
-                          const after = colonIdx >= 0 ? text.slice(colonIdx + 1 + emojiSuggestQuery.length) : "";
-                          const newText = before + e + " " + after;
-                          setDraft(newText);
-                          setEmojiSuggestions([]);
-                          if (composerRef.current) {
-                            composerRef.current.innerText = newText;
-                            composerRef.current.focus();
-                            const sel = window.getSelection();
-                            const range = document.createRange();
-                            range.selectNodeContents(composerRef.current);
-                            range.collapse(false);
-                            sel?.removeAllRanges();
-                            sel?.addRange(range);
-                          }
-                        }}
-                        className="shrink-0 rounded-lg p-1 transition-colors hover:bg-muted"
+                        // focused and stops the button from submitting the form. Works for
+                        // ANY emoji in the bar, not just the first.
+                        onMouseDown={(ev) => { ev.preventDefault(); applyEmojiSuggestion(e); }}
+                        onMouseEnter={() => setEmojiSuggestIndex(i)}
+                        className={cn(
+                          "shrink-0 rounded-lg p-1 transition-colors",
+                          i === emojiSuggestIndex ? "bg-primary/15" : "hover:bg-muted",
+                        )}
                       >
-                        <em-emoji native={e} set="apple" size="1.4em" fallback={e} />
+                        {/* draggable=false so a click on the emoji image never starts an
+                            image-drag instead of selecting it. */}
+                        <em-emoji native={e} set="apple" size="1.4em" fallback={e} draggable={false} />
                       </button>
                     ))}
-                    <span className="ml-1 shrink-0 pr-1 text-[10px] text-muted-foreground opacity-60">Tab</span>
+                    <span className="ml-1 shrink-0 pr-1 text-[10px] text-muted-foreground opacity-60">↔ Enter</span>
                   </div>
                 )}
                 <div className="relative flex min-w-0 flex-1 items-end rounded-3xl border bg-muted/40 px-3">
@@ -3206,6 +3218,7 @@ export default function Inbox() {
                           if (matches.length > 0) {
                             setEmojiSuggestions(matches);
                             setEmojiSuggestQuery(query);
+                            setEmojiSuggestIndex(0);
                           } else {
                             setEmojiSuggestions([]);
                           }
@@ -3226,24 +3239,30 @@ export default function Inbox() {
                       typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
                     }}
                     onKeyDown={(e) => {
-                      // Tab = select first emoji suggestion
-                      if (emojiSuggestions.length > 0 && e.key === "Tab") {
-                        e.preventDefault();
-                        const sel = emojiSuggestions[0];
-                        const cur = e.currentTarget.innerText || draft;
-                        const colonIdx = cur.lastIndexOf(":");
-                        const before = cur.slice(0, colonIdx);
-                        const after = cur.slice(colonIdx + 1 + emojiSuggestQuery.length);
-                        const newText = before + sel + " " + after;
-                        setDraft(newText);
-                        e.currentTarget.innerText = newText;
-                        setEmojiSuggestions([]);
-                        const rng = document.createRange();
-                        rng.selectNodeContents(e.currentTarget);
-                        rng.collapse(false);
-                        window.getSelection()?.removeAllRanges();
-                        window.getSelection()?.addRange(rng);
-                        return;
+                      // Emoji suggestion bar open: arrows navigate, Enter/Tab pick the
+                      // HIGHLIGHTED one, Escape closes. Runs BEFORE the Enter=send rule so
+                      // choosing an emoji never sends the message.
+                      if (emojiSuggestions.length > 0) {
+                        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setEmojiSuggestIndex((i) => (i + 1) % emojiSuggestions.length);
+                          return;
+                        }
+                        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setEmojiSuggestIndex((i) => (i - 1 + emojiSuggestions.length) % emojiSuggestions.length);
+                          return;
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setEmojiSuggestions([]);
+                          return;
+                        }
+                        if ((e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isComposingRef.current) || e.key === "Tab") {
+                          e.preventDefault();
+                          applyEmojiSuggestion(emojiSuggestions[emojiSuggestIndex] ?? emojiSuggestions[0]);
+                          return;
+                        }
                       }
                       // Enter sends; Shift+Enter inserts a newline. Ignore while the
                       // IME is composing (accents) so it doesn't send mid-word.
