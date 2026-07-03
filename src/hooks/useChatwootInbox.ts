@@ -633,6 +633,27 @@ export function useMarkConversationRead() {
   });
 }
 
+// Mark a conversation as UNREAD (list context menu) — the WhatsApp "keep this
+// as a reminder" move. Optimistic: the badge shows "1" instantly.
+export function useMarkConversationUnread() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: number) => {
+      if (!organization?.id) return;
+      await invokeInbox(organization.id, { action: 'mark_unread', conversation_id: conversationId });
+    },
+    onMutate: async (conversationId: number) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { unread_count: 1 },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+  });
+}
+
 // Download an attachment via the edge function proxy (Chatwoot blocks direct
 // browser fetches with CORS) and save it to disk.
 export function useDownloadAttachment() {

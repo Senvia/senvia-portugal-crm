@@ -13,6 +13,7 @@
 //   - list_canned / create_canned { content } / delete_canned { canned_id }
 //   - delete_message        { wa_id, phone }
 //   - mark_read             { conversation_id | conversation_ids }
+//   - mark_unread           { conversation_id | conversation_ids }
 //   - download_attachment   { url }
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
@@ -1054,6 +1055,22 @@ Deno.serve(async (req) => {
       })());
 
       return json({ ok: cwResults.every((r) => r.ok) });
+    }
+
+    if (action === 'mark_unread') {
+      // WhatsApp-style "mark as unread" from the list's context menu — Chatwoot's
+      // /unread endpoint rewinds the agent's last-seen marker so the conversation
+      // shows unread again (mirrors mark_read's update_last_seen, in reverse).
+      const ids: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
+        ? body.conversation_ids.map(Number).filter(Boolean)
+        : conversation_id ? [Number(conversation_id)] : [];
+      if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+      const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${ids[0]}/unread`, 'POST');
+      if (!res.ok) {
+        console.error('Chatwoot mark_unread failed:', res.status, await res.text());
+        return json({ error: 'Falha ao marcar como não lida' }, 502);
+      }
+      return json({ ok: true });
     }
 
     if (action === 'update_groups') {

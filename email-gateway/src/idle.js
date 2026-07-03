@@ -52,6 +52,11 @@ async function isCrmContact(orgId, email) {
   }
 }
 
+// How often to poll every OTHER folder's IMAP STATUS for changes IDLE can't see
+// (IDLE only covers the single mailbox held open — the Inbox). STATUS is cheap:
+// it doesn't select/open the mailbox, just asks the server for counters.
+const FOLDER_POLL_MS = 3 * 60 * 1000;
+
 class CaixaManager {
   constructor(caixa) {
     this.caixa = caixa;
@@ -61,6 +66,7 @@ class CaixaManager {
     this.syncing = false;
     this.reconnectMs = 5000;
     this.lastError = null;
+    this.folderPollTimer = null;
   }
 
   async start() {
@@ -70,6 +76,7 @@ class CaixaManager {
 
   async connect() {
     if (this.stopped) return;
+    this.clearFolderPoll(); // guard against connect() being called again mid-poll-cycle (reconnects)
     const client = new ImapFlow(imapConfig(this.caixa));
     this.client = client;
     client.on('error', (err) => { this.lastError = err.message; });
@@ -93,10 +100,59 @@ class CaixaManager {
         client.on('exists', () => this.onNewMail());
         log(`[${this.caixa.label}] a vigiar a Entrada (IDLE)`);
       }
+
+      // Everything besides the Inbox (Sent, Archive, custom folders, junk...) is
+      // NOT held open in IDLE, so mail read/moved/arrived there from another
+      // device (webmail, phone) would otherwise only be seen on the next full
+      // resync/restart. Poll their STATUS periodically and resync headers for
+      // any folder whose counters actually changed.
+      this.folderPollTimer = setInterval(() => {
+        this.pollAllFolders().catch((e) => log(`[${this.caixa.label}] poll de pastas falhou: ${e.message}`));
+      }, FOLDER_POLL_MS);
     } catch (err) {
       this.lastError = err.message;
       log(`[${this.caixa.label}] falha de ligação: ${err.message}`);
       this.scheduleReconnect();
+    }
+  }
+
+  clearFolderPoll() {
+    if (this.folderPollTimer) { clearInterval(this.folderPollTimer); this.folderPollTimer = null; }
+  }
+
+  // STATUS every folder (cheap — no mailbox select) and resync headers only for
+  // ones whose message/unread count or UIDNEXT actually moved since we last saw
+  // them. Skips a folder entirely when nothing changed, so a caixa with many
+  // custom folders doesn't pay for a full sync every cycle.
+  async pollAllFolders() {
+    if (!this.client?.usable || this.syncing) return;
+    let folders;
+    try {
+      folders = await q(
+        `SELECT id, path, unread_count, total_count, uidnext FROM email_folders WHERE channel_id=$1`,
+        [this.caixa.id],
+      );
+    } catch (e) {
+      log(`[${this.caixa.label}] poll de pastas: falha a ler pastas: ${e.message}`);
+      return;
+    }
+    for (const folder of folders) {
+      if (this.stopped || !this.client?.usable) break;
+      try {
+        const st = await this.client.status(folder.path, { messages: true, unseen: true, uidNext: true });
+        const uidNextStr = st.uidNext ? String(st.uidNext) : null;
+        const changed = (st.messages ?? 0) !== (folder.total_count ?? 0)
+          || (st.unseen ?? 0) !== (folder.unread_count ?? 0)
+          || (uidNextStr && uidNextStr !== folder.uidnext);
+        if (!changed) continue;
+        await syncFolderMessages(this.client, this.caixa, { id: folder.id, path: folder.path }, 25);
+        await q(
+          `UPDATE email_folders SET total_count=$2, unread_count=$3, uidnext=$4, updated_at=now() WHERE id=$1`,
+          [folder.id, st.messages || 0, st.unseen || 0, uidNextStr],
+        );
+      } catch (e) {
+        log(`[${this.caixa.label}] poll de pastas: falha em ${folder.path}: ${e.message}`);
+      }
     }
   }
 
@@ -216,6 +272,7 @@ class CaixaManager {
 
   async stop() {
     this.stopped = true;
+    this.clearFolderPoll();
     try { await this.client?.logout(); } catch { /* ignore */ }
   }
 }

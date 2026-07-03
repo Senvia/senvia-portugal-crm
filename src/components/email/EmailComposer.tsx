@@ -8,8 +8,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { fmtSize } from './emailShared';
-import type { EmailMessage, EmailAddress, EmailDraft } from '@/hooks/useEmail';
+import type { EmailMessage, EmailAddress, EmailDraft, RecipientSuggestion } from '@/hooks/useEmail';
+import { useEmailRecipientSuggestions } from '@/hooks/useEmail';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
+import { useEmailChannels } from '@/hooks/useEmailChannels';
+import { cn } from '@/lib/utils';
+import type { EmailAttachment } from '@/hooks/useEmail';
 
 interface Attached { filename: string; contentType: string; b64: string; size: number; }
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
@@ -54,24 +59,64 @@ function toEditorHtml(s: string | null): string {
 }
 
 // Email chip input — commit on Enter / comma / semicolon / Tab (when non-empty).
+// Also autocompletes from CRM leads/clients + people who've emailed this caixa
+// before (channelId/organizationId are optional — omit to fall back to plain
+// free-text chips, e.g. if a future caller doesn't have that context).
 function EmailChipInput({
-  value, onChange, placeholder,
+  value, onChange, placeholder, channelId, organizationId,
 }: {
   value: EmailAddress[];
   onChange: (addrs: EmailAddress[]) => void;
   placeholder?: string;
+  channelId?: string | null;
+  organizationId?: string;
 }) {
   const [raw, setRaw] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const commit = useCallback(() => {
+  const { data: rawSuggestions = [] } = useEmailRecipientSuggestions(raw, channelId ?? null, organizationId);
+  // Never suggest an address already picked.
+  const suggestions = rawSuggestions.filter(
+    (s) => !value.some((v) => v.address.toLowerCase() === s.address.toLowerCase()),
+  );
+  const showSuggestions = focused && raw.trim().length >= 2 && suggestions.length > 0;
+
+  const commit = useCallback((picked?: EmailAddress) => {
+    if (picked) {
+      onChange([...value, picked]);
+      setRaw('');
+      setHighlightIndex(0);
+      return;
+    }
     const trimmed = raw.trim();
     if (!trimmed) return;
     onChange([...value, ...parseAddrs(trimmed)]);
     setRaw('');
+    setHighlightIndex(0);
   }, [raw, value, onChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      setHighlightIndex((i) => {
+        const len = suggestions.length;
+        return e.key === 'ArrowDown' ? (i + 1) % len : (i - 1 + len) % len;
+      });
+      return;
+    }
+    if (showSuggestions && (e.key === 'Enter' || e.key === 'Tab') && suggestions[highlightIndex]) {
+      e.preventDefault();
+      const s = suggestions[highlightIndex];
+      commit({ name: s.name, address: s.address });
+      return;
+    }
+    if (e.key === 'Escape' && showSuggestions) {
+      e.preventDefault();
+      setFocused(false);
+      return;
+    }
     if (e.key === ',' || e.key === ';') {
       e.preventDefault();
       commit();
@@ -90,7 +135,7 @@ function EmailChipInput({
 
   return (
     <div
-      className="flex flex-1 min-w-0 flex-wrap items-center gap-1 cursor-text py-0.5"
+      className="relative flex flex-1 min-w-0 flex-wrap items-center gap-1 cursor-text py-0.5"
       onClick={() => inputRef.current?.focus()}
     >
       {value.map((a, i) => (
@@ -104,13 +149,39 @@ function EmailChipInput({
       <input
         ref={inputRef}
         value={raw}
-        onChange={(e) => setRaw(e.target.value)}
+        onChange={(e) => { setRaw(e.target.value); setHighlightIndex(0); }}
         onKeyDown={handleKeyDown}
-        onBlur={commit}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); commit(); }}
         placeholder={value.length === 0 ? placeholder : ''}
         autoComplete="new-password"
         className="flex-1 min-w-[120px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
       />
+      {showSuggestions && (
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">
+          {suggestions.map((s, i) => (
+            <button
+              key={s.address}
+              type="button"
+              // onMouseDown (not onClick) + preventDefault: keeps the input focused
+              // through the click so onBlur's commit() never fires and swallows the pick.
+              onMouseDown={(e) => { e.preventDefault(); commit({ name: s.name, address: s.address }); }}
+              className={cn(
+                "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                i === highlightIndex ? "bg-accent" : "hover:bg-accent/60",
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-medium">{s.name}</span>{" "}
+                <span className="text-muted-foreground">{s.address}</span>
+              </span>
+              {s.source === 'crm' && (
+                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">CRM</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -121,6 +192,7 @@ function EmailChipInput({
 // ─────────────────────────────────────────────────────────────────────────────
 export function EmailComposer({
   onClose, channelId, folderId, mode, original, selfAddress, initialDraft, stackIndex,
+  originalAttachments, resolveAttachment,
 }: {
   onClose: () => void;
   channelId: string | null;
@@ -130,9 +202,17 @@ export function EmailComposer({
   selfAddress?: string;
   initialDraft?: EmailDraft | null;
   stackIndex: number;
+  // Forward-only: the original message's attachments (so they can be re-attached)
+  // and a resolver to fetch their bytes on demand (shared with EmailListReader's
+  // download logic — same DB-cache-then-gateway-fetch flow).
+  originalAttachments?: EmailAttachment[];
+  resolveAttachment?: (attachmentId: string) => Promise<{ data_b64: string; content_type: string | null } | null>;
 }) {
   const { toast } = useToast();
+  const { organization } = useAuth();
   const actions = useEmailActions(channelId, folderId);
+  const { data: caixas = [] } = useEmailChannels();
+  const caixa = channelId ? caixas.find((c) => c.id === channelId) : undefined;
   const editorRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -151,9 +231,28 @@ export function EmailComposer({
   const [subject, setSubject] = useState('');
   const [attachments, setAttachments] = useState<Attached[]>([]);
 
+  // The signature the gateway would apply on send (see commands.js applySignature)
+  // — shown INLINE while composing instead of being a server-side surprise the
+  // user only discovers after sending. 'reply'/'replyAll' use the reply default,
+  // everything else (new, forward) uses the new-message default, mirroring the
+  // gateway's own `p.inReplyTo ? reply : new` rule.
+  const signatureHtml = useMemo(() => {
+    const sigs = caixa?.metadata?.signatures || [];
+    if (!sigs.length) return '';
+    const sigId = (mode === 'reply' || mode === 'replyAll')
+      ? caixa?.metadata?.signature_default_reply
+      : caixa?.metadata?.signature_default_new;
+    const sig = sigId ? sigs.find((s) => s.id === sigId) : null;
+    if (!sig || !sig.html?.trim()) return '';
+    return `<br><br><div class="senvia-signature">--<br>${toEditorHtml(sig.html)}</div>`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caixa, mode]);
+
   // Compute initial field values once on mount.
   const initial = useMemo(() => {
     if (initialDraft) {
+      // A saved draft already carries its own signature (or the user removed
+      // it on purpose) — never re-inject one.
       return {
         to: initialDraft.to_addresses || [],
         cc: initialDraft.cc_addresses || [],
@@ -164,18 +263,18 @@ export function EmailComposer({
       };
     }
     if (!original || mode === 'new') {
-      return { to: [], cc: [], bcc: [], subject: '', bodyHtml: '', attachments: [] };
+      return { to: [], cc: [], bcc: [], subject: '', bodyHtml: signatureHtml, attachments: [] };
     }
     const from: EmailAddress = { name: original.from_name || '', address: original.from_address || '' };
     if (mode === 'forward') {
-      return { to: [], cc: [], bcc: [], subject: ensurePrefix(original.subject || '', 'Fwd:'), bodyHtml: quoteHtml(original), attachments: [] };
+      return { to: [], cc: [], bcc: [], subject: ensurePrefix(original.subject || '', 'Fwd:'), bodyHtml: signatureHtml + quoteHtml(original), attachments: [] };
     }
     const self = (selfAddress || '').toLowerCase();
     const ccAddrs = mode === 'replyAll'
       ? [...(original.to_addresses || []), ...(original.cc_addresses || [])]
           .filter((a) => a.address && a.address.toLowerCase() !== self && a.address.toLowerCase() !== from.address.toLowerCase())
       : [];
-    return { to: [from], cc: ccAddrs, bcc: [], subject: ensurePrefix(original.subject || '', 'Re:'), bodyHtml: quoteHtml(original), attachments: [] };
+    return { to: [from], cc: ccAddrs, bcc: [], subject: ensurePrefix(original.subject || '', 'Re:'), bodyHtml: signatureHtml + quoteHtml(original), attachments: [] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -192,6 +291,32 @@ export function EmailComposer({
     requestAnimationFrame(() => {
       if (editorRef.current) editorRef.current.innerHTML = initial.bodyHtml;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Forward-only: re-attach the original message's non-inline attachments. Each
+  // resolves independently (DB cache or a gateway fetch round-trip) and pops
+  // into the attachments row as it's ready — the user can start writing/sending
+  // immediately without waiting for every attachment to resolve first.
+  useEffect(() => {
+    if (mode !== 'forward' || !resolveAttachment || !originalAttachments?.length) return;
+    let cancelled = false;
+    for (const att of originalAttachments.filter((a) => !a.inline)) {
+      resolveAttachment(att.id).then((resolved) => {
+        if (cancelled || !resolved) return;
+        setAttachments((prev) => (prev.some((a) => a.filename === att.filename && a.size === (att.size ?? 0))
+          ? prev
+          : [...prev, {
+              filename: att.filename || 'anexo',
+              contentType: resolved.content_type || att.content_type || 'application/octet-stream',
+              b64: resolved.data_b64,
+              size: att.size ?? 0,
+            }]));
+      }).catch(() => {
+        toast({ title: `Não foi possível reencaminhar "${att.filename || 'um anexo'}"`, variant: 'destructive' });
+      });
+    }
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -338,7 +463,7 @@ export function EmailComposer({
           {/* Para */}
           <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
             <span className="w-12 shrink-0 text-xs text-muted-foreground">Para</span>
-            <EmailChipInput value={to} onChange={setTo} placeholder="nome@exemplo.com" />
+            <EmailChipInput value={to} onChange={setTo} placeholder="nome@exemplo.com" channelId={channelId} organizationId={organization?.id} />
             <div className="ml-2 flex shrink-0 gap-2 text-xs text-muted-foreground">
               {!showCc && <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowCc(true)}>Cc</button>}
               {!showBcc && <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowBcc(true)}>Cco</button>}
@@ -348,7 +473,7 @@ export function EmailComposer({
           {showCc && (
             <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
               <span className="w-12 shrink-0 text-xs text-muted-foreground">Cc</span>
-              <EmailChipInput value={cc} onChange={setCc} placeholder="cc@exemplo.com" />
+              <EmailChipInput value={cc} onChange={setCc} placeholder="cc@exemplo.com" channelId={channelId} organizationId={organization?.id} />
               <button type="button" className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { setShowCc(false); setCc([]); }}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
@@ -356,7 +481,7 @@ export function EmailComposer({
           {showBcc && (
             <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
               <span className="w-12 shrink-0 text-xs text-muted-foreground">Cco</span>
-              <EmailChipInput value={bcc} onChange={setBcc} placeholder="cco@exemplo.com" />
+              <EmailChipInput value={bcc} onChange={setBcc} placeholder="cco@exemplo.com" channelId={channelId} organizationId={organization?.id} />
               <button type="button" className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { setShowBcc(false); setBcc([]); }}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}

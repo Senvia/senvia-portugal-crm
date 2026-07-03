@@ -6,6 +6,7 @@ import {
   useInboxRealtime,
   useSendInboxMessage,
   useMarkConversationRead,
+  useMarkConversationUnread,
   useDownloadAttachment,
   useLoadOlderMessages,
   useStartConversation,
@@ -89,7 +90,8 @@ import {
   ArchiveRestore, UserPlus, Reply, ChevronUp, ChevronDown, Trash2, Pin, PinOff,
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
-  ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause,
+  ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
+  MailOpen,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -732,7 +734,14 @@ export default function Inbox() {
   const [drafts, setDrafts] = useState<Map<number, string>>(() => loadDraftsMap());
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
-  const [pending, setPending] = useState<Array<{ key: string; conversationId: number; content: string; at: number; sent?: boolean }>>([]);
+  const [pending, setPending] = useState<Array<{
+    key: string; conversationId: number; content: string; at: number; sent?: boolean;
+    // Local object-URL preview for an attachment being sent (image/video/voice) —
+    // real bytes, not a "📎 filename" placeholder, WhatsApp-style. Revoked once
+    // the bubble is pruned (see the prune effect and doSend's onError below).
+    previewUrl?: string;
+    previewKind?: OutgoingAttachment["kind"];
+  }>>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   // Pending outgoing attachments (picked/pasted/dropped files, not yet sent).
@@ -889,6 +898,7 @@ export default function Inbox() {
   const { data: searchResults = [] } = useSearchConversations(channelConfigured ? debouncedSearch : "");
   const sendMessage = useSendInboxMessage();
   const { mutate: markRead } = useMarkConversationRead();
+  const { mutate: markUnread } = useMarkConversationUnread();
   const download = useDownloadAttachment();
   const loadOlder = useLoadOlderMessages();
   const startConversation = useStartConversation();
@@ -1272,8 +1282,8 @@ export default function Inbox() {
   useEffect(() => {
     if (pending.length === 0) return;
     const prune = () =>
-      setPending((prev) =>
-        prev.filter((p) => {
+      setPending((prev) => {
+        const next = prev.filter((p) => {
           // Hard cap: never keep an optimistic bubble forever (covers attachment
           // bubbles and pendings of conversations that aren't currently open).
           if (Date.now() - p.at > 30000) return false;
@@ -1281,8 +1291,16 @@ export default function Inbox() {
           return !messages.some(
             (m) => m.outgoing && m.content === p.content && p.conversationId === selectedId,
           );
-        }),
-      );
+        });
+        // Revoke the local preview URLs of bubbles that just got pruned — the
+        // real message (with its own Chatwoot-hosted attachment) is in `messages`
+        // by now, so the throwaway local blob URL is no longer needed.
+        if (next.length !== prev.length) {
+          const keptKeys = new Set(next.map((p) => p.key));
+          for (const p of prev) if (!keptKeys.has(p.key) && p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        }
+        return next;
+      });
     prune();
     const t = window.setInterval(prune, 2000);
     return () => window.clearInterval(t);
@@ -1577,14 +1595,24 @@ export default function Inbox() {
   const peersHere = selectedId ? presence.get(selectedId) ?? [] : [];
 
   const doSend = useCallback(
-    async (rawText: string, attachment?: OutgoingAttachment) => {
+    // previewSource: the raw File/Blob behind an image/video/voice attachment —
+    // lets the optimistic bubble show the REAL picture/waveform instantly
+    // instead of a "📎 filename" placeholder for the 3-10s until Evolution's
+    // mirror lands the Chatwoot-hosted copy.
+    async (rawText: string, attachment?: OutgoingAttachment, previewSource?: File | Blob) => {
       if (!selectedId) return;
       // Optional signature — lets the customer know WHO is talking when the
       // whole team shares one number.
       const text = signing && rawText && myName ? `*${firstName(myName)}:*\n${rawText}` : rawText;
       const key = `${selectedId}-${Date.now()}-${Math.random()}`;
       const bubbleText = text || (attachment ? (attachment.kind === "voice" ? "🎵 Mensagem de voz" : `📎 ${attachment.filename}`) : "");
-      setPending((prev) => [...prev, { key, conversationId: selectedId, content: bubbleText, at: Date.now() }]);
+      const previewUrl = previewSource && attachment && attachment.kind !== "document"
+        ? URL.createObjectURL(previewSource)
+        : undefined;
+      setPending((prev) => [...prev, {
+        key, conversationId: selectedId, content: bubbleText, at: Date.now(),
+        previewUrl, previewKind: attachment?.kind,
+      }]);
       sendMessage.mutate(
         {
           conversationId: selectedId,
@@ -1601,7 +1629,11 @@ export default function Inbox() {
             setPending((prev) => prev.map((p) => (p.key === key ? { ...p, sent: true } : p)));
           },
           onError: (err) => {
-            setPending((prev) => prev.filter((p) => p.key !== key));
+            setPending((prev) => {
+              const removed = prev.find((p) => p.key === key);
+              if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+              return prev.filter((p) => p.key !== key);
+            });
             // Restore the text ONLY if the composer is still empty — never clobber
             // something the user has started typing since.
             if (rawText) setDraft((d) => d.trim() ? d : rawText);
@@ -1685,7 +1717,7 @@ export default function Inbox() {
             mimetype: list[i].file.type || "application/octet-stream",
             filename: list[i].file.name,
             kind: list[i].kind,
-          });
+          }, list[i].file);
         } catch {
           toast({ title: `Falha ao ler ${list[i].file.name}`, variant: "destructive" });
         }
@@ -1767,18 +1799,23 @@ export default function Inbox() {
     URL.revokeObjectURL(voice.url);
     try {
       const data = await fileToBase64(voice.blob);
-      await doSend("", { data, mimetype: voice.blob.type, filename: "voz.webm", kind: "voice" });
+      await doSend("", { data, mimetype: voice.blob.type, filename: "voz.webm", kind: "voice" }, voice.blob);
     } catch {
       toast({ title: "Falha ao enviar o áudio", variant: "destructive" });
     }
   };
 
   // ---- Pin ----
-  const togglePin = (id: number) => {
-    const next = pinned.includes(id) ? pinned.filter((p) => p !== id) : [...pinned, id];
-    setPinned(next);
-    localStorage.setItem(PINNED_KEY, JSON.stringify(next));
-  };
+  // Stable (useCallback + functional setState) so it can be passed to the
+  // memoized ConversationRow without defeating its memo on every keystroke —
+  // same concern as the MessageBubble callbacks further down.
+  const togglePin = useCallback((id: number) => {
+    setPinned((prev) => {
+      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
+      localStorage.setItem(PINNED_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   // ---- Snooze/reminder via calendar ----
   // Creates a follow-up event in the Agenda and a push notification that fires at
@@ -1827,13 +1864,14 @@ export default function Inbox() {
     createReminder(when);
   };
 
-  // ---- Conversation actions (used by the contact panel) ----
-  const handleToggleMute = async () => {
-    if (!selected) return;
-    const wasMuted = muted.includes(selected.id);
-    const next = wasMuted
-      ? muted.filter((m) => m !== selected.id)
-      : [...muted, selected.id];
+  // ---- Conversation actions (used by the contact panel AND the list's "⋮" menu) ----
+  // Generic so the list's per-row menu can mute/unmute ANY conversation, not
+  // just the currently open one. useCallback (deps limited to `muted`, which only
+  // changes on a mute/unmute itself) so ConversationRow's memo isn't defeated by
+  // every composer keystroke.
+  const toggleMuteFor = useCallback(async (id: number) => {
+    const wasMuted = muted.includes(id);
+    const next = wasMuted ? muted.filter((m) => m !== id) : [...muted, id];
     setMuted(next);
     saveMutedIds(next);
     // Sync to server so the push edge function can filter per-user
@@ -1845,7 +1883,8 @@ export default function Inbox() {
         .eq('organization_id', organization.id);
     }
     toast({ title: wasMuted ? "Notificações reativadas" : "Conversa silenciada" });
-  };
+  }, [muted, user?.id, organization?.id, toast]);
+  const handleToggleMute = () => selected && toggleMuteFor(selected.id);
 
   const handleExport = () => {
     if (!selected) return;
@@ -1908,6 +1947,16 @@ export default function Inbox() {
       },
     );
   };
+  // Generic sibling of handleToggleArchive for the list's "⋮" menu — archives/
+  // reopens ANY row, not just the currently open one. Stable (useCallback) for
+  // the same ConversationRow-memo reason as togglePin/toggleMuteFor above.
+  const handleArchiveToggleFor = useCallback((id: number, currentStatus: string) => {
+    const archived = currentStatus === "resolved";
+    toggleStatus.mutate(
+      { conversationId: id, status: archived ? "open" : "resolved" },
+      { onSuccess: () => toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" }) },
+    );
+  }, [toggleStatus, toast]);
 
   // Stable callbacks so memoized MessageBubble rows don't re-render on every
   // composer keystroke (when only `draft` changed).
@@ -2774,6 +2823,10 @@ export default function Inbox() {
                       draftPreview={c.id !== selectedId ? drafts.get(c.id) : undefined}
                       onSelect={setSelectedId}
                       onHover={prefetchMessages}
+                      onTogglePin={togglePin}
+                      onToggleMute={toggleMuteFor}
+                      onMarkUnread={markUnread}
+                      onArchiveToggle={handleArchiveToggleFor}
                     />
                   </div>
                 );
@@ -3073,17 +3126,34 @@ export default function Inbox() {
                       />
                     );
                   })}
-                  {visiblePending.map((p) => (
-                    <div key={p.key} className="mt-0.5 flex justify-end">
-                      <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
-                        <p className="whitespace-pre-wrap break-words">{p.content}</p>
-                        <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
-                          {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
-                          {p.sent ? "" : "a enviar..."}
-                        </p>
+                  {visiblePending.map((p) => {
+                    // The auto-generated placeholder ("📎 file.png" / "🎵 Mensagem de
+                    // voz") is redundant once the real preview renders — only show
+                    // `content` as text when the user actually typed a caption.
+                    const isPlaceholderText = p.content === "🎵 Mensagem de voz" || /^📎 /.test(p.content);
+                    return (
+                      <div key={p.key} className="mt-0.5 flex justify-end">
+                        <div className="max-w-[75%] space-y-1 rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
+                          {p.previewUrl && p.previewKind === "image" && (
+                            <img src={p.previewUrl} alt="" className="max-h-64 max-w-full rounded-lg object-contain" />
+                          )}
+                          {p.previewUrl && p.previewKind === "video" && (
+                            <video src={p.previewUrl} className="max-h-64 max-w-full rounded-lg" muted />
+                          )}
+                          {p.previewUrl && p.previewKind === "voice" && (
+                            <AudioPlayer url={p.previewUrl} outgoing />
+                          )}
+                          {(!p.previewUrl || !isPlaceholderText) && (
+                            <p className="whitespace-pre-wrap break-words">{p.content}</p>
+                          )}
+                          <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
+                            {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+                            {p.sent ? "" : "a enviar..."}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
               <div ref={bottomRef} />
@@ -4081,6 +4151,14 @@ const MessageBubble = memo(function MessageBubble({
   // Swipe/drag-to-reply — Pointer Events unify touch (mobile) and mouse (desktop).
   const dragRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const [dragX, setDragX] = useState(0);
+  // Long-press (touch only — desktop already has hover-revealed action buttons)
+  // opens a bottom-sheet action menu, WhatsApp-mobile-style. Cancelled by any
+  // real movement so it never fires mid-scroll or mid-swipe-to-reply.
+  const longPressTimerRef = useRef<number | null>(null);
+  const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current != null) { window.clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+  };
   const taskButton = onTask ? (
     <button
       type="button"
@@ -4102,18 +4180,28 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   return (
+    <>
     <div
       id={`m-${m.id}`}
       onPointerDown={(e) => {
         // Left button only for mouse; don't start a drag while editing.
         if (editing || (e.pointerType === "mouse" && e.button !== 0)) return;
         dragRef.current = { x: e.clientX, y: e.clientY, active: false };
+        if (e.pointerType === "touch") {
+          cancelLongPress();
+          longPressTimerRef.current = window.setTimeout(() => {
+            longPressTimerRef.current = null;
+            setActionsSheetOpen(true);
+          }, 500);
+        }
       }}
       onPointerMove={(e) => {
         const st = dragRef.current;
         if (!st) return;
         const dx = e.clientX - st.x;
         const dy = e.clientY - st.y;
+        // Any real movement means this is a scroll or a swipe, not a long-press.
+        if (longPressTimerRef.current != null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) cancelLongPress();
         // Lock to a horizontal drag only once it clearly dominates vertical scroll.
         if (!st.active && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
           st.active = true;
@@ -4122,12 +4210,13 @@ const MessageBubble = memo(function MessageBubble({
         if (st.active) setDragX(Math.max(-90, Math.min(90, dx)));
       }}
       onPointerUp={() => {
+        cancelLongPress();
         const st = dragRef.current;
         dragRef.current = null;
         if (st?.active && Math.abs(dragX) > 55 && m.wa_id) onReply(m);
         setDragX(0);
       }}
-      onPointerCancel={() => { dragRef.current = null; setDragX(0); }}
+      onPointerCancel={() => { cancelLongPress(); dragRef.current = null; setDragX(0); }}
       style={{ transform: dragX ? `translateX(${dragX}px)` : undefined, touchAction: "pan-y" }}
       className={cn(
         "group relative flex items-end gap-1",
@@ -4265,6 +4354,60 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       )}
     </div>
+    {/* Long-press action sheet (mobile) — desktop already has hover-revealed
+        buttons, so this is the touch equivalent for Responder/Copiar/Editar/Apagar. */}
+    {actionsSheetOpen && (
+      <Sheet open={actionsSheetOpen} onOpenChange={setActionsSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <div className="flex flex-col gap-0.5 pb-[env(safe-area-inset-bottom)] pt-2">
+            {m.wa_id && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); onReply(m); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+              >
+                <Reply className="h-4 w-4 text-muted-foreground" /> Responder
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setActionsSheetOpen(false); navigator.clipboard?.writeText(body || ""); }}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+            >
+              <FileText className="h-4 w-4 text-muted-foreground" /> Copiar texto
+            </button>
+            {onTask && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); onTask(m); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+              >
+                <ClipboardList className="h-4 w-4 text-muted-foreground" /> Criar tarefa
+              </button>
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); setEditDraft(body); setEditing(true); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+              >
+                <Pencil className="h-4 w-4 text-muted-foreground" /> Editar
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); onDelete(m); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" /> Apagar para todos
+              </button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    )}
+    </>
   );
 });
 
@@ -4461,6 +4604,10 @@ const ConversationRow = memo(function ConversationRow({
   draftPreview,
   onSelect,
   onHover,
+  onTogglePin,
+  onToggleMute,
+  onMarkUnread,
+  onArchiveToggle,
 }: {
   conversation: InboxConversation;
   active: boolean;
@@ -4481,17 +4628,26 @@ const ConversationRow = memo(function ConversationRow({
   onSelect: (id: number) => void;
   // Prefetch the thread on hover so the click opens instantly.
   onHover?: (id: number, altIds: number[]) => void;
+  // Row context menu ("⋮", hover-revealed) — WhatsApp Web-style quick actions
+  // without having to open the conversation first.
+  onTogglePin: (id: number) => void;
+  onToggleMute: (id: number) => void;
+  onMarkUnread: (id: number) => void;
+  onArchiveToggle: (id: number, currentStatus: string) => void;
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
   const isEmailCh = !!(conversation.channel?.toLowerCase().includes('email'));
   const sla = open ? slaLevel(conversation.waiting_since, isEmailCh) : null;
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(conversation.id)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(conversation.id); } }}
       onMouseEnter={() => onHover?.(conversation.id, conversation.alt_ids ?? [])}
       className={cn(
-        "flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
+        "group flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
         active && "bg-accent",
       )}
     >
@@ -4533,7 +4689,40 @@ const ConversationRow = memo(function ConversationRow({
                 {caixaLabel}
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
+            <span className="text-[10px] text-muted-foreground group-hover:hidden">{formatListDate(conversation.updated_at)}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Mais opções"
+                  className="hidden rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground group-hover:block"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={() => onTogglePin(conversation.id)}>
+                  {pinned ? <PinOff className="mr-2 h-3.5 w-3.5" /> : <Pin className="mr-2 h-3.5 w-3.5" />}
+                  {pinned ? "Desafixar" : "Fixar no topo"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToggleMute(conversation.id)}>
+                  {muted ? <Bell className="mr-2 h-3.5 w-3.5" /> : <BellOff className="mr-2 h-3.5 w-3.5" />}
+                  {muted ? "Reativar notificações" : "Silenciar"}
+                </DropdownMenuItem>
+                {conversation.unread_count === 0 && (
+                  <DropdownMenuItem onClick={() => onMarkUnread(conversation.id)}>
+                    <MailOpen className="mr-2 h-3.5 w-3.5" />
+                    Marcar como não lida
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => onArchiveToggle(conversation.id, conversation.status)}>
+                  {open
+                    ? <><Archive className="mr-2 h-3.5 w-3.5" /> Arquivar</>
+                    : <><ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Reabrir</>}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         {isEmailCh && conversation.email_subject && (
@@ -4595,6 +4784,6 @@ const ConversationRow = memo(function ConversationRow({
           {conversation.unread_count}
         </span>
       )}
-    </button>
+    </div>
   );
 });

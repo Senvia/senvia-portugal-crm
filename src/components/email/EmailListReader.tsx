@@ -21,41 +21,116 @@ import { useEmailActions } from '@/hooks/useEmailActions';
 import { EmailComposer, type ComposeMode } from './EmailComposer';
 import { initials, fmtListDate, fmtFullDate, fmtSize, addrText, folderLabel, ROLE_META } from './emailShared';
 
-// HTML body in a sandboxed, auto-sized iframe (consistent fonts).
-function EmailBody({ html, text }: { html: string | null; text: string | null }) {
+// 1x1 transparent GIF — placeholder src for images we haven't loaded (yet, or
+// ever, if the user never unblocks remote images).
+const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+// Matches an <img ...> tag's src attribute value (double or single quoted).
+const IMG_SRC_RE = /(<img\b[^>]*?\ssrc=)(["'])(.*?)\2/gi;
+// Standalone (non-global) check for "does this body have at least one remote
+// <img>" — used only to decide whether to show the unblock banner at all.
+function hasRemoteImage(html: string): boolean {
+  return /<img\b[^>]*\ssrc=["']https?:\/\//i.test(html);
+}
+
+// HTML body in a sandboxed, auto-sized iframe (consistent fonts). Blocks remote
+// images by default (Gmail/Outlook-style anti-tracking-pixel behaviour — a
+// sender can otherwise tell you opened the email the instant it loads) and
+// resolves `cid:` embedded images (logos, signatures) from the message's own
+// inline attachments, which the browser can never fetch directly.
+function EmailBody({
+  html, text, inlineAttachments, resolveAttachment,
+}: {
+  html: string | null;
+  text: string | null;
+  inlineAttachments: EmailAttachment[];
+  resolveAttachment: (id: string) => Promise<{ data_b64: string; content_type: string | null } | null>;
+}) {
   const ref = useRef<HTMLIFrameElement>(null);
+  // Blocked by default per message view (EmailListReader remounts this with a
+  // `key` per message id, so a freshly opened email always starts blocked).
+  const [imagesBlocked, setImagesBlocked] = useState(true);
+  const [cidUrls, setCidUrls] = useState<Record<string, string>>({});
+  const hadRemoteImages = useMemo(() => (html ? hasRemoteImage(html) : false), [html]);
+
+  // Resolve every cid: reference actually used in this body, once, from the
+  // message's own inline attachments (never a network fetch to a 3rd party).
+  useEffect(() => {
+    if (!html || inlineAttachments.length === 0) return;
+    const referenced = new Set<string>();
+    for (const m of html.matchAll(/cid:([^"'\s)]+)/gi)) referenced.add(m[1].toLowerCase());
+    if (referenced.size === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const att of inlineAttachments) {
+        const cid = (att.content_id || '').replace(/^<|>$/g, '').toLowerCase();
+        if (!cid || !referenced.has(cid) || cidUrls[cid]) continue;
+        const resolved = await resolveAttachment(att.id);
+        if (cancelled || !resolved) continue;
+        const url = `data:${resolved.content_type || 'application/octet-stream'};base64,${resolved.data_b64}`;
+        setCidUrls((prev) => ({ ...prev, [cid]: url }));
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, inlineAttachments]);
+
   const srcDoc = useMemo(() => {
     const font = "-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    let body: string;
     if (html) {
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
-        *{box-sizing:border-box}
-        body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;word-break:break-word;overflow-wrap:break-word}
-        a{color:#2563eb}img{max-width:100%;height:auto}
-        blockquote{margin:0 0 0 12px;padding-left:12px;border-left:3px solid #e5e7eb;color:#6b7280}
-      </style></head><body>${html}</body></html>`;
+      body = html.replace(IMG_SRC_RE, (full, prefix, quote, src) => {
+        const cidMatch = /^cid:(.+)$/i.exec(src);
+        if (cidMatch) {
+          const url = cidUrls[cidMatch[1].toLowerCase()];
+          return `${prefix}${quote}${url || BLANK_PIXEL}${quote}`;
+        }
+        if (/^https?:\/\//i.test(src) && imagesBlocked) {
+          return `${prefix}${quote}${BLANK_PIXEL}${quote} data-original-src=${quote}${src}${quote}`;
+        }
+        return full;
+      });
+    } else {
+      body = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
-    const escaped = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
-      body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;white-space:pre-wrap;word-break:break-word}
-    </style></head><body>${escaped}</body></html>`;
-  }, [html, text]);
+      *{box-sizing:border-box}
+      body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;word-break:break-word;overflow-wrap:break-word;${html ? '' : 'white-space:pre-wrap'}}
+      a{color:#2563eb}img{max-width:100%;height:auto}
+      blockquote{margin:0 0 0 12px;padding-left:12px;border-left:3px solid #e5e7eb;color:#6b7280}
+    </style></head><body>${body}</body></html>`;
+  }, [html, text, cidUrls, imagesBlocked]);
 
   return (
-    <iframe
-      ref={ref}
-      srcDoc={srcDoc}
-      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      title="Email"
-      className="w-full border-0"
-      style={{ height: 200 }}
-      onLoad={() => {
-        try {
-          const doc = ref.current?.contentDocument;
-          const h = doc?.documentElement?.scrollHeight ?? 0;
-          if (h && ref.current) ref.current.style.height = `${h + 12}px`;
-        } catch { /* ignore */ }
-      }}
-    />
+    <div>
+      {hadRemoteImages && imagesBlocked && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          <span>Imagens externas bloqueadas (proteção contra rastreio).</span>
+          <button
+            type="button"
+            onClick={() => setImagesBlocked(false)}
+            className="shrink-0 rounded-md bg-amber-200/70 px-2 py-1 font-medium text-amber-900 hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-200"
+          >
+            Mostrar imagens
+          </button>
+        </div>
+      )}
+      <iframe
+        ref={ref}
+        srcDoc={srcDoc}
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        title="Email"
+        className="w-full border-0"
+        style={{ height: 200 }}
+        onLoad={() => {
+          try {
+            const doc = ref.current?.contentDocument;
+            const h = doc?.documentElement?.scrollHeight ?? 0;
+            if (h && ref.current) ref.current.style.height = `${h + 12}px`;
+          } catch { /* ignore */ }
+        }}
+      />
+    </div>
   );
 }
 
@@ -155,8 +230,9 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [starredOnly, setStarredOnly] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 350); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { setSearch(''); setDebounced(''); setUnreadOnly(false); }, [folderId, channelId]);
+  useEffect(() => { setSearch(''); setDebounced(''); setUnreadOnly(false); setStarredOnly(false); }, [folderId, channelId]);
   const searching = debounced.trim().length >= 2;
 
   const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(isDraftsFolder ? null : folderId);
@@ -165,7 +241,13 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
 
   const unreadCount = folderMessages.filter((m) => !m.seen).length;
   const baseMessages = searching ? searchResults : folderMessages;
-  const messages = (!searching && unreadOnly) ? baseMessages.filter((m) => !m.seen) : baseMessages;
+  const messages = useMemo(() => {
+    if (searching) return baseMessages;
+    let list = baseMessages;
+    if (unreadOnly) list = list.filter((m) => !m.seen);
+    if (starredOnly) list = list.filter((m) => m.flagged);
+    return list;
+  }, [baseMessages, searching, unreadOnly, starredOnly]);
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened } = useEmailMessage(messageId);
 
@@ -233,10 +315,18 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     mode: ComposeMode;
     original: EmailMessage | null;
     initialDraft: EmailDraft | null;
+    // Forward-only: the original message's attachments, so the composer can
+    // re-attach them (see EmailComposer's originalAttachments prop).
+    originalAttachments: EmailAttachment[];
   }
   const [composes, setComposes] = useState<ComposeInstance[]>([]);
-  const addCompose = (mode: ComposeMode, original: EmailMessage | null = null, initialDraft: EmailDraft | null = null) => {
-    setComposes((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, mode, original, initialDraft }]);
+  const addCompose = (
+    mode: ComposeMode,
+    original: EmailMessage | null = null,
+    initialDraft: EmailDraft | null = null,
+    originalAttachments: EmailAttachment[] = [],
+  ) => {
+    setComposes((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, mode, original, initialDraft, originalAttachments }]);
   };
   const closeCompose = (id: string) => setComposes((prev) => prev.filter((c) => c.id !== id));
 
@@ -285,21 +375,31 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
 
   const { toast } = useToast();
   const [dlId, setDlId] = useState<string | null>(null);
+  // Shared attachment-body resolver: checks the DB cache first, else asks the
+  // gateway to fetch it (fetch_attachment command) and polls briefly for the
+  // result. Used both for explicit downloads and for resolving inline `cid:`
+  // images in the message body (EmailBody below).
+  const resolveAttachment = useCallback(async (attachmentId: string): Promise<{ data_b64: string; content_type: string | null } | null> => {
+    const read = () => attachDb.from('email_attachments').select('data_b64, content_type').eq('id', attachmentId).single();
+    let { data } = await read();
+    if (!data?.data_b64) {
+      await actions.fetchAttachment(attachmentId);
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const r = await read();
+        if (r.data?.data_b64) { data = r.data; break; }
+      }
+    }
+    return data?.data_b64 ? { data_b64: data.data_b64, content_type: data.content_type ?? null } : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actions.fetchAttachment]);
+
   const downloadAttachment = async (a: EmailAttachment) => {
     setDlId(a.id);
     try {
-      const read = () => attachDb.from('email_attachments').select('data_b64, filename, content_type').eq('id', a.id).single();
-      let { data } = await read();
-      if (!data?.data_b64) {
-        await actions.fetchAttachment(a.id);
-        for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 1200));
-          const r = await read();
-          if (r.data?.data_b64) { data = r.data; break; }
-        }
-      }
-      if (!data?.data_b64) throw new Error('Tempo esgotado a obter o anexo');
-      triggerB64Download(data.filename || a.filename || 'anexo', data.content_type || a.content_type, data.data_b64);
+      const resolved = await resolveAttachment(a.id);
+      if (!resolved) throw new Error('Tempo esgotado a obter o anexo');
+      triggerB64Download(a.filename || 'anexo', resolved.content_type || a.content_type, resolved.data_b64);
     } catch (e) {
       toast({ title: 'Falha ao descarregar', description: (e as Error).message, variant: 'destructive' });
     } finally {
@@ -393,19 +493,31 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               )}
             </div>
           )}
-          {/* Unread filter + mark-all-read */}
+          {/* Unread / starred filters + mark-all-read */}
           {!isDraftsFolder && !searching && !hasSelection && (
             <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={toggleUnread}
-                className={cn(
-                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                  unreadOnly ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:bg-accent',
-                )}
-              >
-                Não lidos{folderUnread > 0 ? ` (${folderUnread})` : ''}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={toggleUnread}
+                  className={cn(
+                    'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                    unreadOnly ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  Não lidos{folderUnread > 0 ? ` (${folderUnread})` : ''}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStarredOnly((s) => !s)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                    starredOnly ? 'border-amber-400 bg-amber-400/10 text-amber-600' : 'border-input text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  Com estrela
+                </button>
+              </div>
               {folderUnread > 0 && (
                 <button
                   type="button"
@@ -510,7 +622,15 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                     <div className="flex items-center gap-2">
                       {!m.seen && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
                       <span className={cn('min-w-0 flex-1 truncate text-sm', !m.seen ? 'font-bold' : 'font-medium')}>{who}</span>
-                      {m.flagged && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                      {/* Star: always clickable, visible on hover (or always if already starred) */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); actions.setFlag(m.id, !m.flagged); }}
+                        className={cn('shrink-0 transition-opacity', m.flagged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
+                        title={m.flagged ? 'Remover estrela' : 'Marcar com estrela'}
+                      >
+                        <Star className={cn('h-3.5 w-3.5', m.flagged ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground hover:text-amber-500')} />
+                      </button>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{fmtListDate(m.date)}</span>
                     </div>
                     <span className={cn('truncate text-sm', !m.seen ? 'font-semibold text-foreground' : 'text-foreground/80')}>
@@ -521,15 +641,25 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                       <span className="truncate text-xs text-muted-foreground">{m.snippet || ''}</span>
                     </div>
                   </div>
-                  {/* Trash button — appears on hover */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); actions.trash(m.id); }}
-                    className="shrink-0 self-start pt-1.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                    title="Apagar"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {/* Quick actions — appear on hover (archive skipped in Rascunhos, which never reaches here) */}
+                  <div className="flex shrink-0 items-start gap-0.5 self-start pt-1.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); actions.archive(m.id); }}
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Arquivar"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); actions.trash(m.id); }}
+                      className="text-muted-foreground hover:text-destructive"
+                      title="Apagar"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -579,7 +709,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               <Button size="sm" onClick={() => addCompose('reply', opened.message)}>
                 <Reply className="mr-1.5 h-4 w-4" /> Responder
               </Button>
-              <Button size="sm" variant="outline" className="hidden sm:inline-flex" onClick={() => addCompose('forward', opened.message)}>
+              <Button size="sm" variant="outline" className="hidden sm:inline-flex" onClick={() => addCompose('forward', opened.message, null, opened.attachments)}>
                 <Forward className="mr-1.5 h-4 w-4" /> Reencaminhar
               </Button>
               <div className="flex-1" />
@@ -600,7 +730,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                 <PopoverContent align="end" className="w-56 p-1">
                   {([
                     { icon: ReplyAll, label: 'Responder a todos', run: () => addCompose('replyAll', opened.message) },
-                    { icon: Forward, label: 'Reencaminhar', run: () => addCompose('forward', opened.message), mobileOnly: true },
+                    { icon: Forward, label: 'Reencaminhar', run: () => addCompose('forward', opened.message, null, opened.attachments), mobileOnly: true },
                     { icon: MailOpen, label: 'Marcar como não lida', run: () => act(() => actions.setRead(opened.message.id, false)) },
                     { icon: Archive, label: 'Arquivar', run: () => act(() => actions.archive(opened.message.id)) },
                     { icon: ShieldAlert, label: 'Marcar como spam', run: () => act(() => actions.spam(opened.message.id)) },
@@ -689,7 +819,15 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
 
               <div className="rounded-lg border bg-white p-4 dark:bg-card">
                 {opened.message.body_fetched
-                  ? <EmailBody html={opened.message.html_body} text={opened.message.text_body} />
+                  ? (
+                    <EmailBody
+                      key={opened.message.id}
+                      html={opened.message.html_body}
+                      text={opened.message.text_body}
+                      inlineAttachments={opened.attachments.filter((a) => a.inline)}
+                      resolveAttachment={resolveAttachment}
+                    />
+                  )
                   : <div className="flex items-center gap-2 py-6 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar conteúdo...</span></div>}
               </div>
             </div>
@@ -709,6 +847,8 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
           selfAddress={selfAddress}
           initialDraft={c.initialDraft}
           stackIndex={i}
+          originalAttachments={c.originalAttachments}
+          resolveAttachment={resolveAttachment}
         />
       ))}
     </>

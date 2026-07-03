@@ -91,6 +91,11 @@ function applySignature(caixa, p) {
   const m = caixa.meta || {};
   const sigs = Array.isArray(m.signatures) ? m.signatures : [];
   if (!sigs.length) return p;
+  // The composer now shows the signature INLINE while writing (senvia-signature
+  // marker div) so the user sees it before sending, instead of it being a
+  // server-side surprise appended after the quoted text. Skip re-adding it here
+  // when it's already in the body — otherwise every send would carry two copies.
+  if (p.html && p.html.includes('senvia-signature')) return p;
   const id = p.inReplyTo ? m.signature_default_reply : m.signature_default_new;
   const sig = id ? sigs.find((s) => s.id === id) : null;
   if (!sig || !String(sig.html || '').trim()) return p;
