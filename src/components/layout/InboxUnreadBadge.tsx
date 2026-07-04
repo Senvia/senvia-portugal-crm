@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
+import { useWhatsappChannel, useMessagingChannels } from "@/hooks/useMessagingChannels";
 import { useInboxUnreadTotal } from "@/hooks/useChatwootInbox";
 import { cn } from "@/lib/utils";
 
@@ -8,12 +8,20 @@ import { cn } from "@/lib/utils";
 // browser tab shows new messages even when the user is on another page.
 export function InboxUnreadBadge({ className }: { className?: string }) {
   const { channel } = useWhatsappChannel();
-  const connected = channel?.status === "connected";
+  const { data: channels = [] } = useMessagingChannels();
+  // Same rule as the Inbox page's channelConfigured: ANY connected caixa counts —
+  // an org with only Instagram/Messenger (no WhatsApp) still gets its badge.
+  const connected = channel?.status === "connected" || channels.some((c) => c.status === "connected");
   const { total } = useInboxUnreadTotal(connected);
 
   useEffect(() => {
     const baseTitle = document.title.replace(/^\(\d+\)\s*/, "");
     document.title = total > 0 ? `(${total}) ${baseTitle}` : baseTitle;
+    // Unmounting with unreads (e.g. switching to an org without inbox) must not
+    // leave a stale "(3)" stuck in the tab title.
+    return () => {
+      document.title = document.title.replace(/^\(\d+\)\s*/, "");
+    };
   }, [total]);
 
   if (!connected || total <= 0) return null;

@@ -125,7 +125,10 @@ function rollbackConversations(
 
 // Append a realtime-delivered message to every message cache that contains the
 // given conversation (the open thread, whatever its merged altIds). Deduped by
-// id so the later reconciling refetch never double-counts. Key shape:
+// id so the later reconciling refetch never double-counts; a repeated id UPDATES
+// the cached entry in place (message_updated re-broadcasts once Chatwoot finishes
+// downloading media — without the replace, the bubble kept the attachment-less
+// first version until the next full refetch). Key shape:
 // ['inbox-messages', orgId, conversationId, altIdsCsv].
 function appendMessageToCaches(
   queryClient: QueryClient,
@@ -143,7 +146,12 @@ function appendMessageToCaches(
     if (!belongs) continue;
     queryClient.setQueryData<InboxMessage[]>(cache.queryKey, (old) => {
       if (!old) return old; // thread not loaded yet — let the refetch populate it
-      if (old.some((m) => m.id === msg.id)) return old;
+      const idx = old.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const next = old.slice();
+        next[idx] = msg;
+        return next;
+      }
       return [...old, msg];
     });
   }
@@ -153,10 +161,16 @@ function appendMessageToCaches(
 // lands in Chatwoot (incoming, or our own send mirrored back). Refetching on the
 // event makes receiving near-instant; polling becomes a relaxed fallback.
 // Returns `live` so callers can stretch their poll intervals while connected.
-export function useInboxRealtime(): boolean {
+// `getOpenConversationId` (ref-backed getter, optional) tells the handler which
+// thread the agent is LOOKING at, so an incoming message there doesn't flash the
+// unread badge / trigger the beep only to be auto-marked-read a moment later.
+export function useInboxRealtime(getOpenConversationId?: () => number | null): boolean {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const [live, setLive] = useState(false);
+  // Keep the latest getter without resubscribing the channel.
+  const getOpenRef = useRef(getOpenConversationId);
+  getOpenRef.current = getOpenConversationId;
 
   useEffect(() => {
     if (!organization?.id) return;
@@ -188,17 +202,29 @@ export function useInboxRealtime(): boolean {
             : msg.created_at
               ? Math.floor(new Date(msg.created_at).getTime() / 1000)
               : Math.floor(Date.now() / 1000);
+          // An incoming message on the thread the agent is READING (tab visible)
+          // is auto-marked-read a moment later — bumping unread here would just
+          // flash the badge and fire the beep for a chat they're looking at.
+          // openId can be the merged row's primary OR one of its alts, so the
+          // row-level check below matches both.
+          const openId = document.visibilityState === 'visible'
+            ? getOpenRef.current?.() ?? null
+            : null;
           patchConversations(
             queryClient, orgId,
             (c) => c.id === convId || (c.alt_ids ?? []).includes(convId),
-            (c) => ({
-              last_message: msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message),
-              last_outgoing: msg.outgoing,
-              last_status: msg.status ?? null,
-              updated_at: createdAtSec,
-              unread_count: msg.outgoing ? c.unread_count : c.unread_count + 1,
-              waiting_since: msg.outgoing ? null : createdAtSec,
-            }),
+            (c) => {
+              const isOpenRow = openId != null
+                && (c.id === openId || (c.alt_ids ?? []).includes(openId));
+              return {
+                last_message: msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message),
+                last_outgoing: msg.outgoing,
+                last_status: msg.status ?? null,
+                updated_at: createdAtSec,
+                unread_count: msg.outgoing || isOpenRow ? c.unread_count : c.unread_count + 1,
+                waiting_since: msg.outgoing ? null : createdAtSec,
+              };
+            },
           );
         }
         // AI task suggestions land a few seconds after the message — refresh
@@ -514,16 +540,35 @@ export function useInboxUnreadTotal(enabled = true) {
 // Passing altIds merges the threads of the contact's other conversations into one.
 export function useInboxMessages(conversationId: number | null, altIds: number[] = [], live = false) {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
   const allIds = conversationId ? [conversationId, ...altIds] : [];
+  const queryKey = ['inbox-messages', organization?.id, conversationId, altIds.join(',')];
   return useQuery({
-    queryKey: ['inbox-messages', organization?.id, conversationId, altIds.join(',')],
+    queryKey,
     queryFn: async (): Promise<InboxMessage[]> => {
       if (!organization?.id || !conversationId) return [];
       const res = await invokeInbox<{ messages: InboxMessage[] }>(organization.id, {
         action: 'get_messages',
         conversation_ids: allIds,
       });
-      return res.messages || [];
+      const fetched = res.messages || [];
+      // Merge-grace: keep very recent cache-only messages (landed via the
+      // realtime broadcast append) that this GET doesn't include yet — under
+      // load, Chatwoot's read API can lag its own webhook by a few seconds.
+      // Without this, the refetch "un-appends" a message that was already on
+      // screen (it flickers away and comes back on a later poll).
+      const cached = queryClient.getQueryData<InboxMessage[]>(queryKey);
+      if (!cached?.length) return fetched;
+      const fetchedIds = new Set(fetched.map((m) => m.id));
+      const now = Date.now();
+      const grace = cached.filter((m) => {
+        if (fetchedIds.has(m.id)) return false;
+        const ms = typeof m.created_at === 'number'
+          ? m.created_at * 1000
+          : m.created_at ? Date.parse(m.created_at) : 0;
+        return ms > 0 && now - ms < 20_000;
+      });
+      return grace.length > 0 ? [...fetched, ...grace] : fetched;
     },
     enabled: !!organization?.id && !!conversationId,
     // Realtime is the primary freshness path; polling is the safety net. When
@@ -688,6 +733,20 @@ export function useDownloadAttachment() {
   };
 }
 
+export interface SendMessageVars {
+  conversationId: number;
+  content: string;
+  contactPhone?: string | null;
+  inboxId?: number | null;
+  attachment?: OutgoingAttachment;
+  quotedId?: string | null;
+}
+
+// Sends are DISPATCHED strictly in order. Two quick sends used to fire two
+// parallel edge-function calls, and Evolution could deliver them to WhatsApp
+// inverted — the queue guarantees the first message leaves before the second.
+let sendChain: Promise<unknown> = Promise.resolve();
+
 // Send a reply on a conversation (text, attachment, and/or quoting a message).
 export function useSendInboxMessage() {
   const { organization } = useAuth();
@@ -700,26 +759,26 @@ export function useSendInboxMessage() {
       inboxId,
       attachment,
       quotedId,
-    }: {
-      conversationId: number;
-      content: string;
-      contactPhone?: string | null;
-      inboxId?: number | null;
-      attachment?: OutgoingAttachment;
-      quotedId?: string | null;
-    }) => {
+    }: SendMessageVars) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox<{ ok: boolean }>(organization.id, {
-        action: 'send_message',
-        conversation_id: conversationId,
-        content,
-        // Passing the phone lets the edge function skip a Chatwoot lookup.
-        contact_phone: contactPhone ?? undefined,
-        // Routes the reply through the right WhatsApp instance (multi-account).
-        inbox_id: inboxId ?? undefined,
-        attachment,
-        quoted_id: quotedId ?? undefined,
-      });
+      const orgId = organization.id;
+      const dispatch = () =>
+        invokeInbox<{ ok: boolean }>(orgId, {
+          action: 'send_message',
+          conversation_id: conversationId,
+          content,
+          // Passing the phone lets the edge function skip a Chatwoot lookup.
+          contact_phone: contactPhone ?? undefined,
+          // Routes the reply through the right WhatsApp instance (multi-account).
+          inbox_id: inboxId ?? undefined,
+          attachment,
+          quoted_id: quotedId ?? undefined,
+        });
+      // Chain behind the previous send whether it succeeded or failed — one
+      // failed message must not block the rest of the queue.
+      const run = sendChain.then(dispatch, dispatch);
+      sendChain = run.then(() => undefined, () => undefined);
+      return run;
     },
     // Optimistic: the conversation row updates instantly (preview + jumps to the
     // top); the thread bubble is handled by the page's `pending` mechanism.
@@ -738,7 +797,14 @@ export function useSendInboxMessage() {
     }),
     onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id, variables.conversationId] });
+      // Reconcile AFTER the mirror has had time to land in Chatwoot. An instant
+      // refetch here was a wasted round trip on every send (the mirror is never
+      // there yet) and piled load on an already-slow Chatwoot during bursts —
+      // the realtime broadcast covers the instant path; this is the safety net.
+      const orgId = organization?.id;
+      window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId, variables.conversationId] });
+      }, 2500);
     },
   });
 }

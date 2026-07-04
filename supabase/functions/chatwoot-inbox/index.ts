@@ -341,6 +341,32 @@ const MEDIA_TYPES: Record<string, string> = {
 // Org -> Chatwoot creds cache (60s TTL): saves a DB round trip on EVERY call.
 // Auth still runs per request — this only caches the org's account id + token.
 const orgCwCache = new Map<string, { v: { accountId: number; token: string }; at: number }>();
+
+// Per-org channel-routing cache (30s TTL): channel type + Evolution instance per
+// Chatwoot inbox. send_message paid TWO messaging_channels queries on EVERY
+// send (the email-channel check + the instance lookup) — pure latency between
+// hitting Enter and the message reaching WhatsApp. Channel wiring changes
+// rarely; update_groups invalidates explicitly, the TTL bounds the rest.
+type ChannelRoute = {
+  channel_type: string | null;
+  evolution_instance: string | null;
+  chatwoot_inbox_id: number | null;
+};
+const routesCache = new Map<string, { v: ChannelRoute[]; at: number }>();
+async function getChannelRoutes(
+  admin: ReturnType<typeof createClient>,
+  organizationId: string,
+): Promise<ChannelRoute[]> {
+  const hit = routesCache.get(organizationId);
+  if (hit && Date.now() - hit.at < 30_000) return hit.v;
+  const { data } = await admin
+    .from('messaging_channels')
+    .select('channel_type, evolution_instance, chatwoot_inbox_id')
+    .eq('organization_id', organizationId);
+  const v = (data ?? []) as ChannelRoute[];
+  routesCache.set(organizationId, { v, at: Date.now() });
+  return v;
+}
 async function getOrgChatwootCached(
   admin: ReturnType<typeof createClient>,
   organizationId: string,
@@ -408,13 +434,10 @@ Deno.serve(async (req) => {
     const getInstance = async (): Promise<string> => {
       if (_instance) return _instance;
       let inst = instanceNameForOrg(organization_id);
-      const { data: chs } = await auth.admin
-        .from('messaging_channels')
-        .select('evolution_instance, chatwoot_inbox_id')
-        .eq('organization_id', organization_id);
-      if (chs && chs.length) {
+      const chs = await getChannelRoutes(auth.admin, organization_id);
+      if (chs.length) {
         const inboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
-        const match = inboxId != null ? chs.find((c: any) => c.chatwoot_inbox_id === inboxId) : null;
+        const match = inboxId != null ? chs.find((c) => c.chatwoot_inbox_id === inboxId) : null;
         if (match?.evolution_instance) inst = match.evolution_instance;
         else if (chs.length === 1 && chs[0].evolution_instance) inst = chs[0].evolution_instance;
       }
@@ -626,13 +649,10 @@ Deno.serve(async (req) => {
       // Detect by matching the inbox_id against email channels in the org.
       const sendInboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
       if (sendInboxId) {
-        const { data: emailCh } = await auth.admin
-          .from('messaging_channels')
-          .select('channel_type')
-          .eq('organization_id', organization_id)
-          .eq('chatwoot_inbox_id', sendInboxId)
-          .eq('channel_type', 'email')
-          .maybeSingle();
+        const routes = await getChannelRoutes(auth.admin, organization_id);
+        const emailCh = routes.find(
+          (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'email',
+        );
         if (emailCh) {
           // Email: let Chatwoot handle SMTP delivery.
           if (attachment) return json({ error: 'Anexos em email ainda não suportados nesta versão' }, 422);
@@ -1151,6 +1171,7 @@ Deno.serve(async (req) => {
       // groupsInboxes just changed — drop cached visibility for this org so the
       // toggle takes effect on the very next list_conversations, not up to VISIBILITY_TTL_MS later.
       for (const k of [...visCache.keys()]) if (k.startsWith(`${organization_id}:`)) visCache.delete(k);
+      routesCache.delete(organization_id);
 
       // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
       if (ch.evolution_instance) {

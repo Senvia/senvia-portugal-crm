@@ -47,6 +47,7 @@ import {
   InboxMessage,
   OutgoingAttachment,
   PresencePeer,
+  SendMessageVars,
   useInboxPresence,
   useTranscribeAudio,
 } from "@/hooks/useChatwootInbox";
@@ -369,7 +370,7 @@ const EMOJI_MAP: Record<string, string> = {
   ":foguete": "🚀", ":lancar": "🚀", ":acelerar": "🚀", ":alvo": "🎯", ":acertar": "🎯", ":presente": "🎁", ":presentear": "🎁", ":trofeu": "🏆",
   ":vencedor": "🏆", ":lampada": "💡", ":ideia": "💡", ":pino": "📌", ":fixar": "📌", ":chave": "🔑", ":escudo": "🛡️", ":seguro": "🛡️",
   ":nota": "🎵", ":musica": "🎵", ":documento": "📝", ":escrever": "📝", ":lapis": "✏️", ":editar": "✏️", ":computador": "🖥️", ":pc": "🖥️",
-  ":telemovel": "📱", ":mobile": "📱", ":cafe": "☕", ":pizza": "🍕", ":pizza": "🍕",
+  ":telemovel": "📱", ":mobile": "📱", ":cafe": "☕", ":pizza": "🍕",
   ":cao": "🐶", ":cachorro": "🐶", ":gato": "🐱", ":panda": "🐼", ":sapo": "🐸", ":passaro": "🐦", ":abelha": "🐝", ":borboleta": "🦋", ":polvo": "🐙",
   ":golfinho": "🐬", ":tubarao": "🦈", ":elefante": "🐘", ":girafa": "🦒", ":raposa": "🦊", ":coelho": "🐰", ":urso": "🐻", ":leao": "🦁", ":tigre": "🐯",
   ":onda": "👋", ":tchau": "👋", ":adeus": "👋", ":boa_sorte": "🤞", ":cruzado": "🤞", ":paz": "✌️", ":vitoria": "✌️",
@@ -786,14 +787,21 @@ export default function Inbox() {
   const [drafts, setDrafts] = useState<Map<number, string>>(() => loadDraftsMap());
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
-  const [pending, setPending] = useState<Array<{
+  interface PendingBubble {
     key: string; conversationId: number; content: string; at: number; sent?: boolean;
+    // Send failed — the bubble stays visible in an error state with retry/discard
+    // (WhatsApp-style) instead of silently vanishing from the thread.
+    failed?: boolean;
+    // Exact mutation payload, kept so "Tentar novamente" resends precisely what
+    // failed (same signature/quote/attachment).
+    retry?: SendMessageVars;
     // Local object-URL preview for an attachment being sent (image/video/voice) —
     // real bytes, not a "📎 filename" placeholder, WhatsApp-style. Revoked once
-    // the bubble is pruned (see the prune effect and doSend's onError below).
+    // the bubble is pruned (see the prune effect and discardPending below).
     previewUrl?: string;
     previewKind?: OutgoingAttachment["kind"];
-  }>>([]);
+  }
+  const [pending, setPending] = useState<PendingBubble[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   // Contact panel: media / docs / links gallery dialog.
@@ -910,7 +918,11 @@ export default function Inbox() {
   const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
-  const live = useInboxRealtime();
+  // The getter tells the handler which thread is being read, so it doesn't
+  // bump unread / beep for a message arriving on the OPEN conversation.
+  const selectedIdRef = useRef<number | null>(null);
+  selectedIdRef.current = selectedId;
+  const live = useInboxRealtime(() => selectedIdRef.current);
   const { data: conversations = [], isLoading: loadingConvos, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
   // Synthetic conversation for the draft (id < 0 so it never collides with a real
   // Chatwoot id). selectedId stays null for drafts, so message fetch / mark-read /
@@ -1410,20 +1422,42 @@ export default function Inbox() {
   }, []);
 
   // Drop optimistic bubbles once the real (mirrored) message arrives in the feed.
-  // Attachment/voice bubbles never text-match the mirror, so confirmed ("sent")
-  // bubbles also expire after 8s — by then the mirror is in the thread.
+  // Three rules learned the hard way (each was a visible "message vanished" bug):
+  //  1. Only messages that arrived AFTER the bubble was sent may claim it — an
+  //     OLD outgoing "ok" in the history must not swallow a fresh "ok" the
+  //     instant it's sent (message invisible until the mirror landed).
+  //  2. One mirror claims ONE bubble — sending the same text twice must not let
+  //     the first mirror prune both bubbles.
+  //  3. No early expiry for confirmed bubbles: the old 8s timeout made messages
+  //     disappear whenever Chatwoot was slow to receive the mirror, then pop
+  //     back seconds later. Attachment bubbles now match any outgoing message
+  //     with attachments (instead of expiring blind); 45s is the hard cap.
   useEffect(() => {
     if (pending.length === 0) return;
     const prune = () =>
       setPending((prev) => {
+        const claimed = new Set<number>();
         const next = prev.filter((p) => {
-          // Hard cap: never keep an optimistic bubble forever (covers attachment
-          // bubbles and pendings of conversations that aren't currently open).
-          if (Date.now() - p.at > 30000) return false;
-          if (p.sent && Date.now() - p.at > 8000) return false;
-          return !messages.some(
-            (m) => m.outgoing && m.content === p.content && p.conversationId === selectedId,
-          );
+          // Failed bubbles stay until the user retries or discards them.
+          if (p.failed) return true;
+          // Hard cap: never keep an optimistic bubble forever (covers lost
+          // broadcasts and bubbles of conversations that aren't open).
+          if (Date.now() - p.at > 45000) return false;
+          // Can only match against the OPEN thread's messages.
+          if (p.conversationId !== selectedId) return true;
+          const match = messages.find((m) => {
+            if (!m.outgoing || claimed.has(m.id)) return false;
+            // 60s slack for client/server clock skew.
+            if (toMs(m.created_at) < p.at - 60000) return false;
+            return p.previewKind
+              ? (m.attachments?.length ?? 0) > 0
+              : !!p.content && m.content === p.content;
+          });
+          if (match) {
+            claimed.add(match.id);
+            return false;
+          }
+          return true;
         });
         // Revoke the local preview URLs of bubbles that just got pruned — the
         // real message (with its own Chatwoot-hosted attachment) is in `messages`
@@ -1765,6 +1799,35 @@ export default function Inbox() {
   const presence = useInboxPresence(selectedId, selfTyping, myName);
   const peersHere = selectedId ? presence.get(selectedId) ?? [] : [];
 
+  // Fire (or re-fire, on retry) the actual mutation for a pending bubble.
+  const dispatchSend = useCallback((key: string, vars: SendMessageVars) => {
+    sendMessage.mutate(vars, {
+      // Evolution accepted the message — it IS on WhatsApp now; show the tick
+      // while we wait for the mirrored copy to land in Chatwoot.
+      onSuccess: () => {
+        setPending((prev) => prev.map((p) => (p.key === key ? { ...p, sent: true, failed: false } : p)));
+      },
+      onError: (err) => {
+        // Keep the bubble, flagged as failed, with retry/discard. The old
+        // behaviour (remove the bubble + restore the draft) read as "the inbox
+        // ate my message" — especially when sending several in a row.
+        setPending((prev) => prev.map((p) => (p.key === key ? { ...p, failed: true } : p)));
+        toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
+      },
+    });
+  }, [sendMessage, toast]);
+
+  const retryPending = useCallback((p: { key: string; retry?: SendMessageVars }) => {
+    if (!p.retry) return;
+    setPending((prev) => prev.map((x) => (x.key === p.key ? { ...x, failed: false, at: Date.now() } : x)));
+    dispatchSend(p.key, p.retry);
+  }, [dispatchSend]);
+
+  const discardPending = useCallback((p: { key: string; previewUrl?: string }) => {
+    if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+    setPending((prev) => prev.filter((x) => x.key !== p.key));
+  }, []);
+
   const doSend = useCallback(
     // previewSource: the raw File/Blob behind an image/video/voice attachment —
     // lets the optimistic bubble show the REAL picture/waveform instantly
@@ -1780,43 +1843,24 @@ export default function Inbox() {
       const previewUrl = previewSource && attachment && attachment.kind !== "document"
         ? URL.createObjectURL(previewSource)
         : undefined;
+      const vars: SendMessageVars = {
+        conversationId: selectedId,
+        content: text,
+        contactPhone: selected?.contact_phone,
+        inboxId: selected?.inbox_id,
+        attachment,
+        quotedId: replyTo?.waId ?? undefined,
+      };
       setPending((prev) => [...prev, {
         key, conversationId: selectedId, content: bubbleText, at: Date.now(),
-        previewUrl, previewKind: attachment?.kind,
+        retry: vars, previewUrl, previewKind: attachment?.kind,
       }]);
-      sendMessage.mutate(
-        {
-          conversationId: selectedId,
-          content: text,
-          contactPhone: selected?.contact_phone,
-          inboxId: selected?.inbox_id,
-          attachment,
-          quotedId: replyTo?.waId ?? undefined,
-        },
-        {
-          // Evolution accepted the message — it IS on WhatsApp now; show the tick
-          // while we wait for the mirrored copy to land in Chatwoot.
-          onSuccess: () => {
-            setPending((prev) => prev.map((p) => (p.key === key ? { ...p, sent: true } : p)));
-          },
-          onError: (err) => {
-            setPending((prev) => {
-              const removed = prev.find((p) => p.key === key);
-              if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
-              return prev.filter((p) => p.key !== key);
-            });
-            // Restore the text ONLY if the composer is still empty — never clobber
-            // something the user has started typing since.
-            if (rawText) setDraft((d) => d.trim() ? d : rawText);
-            toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
-          },
-        },
-      );
+      dispatchSend(key, vars);
       setReplyTo(null);
       setSelfTyping(false);
       if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
     },
-    [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, sendMessage, toast, signing, myName],
+    [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, dispatchSend, signing, myName],
   );
 
   const handleSend = async (e: React.FormEvent) => {
@@ -3380,7 +3424,10 @@ export default function Inbox() {
                     const isPlaceholderText = p.content === "🎵 Mensagem de voz" || /^📎 /.test(p.content);
                     return (
                       <div key={p.key} className="mt-0.5 flex justify-end">
-                        <div className="max-w-[75%] space-y-1 rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
+                        <div className={cn(
+                          "max-w-[75%] space-y-1 rounded-2xl rounded-br-sm px-3 py-2 text-sm text-primary-foreground",
+                          p.failed ? "bg-destructive/90" : "bg-primary/80",
+                        )}>
                           {p.previewUrl && p.previewKind === "image" && (
                             <img src={p.previewUrl} alt="" className="max-h-64 max-w-full rounded-lg object-contain" />
                           )}
@@ -3393,10 +3440,32 @@ export default function Inbox() {
                           {(!p.previewUrl || !isPlaceholderText) && (
                             <p className="whitespace-pre-wrap break-words">{p.content}</p>
                           )}
-                          <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
-                            {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
-                            {p.sent ? "" : "a enviar..."}
-                          </p>
+                          {p.failed ? (
+                            <div className="mt-1 flex items-center justify-end gap-2 text-[10px]">
+                              <span className="flex items-center gap-1 font-medium">
+                                <X className="h-2.5 w-2.5" /> Não enviada
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => retryPending(p)}
+                                className="rounded bg-white/20 px-1.5 py-0.5 font-medium transition-colors hover:bg-white/30"
+                              >
+                                Tentar novamente
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => discardPending(p)}
+                                className="rounded px-1.5 py-0.5 transition-colors hover:bg-white/20"
+                              >
+                                Descartar
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
+                              {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+                              {p.sent ? "" : "a enviar..."}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -3846,9 +3915,14 @@ export default function Inbox() {
                   />
                 </div>
 
+                {/* The send button is NEVER disabled during a normal send: the round
+                    trip takes 1-3s and a dead spinner-button blocked the 2nd message
+                    of a rapid sequence (sends are queued in order by the hook; the
+                    bubble shows the in-flight state). Only a draft's first send
+                    locks — a double start_conversation would create two conversations. */}
                 {draft.trim() || outAttachments.length > 0 ? (
-                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={sendMessage.isPending || startConversation.isPending}>
-                    {(sendMessage.isPending || startConversation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={!!draftConv && startConversation.isPending}>
+                    {draftConv && startConversation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 ) : !isEmailSelected ? (
                   <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" onClick={startRecording}>
