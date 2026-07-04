@@ -1230,6 +1230,9 @@ export interface ScheduledMessage {
   content: string;
   send_at: string;
   status: string;
+  // Cheap label for the "scheduled" bar — set when the message carries an
+  // attachment; the (large) base64 payload itself is never pulled into the list.
+  attachment_name: string | null;
 }
 
 // The table is newer than the auto-generated Supabase types — hence the cast.
@@ -1243,12 +1246,21 @@ export function useScheduledMessages(phone: string | null | undefined) {
     queryFn: async (): Promise<ScheduledMessage[]> => {
       if (!organization?.id || suffix.length < 9) return [];
       const { data, error } = await scheduledTable()
-        .select('id, phone, content, send_at, status')
+        .select('id, phone, content, send_at, status, attachment_name')
         .eq('organization_id', organization.id)
         .eq('status', 'pending')
         .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
         .order('send_at', { ascending: true });
-      if (error) return []; // degrade gracefully (e.g. column not yet migrated)
+      if (error) {
+        // Degrade gracefully if attachment_name isn't migrated yet: retry without it.
+        const { data: d2 } = await scheduledTable()
+          .select('id, phone, content, send_at, status')
+          .eq('organization_id', organization.id)
+          .eq('status', 'pending')
+          .eq('phone_key', suffix)
+          .order('send_at', { ascending: true });
+        return ((d2 ?? []) as ScheduledMessage[]).map((m) => ({ ...m, attachment_name: null }));
+      }
       return (data ?? []) as ScheduledMessage[];
     },
     enabled: !!organization?.id && suffix.length >= 9,
@@ -1261,14 +1273,20 @@ export function useScheduleMessage() {
   const { organization, user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ phone, content, sendAt }: { phone: string; content: string; sendAt: Date }) => {
+    mutationFn: async ({ phone, content, sendAt, attachment }: {
+      phone: string; content: string; sendAt: Date; attachment?: OutgoingAttachment;
+    }) => {
       if (!organization?.id || !user?.id) throw new Error('Organização não encontrada');
+      // Only reference the attachment columns when there IS one, so text-only
+      // scheduling keeps working even if the attachment migration hasn't run yet
+      // (referencing an unknown column fails the whole insert in Postgres).
       const { error } = await scheduledTable().insert({
         organization_id: organization.id,
         created_by: user.id,
         phone: phone.replace(/\D/g, ''),
         content,
         send_at: sendAt.toISOString(),
+        ...(attachment ? { attachment, attachment_name: attachment.filename } : {}),
       });
       if (error) throw error;
     },

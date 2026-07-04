@@ -20,8 +20,16 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   corsHeaders, json, getConfig, authOrgMember, getOrgChatwoot, chatwootFetch,
-  instanceNameForOrg, evolutionFetch,
+  instanceNameForOrg, evolutionFetch, fetchWithTimeout,
 } from '../_shared/multicanal.ts';
+
+// Decode a base64 payload (no data: prefix) into bytes for a multipart upload.
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
 
 interface NormalizedConversation {
   id: number;
@@ -654,8 +662,32 @@ Deno.serve(async (req) => {
           (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'email',
         );
         if (emailCh) {
-          // Email: let Chatwoot handle SMTP delivery.
-          if (attachment) return json({ error: 'Anexos em email ainda não suportados nesta versão' }, 422);
+          // Email WITH an attachment: Chatwoot's create-message endpoint accepts
+          // multipart/form-data with attachments[] file parts. chatwootFetch sends
+          // JSON, so build the request directly here (fetch must set the multipart
+          // boundary itself — never set Content-Type manually for FormData).
+          if (attachment) {
+            const form = new FormData();
+            if (text) form.append('content', text);
+            form.append('message_type', 'outgoing');
+            form.append('private', 'false');
+            form.append(
+              'attachments[]',
+              new Blob([base64ToBytes(attachment.data)], { type: attachment.mimetype || 'application/octet-stream' }),
+              attachment.filename || 'anexo',
+            );
+            const attRes = await fetchWithTimeout(
+              `${cfg.chatwootUrl}${base}/conversations/${conversation_id}/messages`,
+              { method: 'POST', headers: { api_access_token: cw.token }, body: form },
+              30000,
+            );
+            if (!attRes.ok) {
+              console.error('[chatwoot-inbox] email attachment send failed:', attRes.status, await attRes.text());
+              return json({ error: 'Falha ao enviar o anexo por email' }, 502);
+            }
+            return json({ ok: true });
+          }
+          // Email text-only: let Chatwoot handle SMTP delivery.
           const emailRes = await chatwootFetch(
             cfg, cw.token,
             `${base}/conversations/${conversation_id}/messages`, 'POST',

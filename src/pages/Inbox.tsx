@@ -103,7 +103,7 @@ import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
-import { renderWithEmoji } from "@/lib/emoji";
+import { renderWithEmoji, searchEmojis } from "@/lib/emoji";
 const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 // WhatsApp-style inline formatting: *bold*, _italic_, ~strikethrough~ and
 // ```monospace```. Mirrors WhatsApp's own (deliberately non-nesting) rule: the
@@ -358,33 +358,6 @@ function translateActivity(text: string): string {
 function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
 }
-
-const EMOJI_MAP: Record<string, string> = {
-  ":sorriso": "😀", ":alegria": "😂", ":gargalhada": "😂", ":chorar": "😂", ":feliz": "😍", ":olhos": "😍", ":coracao": "😍", ":apaixonado": "🥰", ":piscar": "😉",
-  ":sunga": "😎", ":fixe": "😎", ":legal": "😎", ":pensando": "🤔", ":pensativo": "🤔", ":refletir": "🤔", ":suor": "😅", ":triste": "😢", ":raiva": "😡",
-  ":joia": "👍", ":like": "👍", ":gosto": "👍", ":joinha": "👍", ":nao_gosto": "👎", ":ruim": "👎", ":rezar": "🙏", ":obrigado": "🙏", ":por_favor": "🙏",
-  ":palmas": "👏", ":parabens": "👏", ":forca": "💪", ":musculo": "💪", ":aperto_mao": "🤝", ":combinado": "🤝", ":ok": "👌", ":beleza": "👌",
-  ":gesto_coracao": "🫶", ":ama": "🫶", ":amor": "❤️", ":coracao_vermelho": "❤️", ":coracao_azul": "💙", ":coracao_roxo": "💜", ":coracao_preto": "🖤",
-  ":festa": "🎉", ":comemorar": "🎉", ":fogo": "🔥", ":incrivel": "🔥", ":top": "🔥", ":estrela": "⭐", ":sim": "✅", ":check": "✅", ":nao": "❌",
-  ":errado": "❌", ":aviso": "⚠️", ":alerta": "⚠️", ":calendario": "📅", ":data": "📅", ":telefone": "📞", ":ligar": "📞", ":dinheiro": "💰",
-  ":foguete": "🚀", ":lancar": "🚀", ":acelerar": "🚀", ":alvo": "🎯", ":acertar": "🎯", ":presente": "🎁", ":presentear": "🎁", ":trofeu": "🏆",
-  ":vencedor": "🏆", ":lampada": "💡", ":ideia": "💡", ":pino": "📌", ":fixar": "📌", ":chave": "🔑", ":escudo": "🛡️", ":seguro": "🛡️",
-  ":nota": "🎵", ":musica": "🎵", ":documento": "📝", ":escrever": "📝", ":lapis": "✏️", ":editar": "✏️", ":computador": "🖥️", ":pc": "🖥️",
-  ":telemovel": "📱", ":mobile": "📱", ":cafe": "☕", ":pizza": "🍕",
-  ":cao": "🐶", ":cachorro": "🐶", ":gato": "🐱", ":panda": "🐼", ":sapo": "🐸", ":passaro": "🐦", ":abelha": "🐝", ":borboleta": "🦋", ":polvo": "🐙",
-  ":golfinho": "🐬", ":tubarao": "🦈", ":elefante": "🐘", ":girafa": "🦒", ":raposa": "🦊", ":coelho": "🐰", ":urso": "🐻", ":leao": "🦁", ":tigre": "🐯",
-  ":onda": "👋", ":tchau": "👋", ":adeus": "👋", ":boa_sorte": "🤞", ":cruzado": "🤞", ":paz": "✌️", ":vitoria": "✌️",
-  ":chorar_riso": "🤣", ":morto_riso": "💀", ":corno": "🤘", ":rock": "🤘", ":show": "🙌",
-};
-
-const EMOJI_CATEGORIES: Record<string, string[]> = {
-  "Carinhas": ["😀", "😂", "🤣", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡", "🤩", "🥳", "😏", "😴", "🤗", "🙃", "😇", "🤠", "🤡", "🥺", "😤", "😭", "😱", "🤯", "🥶", "🥵", "🤢", "🤮", "🤧", "💀"],
-  "Gestos": ["👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "🖐️", "✋", "🤙", "👋", "🤘", "🫵", "🙌", "🤲", "👐", "💅", "👀", "🫣", "🤞"],
-  "Coracoes": ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💗", "💖", "💘", "💝", "❣️", "💓", "💔", "🫰"],
-  "Objetos": ["🎉", "🔥", "⭐", "✅", "❌", "⚠️", "📅", "📞", "💰", "🚀", "🎯", "🎁", "🎈", "🏆", "🪄", "💡", "📌", "🔑", "🛡️", "🎵", "📝", "✏️", "🖥️", "📱", "☕", "🍕"],
-  "Animais": ["🐶", "🐱", "🐼", "🐸", "🐦", "🐝", "🦋", "🐙", "🦀", "🐬", "🦈", "🐘", "🦒", "🦊", "🐰", "🐻", "🐨", "🦁", "🐯", "🐮", "🦄"],
-};
-const EMOJIS = Object.values(EMOJI_CATEGORIES).flat();
 
 const PINNED_KEY = "inbox-pinned-v1";
 
@@ -910,6 +883,9 @@ export default function Inbox() {
   const prevUnreadRef = useRef<number>(0);
   const lastTypingRef = useRef<number>(0);
   const lastAutoReadRef = useRef<number>(0);
+  // Latest ":" query requested — guards the async emoji search against stale
+  // results (the user keeps typing while emoji-mart resolves).
+  const emojiReqRef = useRef<string>("");
 
   // The full connect screen only shows when the channel was NEVER configured.
   // A configured-but-dropped channel keeps the inbox usable (Chatwoot still
@@ -1673,10 +1649,18 @@ export default function Inbox() {
   }, [vv.height, mobileConvOpen]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
+  // Skip the call entirely when there's nothing unread — opening an
+  // already-read chat used to fire update_last_seen + a background WhatsApp
+  // read-receipt sweep (several Chatwoot + Evolution round trips) for no reason,
+  // which piled avoidable load on a Chatwoot that saturates in bursts.
   useEffect(() => {
     if (selectedId) {
-      const conv = conversations.find((c) => c.id === selectedId);
-      markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
+      const conv = conversations.find(
+        (c) => c.id === selectedId || (c.alt_ids ?? []).includes(selectedId),
+      );
+      if ((conv?.unread_count ?? 0) > 0) {
+        markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
+      }
     }
     // Reset per-conversation composer state.
     setReplyTo(null);
@@ -2017,6 +2001,54 @@ export default function Inbox() {
       await doSend("", { data, mimetype: voice.blob.type, filename: "voz.webm", kind: "voice" }, voice.blob);
     } catch {
       toast({ title: "Falha ao enviar o áudio", variant: "destructive" });
+    }
+  };
+
+  // Schedule the current composer (text and/or attachments) for later delivery.
+  // Attachments ride along as base64 in the scheduled row — one row per file, the
+  // first carrying the caption, mirroring the live send. The cron
+  // (send-scheduled-messages) sends them through Evolution at send_at.
+  const handleScheduleConfirm = async () => {
+    if (!selected?.contact_phone || !scheduleAt) return;
+    const sendAt = new Date(scheduleAt);
+    if (sendAt <= new Date()) return;
+    const phone = selected.contact_phone;
+    const content = draft.trim();
+    try {
+      if (outAttachments.length > 0) {
+        const list = outAttachments;
+        for (let i = 0; i < list.length; i++) {
+          const data = await fileToBase64(list[i].file);
+          await scheduleMessage.mutateAsync({
+            phone,
+            content: i === 0 ? content : "",
+            sendAt,
+            attachment: {
+              data,
+              mimetype: list[i].file.type || "application/octet-stream",
+              filename: list[i].file.name,
+              kind: list[i].kind,
+            },
+          });
+        }
+      } else {
+        await scheduleMessage.mutateAsync({ phone, content, sendAt });
+      }
+      setScheduleOpen(false);
+      setDraft("");
+      setOutAttachments([]);
+      if (selectedId != null) {
+        setDrafts((prev) => {
+          if (!prev.has(selectedId)) return prev;
+          const next = new Map(prev);
+          next.delete(selectedId);
+          saveDraftsMap(next);
+          return next;
+        });
+      }
+      toast({ title: "Mensagem agendada", description: `Será enviada a ${sendAt.toLocaleString("pt-PT")}.` });
+    } catch (err) {
+      toast({ title: "Falha ao agendar", description: (err as Error).message, variant: "destructive" });
     }
   };
 
@@ -3502,7 +3534,9 @@ export default function Inbox() {
                     <span className="shrink-0 font-medium text-violet-600">
                       {new Date(s.send_at).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{s.content}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {s.content || (s.attachment_name ? `📎 ${s.attachment_name}` : "")}
+                    </span>
                     <button
                       type="button"
                       title="Cancelar envio"
@@ -3739,7 +3773,7 @@ export default function Inbox() {
                         {selected.contact_phone && (
                           <button
                             type="button"
-                            disabled={!draft.trim()}
+                            disabled={!draft.trim() && outAttachments.length === 0}
                             onClick={() => {
                               setPlusOpen(false);
                               const d = new Date();
@@ -3832,29 +3866,22 @@ export default function Inbox() {
                     onInput={(e) => {
                       const text = e.currentTarget.innerText;
                       setDraft(text);
-                      // Detetar ":" para sugerir emojis
+                      // Detetar ":" para sugerir emojis (busca completa via emoji-mart
+                      // + aliases PT — cobre todos os ~1800 emojis, incluindo :sol, :lua).
                       const colonIdx = text.lastIndexOf(":");
-                      if (colonIdx !== -1) {
-                        const query = text.slice(colonIdx + 1).toLowerCase().trim();
-                        if (query.length > 0 && query.indexOf(" ") === -1 && query.indexOf("\n") === -1) {
-                          // Search emojis by character match OR by name (:sorriso -> 😀)
-                          const charMatches = Object.values(EMOJI_CATEGORIES).flat()
-                            .filter(e => e.toLowerCase().includes(query));
-                          const nameMatches = Object.entries(EMOJI_MAP)
-                            .filter(([key]) => key.replace(":", "").includes(query))
-                            .map(([, emoji]) => emoji);
-                          const matches = [...new Set([...charMatches, ...nameMatches])].slice(0, 6);
-                          if (matches.length > 0) {
-                            setEmojiSuggestions(matches);
-                            setEmojiSuggestQuery(query);
-                            setEmojiSuggestIndex(0);
-                          } else {
-                            setEmojiSuggestions([]);
-                          }
-                        } else {
-                          setEmojiSuggestions([]);
-                        }
+                      const query = colonIdx !== -1 ? text.slice(colonIdx + 1) : "";
+                      if (colonIdx !== -1 && query.length >= 2 && !/[\s\n:]/.test(query)) {
+                        const q = query.toLowerCase();
+                        emojiReqRef.current = q;
+                        setEmojiSuggestQuery(query);
+                        searchEmojis(q, 8).then((matches) => {
+                          // Ignore a result that arrived after the user typed more.
+                          if (emojiReqRef.current !== q) return;
+                          setEmojiSuggestions(matches);
+                          setEmojiSuggestIndex(0);
+                        });
                       } else {
+                        emojiReqRef.current = "";
                         setEmojiSuggestions([]);
                       }
                       // Show "typing..." on the contact's WhatsApp (throttled, not for email).
@@ -4105,40 +4132,28 @@ export default function Inbox() {
             <DialogTitle>Agendar envio</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="rounded-md bg-muted px-3 py-2 text-sm">{draft}</p>
+            {draft.trim() && <p className="whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">{draft}</p>}
+            {outAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {outAttachments.map((a, i) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
+                    <Paperclip className="h-3 w-3 text-muted-foreground" />
+                    <span className="max-w-[160px] truncate">{a.file.name}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Enviar em</label>
               <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             </div>
             <Button
               className="w-full"
-              disabled={!scheduleAt || new Date(scheduleAt) <= new Date() || scheduleMessage.isPending}
-              onClick={() =>
-                scheduleMessage.mutate(
-                  { phone: selected!.contact_phone!, content: draft.trim(), sendAt: new Date(scheduleAt) },
-                  {
-                    onSuccess: () => {
-                      setScheduleOpen(false);
-                      setDraft("");
-                      if (selectedId != null) {
-                        setDrafts((prev) => {
-                          if (!prev.has(selectedId)) return prev;
-                          const next = new Map(prev);
-                          next.delete(selectedId);
-                          saveDraftsMap(next);
-                          return next;
-                        });
-                      }
-                      toast({
-                        title: "Mensagem agendada",
-                        description: `Será enviada a ${new Date(scheduleAt).toLocaleString("pt-PT")}.`,
-                      });
-                    },
-                    onError: (err) =>
-                      toast({ title: "Falha ao agendar", description: (err as Error).message, variant: "destructive" }),
-                  },
-                )
+              disabled={
+                !scheduleAt || new Date(scheduleAt) <= new Date() || scheduleMessage.isPending
+                || (!draft.trim() && outAttachments.length === 0)
               }
+              onClick={handleScheduleConfirm}
             >
               {scheduleMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
               Agendar
