@@ -206,6 +206,19 @@ Deno.serve(async (req) => {
 
   try {
     const event = await req.json().catch(() => null);
+    // TEMP reaction probe — logs the raw shape of EVERY webhook event so we can
+    // see exactly how a WhatsApp reaction arrives (before the message-type filter
+    // below could drop it). Find it in the function logs filtered by
+    // "[reaction-probe]". REMOVE once a reaction payload has been captured.
+    try {
+      console.log('[reaction-probe]',
+        'event=', event?.event,
+        'mt=', event?.message_type,
+        'content_type=', event?.content_type,
+        'content=', JSON.stringify(event?.content ?? '').slice(0, 80),
+        'content_attributes=', JSON.stringify(event?.content_attributes ?? null).slice(0, 400),
+        'full=', JSON.stringify(event ?? {}).slice(0, 3000));
+    } catch { /* probe must never break the webhook */ }
     if (!event || (event.event !== 'message_created' && event.event !== 'message_updated')) return ok();
     if (event.private) return ok();
     const isUpdate = event.event === 'message_updated';
