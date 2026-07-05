@@ -18,7 +18,9 @@ export function folderLabel(f: EmailFolder) {
 export function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+  const first = Array.from(parts[0])[0] ?? '';
+  const second = parts[1] ? (Array.from(parts[1])[0] ?? '') : '';
+  return (first + second).toUpperCase();
 }
 
 export function fmtListDate(value: string | null) {
@@ -38,8 +40,9 @@ export function fmtFullDate(value: string | null) {
   });
 }
 
-export function fmtSize(bytes: number | null) {
-  if (!bytes) return '';
+export function fmtSize(bytes: number | null | undefined) {
+  if (bytes == null) return '';
+  if (bytes === 0) return '0 B';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;

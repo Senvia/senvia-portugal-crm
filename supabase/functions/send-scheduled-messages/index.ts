@@ -20,10 +20,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret) {
-    const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
-    if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
+  if (!cronSecret) {
+    return json({ error: 'CRON_SECRET não configurado' }, 500);
   }
+  const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
+  if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
 
   try {
     const cfg = getConfig();

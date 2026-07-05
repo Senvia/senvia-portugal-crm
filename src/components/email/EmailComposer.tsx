@@ -385,7 +385,7 @@ export function EmailComposer({
       const html = editorRef.current?.innerHTML || '';
       const text = editorRef.current?.innerText || '';
       const refs = original
-        ? [...((original as any).email_references || []), original.message_id].filter(Boolean) as string[]
+        ? [...(original.email_references || []), original.message_id].filter(Boolean) as string[]
         : undefined;
       await actions.send({
         to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
@@ -411,10 +411,14 @@ export function EmailComposer({
     for (const f of Array.from(files)) {
       running += f.size;
       if (running > MAX) { toast({ title: `${f.name} excede o limite (25 MB no total)`, variant: 'destructive' }); continue; }
-      const b64 = await new Promise<string>((res, rej) => {
-        const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f);
-      });
-      added.push({ filename: f.name, contentType: f.type || 'application/octet-stream', b64, size: f.size });
+      try {
+        const b64 = await new Promise<string>((res, rej) => {
+          const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f);
+        });
+        added.push({ filename: f.name, contentType: f.type || 'application/octet-stream', b64, size: f.size });
+      } catch {
+        toast({ title: `Falha ao ler ${f.name}`, variant: 'destructive' });
+      }
     }
     if (added.length) setAttachments((prev) => [...prev, ...added]);
     if (fileRef.current) fileRef.current.value = '';
@@ -505,7 +509,7 @@ export function EmailComposer({
             suppressContentEditableWarning
             tabIndex={0}
             onInput={() => setBodyVersion((v) => v + 1)}
-            className="min-h-[200px] max-h-[280px] overflow-y-auto px-4 py-3 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+            className="min-h-[200px] max-h-[400px] overflow-y-auto px-4 py-3 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
             style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif", lineHeight: '1.6' }}
           />
 

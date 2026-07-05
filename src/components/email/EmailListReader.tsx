@@ -265,7 +265,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     return order.map((key) => byThread.get(key)!);
   }, [messages, searching]);
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
-  const { data: opened } = useEmailMessage(messageId);
+  const { data: opened, isLoading: loadingMessage } = useEmailMessage(messageId);
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
@@ -282,10 +282,17 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     });
   }, []);
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-  const batchArchive = () => { [...selectedIds].forEach((id) => actions.archive(id)); clearSelection(); };
-  const batchTrash = () => { [...selectedIds].forEach((id) => actions.trash(id)); clearSelection(); };
-  const batchSpam = () => { [...selectedIds].forEach((id) => actions.spam(id)); clearSelection(); };
-  const batchSetRead = (read: boolean) => { [...selectedIds].forEach((id) => actions.setRead(id, read)); clearSelection(); };
+  const runBatch = async (fn: (id: string) => Promise<unknown>, label: string) => {
+    const ids = [...selectedIds];
+    clearSelection();
+    const results = await Promise.allSettled(ids.map((id) => fn(id)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) toast({ title: `${failed} de ${ids.length} operações falharam (${label})`, variant: 'destructive' });
+  };
+  const batchArchive = () => { runBatch(actions.archive, 'arquivar'); };
+  const batchTrash = () => { runBatch(actions.trash, 'apagar'); };
+  const batchSpam = () => { runBatch(actions.spam, 'spam'); };
+  const batchSetRead = (read: boolean) => { runBatch((id) => actions.setRead(id, read), 'marcar'); };
   const markAllRead = () => { if (folderId) actions.markFolderRead(folderId); };
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -715,16 +722,23 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
             <p className="text-sm">Clica num rascunho para continuar a escrever</p>
           </div>
         ) : !opened ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-              <Mail className="h-8 w-8 text-primary" />
+          messageId && loadingMessage ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin opacity-50" />
+              <span className="text-sm">A abrir email...</span>
             </div>
-            <div>
-              <p className="text-base font-semibold text-foreground">Os teus emails</p>
-              <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
-              <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <Mail className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-foreground">Os teus emails</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
+                <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <>
             <div className="flex items-center gap-1 border-b bg-background px-2 pt-5 pb-2 sm:px-3">

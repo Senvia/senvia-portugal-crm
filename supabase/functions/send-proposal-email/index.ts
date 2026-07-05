@@ -7,6 +7,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 interface ProductItem {
   name: string;
   quantity: number;
@@ -245,7 +251,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       htmlContent: htmlContent,
     };
 
-    const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+    const brevoResponse = await fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "accept": "application/json",

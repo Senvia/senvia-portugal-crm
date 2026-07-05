@@ -979,8 +979,8 @@ export default function Inbox() {
   const clientId = contactMatch?.kind === "client" ? contactMatch.id : null;
   const { data: openProposals = [] } = useClientProposals(clientId);
   const { data: openSales = [] } = useClientSales(clientId);
-  const activeProposals = openProposals.filter((p: any) => ["draft","sent","negotiating"].includes(p.status));
-  const activeSales = openSales.filter((s: any) => ["in_progress","fulfilled"].includes(s.status));
+  const activeProposals = openProposals.filter((p) => ["draft","sent","negotiating"].includes(p.status));
+  const activeSales = openSales.filter((s) => ["in_progress","fulfilled"].includes(s.status));
   // Associate-to-existing combobox.
   // Edit client / lead modal — opens inline without leaving inbox.
   const [editCrmOpen, setEditCrmOpen] = useState(false);
@@ -2778,7 +2778,7 @@ export default function Inbox() {
       {(activeProposals.length > 0 || activeSales.length > 0) && (
         <div className="rounded-xl border border-amber-200/60 bg-amber-500/5 p-3 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Em aberto</p>
-          {activeSales.map((s: any) => {
+          {activeSales.map((s) => {
             const saleStatusLabel: Record<string, string> = { in_progress: "Em curso", fulfilled: "Concluída", pending: "Pendente" };
             const saleStatusColor: Record<string, string> = { in_progress: "bg-amber-500 text-white", fulfilled: "bg-emerald-500 text-white", pending: "bg-slate-400 text-white" };
             return (
@@ -2806,7 +2806,7 @@ export default function Inbox() {
               </button>
             );
           })}
-          {activeProposals.map((p: any) => {
+          {activeProposals.map((p) => {
             const propStatusLabel: Record<string, string> = { draft: "Rascunho", sent: "Enviada", negotiating: "Em negociação" };
             const propStatusColor: Record<string, string> = { draft: "bg-slate-400 text-white", sent: "bg-blue-500 text-white", negotiating: "bg-violet-500 text-white" };
             return (

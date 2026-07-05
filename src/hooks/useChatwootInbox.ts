@@ -1101,10 +1101,15 @@ export function useDeleteCannedResponse() {
 // send_message already does) — omit only for caixas with no restriction.
 export function useDeleteMessage() {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ waId, phone, inboxId }: { waId: string; phone: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox(organization.id, { action: 'delete_message', wa_id: waId, phone, inbox_id: inboxId ?? undefined });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
 }

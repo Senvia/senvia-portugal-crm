@@ -46,6 +46,7 @@ export interface EmailMessage {
   body_fetched: boolean;
   html_body: string | null;
   text_body: string | null;
+  email_references: string[] | null;
 }
 
 export interface EmailAttachment {
@@ -76,6 +77,8 @@ export function useEmailFolders(channelId: string | null) {
       return (data || []) as EmailFolder[];
     },
     enabled: !!channelId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -95,6 +98,8 @@ export function useEmailMessages(folderId: string | null) {
       return (data || []) as EmailMessage[];
     },
     enabled: !!folderId,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -240,6 +245,8 @@ export function useEmailDrafts(channelId: string | null) {
       return (data || []) as EmailDraft[];
     },
     enabled: !!channelId,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -281,5 +288,7 @@ export function useEmailMessage(messageId: string | null) {
       return { message: message as EmailMessage, attachments: (attachments || []) as EmailAttachment[] };
     },
     enabled: !!messageId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }

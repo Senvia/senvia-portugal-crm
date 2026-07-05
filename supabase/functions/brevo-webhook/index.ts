@@ -44,6 +44,7 @@ serve(async (req: Request): Promise<Response> => {
     console.log(`Brevo webhook: event=${event}, messageId=${messageId}`);
 
     const updateData: Record<string, any> = {};
+    let onlyIfNull = false;
 
     switch (event) {
       case "delivered":
@@ -54,9 +55,16 @@ serve(async (req: Request): Promise<Response> => {
         // Check for false positive: fetch the record's sent_at
         const { data: sendRecord } = await supabase
           .from("email_sends")
-          .select("sent_at")
+          .select("sent_at, opened_at")
           .eq("brevo_message_id", String(messageId))
           .maybeSingle();
+
+        // Idempotency: skip if already opened
+        if (sendRecord?.opened_at) {
+          return new Response(JSON.stringify({ ok: true, skipped: "already_opened" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
         if (sendRecord?.sent_at) {
           const diffSeconds = (Date.now() - new Date(sendRecord.sent_at).getTime()) / 1000;
@@ -68,10 +76,12 @@ serve(async (req: Request): Promise<Response> => {
           }
         }
         updateData.opened_at = new Date().toISOString();
+        onlyIfNull = true;
         break;
       }
       case "click":
         updateData.clicked_at = new Date().toISOString();
+        onlyIfNull = true;
         break;
       case "hard_bounce":
       case "soft_bounce":
@@ -95,13 +105,25 @@ serve(async (req: Request): Promise<Response> => {
         });
     }
 
-    const { error } = await supabase
+    let query = supabase
       .from("email_sends")
       .update(updateData)
       .eq("brevo_message_id", String(messageId));
 
+    // Idempotency: for open/click events, only update if the timestamp field is still null
+    if (onlyIfNull) {
+      const field = 'opened_at' in updateData ? 'opened_at' : 'clicked_at';
+      query = query.is(field, null);
+    }
+
+    const { error } = await query;
+
     if (error) {
       console.error("Error updating email_sends:", error);
+      return new Response(JSON.stringify({ error: "Failed to update" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ ok: true }), {
