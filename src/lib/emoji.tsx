@@ -1,6 +1,8 @@
-// Emoji rendering shared across the inbox. We render emojis with the Apple set
-// (via emoji-mart) so they look like iPhone/WhatsApp on every device — Windows,
-// Android, Mac — instead of each OS's own (flatter) style.
+// Emoji rendering shared across the inbox. We render emojis with the native
+// set (via emoji-mart) so they use the device's own emoji font — no CDN
+// dependency, every emoji always renders. On iOS/Mac this gives Apple-style
+// emojis (same as WhatsApp on iPhone); on Android, Google-style; on Windows,
+// Segoe UI Emoji.
 //
 // NOTE: the dataset used to be loaded via a dynamic import() to split it out of
 // the Inbox bundle — that introduced a new chunk shared between this eagerly-
@@ -13,9 +15,9 @@ import { init, SearchIndex } from "emoji-mart";
 import emojiRegex from "emoji-regex";
 import React from "react";
 
-// Register the emoji data + Apple set once. This powers both the <em-emoji>
+// Register the emoji data + native set once. This powers both the <em-emoji>
 // web component and the picker. Safe to import from anywhere — runs a single time.
-init({ data, set: "apple" });
+init({ data, set: "native" });
 
 // Portuguese aliases for the ":" shortcut. emoji-mart's own search index is
 // keyworded in ENGLISH, so a pt-PT user typing ":sol" / ":lua" / ":coracao"
@@ -144,7 +146,7 @@ export function renderWithEmoji(
       <em-emoji
         key={`${keyPrefix}e${m.index}`}
         native={m[0]}
-        set="apple"
+        set="native"
         size={size}
         fallback={m[0]}
         // Keep the glyph on the text baseline so it doesn't push line-height around.

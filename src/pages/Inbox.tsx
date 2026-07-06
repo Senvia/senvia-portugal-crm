@@ -124,7 +124,7 @@ const LINK_RE = /(https?:\/\/[^\s<]+|www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<]
 function trimTrailingLinkPunct(url: string): string {
   return url.replace(/[.,;:!?)\]}'"]+$/, "");
 }
-function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode[] {
+function renderWhatsAppFormatting(text: string, keyPrefix = "", highlight?: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -149,13 +149,30 @@ function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode
     lastIndex = match.index + token.length;
   }
   if (lastIndex < text.length) {
-    parts.push(...renderWithEmoji(text.slice(lastIndex), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
+    const remaining = text.slice(lastIndex);
+    if (highlight) {
+      const q = highlight.toLowerCase();
+      const lowered = remaining.toLowerCase();
+      let idx = 0;
+      let pos: number;
+      while ((pos = lowered.indexOf(q, idx)) !== -1) {
+        if (pos > idx) parts.push(...renderWithEmoji(remaining.slice(idx, pos), { keyPrefix: `${keyPrefix}t${idx}` }));
+        parts.push(<mark key={`${keyPrefix}h${pos}`} className="rounded-sm bg-yellow-200/70 px-0.5 dark:bg-yellow-700/70">{remaining.slice(pos, pos + q.length)}</mark>);
+        idx = pos + q.length;
+      }
+      if (idx < remaining.length) parts.push(...renderWithEmoji(remaining.slice(idx), { keyPrefix: `${keyPrefix}t${idx}` }));
+    } else {
+      parts.push(...renderWithEmoji(remaining, { keyPrefix: `${keyPrefix}t${lastIndex}` }));
+    }
   }
-  return parts.length > 0 ? parts : renderWithEmoji(text, { keyPrefix });
+  return parts.length > 0 ? parts : (highlight && text.toLowerCase().includes(highlight.toLowerCase())
+    ? (() => { const q = highlight.toLowerCase(); const l = text.toLowerCase(); const i = l.indexOf(q); return [<span key="pre">{text.slice(0, i)}</span>, <mark key="hl" className="rounded-sm bg-yellow-200/70 px-0.5 dark:bg-yellow-700/70">{text.slice(i, i + q.length)}</mark>, <span key="post">{text.slice(i + q.length)}</span>]; })()
+    : renderWithEmoji(text, { keyPrefix }));
 }
 
-  // autolink: converte URLs em links clicaveis e aplica a formatacao WhatsApp
-function autolink(text: string): React.ReactNode {
+// autolink: converte URLs em links clicaveis e aplica a formatacao WhatsApp.
+// outgoing=true aplica cor clara para bolhas enviadas (bg-primary + text-primary-foreground).
+function autolink(text: string, outgoing = false, highlight?: string): React.ReactNode {
   if (!text) return text;
   const urlRegex = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
   const parts: React.ReactNode[] = [];
@@ -163,7 +180,7 @@ function autolink(text: string): React.ReactNode {
   let match: RegExpExecArray | null;
   while ((match = urlRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(...renderWhatsAppFormatting(text.slice(lastIndex, match.index), `al${lastIndex}`));
+      parts.push(...renderWhatsAppFormatting(text.slice(lastIndex, match.index), `al${lastIndex}`, highlight));
     }
     let url = match[0];
     let href = url;
@@ -176,7 +193,10 @@ function autolink(text: string): React.ReactNode {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-primary underline underline-offset-2 hover:opacity-80"
+        className={cn(
+          "underline underline-offset-2 hover:opacity-80",
+          outgoing ? "text-primary-foreground/90" : "text-primary",
+        )}
       >
         {url}
       </a>
@@ -184,12 +204,10 @@ function autolink(text: string): React.ReactNode {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    parts.push(...renderWhatsAppFormatting(text.slice(lastIndex), `al${lastIndex}`));
+    parts.push(...renderWhatsAppFormatting(text.slice(lastIndex), `al${lastIndex}`, highlight));
   }
-  return parts.length > 0 ? parts : renderWhatsAppFormatting(text);
+  return parts.length > 0 ? parts : renderWhatsAppFormatting(text, undefined, highlight);
 }
-
-
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
@@ -575,7 +593,8 @@ function AttachmentView({
           src={thumb}
           alt="Imagem"
           loading="lazy"
-          className="max-h-64 min-h-[120px] max-w-full rounded-lg object-contain"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.background = 'transparent'; }}
+          className="max-h-64 min-h-[120px] max-w-full rounded-lg bg-muted object-contain"
         />
       </button>
     );
@@ -672,7 +691,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
 }
 
 // WhatsApp's default quick-reaction set.
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "👏", "💯", "🎉"];
 
 // Hover-revealed reaction trigger (desktop). `open` forces full opacity so the
 // button doesn't fade out from under the pointer while its popover is open —
@@ -784,6 +803,9 @@ export default function Inbox() {
   const [outAttachments, setOutAttachments] = useState<Array<{ file: File; kind: OutgoingAttachment["kind"] }>>([]);
   // Reply/quote target.
   const [replyTo, setReplyTo] = useState<{ waId: string; content: string; outgoing: boolean } | null>(null);
+  // Persisted highlight (Telegram-style): the message we're replying to stays
+  // highlighted even after the reply is sent. Cleared on conversation switch.
+  const [highlightedWaId, setHighlightedWaId] = useState<string | null>(null);
   // Voice recording + pre-send preview.
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -899,7 +921,7 @@ export default function Inbox() {
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
   const live = useInboxRealtime(() => selectedIdRef.current);
-  const { data: conversations = [], isLoading: loadingConvos, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
+  const { data: conversations = [], isLoading: loadingConvos, isFetching: fetchingConvos, isError: convosError, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
   // Synthetic conversation for the draft (id < 0 so it never collides with a real
   // Chatwoot id). selectedId stays null for drafts, so message fetch / mark-read /
   // presence all stay disabled — the thread is simply empty until the first send.
@@ -1069,6 +1091,9 @@ export default function Inbox() {
   // Selecting a real conversation always dismisses any open draft.
   useEffect(() => {
     if (selectedId != null && draftConv) setDraftConv(null);
+    // Clear the persisted reply highlight when switching conversations.
+    setHighlightedWaId(null);
+    setSheetOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -1191,6 +1216,15 @@ export default function Inbox() {
     }
     if (unreadTotal > prevUnreadRef.current) playNotificationBeep();
     prevUnreadRef.current = unreadTotal;
+  }, [unreadTotal]);
+
+  // Screen-reader announcement of new messages (aria-live region).
+  const [srAnnouncement, setSrAnnouncement] = useState("");
+  useEffect(() => {
+    if (!beepInitRef.current) return;
+    if (unreadTotal > prevUnreadRef.current) {
+      setSrAnnouncement(`Nova mensagem recebida. ${unreadTotal} conversa${unreadTotal !== 1 ? "s" : ""} por ler.`);
+    }
   }, [unreadTotal]);
 
   // "Mensagens não lidas" divider: anchored to a SPECIFIC message id, resolved
@@ -1907,20 +1941,18 @@ export default function Inbox() {
     if (outAttachments.length > 0) {
       const list = outAttachments;
       setOutAttachments([]);
-      // First file carries the caption; the rest go bare.
-      for (let i = 0; i < list.length; i++) {
-        try {
-          const data = await fileToBase64(list[i].file);
-          await doSend(i === 0 ? content : "", {
+      // First file carries the caption; the rest go bare. Send in parallel —
+      // the hook's internal sendChain serializes the actual API calls.
+      await Promise.all(list.map((item, i) =>
+        fileToBase64(item.file)
+          .then((data) => doSend(i === 0 ? content : "", {
             data,
-            mimetype: list[i].file.type || "application/octet-stream",
-            filename: list[i].file.name,
-            kind: list[i].kind,
-          }, list[i].file);
-        } catch {
-          toast({ title: `Falha ao ler ${list[i].file.name}`, variant: "destructive" });
-        }
-      }
+            mimetype: item.file.type || "application/octet-stream",
+            filename: item.file.name,
+            kind: item.kind,
+          }, item.file))
+          .catch(() => toast({ title: `Falha ao ler ${item.file.name}`, variant: "destructive" })),
+      ));
       return;
     }
     doSend(content);
@@ -2184,12 +2216,18 @@ export default function Inbox() {
   const handleToggleArchive = () => {
     if (!selected) return;
     const archived = selected.status === "resolved";
+    const currentId = selected.id;
     toggleStatus.mutate(
-      { conversationId: selected.id, status: archived ? "open" : "resolved" },
+      { conversationId: currentId, status: archived ? "open" : "resolved" },
       {
         onSuccess: () => {
           toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" });
-          if (!archived) setSelectedId(null);
+          if (!archived) {
+            // Auto-select the next conversation in the list (Telegram-style).
+            const idx = filtered.findIndex((c) => c.id === currentId);
+            const next = filtered[idx + 1] ?? filtered[idx - 1] ?? null;
+            setSelectedId(next ? next.id : null);
+          }
         },
       },
     );
@@ -2201,14 +2239,27 @@ export default function Inbox() {
     const archived = currentStatus === "resolved";
     toggleStatus.mutate(
       { conversationId: id, status: archived ? "open" : "resolved" },
-      { onSuccess: () => toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" }) },
+      {
+        onSuccess: () => {
+          toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" });
+          if (!archived && selectedId === id) {
+            // Auto-select the next conversation when archiving the active one.
+            const idx = filtered.findIndex((c) => c.id === id);
+            const next = filtered[idx + 1] ?? filtered[idx - 1] ?? null;
+            setSelectedId(next ? next.id : null);
+          }
+        },
+      },
     );
-  }, [toggleStatus, toast]);
+  }, [toggleStatus, toast, selectedId, filtered]);
 
   // Stable callbacks so memoized MessageBubble rows don't re-render on every
   // composer keystroke (when only `draft` changed).
   const handleReplyTo = useCallback(
-    (m: InboxMessage) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing }),
+    (m: InboxMessage) => {
+      setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing });
+      setHighlightedWaId(m.wa_id!);
+    },
     [],
   );
   const handleTaskFromMessage = useCallback(
@@ -2263,15 +2314,22 @@ export default function Inbox() {
     },
     [selectedPhone, selected?.inbox_id, editMessage, toast],
   );
-  // Send-only WhatsApp reaction (👍❤️😂...). No optimistic UI — receiving the
-  // reaction back into the thread isn't wired up (see the edge function's
-  // `react` action comment), so there's no local state to show it echoed back.
+  // Send-only WhatsApp reaction (👍❤️😂...). Optimistic: show the emoji on the
+  // bubble immediately, roll back on error. Receiving the contact's reaction
+  // back isn't wired up (Chatwoot doesn't surface WhatsApp reactions).
+  const [optimisticReactions, setOptimisticReactions] = useState<Record<string, string>>({});
   const handleReact = useCallback(
     (m: InboxMessage, emoji: string) => {
       if (!m.wa_id || !selectedPhone) return;
+      setOptimisticReactions((prev) => ({ ...prev, [m.wa_id!]: emoji }));
       reactToMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji, inboxId: selected?.inbox_id },
-        { onError: (err) => toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" }) },
+        {
+          onError: (err) => {
+            toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" });
+            setOptimisticReactions((prev) => { const n = { ...prev }; delete n[m.wa_id!]; return n; });
+          },
+        },
       );
     },
     [selectedPhone, selected?.inbox_id, reactToMessage, toast],
@@ -2959,6 +3017,9 @@ export default function Inbox() {
                   live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/40",
                 )}
               />
+              {fetchingConvos && !loadingConvos && (
+                <span className="ml-2 animate-pulse text-[11px] text-muted-foreground">a atualizar...</span>
+              )}
             </h1>
             <div className="flex gap-1.5">
               <Button
@@ -3034,6 +3095,7 @@ export default function Inbox() {
         </div>
 
         <div ref={listScrollRef} className="flex-1 overflow-y-auto">
+          <div className="animate-in fade-in" key={`${tab}-${caixaFilter}`}>
           {loadingConvos ? (
             <div className="p-2">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -3045,6 +3107,14 @@ export default function Inbox() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : convosError ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+              <p>Não foi possível carregar as conversas.</p>
+              <Button variant="outline" size="sm" onClick={() => refetchConvos()}>
+                <svg className="mr-1.5 h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                Tentar novamente
+              </Button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
@@ -3097,6 +3167,7 @@ export default function Inbox() {
               })}
             </div>
           )}
+          </div>
         </div>
       </aside>
 
@@ -3382,9 +3453,12 @@ export default function Inbox() {
                   )}
                 </div>
               ) : loadingMessages && thread.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">A carregar mensagens...</span>
+                <div className="flex flex-col gap-2 px-4 py-6">
+                  {[75, 55, 65, 80, 50, 70, 60].map((w, i) => (
+                    <div key={i} className={cn("flex", i % 2 === 0 ? "justify-start" : "justify-end")}>
+                      <div className="h-10 animate-pulse rounded-2xl bg-muted" style={{ width: `${w}%` }} />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
@@ -3446,6 +3520,9 @@ export default function Inbox() {
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
                         onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
+                        replyTargetWaId={highlightedWaId}
+                        reaction={row.msg.wa_id ? optimisticReactions[row.msg.wa_id] : undefined}
+                        searchQuery={threadSearchOpen ? threadSearchQuery : undefined}
                       />
                     );
                   })}
@@ -3513,7 +3590,8 @@ export default function Inbox() {
                 type="button"
                 onClick={() => { jumpToBottom(); setNewArrivedCount(0); }}
                 title="Ir para o fim"
-                className="absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-transform hover:scale-105"
+                aria-label="Ir para o fim"
+                className="absolute bottom-4 right-4 z-10 flex h-10 w-10 animate-in fade-in slide-in-from-bottom-2 items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-transform hover:scale-105"
               >
                 <ChevronDown className="h-5 w-5" />
                 {newArrivedCount > 0 && (
@@ -3552,7 +3630,7 @@ export default function Inbox() {
 
             {/* Reply quote bar */}
             {replyTo && (
-              <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2">
+              <div className="flex animate-in fade-in slide-in-from-top-1 items-center gap-2 border-t bg-muted/40 px-3 py-2">
                 <Reply className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                   A responder a: <span className="italic">{replyTo.content || "📎 anexo"}</span>
@@ -3570,6 +3648,7 @@ export default function Inbox() {
                   <span key={i} className="flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs">
                     <Paperclip className="h-3 w-3 text-muted-foreground" />
                     <span className="max-w-[160px] truncate">{a.file.name}</span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{a.file.size > 1024 * 1024 ? `${(a.file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(a.file.size / 1024)} KB`}</span>
                     <button
                       type="button"
                       onClick={() => setOutAttachments((prev) => prev.filter((_, j) => j !== i))}
@@ -3585,7 +3664,7 @@ export default function Inbox() {
             {/* Voice preview before sending */}
             {pendingVoice && (
               <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2">
-                <audio controls src={pendingVoice.url} className="h-9 flex-1" />
+                <AudioPlayer url={pendingVoice.url} outgoing />
                 <Button
                   type="button"
                   variant="ghost"
@@ -3607,12 +3686,12 @@ export default function Inbox() {
             {/* Composer */}
             {recording ? (
               <div
-                className="flex shrink-0 items-center gap-3 border-t bg-background p-3"
+                className="flex shrink-0 animate-in fade-in slide-in-from-bottom-1 items-center gap-3 border-t bg-background p-3"
                 style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" } : undefined}
               >
                 <span className="flex items-center gap-2 text-sm text-red-500">
                   <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-                  A gravar... {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
+                  A gravar... {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:{String(recordSeconds % 60).padStart(2, "0")}
                 </span>
                 <div className="flex-1" />
                 <Button type="button" variant="ghost" size="icon" title="Cancelar" onClick={() => stopRecording(true)}>
@@ -3624,7 +3703,7 @@ export default function Inbox() {
               </div>
             ) : (
               <div
-                className="shrink-0 border-t bg-background"
+                className="shrink-0 animate-in fade-in slide-in-from-bottom-1 border-t bg-background"
                 style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" } : undefined}
               >
                 {isEmailSelected && selected.email_subject && (
@@ -3634,7 +3713,7 @@ export default function Inbox() {
                   </div>
                 )}
               <form onSubmit={handleSend} onPaste={handlePaste} className="relative flex items-end gap-2 p-2.5">
-                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
+                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,application/pdf" className="hidden" onChange={handlePickFile} />
 
                 {/* "+" menu — single entry point for attach / emoji / quick replies / AI / schedule / signature */}
                 <Popover
@@ -3816,15 +3895,15 @@ export default function Inbox() {
                     It grows naturally with the text up to ~6 lines, then scrolls.
                     Secondary actions live in the "+" menu to keep the bar uncluttered. */}
                 {emojiSuggestions.length > 0 && (
-                  <div className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
+                  <div role="listbox" aria-label="Sugestões de emoji" className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
                     {emojiSuggestions.map((e, i) => (
                       <button
                         key={e}
                         type="button"
                         title="Inserir emoji"
-                        // onMouseDown + preventDefault (not onClick): keeps the composer
-                        // focused and stops the button from submitting the form. Works for
-                        // ANY emoji in the bar, not just the first.
+                        role="option"
+                        aria-selected={i === emojiSuggestIndex}
+                        aria-label={`Emoji ${e}`}
                         onMouseDown={(ev) => { ev.preventDefault(); applyEmojiSuggestion(e); }}
                         onMouseEnter={() => setEmojiSuggestIndex(i)}
                         className={cn(
@@ -3832,9 +3911,7 @@ export default function Inbox() {
                           i === emojiSuggestIndex ? "bg-primary/15" : "hover:bg-muted",
                         )}
                       >
-                        {/* draggable=false so a click on the emoji image never starts an
-                            image-drag instead of selecting it. */}
-                        <em-emoji native={e} set="apple" size="1.4em" fallback={e} draggable={false} />
+                        <em-emoji native={e} set="native" size="1.4em" fallback={e} draggable={false} />
                       </button>
                     ))}
                     <span className="ml-1 shrink-0 pr-1 text-[10px] text-muted-foreground opacity-60">↔ Enter</span>
@@ -3853,6 +3930,7 @@ export default function Inbox() {
                   <div
                     ref={composerRef}
                     role="textbox"
+                    aria-label="Mensagem"
                     aria-multiline="true"
                     contentEditable
                     suppressContentEditableWarning
@@ -3948,11 +4026,11 @@ export default function Inbox() {
                     bubble shows the in-flight state). Only a draft's first send
                     locks — a double start_conversation would create two conversations. */}
                 {draft.trim() || outAttachments.length > 0 ? (
-                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={!!draftConv && startConversation.isPending}>
+                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" aria-label="Enviar mensagem" disabled={!!draftConv && startConversation.isPending}>
                     {draftConv && startConversation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 ) : !isEmailSelected ? (
-                  <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" onClick={startRecording}>
+                  <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" aria-label="Gravar mensagem de voz" onClick={startRecording}>
                     <Mic className="h-4 w-4" />
                   </Button>
                 ) : null}
@@ -3965,10 +4043,11 @@ export default function Inbox() {
 
       {/* ---- Contact panel (desktop right column) ---- */}
       {selected && panelOpen && (
-        <aside className="hidden w-72 shrink-0 flex-col border-l 2xl:flex">
+        <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
           {contactPanel}
         </aside>
       )}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">{srAnnouncement}</div>
       </>
       )}
       </div>
@@ -4559,6 +4638,9 @@ const MessageBubble = memo(function MessageBubble({
   displayContent,
   quoted,
   onJumpToQuoted,
+  replyTargetWaId,
+  reaction,
+  searchQuery,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
@@ -4580,10 +4662,19 @@ const MessageBubble = memo(function MessageBubble({
   groupSender?: string | null;
   // Body with the group-sender prefix stripped; falls back to m.content.
   displayContent?: string;
+  // WhatsApp message id of the message currently being replied to (highlight target).
+  replyTargetWaId?: string | null;
+  // Optimistic reaction emoji shown on this bubble before the server confirms.
+  reaction?: string;
+  // Search query for in-thread text highlighting.
+  searchQuery?: string;
 }) {
   // Show the per-participant avatar + name only for incoming group messages.
   const showGroupSender = !m.outgoing && !!groupSender;
   const body = displayContent ?? m.content;
+  const { toast: copyToast } = useToast();
+  // Highlight when this is the message currently being replied to (Telegram-style).
+  const isReplyTarget = !!replyTargetWaId && !!m.wa_id && m.wa_id === replyTargetWaId;
   // Inline edit — only offered for own recent messages (WhatsApp caps editing at ~15 min; we use 5).
   const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 5 * 60 * 1000;
   const [editing, setEditing] = useState(false);
@@ -4596,6 +4687,7 @@ const MessageBubble = memo(function MessageBubble({
   // real movement so it never fires mid-scroll or mid-swipe-to-reply.
   const longPressTimerRef = useRef<number | null>(null);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
+  const editRef = useRef<HTMLDivElement>(null);
   const cancelLongPress = () => {
     if (longPressTimerRef.current != null) { window.clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
   };
@@ -4653,13 +4745,13 @@ const MessageBubble = memo(function MessageBubble({
         cancelLongPress();
         const st = dragRef.current;
         dragRef.current = null;
-        if (st?.active && Math.abs(dragX) > 55 && m.wa_id) onReply(m);
+        if (st?.active && Math.abs(dragX) > 40 && m.wa_id) onReply(m);
         setDragX(0);
       }}
       onPointerCancel={() => { cancelLongPress(); dragRef.current = null; setDragX(0); }}
       style={{ transform: dragX ? `translateX(${dragX}px)` : undefined, touchAction: "pan-y" }}
       className={cn(
-        "group relative flex items-end gap-1",
+        "group relative flex animate-in fade-in items-end gap-1",
         firstOfGroup ? "mt-2.5" : "mt-0.5",
         m.outgoing ? "justify-end" : "justify-start",
       )}
@@ -4714,10 +4806,11 @@ const MessageBubble = memo(function MessageBubble({
       )}
       <div
         className={cn(
-          "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm",
+          "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm transition-shadow",
           m.outgoing
             ? cn("bg-primary text-primary-foreground", lastOfGroup && "rounded-br-sm")
             : cn("border bg-card", lastOfGroup && "rounded-bl-sm"),
+          isReplyTarget && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         )}
       >
         {m.outgoing && m.sender_name && firstOfGroup && (
@@ -4749,11 +4842,11 @@ const MessageBubble = memo(function MessageBubble({
         ))}
         {editing ? (
           <div className="space-y-1.5">
-            <textarea
-              value={editDraft}
-              onChange={(e) => setEditDraft(e.target.value)}
-              rows={2}
-              autoFocus
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              ref={editRef}
+              onInput={(e) => setEditDraft(e.currentTarget.innerText)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -4763,8 +4856,8 @@ const MessageBubble = memo(function MessageBubble({
                   setEditing(false);
                 }
               }}
-              className="w-full resize-none rounded-md border border-primary-foreground/30 bg-primary-foreground/10 p-1.5 text-sm text-inherit outline-none"
-            />
+              className="w-full resize-none rounded-3xl border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-2 text-sm text-inherit outline-none"
+            >{editDraft}</div>
             <div className="flex justify-end gap-1">
               <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-0.5 text-[11px] opacity-80 hover:opacity-100">
                 Cancelar
@@ -4779,13 +4872,21 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
         ) : (
-          body && <p className="whitespace-pre-wrap break-words">{autolink(body)}</p>
+          body && <p className="whitespace-pre-wrap break-words">{autolink(body, m.outgoing, searchQuery)}</p>
         )}
         {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
             {formatTime(m.created_at)}
             {m.outgoing && <StatusTicks status={m.status} />}
           </p>
+        )}
+        {reaction && (
+          <div className={cn(
+            "absolute -bottom-2.5 rounded-full border px-1.5 py-0.5 text-xs shadow-sm",
+            m.outgoing ? "right-2 border-primary-foreground/20 bg-primary-foreground/10" : "left-2 border-border bg-card",
+          )}>
+            {reaction}
+          </div>
         )}
       </div>
       {!m.outgoing && (
@@ -4827,7 +4928,7 @@ const MessageBubble = memo(function MessageBubble({
             )}
             <button
               type="button"
-              onClick={() => { setActionsSheetOpen(false); navigator.clipboard?.writeText(body || ""); }}
+              onClick={() => { setActionsSheetOpen(false); navigator.clipboard?.writeText(body || ""); copyToast({ title: "Texto copiado" }); }}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
             >
               <FileText className="h-4 w-4 text-muted-foreground" /> Copiar texto
@@ -5013,37 +5114,37 @@ function ChannelBadge({ channel }: { channel: string | null }) {
   const ch = channel.toLowerCase();
   if (ch.includes("instagram")) {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-background"
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-background"
         style={{ background: "linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)" }}>
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.97.24 2.43.403a4.9 4.9 0 0 1 1.772 1.153 4.9 4.9 0 0 1 1.153 1.772c.163.46.35 1.26.403 2.43.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.24 1.97-.403 2.43a4.9 4.9 0 0 1-1.153 1.772 4.9 4.9 0 0 1-1.772 1.153c-.46.163-1.26.35-2.43.403-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.97-.24-2.43-.403a4.9 4.9 0 0 1-1.772-1.153 4.9 4.9 0 0 1-1.153-1.772c-.163-.46-.35-1.26-.403-2.43C2.175 15.747 2.163 15.367 2.163 12s.012-3.584.07-4.85c.054-1.17.24-1.97.403-2.43A4.9 4.9 0 0 1 3.79 2.948a4.9 4.9 0 0 1 1.772-1.153c.46-.163 1.26-.35 2.43-.403C9.258 1.334 9.638 1.322 12 1.322Zm0 1.838c-3.162 0-3.535.012-4.787.069-1.055.048-1.63.224-2.011.372a3.07 3.07 0 0 0-1.138.74 3.07 3.07 0 0 0-.74 1.138c-.148.382-.324.956-.372 2.011-.057 1.252-.069 1.625-.069 4.787s.012 3.535.069 4.787c.048 1.055.224 1.63.372 2.011.19.487.45.9.74 1.138.238.29.651.55 1.138.74.382.148.956.324 2.011.372 1.252.057 1.625.069 4.787.069s3.535-.012 4.787-.069c1.055-.048 1.63-.224 2.011-.372a3.07 3.07 0 0 0 1.138-.74 3.07 3.07 0 0 0 .74-1.138c.148-.382.324-.956.372-2.011.057-1.252.069-1.625.069-4.787s-.012-3.535-.069-4.787c-.048-1.055-.224-1.63-.372-2.011a3.07 3.07 0 0 0-.74-1.138 3.07 3.07 0 0 0-1.138-.74c-.382-.148-.956-.324-2.011-.372-1.252-.057-1.625-.069-4.787-.069ZM12 6.865a5.135 5.135 0 1 1 0 10.27 5.135 5.135 0 0 1 0-10.27Zm0 1.838a3.297 3.297 0 1 0 0 6.594 3.297 3.297 0 0 0 0-6.594Zm5.338-3.205a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/></svg>
+        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.97.24 2.43.403a4.9 4.9 0 0 1 1.772 1.153 4.9 4.9 0 0 1 1.153 1.772c.163.46.35 1.26.403 2.43.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.24 1.97-.403 2.43a4.9 4.9 0 0 1-1.153 1.772 4.9 4.9 0 0 1-1.772 1.153c-.46.163-1.26.35-2.43.403-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.97-.24-2.43-.403a4.9 4.9 0 0 1-1.772-1.153 4.9 4.9 0 0 1-1.153-1.772c-.163-.46-.35-1.26-.403-2.43C2.175 15.747 2.163 15.367 2.163 12s.012-3.584.07-4.85c.054-1.17.24-1.97.403-2.43A4.9 4.9 0 0 1 3.79 2.948a4.9 4.9 0 0 1 1.772-1.153c.46-.163 1.26-.35 2.43-.403C9.258 1.334 9.638 1.322 12 1.322Zm0 1.838c-3.162 0-3.535.012-4.787.069-1.055.048-1.63.224-2.011.372a3.07 3.07 0 0 0-1.138.74 3.07 3.07 0 0 0-.74 1.138c-.148.382-.324.956-.372 2.011-.057 1.252-.069 1.625-.069 4.787s.012 3.535.069 4.787c.048 1.055.224 1.63.372 2.011.19.487.45.9.74 1.138.238.29.651.55 1.138.74.382.148.956.324 2.011.372 1.252.057 1.625.069 4.787.069s3.535-.012 4.787-.069c1.055-.048 1.63-.224 2.011-.372a3.07 3.07 0 0 0 1.138-.74 3.07 3.07 0 0 0 .74-1.138c.148-.382.324-.956.372-2.011.057-1.252.069-1.625.069-4.787s-.012-3.535-.069-4.787c-.048-1.055-.224-1.63-.372-2.011a3.07 3.07 0 0 0-.74-1.138 3.07 3.07 0 0 0-1.138-.74c-.382-.148-.956-.324-2.011-.372-1.252-.057-1.625-.069-4.787-.069ZM12 6.865a5.135 5.135 0 1 1 0 10.27 5.135 5.135 0 0 1 0-10.27Zm0 1.838a3.297 3.297 0 1 0 0 6.594 3.297 3.297 0 0 0 0-6.594Zm5.338-3.205a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/></svg>
       </span>
     );
   }
   if (ch.includes("telegram")) {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#229ED9] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#229ED9] ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
       </span>
     );
   }
   if (ch.includes("email")) {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-500 ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
       </span>
     );
   }
   if (ch.includes("facebook")) {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1877F2] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#1877F2] ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
       </span>
     );
   }
   // Default: WhatsApp (api channel or any other → assume WhatsApp since that's the main channel here)
   return (
-    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background">
-      <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+    <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background">
+      <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
     </span>
   );
 }
@@ -5103,7 +5204,7 @@ const ConversationRow = memo(function ConversationRow({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(conversation.id); } }}
       onMouseEnter={() => onHover?.(conversation.id, conversation.alt_ids ?? [])}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
+        "group flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
         active && "bg-accent",
       )}
     >

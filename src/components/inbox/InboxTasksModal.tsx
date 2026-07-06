@@ -68,18 +68,18 @@ export function InboxTasksModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0">
-        <DialogHeader className="border-b px-5 py-3">
+      <DialogContent className="sm:max-w-5xl max-w-[calc(100vw-1rem)] p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] h-[80vh]">
+        <DialogHeader className="border-b px-5 py-3 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <ClipboardList className="h-4 w-4 text-primary" />
             Tarefas {tasks.length > 0 && <span className="text-sm font-normal text-muted-foreground">({tasks.length} abertas)</span>}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex h-[75vh] flex-col md:grid md:h-[60vh] md:grid-cols-[1fr_1.2fr]">
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           {/* Left: filter + list (hidden on mobile once a task is open) */}
-          <div className={cn("min-h-0 flex-col border-r md:flex", selectedId ? "hidden md:flex" : "flex")}>
-            <div className="border-b p-3">
+          <div className={cn("flex min-h-0 flex-col border-b md:border-b-0 md:border-r md:w-[40%]", selectedId && "hidden md:flex")}>
+            <div className="border-b p-3 shrink-0">
               <Select value={assignee} onValueChange={(v) => { setAssignee(v); setSelectedId(null); }}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Filtrar por colaborador" />
@@ -126,13 +126,13 @@ export function InboxTasksModal({
           </div>
 
           {/* Right: details (full-screen on mobile when a task is open) */}
-          <div className={cn("min-h-0 flex-1 overflow-y-auto p-5", selectedId ? "block" : "hidden md:block")}>
+          <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto p-5", selectedId ? "flex" : "hidden md:flex")}>
             {!selected ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                 Seleciona uma tarefa para ver os detalhes.
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <Button
                   variant="outline"
                   size="sm"
@@ -142,22 +142,28 @@ export function InboxTasksModal({
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Voltar às tarefas
                 </Button>
                 <div>
-                  <h3 className="text-lg font-semibold leading-snug">{selected.title}</h3>
+                  <h3 className="text-xl font-semibold leading-snug">{selected.title}</h3>
                   {selected.contact_name && (
                     <p className="mt-0.5 text-sm text-muted-foreground">{selected.contact_name}</p>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-lg border p-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg border p-3">
                     <p className="text-[11px] text-muted-foreground">Prazo</p>
-                    <p className={cn("font-medium", isTaskOverdue(selected) && "text-red-600")}>
+                    <p className={cn("font-medium mt-0.5", isTaskOverdue(selected) && "text-red-600")}>
                       {dueLabel(selected.due_at)}
                     </p>
                   </div>
-                  <div className="rounded-lg border p-2.5">
+                  <div className="rounded-lg border p-3">
                     <p className="text-[11px] text-muted-foreground">Responsável</p>
-                    <p className="truncate font-medium">{nameOf(selected.assigned_to)}</p>
+                    <p className="truncate font-medium mt-0.5">{nameOf(selected.assigned_to)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-[11px] text-muted-foreground">Estado</p>
+                    <p className="font-medium mt-0.5">
+                      {isTaskOverdue(selected) ? "Atrasada" : "Aberta"}
+                    </p>
                   </div>
                 </div>
 
@@ -172,7 +178,7 @@ export function InboxTasksModal({
                   <div>
                     <p className="mb-1 text-[11px] font-medium text-muted-foreground">Mensagem de origem</p>
                     <p className="rounded-md bg-muted px-3 py-2 text-sm italic text-muted-foreground">
-                      “{selected.source_message}”
+                      &ldquo;{selected.source_message}&rdquo;
                     </p>
                   </div>
                 )}

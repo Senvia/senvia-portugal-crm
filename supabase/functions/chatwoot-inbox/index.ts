@@ -1029,9 +1029,7 @@ Deno.serve(async (req) => {
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${await getInstance()}`, 'DELETE', {
-        id: waId,
-        remoteJid: `${phone}@s.whatsapp.net`,
-        fromMe: true,
+        key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
       });
       if (!res.ok) {
         console.error('Evolution delete failed:', res.status, await res.text());
@@ -1053,8 +1051,10 @@ Deno.serve(async (req) => {
       const emoji = String(body.emoji ?? '');
       if (!waId || !phone || !emoji) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/message/sendReaction/${await getInstance()}`, 'POST', {
-        key: { remoteJid: `${phone}@s.whatsapp.net`, fromMe: !!body.from_me, id: waId },
-        reaction: emoji,
+        reaction: {
+          key: { remoteJid: `${phone}@s.whatsapp.net`, fromMe: !!body.from_me, id: waId },
+          text: emoji,
+        },
       });
       if (!res.ok) {
         console.error('Evolution reaction failed:', res.status, await res.text());
@@ -1075,8 +1075,10 @@ Deno.serve(async (req) => {
       if (!waId || !phone || !text) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/chat/updateMessage/${await getInstance()}`, 'POST', {
         number: phone,
-        key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
-        text,
+        edit: {
+          key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
+          message: { conversation: text },
+        },
       });
       if (!res.ok) {
         console.error('Evolution edit failed:', res.status, await res.text());

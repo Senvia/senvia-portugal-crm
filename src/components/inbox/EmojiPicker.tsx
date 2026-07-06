@@ -1,6 +1,6 @@
-// Full emoji picker (all ~1800 emojis) in the Apple/WhatsApp style, with search,
-// categories and skin tones. Thin wrapper around emoji-mart so the inbox only
-// depends on our own small surface. Lazy-loaded by the composer.
+// Full emoji picker (all ~1800 emojis) using the device's native emoji font,
+// with search, categories and skin tones. Thin wrapper around emoji-mart so
+// the inbox only depends on our own small surface. Lazy-loaded by the composer.
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 
@@ -38,7 +38,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (native: string) => void }
   return (
     <Picker
       data={data}
-      set="apple"
+      set="native"
       theme="auto"
       i18n={I18N_PT}
       previewPosition="none"

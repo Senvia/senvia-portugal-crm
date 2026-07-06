@@ -150,5 +150,8 @@ verify_jwt = false
 [functions.repair-whatsapp-wiring]
 verify_jwt = false
 
+[functions.whatsapp-keepalive]
+verify_jwt = false
+
 [functions.transcribe-audio]
 verify_jwt = true

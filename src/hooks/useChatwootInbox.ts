@@ -168,6 +168,13 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const [live, setLive] = useState(false);
+  // Track when we actually RECEIVED a broadcast. If the WebSocket is connected
+  // (live=true) but no broadcast arrives in ~45s, the webhook is likely not
+  // registered or broadcasts are going to the wrong project. In that case
+  // callers should use faster polling instead of the relaxed "live" intervals.
+  const lastBroadcastRef = useRef<number>(0);
+  const connectedAtRef = useRef<number>(0);
+  const [, forceTick] = useState(0);
   // Keep the latest getter without resubscribing the channel.
   const getOpenRef = useRef(getOpenConversationId);
   getOpenRef.current = getOpenConversationId;
@@ -185,6 +192,7 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
     const channel = supabase
       .channel(`inbox-${orgId}`, { config: { private: true } })
       .on('broadcast', { event: 'message' }, ({ payload }) => {
+        lastBroadcastRef.current = Date.now();
         // Instant append: the webhook now ships the message itself, so the OPEN
         // thread updates immediately without waiting for the Chatwoot refetch.
         // The debounced invalidate below still runs to reconcile (attachments,
@@ -244,8 +252,16 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
       })
       .subscribe((status) => setLive((prev) => {
         const next = status === 'SUBSCRIBED';
+        if (next && !prev) connectedAtRef.current = Date.now();
         return prev === next ? prev : next;
       }));
+
+    // Periodic staleness check: if the WebSocket is connected but no broadcast
+    // has arrived in 45s, force a re-render so callers re-evaluate their poll
+    // intervals (they'll switch from the relaxed "live" cadence to a faster one).
+    const staleTicker = window.setInterval(() => {
+      forceTick((n) => n + 1);
+    }, 15000);
 
     // Wake on tab focus. Desktop browsers throttle background tabs — timers slow
     // down and the realtime socket is often suspended/dropped — so a PC left on
@@ -269,13 +285,21 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       if (taskTimer !== null) window.clearTimeout(taskTimer);
+      window.clearInterval(staleTicker);
       document.removeEventListener('visibilitychange', onVisible);
       setLive(false);
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);
 
-  return live;
+  // Realtime is "fresh" only if we've received a broadcast recently. If the
+  // WebSocket is up but silent for >45s (since connect or since last broadcast),
+  // the webhook is likely not firing — callers should poll faster instead of
+  // trusting the dead "live" flag.
+  const since = lastBroadcastRef.current || connectedAtRef.current;
+  const stale = live && since > 0 && (Date.now() - since > 45000);
+
+  return live && !stale;
 }
 
 export interface PresencePeer {
@@ -459,14 +483,16 @@ export function useInboxConversations(enabled = true, live = false) {
     // (fresh-mode) fetch in the background to reconcile — this is display-only.
     initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
     initialDataUpdatedAt: 0,
-    // Gentle fallback polling (realtime is the primary freshness path). 5s was too
-    // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
-    refetchInterval: !enabled ? false : live ? 15000 : 6000,
+    // Gentle fallback polling (realtime is the primary freshness path). 6s when
+    // realtime is down or stale; 10s when fresh — a safety net, not the main path.
+    refetchInterval: !enabled ? false : live ? 10000 : 6000,
     // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
     // realtime invalidate already keep this fresh. Without this, every focus
     // change re-ran the read-modify-write merge and re-rendered the whole inbox.
     staleTime: 10000,
     refetchOnWindowFocus: false,
+    // Keep the previous data visible while refetching (no flash to empty/loading).
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -584,7 +610,7 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     // work — a poll every 6s was pure rework (each tick re-fetches EVERY merged
     // alt conversation from Chatwoot, for every open thread, forever), so
     // it's stretched to a relaxed safety net instead of a redundant fast poll.
-    refetchInterval: !conversationId ? false : live ? 25000 : 3000,
+    refetchInterval: !conversationId ? false : live ? 12000 : 3000,
     // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
     // the poll already keep the open thread fresh.
     refetchOnWindowFocus: false,
