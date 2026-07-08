@@ -18,7 +18,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring, useInstagramConnect } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
@@ -777,7 +777,7 @@ type ChannelIcon = React.ComponentType<{ className?: string }>;
 const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; tint: string; available: boolean }[] = [
   { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: true },
   { type: 'email', label: 'Email', icon: Mail, color: 'text-blue-600', tint: 'bg-blue-500/10', available: true },
-  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: false },
+  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: true },
   { type: 'facebook', label: 'Facebook', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
 ];
 
@@ -992,6 +992,9 @@ function InboxesManager() {
   const [newOpen, setNewOpen] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [addEmailOpen, setAddEmailOpen] = useState(false);
+  // Instagram connect modal
+  const [igOpen, setIgOpen] = useState(false);
+  const [igLabel, setIgLabel] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1032,6 +1035,28 @@ function InboxesManager() {
     setConnectModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
     setNewOpen(false);
     setNewLabel('');
+  };
+
+  const igConnect = useInstagramConnect();
+  const startNewInstagram = () => {
+    if (blockIfAtLimit()) return;
+    setIgOpen(true);
+    setNewOpen(false);
+    setNewLabel('');
+  };
+  const handleInstagramConnect = () => {
+    if (!igLabel.trim()) return;
+    igConnect.mutate(
+      { label: igLabel.trim() },
+      {
+        onSuccess: (data) => {
+          toast({ title: 'Instagram ligado', description: data.ig_username ? `@${data.ig_username} conectado` : 'Caixa pronta.' });
+          setIgOpen(false);
+          setIgLabel('');
+        },
+        onError: (err) => toast({ title: 'Falha ao ligar Instagram', description: (err as Error).message, variant: 'destructive' }),
+      },
+    );
   };
 
   return (
@@ -1226,7 +1251,8 @@ function InboxesManager() {
                     if (!c.available) return;
                     if (blockIfAtLimit()) { setNewOpen(false); return; }
                     if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
-                    // WhatsApp (and future channels): stay open so user enters a label
+                    if (c.type === 'instagram') { startNewInstagram(); return; }
+                    // WhatsApp: stay open so user enters a label
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',
@@ -1267,6 +1293,43 @@ function InboxesManager() {
         channelId={connectModal.channelId}
         label={connectModal.label}
       />
+
+      {/* Instagram connect modal */}
+      <Dialog open={igOpen} onOpenChange={(o) => { setIgOpen(o); if (!o) igConnect.reset(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <InstagramIcon className="h-5 w-5 text-[#E4405F]" />
+              Ligar Instagram
+            </DialogTitle>
+            <DialogDescription>
+              Faz login com o Facebook para ligar a tua conta Instagram Business.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
+              <Input value={igLabel} onChange={(e) => setIgLabel(e.target.value)} placeholder="Ex: Instagram Vendas" className="mt-1" />
+            </div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-amber-700 dark:text-amber-400">Requisitos:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                <li>A conta Instagram tem de ser <strong>Business</strong> (não Creator)</li>
+                <li>Tens de ter uma <strong>Página de Facebook</strong> com a conta Instagram ligada</li>
+              </ul>
+            </div>
+            <Button onClick={handleInstagramConnect} disabled={igConnect.isPending || !igLabel.trim()} className="w-full gap-2">
+              {igConnect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <InstagramIcon className="h-4 w-4" />}
+              {igConnect.isPending ? 'A ligar...' : 'Entrar com Facebook'}
+            </Button>
+            {igConnect.isPending && (
+              <p className="text-center text-xs text-muted-foreground">
+                Vai abrir uma janela de login. Faz login e autoriza o acesso.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>

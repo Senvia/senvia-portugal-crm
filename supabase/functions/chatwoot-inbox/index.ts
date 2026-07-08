@@ -661,8 +661,12 @@ Deno.serve(async (req) => {
         const emailCh = routes.find(
           (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'email',
         );
-        if (emailCh) {
-          // Email WITH an attachment: Chatwoot's create-message endpoint accepts
+        // Instagram channels also route through Chatwoot (Meta API), not Evolution.
+        const igCh = routes.find(
+          (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'instagram',
+        );
+        if (emailCh || igCh) {
+          // Email/Instagram WITH an attachment: Chatwoot's create-message endpoint accepts
           // multipart/form-data with attachments[] file parts. chatwootFetch sends
           // JSON, so build the request directly here (fetch must set the multipart
           // boundary itself — never set Content-Type manually for FormData).
@@ -682,20 +686,20 @@ Deno.serve(async (req) => {
               30000,
             );
             if (!attRes.ok) {
-              console.error('[chatwoot-inbox] email attachment send failed:', attRes.status, await attRes.text());
-              return json({ error: 'Falha ao enviar o anexo por email' }, 502);
+              console.error('[chatwoot-inbox] email/instagram attachment send failed:', attRes.status, await attRes.text());
+              return json({ error: 'Falha ao enviar o anexo' }, 502);
             }
             return json({ ok: true });
           }
-          // Email text-only: let Chatwoot handle SMTP delivery.
-          const emailRes = await chatwootFetch(
+          // Email/Instagram text-only: let Chatwoot handle delivery (SMTP or Meta API).
+          const textRes = await chatwootFetch(
             cfg, cw.token,
             `${base}/conversations/${conversation_id}/messages`, 'POST',
             { content: text, message_type: 'outgoing', private: false },
           );
-          if (!emailRes.ok) {
-            console.error('[chatwoot-inbox] email send failed:', emailRes.status, await emailRes.text());
-            return json({ error: 'Falha ao enviar email' }, 502);
+          if (!textRes.ok) {
+            console.error('[chatwoot-inbox] email/instagram send failed:', textRes.status, await textRes.text());
+            return json({ error: 'Falha ao enviar a mensagem' }, 502);
           }
           return json({ ok: true });
         }

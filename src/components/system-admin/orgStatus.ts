@@ -9,7 +9,7 @@
 //   trial_ends_at in future -> em trial
 //   otherwise               -> trial expirado
 
-export type OrgBucket = "paying" | "trial" | "overdue" | "expired" | "canceled" | "exempt";
+export type OrgBucket = "paying" | "trial" | "overdue" | "blocked" | "expired" | "canceled" | "exempt";
 
 export interface ClassifiableOrg {
   billing_exempt: boolean | null;
@@ -18,10 +18,20 @@ export interface ClassifiableOrg {
   payment_failed_at: string | null;
 }
 
+const GRACE_DAYS = 4;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export function classifyOrg(o: ClassifiableOrg, stripeStatus: string | null | undefined, now: Date): OrgBucket {
   if (o.billing_exempt) return "exempt";
   if (stripeStatus === "canceled") return "canceled";
-  if (o.payment_failed_at || stripeStatus === "past_due" || stripeStatus === "unpaid") return "overdue";
+  if (o.payment_failed_at || stripeStatus === "past_due" || stripeStatus === "unpaid") {
+    // Check if grace window has passed
+    if (o.payment_failed_at) {
+      const blockAt = new Date(o.payment_failed_at).getTime() + GRACE_DAYS * DAY_MS;
+      if (now.getTime() > blockAt) return "blocked";
+    }
+    return "overdue";
+  }
   if (o.first_paid_at || stripeStatus === "active") return "paying";
   if (o.trial_ends_at && new Date(o.trial_ends_at) > now) return "trial";
   return "expired";
@@ -42,6 +52,11 @@ export const BUCKET_META: Record<OrgBucket, { label: string; badge: string; dot:
     label: "Em atraso",
     badge: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-400",
     dot: "bg-amber-500",
+  },
+  blocked: {
+    label: "Bloqueado",
+    badge: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+    dot: "bg-red-600",
   },
   expired: {
     label: "Expirado",

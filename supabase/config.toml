@@ -153,5 +153,8 @@ verify_jwt = false
 [functions.whatsapp-keepalive]
 verify_jwt = false
 
+[functions.instagram-connect]
+verify_jwt = false
+
 [functions.transcribe-audio]
 verify_jwt = true
