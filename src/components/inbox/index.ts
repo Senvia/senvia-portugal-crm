@@ -1,10 +1,5 @@
 // Barrel export for inbox components.
-// Modular components extracted from the monolithic Inbox.tsx + kanban view.
-
-// Kanban view (Phase 2)
-export { InboxKanbanView } from "./InboxKanbanView";
-export { InboxKanbanColumn } from "./InboxKanbanColumn";
-export { InboxKanbanCard } from "./InboxKanbanCard";
+// Modular components extracted from the monolithic Inbox.tsx.
 
 // Existing modular components
 export { InboxCaixaRail } from "./InboxCaixaRail";

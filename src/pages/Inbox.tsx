@@ -58,7 +58,6 @@ import { InboxProductSection } from "@/components/inbox/InboxProductPicker";
 import { useSendProductInbox } from "@/hooks/inbox/useSendProductInbox";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
-import { InboxKanbanView } from "@/components/inbox/InboxKanbanView";
 import { CommandPalette } from "@/components/inbox/CommandPalette";
 import { ShortcutsOverlay } from "@/components/inbox/ShortcutsOverlay";
 // Lazy: the email client (list+reader+composer) is a big chunk of code that
@@ -98,7 +97,7 @@ import {
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
-  MailOpen, Image as ImageIcon, Link2, List, LayoutGrid,
+  MailOpen, Image as ImageIcon, Link2,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -881,14 +880,6 @@ export default function Inbox() {
   // Mobile-only: the caixa rail (hidden < md) opens in a left Sheet so phones can
   // switch caixa / reach email.
   const [railSheetOpen, setRailSheetOpen] = useState(false);
-  // View mode: list (default) or kanban — persisted in localStorage.
-  const [viewMode, setViewMode] = useState<"list" | "kanban">(
-    () => (localStorage.getItem("inbox-view-mode") as "list" | "kanban") || "list",
-  );
-  // Persist view mode preference.
-  useEffect(() => {
-    localStorage.setItem("inbox-view-mode", viewMode);
-  }, [viewMode]);
   // Generic destructive-action confirmation (replaces window.confirm).
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
   // Command palette (Cmd/Ctrl+K) and keyboard shortcuts overlay (Cmd/Ctrl+/).
@@ -2337,10 +2328,6 @@ export default function Inbox() {
     }
   }, [navigate, handleExportConversation]);
 
-  // Kanban: change a conversation's status via drag-and-drop. The kanban view
-  // classifies conversations into columns (novo, atendimento, aguarda, resolvido)
-  // and fires onStatusChange when a card is dragged to a different column.
-  // Maps the kanban column status to the Chatwoot toggle_status action.
   const handleStatusChange = useCallback(
     (conversationId: number, newStatus: string) => {
       const status = newStatus === "resolved" ? "resolved" : "open";
@@ -2350,7 +2337,6 @@ export default function Inbox() {
           onSuccess: () => {
             toast({
               title: status === "resolved" ? "Conversa arquivada" : "Conversa reaberta",
-              description: "Estado atualizado no kanban.",
             });
           },
           onError: () => {
@@ -2361,8 +2347,7 @@ export default function Inbox() {
             });
           },
         },
-      );
-    },
+      );    },
     [toggleStatus, toast],
   );
 
@@ -3203,31 +3188,6 @@ export default function Inbox() {
               )}
             </h1>
             <div className="flex gap-1.5">
-              {/* List / Kanban view toggle */}
-              <div className="flex items-center rounded-md border bg-muted/50 p-0.5">
-                <button
-                  type="button"
-                  title="Vista de lista"
-                  onClick={() => setViewMode("list")}
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded transition-colors",
-                    viewMode === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  title="Vista kanban"
-                  onClick={() => setViewMode("kanban")}
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded transition-colors",
-                    viewMode === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </button>
-              </div>
               <Button
                 size="icon"
                 variant="ghost"
@@ -3300,31 +3260,7 @@ export default function Inbox() {
           {/* Caixa selection moved to the unified left rail (InboxCaixaRail) */}
         </div>
 
-        {viewMode === "kanban" ? (
-          <div className="flex-1 overflow-hidden">
-            {loadingConvos ? (
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : convosError ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
-                <p>Não foi possível carregar as conversas.</p>
-                <Button variant="outline" size="sm" onClick={() => refetchConvos()}>Tentar novamente</Button>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sem conversas para mostrar.
-              </div>
-            ) : (
-              <InboxKanbanView
-                conversations={filtered}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                onStatusChange={handleStatusChange}
-              />
-            )}
-          </div>
-        ) : (
+        
         <div ref={listScrollRef} className="flex-1 overflow-y-auto">
           <div className="animate-in fade-in" key={`${tab}-${caixaFilter}`}>
           {loadingConvos ? (
@@ -3400,8 +3336,7 @@ export default function Inbox() {
             </div>
           )}
           </div>
-        </div>
-        )}
+          </div>
       </aside>
 
       {/* ---- Thread ---- */}
