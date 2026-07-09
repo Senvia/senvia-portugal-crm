@@ -13,7 +13,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
-import type { InboxConversation } from "@/hooks/inbox";
+import type { InboxConversation } from "@/hooks/useChatwootInbox";
 import { InboxKanbanColumn } from "./InboxKanbanColumn";
 import { InboxKanbanCard } from "./InboxKanbanCard";
 

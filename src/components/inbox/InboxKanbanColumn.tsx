@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
-import type { InboxConversation } from "@/hooks/inbox";
+import type { InboxConversation } from "@/hooks/useChatwootInbox";
 import { InboxKanbanCard } from "./InboxKanbanCard";
 
 interface InboxKanbanColumnProps {

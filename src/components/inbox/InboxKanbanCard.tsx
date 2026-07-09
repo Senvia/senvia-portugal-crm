@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import type { InboxConversation } from "@/hooks/inbox";
+import type { InboxConversation } from "@/hooks/useChatwootInbox";
 import { ContactAvatar } from "./ContactAvatar";
 import { ChannelBadge } from "./ChannelBadge";
 import { ListStatusTicks } from "./StatusTicks";
