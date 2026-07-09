@@ -54,9 +54,13 @@ import {
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { InboxProductSection } from "@/components/inbox/InboxProductPicker";
+import { useSendProductInbox } from "@/hooks/inbox/useSendProductInbox";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
 import { InboxKanbanView } from "@/components/inbox/InboxKanbanView";
+import { CommandPalette } from "@/components/inbox/CommandPalette";
+import { ShortcutsOverlay } from "@/components/inbox/ShortcutsOverlay";
 // Lazy: the email client (list+reader+composer) is a big chunk of code that
 // pure-WhatsApp users never touch — no reason to ship it in the initial Inbox bundle.
 const EmailListReader = lazy(() => import("@/components/email/EmailListReader").then(m => ({ default: m.EmailListReader })));
@@ -75,7 +79,7 @@ const LeadDetailsModal = lazy(() => import("@/components/leads/LeadDetailsModal"
 // Lazy: only needed the rare times the WhatsApp session needs (re)connecting.
 const ConnectWhatsAppModal = lazy(() => import("@/components/settings/ConnectWhatsAppModal").then(m => ({ default: m.ConnectWhatsAppModal })));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -887,6 +891,9 @@ export default function Inbox() {
   }, [viewMode]);
   // Generic destructive-action confirmation (replaces window.confirm).
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
+  // Command palette (Cmd/Ctrl+K) and keyboard shortcuts overlay (Cmd/Ctrl+/).
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -910,7 +917,10 @@ export default function Inbox() {
     filtered: InboxConversation[];
     selectedId: number | null;
     archive: () => void;
-  }>({ filtered: [], selectedId: null, archive: () => {} });
+    openCommandPalette: () => void;
+    showShortcuts: () => void;
+    closePanel: () => void;
+  }>({ filtered: [], selectedId: null, archive: () => {}, openCommandPalette: () => {}, showShortcuts: () => {}, closePanel: () => {} });
   const prevUnreadRef = useRef<number>(0);
   const lastTypingRef = useRef<number>(0);
   const lastAutoReadRef = useRef<number>(0);
@@ -1046,6 +1056,9 @@ export default function Inbox() {
   const saveAutoReply = useSaveAutoReplyConfig();
   const createCommunication = useCreateCommunication();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // ---- Produtos ----
+  const { sendProduct: sendProductInbox } = useSendProductInbox();
 
   // ---- Tarefas ----
   const { data: openTasks = [] } = useOpenInboxTasks(channelConfigured);
@@ -2397,7 +2410,14 @@ export default function Inbox() {
   }, [draft, emojiSuggestQuery]);
 
   // Keep the keyboard handler's data fresh without rebinding the listener.
-  kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
+  kbdRef.current = {
+    filtered,
+    selectedId,
+    archive: handleToggleArchive,
+    openCommandPalette: () => setCommandPaletteOpen(true),
+    showShortcuts: () => setShortcutsOpen(true),
+    closePanel: () => setSelectedId(null),
+  };
 
   // Virtual list for the conversation panel — only renders ~15 visible rows
   // instead of the full 200-cap, dramatically reducing DOM nodes and memory.
@@ -2409,20 +2429,53 @@ export default function Inbox() {
     overscan: 5,
   });
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
-  // / search, c new conversation, n toggle note. Ignored while typing. ----
+  // / search, c new conversation, Enter opens, Esc closes, Cmd/Ctrl+K palette,
+  // Cmd/Ctrl+/ shortcuts overlay, Cmd/Ctrl+Enter sends. ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Don't let single-key shortcuts (e archive, c new conversation, ...) fire
-      // while a modal/sheet is open — they'd act on the list behind the dialog.
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
-      const t = e.target as HTMLElement | null;
-      const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) {
-        if (e.key === "Escape") t?.blur();
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl+K → command palette (works even in inputs)
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
         return;
       }
-      const { filtered: list, selectedId: sel, archive } = kbdRef.current;
+      // Cmd/Ctrl+/ → shortcuts overlay (works even in inputs)
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+Enter → submit message (works inside the composer)
+      if (mod && e.key === "Enter") {
+        e.preventDefault();
+        // Find the composer form and submit it
+        const form = document.querySelector<HTMLFormElement>('section form');
+        if (form) form.requestSubmit();
+        return;
+      }
+
+      // Below: single-key shortcuts only — bail if modifier is held.
+      if (mod || e.altKey) return;
+
+      // Don't let single-key shortcuts fire while a modal/sheet is open.
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
+
+      if (inInput) {
+        // Esc blurs the input / closes the conversation panel.
+        if (e.key === "Escape") {
+          e.preventDefault();
+          t?.blur();
+        }
+        return;
+      }
+
+      const { filtered: list, selectedId: sel, archive, openCommandPalette, showShortcuts, closePanel } = kbdRef.current;
       const move = (delta: number) => {
         if (list.length === 0) return;
         const idx = list.findIndex((c) => c.id === sel);
@@ -2443,6 +2496,13 @@ export default function Inbox() {
           e.preventDefault();
           move(-1);
           break;
+        case "Enter":
+          // Open the selected conversation (if not already open)
+          if (sel != null) {
+            e.preventDefault();
+            // Already open — no-op, but prevent default to avoid scrolling
+          }
+          break;
         case "e":
           if (sel) {
             e.preventDefault();
@@ -2456,6 +2516,12 @@ export default function Inbox() {
         case "c":
           e.preventDefault();
           setNewConvOpen(true);
+          break;
+        case "Escape":
+          if (sel != null) {
+            e.preventDefault();
+            closePanel();
+          }
           break;
         default:
           break;
@@ -2931,6 +2997,21 @@ export default function Inbox() {
             );
           })}
         </div>
+      )}
+
+      {/* Produtos — enviar com 1 clique */}
+      {selected?.contact_phone && selected.id > 0 && (
+        <InboxProductSection
+          onSelectProduct={async (product) => {
+            await sendProductInbox(
+              selected.id,
+              product,
+              selected.contact_phone,
+              selected.inbox_id,
+            );
+            toast({ title: "Produto enviado", description: product.name });
+          }}
+        />
       )}
 
       {/* Tarefas da conversa — "prometi e não esqueço" */}
