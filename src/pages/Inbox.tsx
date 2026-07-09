@@ -2275,6 +2275,68 @@ export default function Inbox() {
     );
   }, [toggleStatus, toast, selectedId, filtered]);
 
+  // Export a conversation's messages as a text file.
+  const handleExportConversation = useCallback(async (conv: InboxConversation) => {
+    try {
+      const lines: string[] = [];
+      lines.push(`Conversa: ${conv.contact_name}`);
+      lines.push(`Telefone: ${conv.contact_phone || "N/A"}`);
+      lines.push(`Data de exportação: ${new Date().toLocaleString("pt-PT")}`);
+      lines.push("=".repeat(50));
+      lines.push("");
+      const msgs = conv.id === selectedId ? thread : [];
+      if (msgs.length === 0) {
+        lines.push("(Abre a conversa para carregar as mensagens antes de exportar.)");
+      } else {
+        for (const m of msgs) {
+          const time = formatTime(m.created_at);
+          const sender = m.outgoing ? "Nós" : conv.contact_name;
+          lines.push(`[${time}] ${sender}: ${m.content || "[anexo]"}`);
+        }
+      }
+      lines.push("");
+      lines.push("=".repeat(50));
+      lines.push(`Total de mensagens: ${msgs.length}`);
+      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversa-${conv.contact_name.replace(/\s+/g, "-")}-${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Conversa exportada" });
+    } catch {
+      toast({ title: "Falha ao exportar", variant: "destructive" });
+    }
+  }, [selectedId, thread, toast]);
+
+  // Quick action handler for the conversation row's "⋮" menu — opens the
+  // conversation first, then triggers the relevant action.
+  const handleQuickAction = useCallback((action: string, conv: InboxConversation) => {
+    setSelectedId(conv.id);
+    switch (action) {
+      case "create_lead":
+        setAddToCrmOpen(true);
+        setAddToCrmTab("lead");
+        break;
+      case "schedule_meeting":
+        navigate("/calendar?new=true");
+        break;
+      case "assign":
+        setAssignOpen(true);
+        break;
+      case "labels":
+        setManagingLabels(true);
+        break;
+      case "snooze":
+        setReminderOpen(true);
+        break;
+      case "export":
+        handleExportConversation(conv);
+        break;
+    }
+  }, [navigate, handleExportConversation]);
+
   // Kanban: change a conversation's status via drag-and-drop. The kanban view
   // classifies conversations into columns (novo, atendimento, aguarda, resolvido)
   // and fires onStatusChange when a card is dragged to a different column.
@@ -3330,6 +3392,7 @@ export default function Inbox() {
                       onToggleMute={toggleMuteFor}
                       onMarkUnread={markUnread}
                       onArchiveToggle={handleArchiveToggleFor}
+                      onQuickAction={handleQuickAction}
                     />
                   </div>
                 );
@@ -3508,6 +3571,54 @@ export default function Inbox() {
                 >
                   <Search className={cn("h-4 w-4", threadSearchOpen && "text-primary")} />
                 </Button>
+
+                {/* Quick actions menu (3 dots) — contextual actions for the open conversation */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" title="Ações rápidas">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setAddToCrmOpen(true)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Criar lead / Adicionar ao CRM
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/calendar?new=true")}>
+                      <CalendarClock className="mr-2 h-4 w-4" />
+                      Marcar reunião
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAssignOpen(true)}>
+                      <UserCog className="mr-2 h-4 w-4" />
+                      Atribuir a...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setManagingLabels(true)}>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Gerir etiquetas
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setReminderOpen(true)}>
+                      <AlarmClock className="mr-2 h-4 w-4" />
+                      Adiar (snooze)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleToggleArchive}>
+                      {isArchived
+                        ? <><ArchiveRestore className="mr-2 h-4 w-4" /> Reabrir conversa</>
+                        : <><Archive className="mr-2 h-4 w-4" /> Arquivar conversa</>}
+                    </DropdownMenuItem>
+                    {selected?.contact_phone && selected.unread_count === 0 && (
+                      <DropdownMenuItem onClick={() => selectedId && markUnread({ conversationId: selectedId })}>
+                        <MailOpen className="mr-2 h-4 w-4" />
+                        Marcar como não lida
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => selected && handleExportConversation(selected)}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Exportar conversa
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
                 <Button
@@ -4700,6 +4811,25 @@ export default function Inbox() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Command Palette (Cmd/Ctrl+K) */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        conversations={visible}
+        onOpenConversation={(id) => setSelectedId(id)}
+        onNewConversation={() => setNewConvOpen(true)}
+        onArchiveCurrent={handleToggleArchive}
+        onMarkCurrentRead={() => { if (selectedId) markRead({ conversationId: selectedId }); }}
+        onAssignCurrent={() => setAssignOpen(true)}
+        onManageLabels={() => setManagingLabels(true)}
+        onExportConversation={() => { if (selected) handleExportConversation(selected); }}
+        onGoToSettings={() => navigate("/settings")}
+        currentConversationId={selectedId}
+      />
+
+      {/* Keyboard shortcuts overlay (Cmd/Ctrl+/) */}
+      <ShortcutsOverlay open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }
@@ -5335,6 +5465,7 @@ const ConversationRow = memo(function ConversationRow({
   onToggleMute,
   onMarkUnread,
   onArchiveToggle,
+  onQuickAction,
 }: {
   conversation: InboxConversation;
   active: boolean;
@@ -5361,6 +5492,9 @@ const ConversationRow = memo(function ConversationRow({
   onToggleMute: (id: number) => void;
   onMarkUnread: (id: number) => void;
   onArchiveToggle: (id: number, currentStatus: string) => void;
+  // Quick action callback for context-menu items that need the conversation
+  // to be opened first (create lead, schedule meeting, assign, labels, snooze, export).
+  onQuickAction?: (action: string, conversation: InboxConversation) => void;
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
@@ -5448,6 +5582,35 @@ const ConversationRow = memo(function ConversationRow({
                     ? <><Archive className="mr-2 h-3.5 w-3.5" /> Arquivar</>
                     : <><ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Reabrir</>}
                 </DropdownMenuItem>
+                {onQuickAction && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onQuickAction("create_lead", conversation)}>
+                      <UserPlus className="mr-2 h-3.5 w-3.5" />
+                      Criar lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("schedule_meeting", conversation)}>
+                      <CalendarClock className="mr-2 h-3.5 w-3.5" />
+                      Marcar reunião
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("assign", conversation)}>
+                      <UserCog className="mr-2 h-3.5 w-3.5" />
+                      Atribuir a...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("labels", conversation)}>
+                      <Tag className="mr-2 h-3.5 w-3.5" />
+                      Etiquetas
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("snooze", conversation)}>
+                      <AlarmClock className="mr-2 h-3.5 w-3.5" />
+                      Adiar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("export", conversation)}>
+                      <FileDown className="mr-2 h-3.5 w-3.5" />
+                      Exportar conversa
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
