@@ -1,11 +1,11 @@
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar } from "@/components/ui/calendar-rac";
 import { CalendarIcon, Printer } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { parseDate, getLocalTimeZone } from "@internationalized/date";
 import { useState } from "react";
 
 const presets = [
@@ -33,6 +33,10 @@ export function DashboardPeriodFilter() {
   };
 
   const currentLabel = format(startOfMonth(selectedMonth), "MMM yyyy", { locale: pt });
+
+  const calendarValue = parseDate(
+    format(startOfMonth(selectedMonth), "yyyy-MM-dd")
+  );
 
   return (
     <div className="flex items-center gap-2">
@@ -65,17 +69,19 @@ export function DashboardPeriodFilter() {
               );
             })}
           </div>
-          <Calendar
-            mode="single"
-            selected={startOfMonth(selectedMonth)}
-            onSelect={(date) => {
-              if (date) {
-                setSelectedMonth(startOfMonth(date));
-                setOpen(false);
-              }
-            }}
-            className={cn("p-3 pointer-events-auto")}
-          />
+          <div className="p-2">
+            <Calendar
+              aria-label="Selecionar mês"
+              value={calendarValue}
+              onChange={(date) => {
+                if (date) {
+                  setSelectedMonth(startOfMonth(date.toDate(getLocalTimeZone())));
+                  setOpen(false);
+                }
+              }}
+              className="rounded-lg border border-border bg-background p-2"
+            />
+          </div>
         </PopoverContent>
       </Popover>
 
