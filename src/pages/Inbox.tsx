@@ -376,6 +376,19 @@ function translateActivity(text: string): string {
   return text;
 }
 
+const ACTIVITY_PATTERNS = [
+  /^Conversation was/i,
+  /^Assigned to/i,
+  /self-assigned this conversation/i,
+  RE_ACT_ADDED,
+  RE_ACT_REMOVED,
+];
+
+function isActivityMessage(text: string | null): boolean {
+  if (!text) return false;
+  return ACTIVITY_PATTERNS.some((re) => re.test(text));
+}
+
 // Replace {{nome}} with the contact's first name in quick replies.
 function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
@@ -5567,7 +5580,11 @@ const ConversationRow = memo(function ConversationRow({
               <>
                 {conversation.last_outgoing && <ListStatusTicks status={conversation.last_status} />}
                 <span className="min-w-0 flex-1 truncate">
-                  {conversation.last_message ? renderWhatsAppFormatting(translateActivity(conversation.last_message)) : "—"}
+                  {conversation.last_message
+                    ? isActivityMessage(conversation.last_message)
+                      ? <span className="italic text-muted-foreground/60">{translateActivity(conversation.last_message)}</span>
+                      : renderWhatsAppFormatting(translateActivity(conversation.last_message))
+                    : "—"}
                 </span>
               </>
             )}

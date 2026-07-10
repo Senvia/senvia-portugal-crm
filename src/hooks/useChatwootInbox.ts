@@ -224,13 +224,16 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
             (c) => {
               const isOpenRow = openId != null
                 && (c.id === openId || (c.alt_ids ?? []).includes(openId));
+              const isActivity = msg.is_activity;
               return {
-                last_message: msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message),
-                last_outgoing: msg.outgoing,
-                last_status: msg.status ?? null,
+                last_message: isActivity
+                  ? c.last_message
+                  : (msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message)),
+                last_outgoing: isActivity ? c.last_outgoing : msg.outgoing,
+                last_status: isActivity ? c.last_status : (msg.status ?? null),
                 updated_at: createdAtSec,
-                unread_count: msg.outgoing || isOpenRow ? c.unread_count : c.unread_count + 1,
-                waiting_since: msg.outgoing ? null : createdAtSec,
+                unread_count: isActivity || msg.outgoing || isOpenRow ? c.unread_count : c.unread_count + 1,
+                waiting_since: isActivity ? c.waiting_since : (msg.outgoing ? null : createdAtSec),
               };
             },
           );
