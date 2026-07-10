@@ -6,18 +6,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Filter, X } from "lucide-react";
-import { format } from "date-fns";
-import { pt } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Filter, X } from "lucide-react";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import type { ClientStatus, ClientSource } from "@/types/clients";
+import type { DateRange } from "react-day-picker";
 
 export interface ClientFiltersState {
   status: ClientStatus | 'all';
@@ -67,6 +60,14 @@ export function ClientFilters({ filters, onFiltersChange, onClearFilters, isTele
     { value: 'website', label: 'Website' },
     { value: 'other', label: 'Outro' },
   ];
+
+  const dateRange: DateRange | undefined = (filters.dateFrom || filters.dateTo)
+    ? { from: filters.dateFrom, to: filters.dateTo }
+    : undefined;
+
+  const handleDateChange = (range: DateRange | undefined) => {
+    onFiltersChange({ ...filters, dateFrom: range?.from, dateTo: range?.to });
+  };
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
@@ -123,56 +124,13 @@ export function ClientFilters({ filters, onFiltersChange, onClearFilters, isTele
         </Select>
       )}
 
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              "h-9 justify-start text-left font-normal",
-              !filters.dateFrom && "text-muted-foreground"
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {filters.dateFrom ? format(filters.dateFrom, "dd/MM/yy", { locale: pt }) : "De"}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={filters.dateFrom}
-            onSelect={(date) => onFiltersChange({ ...filters, dateFrom: date })}
-            initialFocus
-            locale={pt}
-          />
-        </PopoverContent>
-      </Popover>
-
-      {/* Date To */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              "h-9 justify-start text-left font-normal",
-              !filters.dateTo && "text-muted-foreground"
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {filters.dateTo ? format(filters.dateTo, "dd/MM/yy", { locale: pt }) : "Até"}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={filters.dateTo}
-            onSelect={(date) => onFiltersChange({ ...filters, dateTo: date })}
-            initialFocus
-            locale={pt}
-          />
-        </PopoverContent>
-      </Popover>
+      {/* Date Range Filter */}
+      <DateRangePicker
+        value={dateRange}
+        onChange={handleDateChange}
+        placeholder="Período"
+        className="h-9"
+      />
 
       {/* Clear Filters */}
       {hasActiveFilters && (
