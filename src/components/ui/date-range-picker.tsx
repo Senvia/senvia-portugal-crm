@@ -3,7 +3,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { CalendarIcon, X } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isSameMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
@@ -26,15 +26,20 @@ export function DateRangePicker({
   const formatRange = () => {
     if (!value?.from) return placeholder;
     if (!value.to) return format(value.from, "dd/MM/yyyy", { locale: pt });
-    return `${format(value.from, "dd/MM/yy", { locale: pt })} - ${format(value.to, "dd/MM/yy", { locale: pt })}`;
+    return `${format(value.from, "dd/MM/yy", { locale: pt })} — ${format(value.to, "dd/MM/yy", { locale: pt })}`;
   };
 
   const hasValue = value?.from !== undefined;
 
   const presets = React.useMemo(() => {
     const now = new Date();
+    const lastMonthStart = startOfMonth(subDays(startOfMonth(now), 1));
     return [
+      { label: "Hoje", range: { from: now, to: now } },
+      { label: "Ontem", range: { from: subDays(now, 1), to: subDays(now, 1) } },
       { label: "Este mês", range: { from: startOfMonth(now), to: endOfMonth(now) } },
+      { label: "Mês passado", range: { from: lastMonthStart, to: endOfMonth(lastMonthStart) } },
+      { label: "Últimos 7 dias", range: { from: subDays(now, 6), to: now } },
       { label: "Últimos 30 dias", range: { from: subDays(now, 29), to: now } },
       { label: "Últimos 60 dias", range: { from: subDays(now, 59), to: now } },
       { label: "Últimos 90 dias", range: { from: subDays(now, 89), to: now } },
@@ -45,6 +50,12 @@ export function DateRangePicker({
   const applyPreset = (range: DateRange) => {
     onChange(range);
     setOpen(false);
+  };
+
+  const isPresetActive = (preset: { from: Date; to: Date }) => {
+    if (!value?.from || !value?.to) return false;
+    return value.from.getTime() === preset.from.getTime() &&
+           value.to.getTime() === preset.to.getTime();
   };
 
   return (
@@ -65,41 +76,56 @@ export function DateRangePicker({
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <div className="flex flex-col sm:flex-row">
-            <div className="flex flex-row flex-wrap gap-1 border-b p-2 sm:w-40 sm:flex-col sm:flex-nowrap sm:border-b-0 sm:border-r">
-              {presets.map((p) => (
-                <Button
-                  key={p.label}
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start font-normal"
-                  onClick={() => applyPreset(p.range)}
-                >
-                  {p.label}
-                </Button>
-              ))}
+            <div className="flex flex-row flex-wrap gap-1 border-b p-2 sm:w-44 sm:flex-col sm:flex-nowrap sm:gap-0.5 sm:border-b-0 sm:border-r">
+              {presets.map((p) => {
+                const active = isPresetActive(p.range);
+                return (
+                  <Button
+                    key={p.label}
+                    variant={active ? "default" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "justify-start font-normal text-xs",
+                      active && "shadow-sm",
+                      !active && "hover:bg-primary/10 hover:text-primary"
+                    )}
+                    onClick={() => applyPreset(p.range)}
+                  >
+                    {p.label}
+                  </Button>
+                );
+              })}
               <Button
                 variant="ghost"
                 size="sm"
-                className="justify-start font-normal text-muted-foreground"
+                className="justify-start font-normal text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => { onChange(undefined); setOpen(false); }}
               >
                 Todo o histórico
               </Button>
             </div>
-            <Calendar
-              mode="range"
-              selected={value}
-              onSelect={(range) => {
-                onChange(range);
-                // Close popover when both dates are selected
-                if (range?.from && range?.to) {
-                  setOpen(false);
-                }
-              }}
-              numberOfMonths={1}
-              locale={pt}
-              className="pointer-events-auto"
-            />
+            <div className="p-1">
+              <Calendar
+                mode="range"
+                selected={value}
+                onSelect={(range) => {
+                  onChange(range);
+                  if (range?.from && range?.to) {
+                    setOpen(false);
+                  }
+                }}
+                numberOfMonths={2}
+                locale={pt}
+                className="pointer-events-auto"
+                classNames={{
+                  day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                  day_range_start: "bg-primary text-primary-foreground ring-2 ring-primary/30",
+                  day_range_end: "bg-primary text-primary-foreground ring-2 ring-primary/30",
+                  day_in_range: "bg-primary/15 text-primary",
+                  day_today: "ring-1 ring-primary/40",
+                }}
+              />
+            </div>
           </div>
         </PopoverContent>
       </Popover>
