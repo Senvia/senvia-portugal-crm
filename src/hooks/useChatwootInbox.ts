@@ -421,6 +421,36 @@ function saveCachedConversations(orgId: string, list: InboxConversation[]) {
   }
 }
 
+const ACTIVITY_RE = /^Conversation was |^Assigned to |self-assigned this conversation| added | removed /i;
+
+function isActivityText(text: string | null): boolean {
+  if (!text) return false;
+  return ACTIVITY_RE.test(text);
+}
+
+async function fetchLastRealMessage(orgId: string, conversationId: number): Promise<string | null> {
+  try {
+    const res = await invokeInbox<{ messages: InboxMessage[] }>(orgId, {
+      action: 'get_messages',
+      conversation_ids: [conversationId],
+    });
+    const msgs = (res.messages || []).filter((m) => !m.is_activity && !m.is_private);
+    const last = msgs[msgs.length - 1];
+    if (!last) return null;
+    if (last.content) return last.content;
+    if (last.attachments?.length) {
+      const ft = last.attachments[0].file_type;
+      if (ft === 'image') return '📷 Foto';
+      if (ft === 'audio') return '🎵 Áudio';
+      if (ft === 'video') return '🎬 Vídeo';
+      return '📎 Anexo';
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Shared fetch+merge for the conversations cache. BOTH the inbox list and the
 // sidebar unread badge use this exact queryFn under the same key, so the badge's
 // poll can never overwrite the list's merged cache with a raw fetch (the bug
@@ -439,6 +469,21 @@ async function fetchConversationsMerged(
     mode,
   });
   const fresh = res.conversations || [];
+  const activityConvs = fresh.filter((c) => isActivityText(c.last_message));
+  if (activityConvs.length > 0 && activityConvs.length <= 10) {
+    const fixes = await Promise.all(
+      activityConvs.map(async (c) => {
+        const real = await fetchLastRealMessage(orgId, c.id);
+        return { id: c.id, last_message: real };
+      }),
+    );
+    for (const fix of fixes) {
+      if (fix.last_message) {
+        const idx = fresh.findIndex((c) => c.id === fix.id);
+        if (idx >= 0) fresh[idx] = { ...fresh[idx], last_message: fix.last_message };
+      }
+    }
+  }
   if (mode === 'full' || !previous) { saveCachedConversations(orgId, fresh); return fresh; }
   const seenKeys = new Set(fresh.map(convKey));
   const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
