@@ -1,11 +1,13 @@
 import * as React from "react";
-import { Calendar } from "@/components/ui/calendar";
+import { RangeCalendar } from "@/components/ui/calendar-rac";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { CalendarIcon, X } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isSameMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from "date-fns";
 import { pt } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
+import { parseDate, getLocalTimeZone } from "@internationalized/date";
+import type { DateRange as RacDateRange } from "react-aria-components";
 import { cn } from "@/lib/utils";
 
 interface DateRangePickerProps {
@@ -13,6 +15,21 @@ interface DateRangePickerProps {
   onChange: (range: DateRange | undefined) => void;
   placeholder?: string;
   className?: string;
+}
+
+function toRacRange(range: DateRange | undefined): RacDateRange | null {
+  if (!range?.from) return null;
+  const start = parseDate(format(range.from, "yyyy-MM-dd"));
+  const end = range.to ? parseDate(format(range.to, "yyyy-MM-dd")) : start;
+  return { start, end };
+}
+
+function fromRacRange(range: RacDateRange | null): DateRange | undefined {
+  if (!range) return undefined;
+  return {
+    from: range.start.toDate(getLocalTimeZone()),
+    to: range.end.toDate(getLocalTimeZone()),
+  };
 }
 
 export function DateRangePicker({
@@ -105,25 +122,16 @@ export function DateRangePicker({
               </Button>
             </div>
             <div className="p-1">
-              <Calendar
-                mode="range"
-                selected={value}
-                onSelect={(range) => {
-                  onChange(range);
-                  if (range?.from && range?.to) {
+              <RangeCalendar
+                aria-label="Selecionar período"
+                value={toRacRange(value)}
+                onChange={(range) => {
+                  onChange(fromRacRange(range));
+                  if (range) {
                     setOpen(false);
                   }
                 }}
-                numberOfMonths={2}
-                locale={pt}
-                className="pointer-events-auto"
-                classNames={{
-                  day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                  day_range_start: "bg-primary text-primary-foreground ring-2 ring-primary/30",
-                  day_range_end: "bg-primary text-primary-foreground ring-2 ring-primary/30",
-                  day_in_range: "bg-primary/15 text-primary",
-                  day_today: "ring-1 ring-primary/40",
-                }}
+                className="rounded-lg border border-border bg-background p-2"
               />
             </div>
           </div>
