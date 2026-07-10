@@ -125,14 +125,8 @@ function cleanGroupPreview(content: string): string {
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
-  // Prefer the last REAL message for the preview (skip Chatwoot activity/system
-  // messages, message_type 2). But the list window often contains ONLY the last
-  // message — if that is an activity, filtering would leave nothing, so fall
-  // back to the actual last message and let the client translate it to pt-PT.
   const realMessages = messages.filter((m: any) => m?.message_type !== 2 && !isEvoStatusContent(m?.content ?? null));
-  const last = realMessages[realMessages.length - 1] ?? messages[messages.length - 1];
-  // Media messages have no text — show the type label ("🎵 Áudio") in the
-  // list preview instead of an empty dash, WhatsApp-style.
+  const last = realMessages[realMessages.length - 1] ?? null;
   let lastMessage = prettyContent(last?.content ?? null);
   if (!lastMessage && Array.isArray(last?.attachments) && last.attachments.length > 0) {
     const ft = String(last.attachments[0]?.file_type ?? 'file');
