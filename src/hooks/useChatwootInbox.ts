@@ -484,9 +484,8 @@ export function useInboxConversations(enabled = true, live = false) {
     initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
     initialDataUpdatedAt: () => 0,
     refetchInterval: !enabled ? false : live ? 30000 : 6000,
-    staleTime: 5000,
-    refetchOnWindowFocus: false,
-    placeholderData: (prev: InboxConversation[] | undefined) => prev,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -595,7 +594,6 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     refetchInterval: !conversationId ? false : live ? 30000 : 3000,
     refetchOnWindowFocus: false,
     gcTime: 5 * 60 * 1000,
-    placeholderData: (prev: InboxMessage[] | undefined) => prev,
   });
 }
 
