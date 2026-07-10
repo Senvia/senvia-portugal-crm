@@ -1718,11 +1718,9 @@ export default function Inbox() {
       const conv = conversations.find(
         (c) => c.id === selectedId || (c.alt_ids ?? []).includes(selectedId),
       );
-      if ((conv?.unread_count ?? 0) > 0) {
-        markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
-      }
+      markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
+      navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_NOTIFICATIONS" });
     }
-    // Reset per-conversation composer state.
     setReplyTo(null);
     setOutAttachments([]);
     setPendingVoice(null);

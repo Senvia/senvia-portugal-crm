@@ -78,5 +78,16 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
+// Clear notifications when the web app marks messages as read
+self.addEventListener("message", (e) => {
+  if (e.data?.type === "CLEAR_NOTIFICATIONS") {
+    self.registration.getNotifications().then((notifications) => {
+      notifications.forEach((n) => {
+        if (n.data?.url?.startsWith("/inbox")) n.close();
+      });
+    });
+  }
+});
+
 // Pass-through fetch — no caching at all
 self.addEventListener("fetch", () => {});
