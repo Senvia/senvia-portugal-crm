@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Users, Target, XCircle } from "lucide-react";
 import { useLeadReporting, type ReportPeriod } from "@/hooks/useLeadReporting";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
 
 const PERIOD_LABELS: Record<ReportPeriod, string> = {
   week: 'Esta semana',
@@ -15,7 +16,8 @@ const PERIOD_LABELS: Record<ReportPeriod, string> = {
 
 export function LeadsReportPanel() {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const report = useLeadReporting(period);
+  const { paidOnly } = usePaidTrafficFilter();
+  const report = useLeadReporting(period, paidOnly);
 
   return (
     <div className="space-y-4">

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLeads } from '@/hooks/useLeads';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
+import { isPaidTraffic } from '@/lib/paid-traffic';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, isWithinInterval } from 'date-fns';
 
 export type ReportPeriod = 'week' | 'month' | 'quarter' | 'all';
@@ -24,7 +25,7 @@ export interface CommercialReport {
   conversionRate: number;
 }
 
-export function useLeadReporting(period: ReportPeriod) {
+export function useLeadReporting(period: ReportPeriod, paidOnly: boolean = false) {
   const { data: leads = [] } = useLeads();
   const { data: stages = [] } = usePipelineStages();
   const { data: members = [] } = useTeamMembers();
@@ -32,12 +33,16 @@ export function useLeadReporting(period: ReportPeriod) {
   return useMemo(() => {
     const interval = getPeriodInterval(period);
 
-    const filteredLeads = interval
+    let filteredLeads = interval
       ? leads.filter(l => {
           const d = l.created_at ? new Date(l.created_at) : null;
           return d && isWithinInterval(d, interval);
         })
       : leads;
+
+    if (paidOnly) {
+      filteredLeads = filteredLeads.filter(l => isPaidTraffic(l.source));
+    }
 
     const wonKey = stages.find(s => s.is_final_positive)?.key;
     const lostKey = stages.find(s => s.is_final_negative)?.key;
@@ -93,5 +98,5 @@ export function useLeadReporting(period: ReportPeriod) {
       commercials,
       stages,
     };
-  }, [leads, stages, members, period]);
+  }, [leads, stages, members, period, paidOnly]);
 }
