@@ -21,6 +21,9 @@ import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
 import { PaidTrafficCard } from "@/components/dashboard/PaidTrafficCard";
 import { OttoDashboardSetup } from "@/components/otto/OttoDashboardSetup";
+import { Button } from "@/components/ui/button";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { MousePointerClick } from "lucide-react";
 
 export default function Dashboard() {
   useRealtimeSubscription([
@@ -35,11 +38,12 @@ export default function Dashboard() {
   const calendarModuleEnabled = modules.calendar !== false;
   const salesSettings = (organization?.sales_settings as any) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
-  const { 
-    visibleWidgets, 
-    isLoading, 
-    niche, 
+  const {
+    visibleWidgets,
+    isLoading,
+    niche,
   } = useDashboardWidgets();
+  const { paidOnly, toggle: togglePaidTraffic } = usePaidTrafficFilter();
 
   const greeting = profile?.full_name 
     ? `Olá, ${profile.full_name.split(' ')[0]}` 
@@ -61,6 +65,17 @@ export default function Dashboard() {
               <span className="hidden sm:inline">O que há de novo</span>
             </Link>
             <DashboardPeriodFilter />
+            <Button
+              variant={paidOnly ? "default" : "outline"}
+              size="sm"
+              onClick={togglePaidTraffic}
+              aria-pressed={paidOnly}
+              title="Mostrar apenas leads vindas de tráfego pago"
+              className="gap-1.5"
+            >
+              <MousePointerClick className="h-4 w-4" />
+              <span className="hidden sm:inline">Só tráfego pago</span>
+            </Button>
             <TeamMemberFilter className="w-[150px] sm:w-[180px]" />
           </>
         }
