@@ -427,12 +427,7 @@ async function fetchConversationsMerged(
   queryClient: QueryClient,
   orgId: string,
 ): Promise<InboxConversation[]> {
-  // Fall back to the localStorage cache when the in-memory cache is cold (page
-  // reload): lets the refresh run in the cheaper 'fresh' mode (2 pages) AND keeps
-  // the older history rows the merge below preserves.
-  const previous =
-    queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]) ??
-    loadCachedConversations(orgId);
+  const previous = queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]);
   const mode = previous && previous.length > 0 ? 'fresh' : 'full';
   const res = await invokeInbox<{ conversations: InboxConversation[] }>(orgId, {
     action: 'list_conversations',
@@ -440,21 +435,12 @@ async function fetchConversationsMerged(
   });
   const fresh = res.conversations || [];
   if (mode === 'full' || !previous) { saveCachedConversations(orgId, fresh); return fresh; }
-  // Merge: fresh rows win; keep cached rows for contacts not in the fresh window
-  // (no recent activity — their state can only have changed through our own
-  // optimistic patches, which are already in `previous`).
   const seenKeys = new Set(fresh.map(convKey));
   const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
-  // Cap older rows to prevent unbounded cache growth when the org has hundreds of
-  // historical conversations. 200 is well above what fits in the viewport but
-  // avoids accumulating the entire Chatwoot history in browser memory.
   const MAX_CACHED = 200;
   const rest = previous
     .filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id))
     .slice(0, Math.max(0, MAX_CACHED - fresh.length));
-  // Reuse previous object references for conversations whose visible data has not
-  // changed (updated_at + unread_count are the two fields that drive re-renders).
-  // This lets ConversationRow.memo bail out on every poll when nothing actually changed.
   const prevById = new Map(previous.map((c) => [c.id, c]));
   const stabilize = (c: InboxConversation): InboxConversation => {
     const p = prevById.get(c.id);
@@ -477,14 +463,8 @@ export function useInboxConversations(enabled = true, live = false) {
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    // Paint the last known inbox INSTANTLY from localStorage instead of a blank
-    // "A carregar conversas..." skeleton on every page load/reload. initialDataUpdatedAt: 0
-    // marks it as infinitely stale, so React Query still kicks off the real
-    // (fresh-mode) fetch in the background to reconcile — this is display-only.
-    initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
-    initialDataUpdatedAt: () => 0,
-    refetchInterval: !enabled ? false : live ? 30000 : 6000,
     staleTime: 0,
+    refetchInterval: !enabled ? false : live ? 30000 : 6000,
     refetchOnWindowFocus: true,
   });
 }
@@ -593,7 +573,7 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     staleTime: 0,
     refetchInterval: !conversationId ? false : live ? 30000 : 3000,
     refetchOnWindowFocus: false,
-    gcTime: 5 * 60 * 1000,
+    gcTime: 0,
   });
 }
 
