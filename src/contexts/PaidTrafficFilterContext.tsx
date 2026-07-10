@@ -1,25 +1,34 @@
 import { createContext, useContext, useCallback, ReactNode } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import type { TrafficFilterKey } from "@/lib/paid-traffic";
 
-const STORAGE_KEY = "dashboard-paid-traffic-only-v1";
+const STORAGE_KEY = "dashboard-traffic-filter-v2";
 
 interface PaidTrafficFilterContextValue {
-  paidOnly: boolean;
-  toggle: () => void;
-  setPaidOnly: (value: boolean | ((prev: boolean) => boolean)) => void;
+  /** Current filter key (e.g. "all", "paid-all", "meta", "google"). */
+  filterKey: TrafficFilterKey;
+  /** Set the filter to a specific key. */
+  setFilter: (key: TrafficFilterKey) => void;
+  /** Convenience: true when filterKey !== "all". */
+  isFiltered: boolean;
 }
 
 const PaidTrafficFilterContext = createContext<PaidTrafficFilterContextValue | undefined>(undefined);
 
 export function PaidTrafficFilterProvider({ children }: { children: ReactNode }) {
-  const [paidOnly, setPaidOnly] = usePersistedState<boolean>(STORAGE_KEY, false);
+  const [filterKey, setFilterKey] = usePersistedState<TrafficFilterKey>(STORAGE_KEY, "all");
 
-  const toggle = useCallback(() => {
-    setPaidOnly((prev) => !prev);
-  }, [setPaidOnly]);
+  const setFilter = useCallback(
+    (key: TrafficFilterKey) => {
+      setFilterKey(key);
+    },
+    [setFilterKey],
+  );
+
+  const isFiltered = filterKey !== "all";
 
   return (
-    <PaidTrafficFilterContext.Provider value={{ paidOnly, toggle, setPaidOnly }}>
+    <PaidTrafficFilterContext.Provider value={{ filterKey, setFilter, isFiltered }}>
       {children}
     </PaidTrafficFilterContext.Provider>
   );

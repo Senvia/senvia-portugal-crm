@@ -1,20 +1,21 @@
 import { useMemo } from "react";
 import { useLeads } from "@/hooks/useLeads";
 import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
-import { isPaidTraffic } from "@/lib/paid-traffic";
+import { getTrafficMatcher } from "@/lib/paid-traffic";
 import type { Lead } from "@/types";
 
 /**
- * Same as `useLeads`, but optionally filtered to paid-traffic-only when the
- * Dashboard "Só tráfego pago" toggle is on. Components that read leads from this
- * hook automatically respect the toggle state.
+ * Same as `useLeads`, but filtered by the Dashboard traffic-source dropdown.
+ * When the filter is "all", returns the full list. When a specific platform
+ * or "paid-all" is selected, returns only leads whose `source` matches.
  */
 export function useFilteredLeads(): Lead[] {
   const { data: leads = [] } = useLeads();
-  const { paidOnly } = usePaidTrafficFilter();
+  const { filterKey } = usePaidTrafficFilter();
 
   return useMemo(() => {
-    if (!paidOnly) return leads;
-    return leads.filter((l) => isPaidTraffic(l.source));
-  }, [leads, paidOnly]);
+    const matcher = getTrafficMatcher(filterKey);
+    if (filterKey === "all") return leads;
+    return leads.filter((l) => matcher(l.source));
+  }, [leads, filterKey]);
 }

@@ -16,8 +16,8 @@ const PERIOD_LABELS: Record<ReportPeriod, string> = {
 
 export function LeadsReportPanel() {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const { paidOnly } = usePaidTrafficFilter();
-  const report = useLeadReporting(period, paidOnly);
+  const { filterKey } = usePaidTrafficFilter();
+  const report = useLeadReporting(period, filterKey);
 
   return (
     <div className="space-y-4">

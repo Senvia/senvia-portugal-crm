@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useLeads } from '@/hooks/useLeads';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { isPaidTraffic } from '@/lib/paid-traffic';
+import { getTrafficMatcher, type TrafficFilterKey } from '@/lib/paid-traffic';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, isWithinInterval } from 'date-fns';
 
 export type ReportPeriod = 'week' | 'month' | 'quarter' | 'all';
@@ -25,7 +25,7 @@ export interface CommercialReport {
   conversionRate: number;
 }
 
-export function useLeadReporting(period: ReportPeriod, paidOnly: boolean = false) {
+export function useLeadReporting(period: ReportPeriod, filterKey: TrafficFilterKey = 'all') {
   const { data: leads = [] } = useLeads();
   const { data: stages = [] } = usePipelineStages();
   const { data: members = [] } = useTeamMembers();
@@ -40,8 +40,9 @@ export function useLeadReporting(period: ReportPeriod, paidOnly: boolean = false
         })
       : leads;
 
-    if (paidOnly) {
-      filteredLeads = filteredLeads.filter(l => isPaidTraffic(l.source));
+    if (filterKey !== 'all') {
+      const matcher = getTrafficMatcher(filterKey);
+      filteredLeads = filteredLeads.filter(l => matcher(l.source));
     }
 
     const wonKey = stages.find(s => s.is_final_positive)?.key;
@@ -98,5 +99,5 @@ export function useLeadReporting(period: ReportPeriod, paidOnly: boolean = false
       commercials,
       stages,
     };
-  }, [leads, stages, members, period, paidOnly]);
+  }, [leads, stages, members, period, filterKey]);
 }
