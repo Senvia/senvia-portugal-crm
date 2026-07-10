@@ -427,7 +427,9 @@ async function fetchConversationsMerged(
   queryClient: QueryClient,
   orgId: string,
 ): Promise<InboxConversation[]> {
-  const previous = queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]);
+  const previous =
+    queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]) ??
+    loadCachedConversations(orgId);
   const mode = previous && previous.length > 0 ? 'fresh' : 'full';
   const res = await invokeInbox<{ conversations: InboxConversation[] }>(orgId, {
     action: 'list_conversations',
@@ -449,7 +451,9 @@ async function fetchConversationsMerged(
         && p.assigned_id === c.assigned_id) return p;
     return c;
   };
-  return [...fresh.map(stabilize), ...rest];
+  const merged = [...fresh.map(stabilize), ...rest];
+  saveCachedConversations(orgId, merged);
+  return merged;
 }
 
 // List the open conversations for the org's Chatwoot account.
@@ -463,8 +467,10 @@ export function useInboxConversations(enabled = true, live = false) {
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
+    initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
+    initialDataUpdatedAt: () => 0,
     staleTime: 0,
-    refetchInterval: !enabled ? false : live ? 30000 : 6000,
+    refetchInterval: !enabled ? false : live ? false : 5000,
     refetchOnWindowFocus: true,
   });
 }
@@ -571,7 +577,7 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     },
     enabled: !!organization?.id && !!conversationId,
     staleTime: 0,
-    refetchInterval: !conversationId ? false : live ? 30000 : 3000,
+    refetchInterval: false,
     refetchOnWindowFocus: false,
     gcTime: 0,
   });
