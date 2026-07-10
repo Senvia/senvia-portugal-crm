@@ -421,11 +421,19 @@ function saveCachedConversations(orgId: string, list: InboxConversation[]) {
   }
 }
 
-const ACTIVITY_RE = /^Conversation was |^Assigned to |self-assigned this conversation| added | removed /i;
-
 function isActivityText(text: string | null): boolean {
   if (!text) return false;
-  return ACTIVITY_RE.test(text);
+  const lower = text.toLowerCase();
+  if (lower.startsWith('conversation was')) return true;
+  if (lower.startsWith('assigned to')) return true;
+  if (lower.includes('self-assigned')) return true;
+  if (lower.startsWith('o sistema')) return true;
+  if (lower.startsWith('a conversa')) return true;
+  if (lower.startsWith('conversa re')) return true;
+  if (lower.includes(' added ') || lower.includes(' removed ')) return true;
+  if (lower.includes('reabriu') || lower.includes('resolvida') || lower.includes('atribu')) return true;
+  if (lower.includes('due to a new') || lower.includes('devido a uma nova')) return true;
+  return false;
 }
 
 async function fetchLastRealMessage(orgId: string, conversationId: number): Promise<string | null> {
