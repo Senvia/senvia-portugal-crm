@@ -5,17 +5,20 @@ import { getTrafficMatcher } from "@/lib/paid-traffic";
 import type { Lead } from "@/types";
 
 /**
- * Same as `useLeads`, but filtered by the Dashboard traffic-source dropdown.
- * When the filter is "all", returns the full list. When a specific platform
- * or "paid-all" is selected, returns only leads whose `source` matches.
+ * Same shape as `useLeads()` — returns `{ data, isLoading, ... }` — but the
+ * `data` array is filtered by the Dashboard traffic-source dropdown.
+ * When the filter is "all", returns the full list unchanged.
  */
-export function useFilteredLeads(): Lead[] {
-  const { data: leads = [] } = useLeads();
+export function useFilteredLeads() {
+  const query = useLeads();
   const { filterKey } = usePaidTrafficFilter();
 
-  return useMemo(() => {
-    const matcher = getTrafficMatcher(filterKey);
+  const data = useMemo<Lead[]>(() => {
+    const leads = query.data || [];
     if (filterKey === "all") return leads;
+    const matcher = getTrafficMatcher(filterKey);
     return leads.filter((l) => matcher(l.source));
-  }, [leads, filterKey]);
+  }, [query.data, filterKey]);
+
+  return { ...query, data };
 }
