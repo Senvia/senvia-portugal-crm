@@ -482,17 +482,11 @@ export function useInboxConversations(enabled = true, live = false) {
     // marks it as infinitely stale, so React Query still kicks off the real
     // (fresh-mode) fetch in the background to reconcile — this is display-only.
     initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
-    initialDataUpdatedAt: 0,
-    // Gentle fallback polling (realtime is the primary freshness path). 6s when
-    // realtime is down or stale; 10s when fresh — a safety net, not the main path.
-    refetchInterval: !enabled ? false : live ? 10000 : 6000,
-    // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
-    // realtime invalidate already keep this fresh. Without this, every focus
-    // change re-ran the read-modify-write merge and re-rendered the whole inbox.
-    staleTime: 10000,
+    initialDataUpdatedAt: () => 0,
+    refetchInterval: !enabled ? false : live ? 30000 : 6000,
+    staleTime: 5000,
     refetchOnWindowFocus: false,
-    // Keep the previous data visible while refetching (no flash to empty/loading).
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: InboxConversation[] | undefined) => prev,
   });
 }
 
@@ -555,8 +549,8 @@ export function useInboxUnreadTotal(enabled = true) {
     // stops the badge poll from clobbering the list cache.
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled ? 20000 : false,
-    staleTime: 10000,
+    refetchInterval: enabled ? 30000 : false,
+    staleTime: 5000,
     refetchOnWindowFocus: false,
   });
   return { total: countUnreadConversations(query.data || [], emailInboxIds), isLoading: query.isLoading };
@@ -597,27 +591,11 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
       return grace.length > 0 ? [...fetched, ...grace] : fetched;
     },
     enabled: !!organization?.id && !!conversationId,
-    // Realtime is the primary freshness path; polling is the safety net. When
-    // realtime is connected (live) a relaxed 20s net is plenty; when it isn't,
-    // poll every 8s so incoming messages don't lag tens of seconds. We do NOT
-    // suspend on global useIsMutating: the messages cache has no optimistic
-    // patches to protect (sends use local `pending` state, not the cache), and a
-    // background mark_read mutation was needlessly freezing the messages poll —
-    // that was why incoming messages took so long to appear after a read receipt.
-    // Open-thread poll is the safety net behind realtime. Offline (no realtime)
-    // it's kept tight (3s) so an incoming message still lands fast. Connected
-    // (live), the append+invalidate on the broadcast event already does the real
-    // work — a poll every 6s was pure rework (each tick re-fetches EVERY merged
-    // alt conversation from Chatwoot, for every open thread, forever), so
-    // it's stretched to a relaxed safety net instead of a redundant fast poll.
-    refetchInterval: !conversationId ? false : live ? 12000 : 3000,
-    // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
-    // the poll already keep the open thread fresh.
+    staleTime: 0,
+    refetchInterval: !conversationId ? false : live ? 30000 : 3000,
     refetchOnWindowFocus: false,
-    // 5 minutes: long enough to switch back to a conversation without a reload,
-    // short enough not to accumulate message data across many conversations and
-    // exhaust browser memory (original 30min caused OOM in dev).
     gcTime: 5 * 60 * 1000,
+    placeholderData: (prev: InboxMessage[] | undefined) => prev,
   });
 }
 
