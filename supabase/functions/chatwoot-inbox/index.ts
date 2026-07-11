@@ -22,6 +22,7 @@ import {
   corsHeaders, json, getConfig, authOrgMember, getOrgChatwoot, chatwootFetch,
   instanceNameForOrg, evolutionFetch, fetchWithTimeout,
 } from '../_shared/multicanal.ts';
+import { isActivityContent } from '../_shared/activity-detection.ts';
 
 // Decode a base64 payload (no data: prefix) into bytes for a multipart upload.
 function base64ToBytes(b64: string): Uint8Array {
@@ -104,29 +105,6 @@ function isEvoStatusContent(content: string | null): boolean {
   const body = content.replace(/^[^\p{L}]+/u, '').trim().toLowerCase();
   if (body === 'init') return true;
   return EVO_STATUS_PREFIXES.some((p) => body.startsWith(p));
-}
-
-// Chatwoot system/activity messages (auto-reopen, resolve, assign, label
-// changes...). These must NEVER be the list preview — they're not real customer
-// messages. Chatwoot usually flags them with message_type=2, but some localized
-// instances emit them as incoming/outgoing (type 0/1), so we ALSO match by
-// content (English + Portuguese) to be safe. This is what makes the preview
-// always show the last REAL message (e.g. "oi") instead of "O sistema reabriu
-// a conversa devido a uma nova mensagem".
-const ACTIVITY_CONTENT_PATTERNS = [
-  /^Conversation was /i,
-  /^Assigned to /i,
-  /self-assigned this conversation$/i,
-  /^O sistema /i,
-  /^Conversa resolvida/i,
-  /^Conversa reaberta/i,
-  /^Conversa marcada como pendente/i,
-  /^Atribu\u00edda a /i,
-  /^A conversa foi /i,
-];
-function isActivityContent(content: string | null): boolean {
-  if (!content) return false;
-  return ACTIVITY_CONTENT_PATTERNS.some((re) => re.test(content));
 }
 
 // WhatsApp GROUP messages arrive from Evolution with the individual sender

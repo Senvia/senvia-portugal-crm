@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessagingChannels } from '@/hooks/useMessagingChannels';
+import { isActivityText } from '@/lib/activity-detection';
 
 export interface InboxConversation {
   id: number;
@@ -431,27 +432,6 @@ function saveCachedConversations(orgId: string, list: InboxConversation[]) {
   } catch {
     /* quota — non-fatal, the in-memory cache still works */
   }
-}
-
-// Activity / system messages Chatwoot injects into the conversation timeline.
-// These must NEVER be shown as the list preview — they're not real customer
-// messages. Match both the English originals ("Conversation was reopened")
-// AND the Portuguese localizations ("O sistema reabriu a conversa...",
-// "Conversa resolvida por...") the Chatwoot instance emits, so the preview is
-// always the last REAL message regardless of the account's language.
-function isActivityText(text: string | null): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase();
-  if (lower.startsWith('conversation was')) return true;
-  if (lower.startsWith('assigned to')) return true;
-  if (lower.includes('self-assigned')) return true;
-  if (lower.startsWith('o sistema')) return true;
-  if (lower.startsWith('a conversa')) return true;
-  if (lower.startsWith('conversa re')) return true;
-  if (lower.includes(' added ') || lower.includes(' removed ')) return true;
-  if (lower.includes('reabriu') || lower.includes('resolvida') || lower.includes('atribu')) return true;
-  if (lower.includes('due to a new') || lower.includes('devido a uma nova')) return true;
-  return false;
 }
 
 async function fetchLastRealMessage(orgId: string, conversationId: number): Promise<string | null> {

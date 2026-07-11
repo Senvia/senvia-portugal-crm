@@ -55,6 +55,7 @@ import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
 import { InboxProductSection } from "@/components/inbox/InboxProductPicker";
+import { InboxErrorBoundary } from "@/components/inbox/InboxErrorBoundary";
 import { useSendProductInbox } from "@/hooks/inbox/useSendProductInbox";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
@@ -104,78 +105,22 @@ import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
+import { isActivityText, translateActivity } from "@/lib/activity-detection";
+import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
+import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
 import { renderWithEmoji, searchEmojis } from "@/lib/emoji";
 const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
-// WhatsApp-style inline formatting: *bold*, _italic_, ~strikethrough~ and
-// ```monospace```. Mirrors WhatsApp's own (deliberately non-nesting) rule: the
-// delimiter must hug non-space text on both sides, so "* item" bullet lists and
-// "a * b" arithmetic are left untouched. Each plain-text run is still passed
-// through the Apple emoji renderer; a monospace span is left as raw text (a
-// code block shouldn't have its glyphs swapped for images).
-const WA_FORMAT_RE = /(\*[^\s*](?:[^*]*[^\s*])?\*)|(_[^\s_](?:[^_]*[^_])?_)|(~[^\s~](?:[^~]*[^~])?~)|(```[^`]+```)/g;
-
-// Used to build the contact panel's "Links" gallery tab from message text.
-// The schemeless alternative requires a "www." prefix (unlike autolink()'s own
-// looser bare-domain matcher used for the thread bubbles) — a bare "word.Word"
-// match with no scheme or www is far too easy to false-positive on ordinary
-// pt-PT text with no space after a period (e.g. "ontem.Aguardo confirmação").
+// WhatsApp-style inline formatting is handled by the shared renderWhatsAppFormatting
+// (imported from MessageBubble.tsx). The autolink helper below wraps it for URLs.
 const LINK_RE = /(https?:\/\/[^\s<]+|www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<]*)?)/gi;
 // A URL glued to trailing punctuation with no space ("confirma aqui: site.pt.")
 // would otherwise swallow the period into the link and 404 on click.
 function trimTrailingLinkPunct(url: string): string {
   return url.replace(/[.,;:!?)\]}'"]+$/, "");
 }
-function renderWhatsAppFormatting(text: string, keyPrefix = "", highlight?: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  WA_FORMAT_RE.lastIndex = 0;
-  while ((match = WA_FORMAT_RE.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(...renderWithEmoji(text.slice(lastIndex, match.index), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
-    }
-    const token = match[0];
-    const isMono = token.startsWith("```");
-    const inner = isMono ? token.slice(3, -3) : token.slice(1, -1);
-    const key = `${keyPrefix}f${match.index}`;
-    if (match[1]) {
-      parts.push(<strong key={key} className="font-semibold">{renderWithEmoji(inner, { keyPrefix: key })}</strong>);
-    } else if (match[2]) {
-      parts.push(<em key={key} className="italic">{renderWithEmoji(inner, { keyPrefix: key })}</em>);
-    } else if (match[3]) {
-      parts.push(<span key={key} className="line-through">{renderWithEmoji(inner, { keyPrefix: key })}</span>);
-    } else {
-      parts.push(<code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[0.9em] dark:bg-white/10">{inner}</code>);
-    }
-    lastIndex = match.index + token.length;
-  }
-  if (lastIndex < text.length) {
-    const remaining = text.slice(lastIndex);
-    if (highlight) {
-      const q = highlight.toLowerCase();
-      const lowered = remaining.toLowerCase();
-      let idx = 0;
-      let pos: number;
-      while ((pos = lowered.indexOf(q, idx)) !== -1) {
-        if (pos > idx) parts.push(...renderWithEmoji(remaining.slice(idx, pos), { keyPrefix: `${keyPrefix}t${idx}` }));
-        parts.push(<mark key={`${keyPrefix}h${pos}`} className="rounded-sm bg-yellow-200/70 px-0.5 dark:bg-yellow-700/70">{remaining.slice(pos, pos + q.length)}</mark>);
-        idx = pos + q.length;
-      }
-      if (idx < remaining.length) parts.push(...renderWithEmoji(remaining.slice(idx), { keyPrefix: `${keyPrefix}t${idx}` }));
-    } else {
-      parts.push(...renderWithEmoji(remaining, { keyPrefix: `${keyPrefix}t${lastIndex}` }));
-    }
-  }
-  return parts.length > 0 ? parts : (highlight && text.toLowerCase().includes(highlight.toLowerCase())
-    ? (() => { const q = highlight.toLowerCase(); const l = text.toLowerCase(); const i = l.indexOf(q); return [<span key="pre">{text.slice(0, i)}</span>, <mark key="hl" className="rounded-sm bg-yellow-200/70 px-0.5 dark:bg-yellow-700/70">{text.slice(i, i + q.length)}</mark>, <span key="post">{text.slice(i + q.length)}</span>]; })()
-    : renderWithEmoji(text, { keyPrefix }));
-}
-
-// autolink: converte URLs em links clicaveis e aplica a formatacao WhatsApp.
-// outgoing=true aplica cor clara para bolhas enviadas (bg-primary + text-primary-foreground).
 function autolink(text: string, outgoing = false, highlight?: string): React.ReactNode {
   if (!text) return text;
   const urlRegex = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
@@ -215,10 +160,6 @@ function autolink(text: string, outgoing = false, highlight?: string): React.Rea
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
-}
-
-function firstName(name: string): string {
-  return (name || "").trim().split(/\s+/)[0] || "";
 }
 
 // Group messages arrive from Evolution with the individual sender embedded in the
@@ -278,19 +219,7 @@ function formatTime(value: string | number | null): string {
   return new Date(ms).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
 }
 
-// WhatsApp-style list timestamp: today → 14:30, yesterday → "Ontem",
-// this week → "ter.", older → 05/06/26.
-function formatListDate(value: string | number | null): string {
-  const ms = toMs(value);
-  if (!ms) return "";
-  const d = new Date(ms);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (ms >= startOfToday) return d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-  if (ms >= startOfToday - 86400000) return "Ontem";
-  if (ms >= startOfToday - 6 * 86400000) return d.toLocaleDateString("pt-PT", { weekday: "short" });
-  return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
+// formatListDate is imported from helpers.ts
 
 // Thread date separator: "Hoje", "Ontem", "5 de junho".
 function dayLabel(ms: number): string {
@@ -335,70 +264,13 @@ const SLA_BADGE: Record<SlaLevel, string> = {
   late: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 };
 
-// "à espera 5m / 2h / 3d"
-function waitingLabel(since: number | null): string | null {
-  if (!since) return null;
-  const mins = Math.floor((Date.now() - since * 1000) / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
+// "à espera 5m / 2h / 3d" — imported from helpers.ts
 
 // Chatwoot emits conversation activity/system messages in English ("X added
-// <label>", "Conversation resolved by Y"). Translate the common ones to pt-PT so
-// the list preview reads in Portuguese even before the backend (which now hides
-// activities from the preview) is redeployed. Patterns are tightly shaped — a
-// capitalised agent name + a verb — so real customer messages are left untouched.
-// Precompiled once (was rebuilding two RegExp objects per call, per row, per render).
-const _ACT_NAME = String.raw`\p{Lu}[\p{L}]+(?:[ '\-]\p{L}+)*`;
-const _ACT_LABELS = String.raw`[\p{L}\p{N}_-]+(?:,\s*[\p{L}\p{N}_-]+)*`;
-const RE_ACT_ADDED = new RegExp(`^(${_ACT_NAME}) added (${_ACT_LABELS})$`, "u");
-const RE_ACT_REMOVED = new RegExp(`^(${_ACT_NAME}) removed (${_ACT_LABELS})$`, "u");
+// <label>", "Conversation resolved by Y"). translateActivity (imported from
+// activity-detection.ts) handles the translation. isActivityText (also imported)
+// is used below to filter activity from the thread and list preview.
 
-function translateActivity(text: string): string {
-  if (!text) return text;
-  let m: RegExpMatchArray | null;
-  if ((m = text.match(RE_ACT_ADDED))) {
-    return `${m[1]} adicionou ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
-  }
-  if ((m = text.match(RE_ACT_REMOVED))) {
-    return `${m[1]} removeu ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
-  }
-  if ((m = text.match(/^Assigned to (.+?) by (.+)$/))) return `Atribuída a ${m[1]} por ${m[2]}`;
-  if ((m = text.match(/^(.+?) self-assigned this conversation$/i))) return `${m[1]} atribuiu a conversa a si`;
-  if ((m = text.match(/^Conversation was marked resolved by (.+)$/i))) return `Conversa resolvida por ${m[1]}`;
-  if ((m = text.match(/^Conversation was (?:marked )?reopened by (.+)$/i))) return `Conversa reaberta por ${m[1]}`;
-  if (/^Conversation was marked resolved$/i.test(text)) return "Conversa resolvida";
-  if (/^Conversation was reopened$/i.test(text)) return "Conversa reaberta";
-  if (/^Conversation was marked pending$/i.test(text)) return "Conversa marcada como pendente";
-  return text;
-}
-
-const ACTIVITY_PATTERNS = [
-  /^Conversation was/i,
-  /^Assigned to/i,
-  /self-assigned this conversation/i,
-  RE_ACT_ADDED,
-  RE_ACT_REMOVED,
-  // Portuguese system messages emitted by the Chatwoot instance (auto-reopen,
-  // resolve, assign...). Without these, the list preview showed the activity
-  // line instead of the last real customer message.
-  /^O sistema /i,
-  /^Conversa resolvida/i,
-  /^Conversa reaberta/i,
-  /^Conversa marcada como pendente/i,
-  /^Atribu\u00edda a/i,
-  /^A conversa foi/i,
-];
-
-function isActivityMessage(text: string | null): boolean {
-  if (!text) return false;
-  return ACTIVITY_PATTERNS.some((re) => re.test(text));
-}
-
-// Replace {{nome}} with the contact's first name in quick replies.
 function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
 }
@@ -437,9 +309,25 @@ function saveDraftsMap(map: Map<number, string>) {
 }
 
 // Short notification beep via WebAudio — no asset needed.
-function playNotificationBeep() {
+// A single shared AudioContext is reused across beeps: creating a new one per
+// notification leaks resources (each counts against the browser's ~6-context
+// cap) and can leave dangling suspended contexts. The context auto-suspends
+// when idle; resume() is a no-op if already running.
+let _beepCtx: AudioContext | null = null;
+function getBeepCtx(): AudioContext | null {
+  if (_beepCtx) return _beepCtx;
   try {
-    const ctx = new AudioContext();
+    _beepCtx = new AudioContext();
+  } catch {
+    return null; // AudioContext unavailable (older browsers / SSR).
+  }
+  return _beepCtx;
+}
+function playNotificationBeep() {
+  const ctx = getBeepCtx();
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended") void ctx.resume();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -449,7 +337,7 @@ function playNotificationBeep() {
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
     osc.start();
     osc.stop(ctx.currentTime + 0.25);
-    osc.onended = () => ctx.close();
+    // No ctx.close() — the singleton stays alive for the next beep.
   } catch {
     // Audio blocked (no user gesture yet) — silently skip.
   }
@@ -3666,6 +3554,7 @@ export default function Inbox() {
 
             {/* Messages */}
             <div className="relative flex min-h-0 flex-1 flex-col">
+            <InboxErrorBoundary resetKey={selectedId} label="thread">
             <div
               ref={scrollRef}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
@@ -3819,6 +3708,7 @@ export default function Inbox() {
               )}
               <div ref={bottomRef} />
             </div>
+            </InboxErrorBoundary>
             {/* Jump-to-bottom FAB, WhatsApp-style: appears once scrolled away from
                 the bottom, with a badge counting messages that arrived meanwhile. */}
             {farFromBottom && !draftConv && (
@@ -5588,7 +5478,7 @@ const ConversationRow = memo(function ConversationRow({
                 {conversation.last_outgoing && <ListStatusTicks status={conversation.last_status} />}
                 <span className="min-w-0 flex-1 truncate">
                   {conversation.last_message
-                    ? isActivityMessage(conversation.last_message)
+                    ? isActivityText(conversation.last_message)
                       ? <span className="italic text-muted-foreground/60">{translateActivity(conversation.last_message)}</span>
                       : renderWhatsAppFormatting(translateActivity(conversation.last_message))
                     : "—"}
