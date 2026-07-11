@@ -200,7 +200,13 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
         const convId = Number(payload?.conversation_id);
         const msg = payload?.message as InboxMessage | undefined;
         if (convId && msg && msg.id != null) {
-          appendMessageToCaches(queryClient, orgId, convId, msg);
+          // Skip system/activity messages entirely: they're not real messages
+          // ("O sistema reabriu a conversa...", "Conversa resolvida...") and must
+          // never appear in the thread OR overwrite the list preview. Some
+          // Chatwoot instances emit these with is_activity=false, so check the
+          // content too.
+          const isActivity = msg.is_activity || isActivityText(msg.content);
+          if (!isActivity) appendMessageToCaches(queryClient, orgId, convId, msg);
           // Patch the conversation ROW immediately too. Without this, the bubble
           // appears in the open thread in <1s but the LIST (preview, unread badge,
           // reordering, sound) only catches up 2-3s later on the debounced
@@ -224,7 +230,13 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
             (c) => {
               const isOpenRow = openId != null
                 && (c.id === openId || (c.alt_ids ?? []).includes(openId));
-              const isActivity = msg.is_activity;
+              // Treat as activity if flagged OR if the content itself is a system
+              // message (some Chatwoot instances emit these as type 0/1, so the
+              // is_activity flag is false even though the text is "O sistema
+              // reabriu a conversa..." — without this content check the preview
+              // gets overwritten with the system line instead of staying on the
+              // last real customer message).
+              const isActivity = msg.is_activity || isActivityText(msg.content);
               return {
                 last_message: isActivity
                   ? c.last_message
@@ -421,6 +433,12 @@ function saveCachedConversations(orgId: string, list: InboxConversation[]) {
   }
 }
 
+// Activity / system messages Chatwoot injects into the conversation timeline.
+// These must NEVER be shown as the list preview — they're not real customer
+// messages. Match both the English originals ("Conversation was reopened")
+// AND the Portuguese localizations ("O sistema reabriu a conversa...",
+// "Conversa resolvida por...") the Chatwoot instance emits, so the preview is
+// always the last REAL message regardless of the account's language.
 function isActivityText(text: string | null): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();

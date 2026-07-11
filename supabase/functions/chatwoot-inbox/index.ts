@@ -106,6 +106,29 @@ function isEvoStatusContent(content: string | null): boolean {
   return EVO_STATUS_PREFIXES.some((p) => body.startsWith(p));
 }
 
+// Chatwoot system/activity messages (auto-reopen, resolve, assign, label
+// changes...). These must NEVER be the list preview — they're not real customer
+// messages. Chatwoot usually flags them with message_type=2, but some localized
+// instances emit them as incoming/outgoing (type 0/1), so we ALSO match by
+// content (English + Portuguese) to be safe. This is what makes the preview
+// always show the last REAL message (e.g. "oi") instead of "O sistema reabriu
+// a conversa devido a uma nova mensagem".
+const ACTIVITY_CONTENT_PATTERNS = [
+  /^Conversation was /i,
+  /^Assigned to /i,
+  /self-assigned this conversation$/i,
+  /^O sistema /i,
+  /^Conversa resolvida/i,
+  /^Conversa reaberta/i,
+  /^Conversa marcada como pendente/i,
+  /^Atribu\u00edda a /i,
+  /^A conversa foi /i,
+];
+function isActivityContent(content: string | null): boolean {
+  if (!content) return false;
+  return ACTIVITY_CONTENT_PATTERNS.some((re) => re.test(content));
+}
+
 // WhatsApp GROUP messages arrive from Evolution with the individual sender
 // embedded as a bold prefix: "**+351 910 812 500 - Ana Silva:**\n\nactual text".
 // The thread already strips this for display (Inbox.tsx's parseGroupMessage) —
@@ -125,7 +148,16 @@ function cleanGroupPreview(content: string): string {
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
-  const realMessages = messages.filter((m: any) => m?.message_type !== 2 && !isEvoStatusContent(m?.content ?? null));
+  // Filter out activity/system messages (message_type=2) AND any message whose
+  // content matches an activity pattern (some localized Chatwoot instances emit
+  // these as type 0/1 instead of 2). This guarantees the list preview is always
+  // the last REAL customer/agent message, never a system line like "O sistema
+  // reabriu a conversa...".
+  const realMessages = messages.filter((m: any) =>
+    m?.message_type !== 2 &&
+    !isEvoStatusContent(m?.content ?? null) &&
+    !isActivityContent(m?.content ?? null),
+  );
   const last = realMessages[realMessages.length - 1] ?? null;
   let lastMessage = prettyContent(last?.content ?? null);
   if (!lastMessage && Array.isArray(last?.attachments) && last.attachments.length > 0) {

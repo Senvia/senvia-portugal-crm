@@ -382,6 +382,15 @@ const ACTIVITY_PATTERNS = [
   /self-assigned this conversation/i,
   RE_ACT_ADDED,
   RE_ACT_REMOVED,
+  // Portuguese system messages emitted by the Chatwoot instance (auto-reopen,
+  // resolve, assign...). Without these, the list preview showed the activity
+  // line instead of the last real customer message.
+  /^O sistema /i,
+  /^Conversa resolvida/i,
+  /^Conversa reaberta/i,
+  /^Conversa marcada como pendente/i,
+  /^Atribu\u00edda a/i,
+  /^A conversa foi/i,
 ];
 
 function isActivityMessage(text: string | null): boolean {

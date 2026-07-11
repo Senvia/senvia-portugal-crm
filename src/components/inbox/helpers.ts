@@ -51,5 +51,14 @@ export function translateActivity(text: string): string {
   if (/^Conversation was marked resolved$/i.test(text)) return "Conversa resolvida";
   if (/^Conversation was reopened$/i.test(text)) return "Conversa reaberta";
   if (/^Conversation was marked pending$/i.test(text)) return "Conversa marcada como pendente";
+  // Portuguese system messages from the Chatwoot instance — already localized,
+  // pass through unchanged so the preview renders them in italics (activity
+  // style) instead of as a normal message.
+  if (/^O sistema /i.test(text)) return text;
+  if (/^Conversa resolvida/i.test(text)) return text;
+  if (/^Conversa reaberta/i.test(text)) return text;
+  if (/^Conversa marcada como pendente/i.test(text)) return text;
+  if (/^Atribu\u00edda a/i.test(text)) return text;
+  if (/^A conversa foi/i.test(text)) return text;
   return text;
 }
