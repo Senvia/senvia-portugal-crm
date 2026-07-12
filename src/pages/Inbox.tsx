@@ -2414,7 +2414,11 @@ export default function Inbox() {
   const [optimisticReactions, setOptimisticReactions] = useState<Record<string, string>>({});
   const handleReact = useCallback(
     (m: InboxMessage, emoji: string) => {
-      if (!m.wa_id || !selectedPhone) return;
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível reagir", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setOptimisticReactions((prev) => ({ ...prev, [m.wa_id!]: emoji }));
       reactToMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji, inboxId: selected?.inbox_id },
@@ -3737,7 +3741,7 @@ export default function Inbox() {
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
                         isEdited={editedContent.has(row.msg.id)}
                         editTrigger={editTriggerId === row.msg.id ? Date.now() : undefined}
-                        onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
+                        onReact={row.msg.wa_id ? handleReact : undefined}
                         replyTargetWaId={highlightedWaId}
                         reaction={row.msg.wa_id ? optimisticReactions[row.msg.wa_id] : undefined}
                         searchQuery={threadSearchOpen ? threadSearchQuery : undefined}
