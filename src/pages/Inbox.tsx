@@ -529,7 +529,15 @@ function AttachmentView({
   onPreview: (url: string) => void;
 }) {
   const url = attachment.data_url;
-  if (!url) return <p className="text-xs italic opacity-70">📎 anexo indisponível</p>;
+  if (!url) return (
+    <div className={cn(
+      "flex items-center gap-2.5 rounded-xl border p-2 text-sm",
+      outgoing ? "border-primary-foreground/30 bg-primary-foreground/5" : "border-border bg-card",
+    )}>
+      <FileTypeIcon extension={attachment.extension} size="md" />
+      <span className="text-xs italic opacity-70">Anexo indisponível</span>
+    </div>
+  );
 
   if (attachment.file_type === "image") {
     const thumb = attachment.thumb_url ?? url;
@@ -593,7 +601,7 @@ function AttachmentView({
   return (
     <div
       className={cn(
-        "flex items-center gap-2.5 rounded-lg border p-2 text-sm transition-colors",
+        "flex items-center gap-2.5 rounded-xl border p-2 text-sm transition-colors hover:bg-accent/50",
         outgoing ? "border-primary-foreground/30 bg-primary-foreground/5" : "border-border bg-card",
       )}
     >

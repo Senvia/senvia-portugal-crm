@@ -6,7 +6,7 @@
 // - Videos: inline player with controls (native <video>)
 // - Keyboard: Esc to close, ArrowLeft/Right to navigate, +/- to zoom
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MediaItem {
@@ -32,6 +32,7 @@ export const MediaViewer = memo(function MediaViewer({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showControls, setShowControls] = useState(true);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const touchRef = useRef<{ startX: number; startY: number; horizontal: boolean } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -86,7 +87,7 @@ export const MediaViewer = memo(function MediaViewer({
   }, []);
 
   // Reset zoom when item changes
-  useEffect(() => { resetZoom(); }, [index, resetZoom]);
+  useEffect(() => { resetZoom(); setImgLoaded(false); }, [index, resetZoom]);
 
   // Auto-hide controls on mouse inactivity
   useEffect(() => { showControlsBriefly(); }, [index, showControlsBriefly]);
@@ -232,7 +233,7 @@ export const MediaViewer = memo(function MediaViewer({
           src={item.url}
           controls
           autoPlay
-          className="max-h-[90vh] max-w-[95vw] rounded-lg"
+          className="max-h-[90vh] max-w-[95vw] rounded-xl"
         />
       ) : item ? (
         <div
@@ -248,11 +249,20 @@ export const MediaViewer = memo(function MediaViewer({
           onTouchEnd={onTouchEnd}
           style={{ cursor: zoom > 1 ? (dragRef.current ? 'grabbing' : 'grab') : 'default' }}
         >
+          {!imgLoaded && (
+            <div className="absolute flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+            </div>
+          )}
           <img
             src={item.url}
             alt={item.filename || 'Imagem'}
             draggable={false}
-            className="max-h-[90vh] max-w-[95vw] select-none rounded-lg object-contain transition-transform duration-100"
+            onLoad={() => setImgLoaded(true)}
+            className={cn(
+              'max-h-[90vh] max-w-[95vw] select-none rounded-xl object-contain transition-opacity duration-200',
+              imgLoaded ? 'opacity-100' : 'opacity-0',
+            )}
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) translateX(${swipeOffset}px)`,
               transition: dragRef.current || touchRef.current ? 'none' : undefined,
