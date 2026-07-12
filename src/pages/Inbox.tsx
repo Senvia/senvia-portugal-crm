@@ -533,20 +533,18 @@ function AttachmentView({
   if (!url) return <p className="text-xs italic opacity-70">📎 anexo indisponível</p>;
 
   if (attachment.file_type === "image") {
-    // Bubbles load the (much smaller) thumbnail — the full-size original is only
-    // fetched when the user opens the lightbox preview. min-h reserves some
-    // vertical space before the image loads so the thread jumps less as photos
-    // pop in (a real fix would need server-side dimensions, out of scope here).
     const thumb = attachment.thumb_url ?? url;
     return (
-      <button type="button" onClick={() => onPreview(url)} className="block cursor-zoom-in">
-        <img
-          src={thumb}
-          alt="Imagem"
-          loading="lazy"
-          onLoad={(e) => { (e.target as HTMLImageElement).style.background = 'transparent'; }}
-          className="max-h-64 min-h-[120px] max-w-full rounded-lg bg-muted object-contain"
-        />
+      <button type="button" onClick={() => onPreview(url)} className="block w-[260px] max-w-full cursor-zoom-in overflow-hidden rounded-xl">
+        <div className="relative aspect-[4/3] w-full bg-muted">
+          <img
+            src={thumb}
+            alt="Imagem"
+            loading="lazy"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.background = 'transparent'; }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
       </button>
     );
   }
@@ -567,18 +565,23 @@ function AttachmentView({
         <button
           type="button"
           onClick={() => onPreview(url)}
-          className="group relative block cursor-pointer overflow-hidden rounded-lg bg-black"
+          className="group relative block w-[260px] max-w-full cursor-pointer overflow-hidden rounded-xl bg-black"
         >
-          <video
-            src={url}
-            preload="metadata"
-            muted
-            className="max-h-64 max-w-full object-contain"
-          />
-          <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity group-hover:bg-black/40">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-black shadow-lg">
+          <div className="relative aspect-[4/3] w-full">
+            <video
+              src={url}
+              preload="metadata"
+              muted
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity group-hover:bg-black/30">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-black shadow-lg transition-transform group-hover:scale-110">
               <Play className="h-6 w-6 translate-x-0.5" />
             </span>
+          </span>
+          <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            Vídeo
           </span>
         </button>
         <div className="flex justify-end">
@@ -3747,10 +3750,23 @@ export default function Inbox() {
                           p.failed ? "bg-destructive/90" : "bg-primary/80",
                         )}>
                           {p.previewUrl && p.previewKind === "image" && (
-                            <img src={p.previewUrl} alt="" className="max-h-64 max-w-full rounded-lg object-contain" />
+                            <div className="w-[260px] max-w-full overflow-hidden rounded-xl">
+                              <div className="relative aspect-[4/3] w-full bg-black/20">
+                                <img src={p.previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                              </div>
+                            </div>
                           )}
                           {p.previewUrl && p.previewKind === "video" && (
-                            <video src={p.previewUrl} className="max-h-64 max-w-full rounded-lg" muted />
+                            <div className="w-[260px] max-w-full overflow-hidden rounded-xl">
+                              <div className="relative aspect-[4/3] w-full bg-black/50">
+                                <video src={p.previewUrl} className="absolute inset-0 h-full w-full object-cover" muted />
+                                <span className="absolute inset-0 flex items-center justify-center">
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/80 text-black">
+                                    <Play className="h-5 w-5 translate-x-0.5" />
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
                           )}
                           {p.previewUrl && p.previewKind === "voice" && (
                             <AudioPlayer url={p.previewUrl} outgoing />
