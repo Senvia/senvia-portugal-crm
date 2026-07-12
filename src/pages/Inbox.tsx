@@ -675,6 +675,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       title="Responder"
+      aria-label="Responder"
       onClick={onClick}
       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
     >
@@ -698,6 +699,7 @@ function ReactionButton({ onPick }: { onPick: (emoji: string) => void }) {
         <button
           type="button"
           title="Reagir"
+          aria-label="Reagir com emoji"
           className={cn(
             "rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100",
             open && "opacity-100",
@@ -3667,6 +3669,8 @@ export default function Inbox() {
             <InboxErrorBoundary resetKey={selectedId} label="thread">
             <div
               ref={scrollRef}
+              role="log"
+              aria-label="Mensagens da conversa"
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
@@ -4248,12 +4252,18 @@ export default function Inbox() {
                       }
                     }}
                     onPaste={(e) => {
-                      // Force plain-text paste (no rich HTML). Images still bubble to
-                      // the form's onPaste (handlePaste) since we only handle text here.
                       if (e.clipboardData?.files?.length) return;
                       e.preventDefault();
                       const text = e.clipboardData?.getData("text/plain") ?? "";
-                      document.execCommand("insertText", false, text);
+                      const sel = window.getSelection();
+                      if (sel && sel.rangeCount > 0) {
+                        const range = sel.getRangeAt(0);
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(text));
+                        range.collapse(false);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                      }
                     }}
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
@@ -5068,6 +5078,7 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Editar mensagem"
+              aria-label="Editar mensagem"
               onClick={() => { setEditDraft(body); setEditing(true); }}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >
@@ -5078,6 +5089,7 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Apagar para todos"
+              aria-label="Apagar para todos"
               onClick={() => onDelete(m)}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >

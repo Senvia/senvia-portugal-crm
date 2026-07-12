@@ -350,8 +350,25 @@ export function EmailComposer({
   }, [to, cc, bcc, subject, bodyVersion, attachments.length, showCc, showBcc]);
 
   const format = (cmd: string) => {
-    document.execCommand(cmd, false, undefined);
-    editorRef.current?.focus();
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const supported = typeof document.queryCommandSupported === 'function' && document.queryCommandSupported(cmd);
+    if (supported) {
+      document.execCommand(cmd, false, undefined);
+    } else {
+      const tag = cmd === 'bold' ? 'strong' : cmd === 'italic' ? 'em' : cmd === 'underline' ? 'u' : null;
+      if (tag) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+          const range = sel.getRangeAt(0);
+          const el = document.createElement(tag);
+          range.surroundContents(el);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+    }
     setBodyVersion((v) => v + 1);
   };
 
