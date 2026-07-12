@@ -113,6 +113,7 @@ import { ProgressDownloadButton } from "@/components/inbox/ProgressDownloadButto
 import { MediaViewer, type MediaItem } from "@/components/inbox/MediaViewer";
 import { WaveformPlayer } from "@/components/inbox/WaveformPlayer";
 import { GlobalAudioPill } from "@/components/inbox/GlobalAudioPill";
+import { ChannelBadge } from "@/components/inbox/ChannelBadge";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
@@ -675,6 +676,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       title="Responder"
+      aria-label="Responder"
       onClick={onClick}
       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
     >
@@ -698,6 +700,7 @@ function ReactionButton({ onPick }: { onPick: (emoji: string) => void }) {
         <button
           type="button"
           title="Reagir"
+          aria-label="Reagir com emoji"
           className={cn(
             "rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100",
             open && "opacity-100",
@@ -818,6 +821,8 @@ export default function Inbox() {
   const [pinned, setPinned] = useState<number[]>(loadPinned);
   // Muted conversations (localStorage) — no sound/badge for these.
   const [muted, setMuted] = useState<number[]>(loadMutedIds);
+  const mutedRef = useRef(muted);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
   // Whether WE are actively typing — broadcast to teammates for collision warnings.
   const [selfTyping, setSelfTyping] = useState(false);
   const typingResetRef = useRef<number | null>(null);
@@ -1917,20 +1922,21 @@ export default function Inbox() {
         if (outAttachments.length > 0) {
           const list = outAttachments;
           setOutAttachments([]);
-          for (let i = 0; i < list.length; i++) {
-            const data = await fileToBase64(list[i].file);
-            await startConversation.mutateAsync({
-              phone,
-              content: i === 0 ? content : "",
-              inboxId,
-              attachment: {
-                data,
-                mimetype: list[i].file.type || "application/octet-stream",
-                filename: list[i].file.name,
-                kind: list[i].kind,
-              },
-            });
-          }
+          await Promise.all(list.map((item, i) =>
+            fileToBase64(item.file)
+              .then((data) => startConversation.mutateAsync({
+                phone,
+                content: i === 0 ? content : "",
+                inboxId,
+                attachment: {
+                  data,
+                  mimetype: item.file.type || "application/octet-stream",
+                  filename: item.file.name,
+                  kind: item.kind,
+                },
+              }))
+              .catch(() => toast({ title: `Falha ao ler ${item.file.name}`, variant: "destructive" })),
+          ));
         } else {
           await startConversation.mutateAsync({ phone, content, inboxId });
         }
@@ -1980,7 +1986,8 @@ export default function Inbox() {
       const accepted: Array<{ file: File; kind: OutgoingAttachment["kind"] }> = [];
       for (const file of Array.from(files)) {
         if (file.size > INBOX_CONFIG.ATTACHMENT_MAX_BYTES) {
-          toast({ title: `${file.name} é demasiado grande`, description: "Máximo 10 MB.", variant: "destructive" });
+          const maxMb = Math.round(INBOX_CONFIG.ATTACHMENT_MAX_BYTES / 1024 / 1024);
+          toast({ title: `${file.name} é demasiado grande`, description: `Máximo ${maxMb} MB.`, variant: "destructive" });
           continue;
         }
         accepted.push({ file, kind: attachmentKind(file.type) });
@@ -1995,7 +2002,7 @@ export default function Inbox() {
     e.target.value = "";
   };
 
-  const openMediaViewer = useCallback((clickedUrl: string) => {
+  const mediaItems = useMemo(() => {
     const items: MediaItem[] = [];
     for (const m of thread) {
       for (const a of m.attachments ?? []) {
@@ -2005,9 +2012,13 @@ export default function Inbox() {
         }
       }
     }
-    const idx = items.findIndex((it) => it.url === clickedUrl);
-    setMediaViewer({ items, index: Math.max(0, idx) });
+    return items;
   }, [thread]);
+
+  const openMediaViewer = useCallback((clickedUrl: string) => {
+    const idx = mediaItems.findIndex((it) => it.url === clickedUrl);
+    setMediaViewer({ items: mediaItems, index: Math.max(0, idx) });
+  }, [mediaItems]);
 
   // Paste an image/print straight into the composer.
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -2080,20 +2091,21 @@ export default function Inbox() {
     try {
       if (outAttachments.length > 0) {
         const list = outAttachments;
-        for (let i = 0; i < list.length; i++) {
-          const data = await fileToBase64(list[i].file);
-          await scheduleMessage.mutateAsync({
-            phone,
-            content: i === 0 ? content : "",
-            sendAt,
-            attachment: {
-              data,
-              mimetype: list[i].file.type || "application/octet-stream",
-              filename: list[i].file.name,
-              kind: list[i].kind,
-            },
-          });
-        }
+        await Promise.all(list.map((item, i) =>
+          fileToBase64(item.file)
+            .then((data) => scheduleMessage.mutateAsync({
+              phone,
+              content: i === 0 ? content : "",
+              sendAt,
+              attachment: {
+                data,
+                mimetype: item.file.type || "application/octet-stream",
+                filename: item.file.name,
+                kind: item.kind,
+              },
+            }))
+            .catch(() => toast({ title: `Falha ao agendar ${item.file.name}`, variant: "destructive" })),
+        ));
       } else {
         await scheduleMessage.mutateAsync({ phone, content, sendAt });
       }
@@ -2180,11 +2192,12 @@ export default function Inbox() {
   // changes on a mute/unmute itself) so ConversationRow's memo isn't defeated by
   // every composer keystroke.
   const toggleMuteFor = useCallback(async (id: number) => {
-    const wasMuted = muted.includes(id);
-    const next = wasMuted ? muted.filter((m) => m !== id) : [...muted, id];
+    const current = mutedRef.current;
+    const wasMuted = current.includes(id);
+    const next = wasMuted ? current.filter((m) => m !== id) : [...current, id];
     setMuted(next);
+    mutedRef.current = next;
     saveMutedIds(next);
-    // Sync to server so the push edge function can filter per-user
     if (user?.id && organization?.id) {
       await supabase
         .from('push_subscriptions')
@@ -2193,34 +2206,33 @@ export default function Inbox() {
         .eq('organization_id', organization.id);
     }
     toast({ title: wasMuted ? "Notificações reativadas" : "Conversa silenciada" });
-  }, [muted, user?.id, organization?.id, toast]);
+  }, [user?.id, organization?.id, toast]);
   const handleToggleMute = () => selected && toggleMuteFor(selected.id);
 
-  const handleExport = () => {
-    if (!selected) return;
-    const lines = thread
+  const handleExport = useCallback((conv: InboxConversation) => {
+    const msgs = conv.id === selectedId ? thread : [];
+    const lines = msgs
       .filter((m) => !m.is_activity)
       .map((m) => {
         const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
-        // In groups, pull the individual sender (and clean body) from the prefix.
         const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
-        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || selected.contact_name);
+        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || conv.contact_name);
         const text = parsed?.sender ? parsed.body : m.content;
         const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
         return `[${when}] ${who}: ${what}`;
       });
-    const contactRef = displayPhone(selected.contact_phone) || selected.contact_email || "";
+    const contactRef = displayPhone(conv.contact_phone) || conv.contact_email || "";
     const blob = new Blob(
-      [`Conversa com ${selected.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
+      [`Conversa com ${conv.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
       { type: "text/plain;charset=utf-8" },
     );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `conversa-${selected.contact_name.replace(/\W+/g, "-")}.txt`;
+    a.download = `conversa-${conv.contact_name.replace(/\W+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [selectedId, thread, isGroupSelected]);
 
   const handleRegisterClient = () => {
     if (!selected || contactMatch?.kind !== "client") return;
@@ -2285,40 +2297,6 @@ export default function Inbox() {
   }, [toggleStatus, toast, selectedId, filtered]);
 
   // Export a conversation's messages as a text file.
-  const handleExportConversation = useCallback(async (conv: InboxConversation) => {
-    try {
-      const lines: string[] = [];
-      lines.push(`Conversa: ${conv.contact_name}`);
-      lines.push(`Telefone: ${conv.contact_phone || "N/A"}`);
-      lines.push(`Data de exportação: ${new Date().toLocaleString("pt-PT")}`);
-      lines.push("=".repeat(50));
-      lines.push("");
-      const msgs = conv.id === selectedId ? thread : [];
-      if (msgs.length === 0) {
-        lines.push("(Abre a conversa para carregar as mensagens antes de exportar.)");
-      } else {
-        for (const m of msgs) {
-          const time = formatTime(m.created_at);
-          const sender = m.outgoing ? "Nós" : conv.contact_name;
-          lines.push(`[${time}] ${sender}: ${m.content || "[anexo]"}`);
-        }
-      }
-      lines.push("");
-      lines.push("=".repeat(50));
-      lines.push(`Total de mensagens: ${msgs.length}`);
-      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `conversa-${conv.contact_name.replace(/\s+/g, "-")}-${Date.now()}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Conversa exportada" });
-    } catch {
-      toast({ title: "Falha ao exportar", variant: "destructive" });
-    }
-  }, [selectedId, thread, toast]);
-
   // Quick action handler for the conversation row's "⋮" menu — opens the
   // conversation first, then triggers the relevant action.
   const handleQuickAction = useCallback((action: string, conv: InboxConversation) => {
@@ -2341,10 +2319,10 @@ export default function Inbox() {
         setReminderOpen(true);
         break;
       case "export":
-        handleExportConversation(conv);
+        handleExport(conv);
         break;
     }
-  }, [navigate, handleExportConversation]);
+  }, [navigate, handleExport]);
 
   const handleStatusChange = useCallback(
     (conversationId: number, newStatus: string) => {
@@ -3565,7 +3543,7 @@ export default function Inbox() {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => selected && handleExportConversation(selected)}>
+                    <DropdownMenuItem onClick={() => selected && handleExport(selected)}>
                       <FileDown className="mr-2 h-4 w-4" />
                       Exportar conversa
                     </DropdownMenuItem>
@@ -3666,6 +3644,8 @@ export default function Inbox() {
             <InboxErrorBoundary resetKey={selectedId} label="thread">
             <div
               ref={scrollRef}
+              role="log"
+              aria-label="Mensagens da conversa"
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
@@ -4249,12 +4229,18 @@ export default function Inbox() {
                       }
                     }}
                     onPaste={(e) => {
-                      // Force plain-text paste (no rich HTML). Images still bubble to
-                      // the form's onPaste (handlePaste) since we only handle text here.
                       if (e.clipboardData?.files?.length) return;
                       e.preventDefault();
                       const text = e.clipboardData?.getData("text/plain") ?? "";
-                      document.execCommand("insertText", false, text);
+                      const sel = window.getSelection();
+                      if (sel && sel.rangeCount > 0) {
+                        const range = sel.getRangeAt(0);
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(text));
+                        range.collapse(false);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                      }
                     }}
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
@@ -4798,7 +4784,7 @@ export default function Inbox() {
         onMarkCurrentRead={() => { if (selectedId) markRead({ conversationId: selectedId }); }}
         onAssignCurrent={() => setAssignOpen(true)}
         onManageLabels={() => setManagingLabels(true)}
-        onExportConversation={() => { if (selected) handleExportConversation(selected); }}
+        onExportConversation={() => { if (selected) handleExport(selected); }}
         onGoToSettings={() => navigate("/settings")}
         currentConversationId={selectedId}
       />
@@ -5069,6 +5055,7 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Editar mensagem"
+              aria-label="Editar mensagem"
               onClick={() => { setEditDraft(body); setEditing(true); }}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >
@@ -5079,6 +5066,7 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Apagar para todos"
+              aria-label="Apagar para todos"
               onClick={() => onDelete(m)}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >
@@ -5404,46 +5392,6 @@ function NewConversationPicker({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ChannelBadge({ channel }: { channel: string | null }) {
-  if (!channel) return null;
-  const ch = channel.toLowerCase();
-  if (ch.includes("instagram")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-background"
-        style={{ background: "linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)" }}>
-        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.97.24 2.43.403a4.9 4.9 0 0 1 1.772 1.153 4.9 4.9 0 0 1 1.153 1.772c.163.46.35 1.26.403 2.43.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.24 1.97-.403 2.43a4.9 4.9 0 0 1-1.153 1.772 4.9 4.9 0 0 1-1.772 1.153c-.46.163-1.26.35-2.43.403-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.97-.24-2.43-.403a4.9 4.9 0 0 1-1.772-1.153 4.9 4.9 0 0 1-1.153-1.772c-.163-.46-.35-1.26-.403-2.43C2.175 15.747 2.163 15.367 2.163 12s.012-3.584.07-4.85c.054-1.17.24-1.97.403-2.43A4.9 4.9 0 0 1 3.79 2.948a4.9 4.9 0 0 1 1.772-1.153c.46-.163 1.26-.35 2.43-.403C9.258 1.334 9.638 1.322 12 1.322Zm0 1.838c-3.162 0-3.535.012-4.787.069-1.055.048-1.63.224-2.011.372a3.07 3.07 0 0 0-1.138.74 3.07 3.07 0 0 0-.74 1.138c-.148.382-.324.956-.372 2.011-.057 1.252-.069 1.625-.069 4.787s.012 3.535.069 4.787c.048 1.055.224 1.63.372 2.011.19.487.45.9.74 1.138.238.29.651.55 1.138.74.382.148.956.324 2.011.372 1.252.057 1.625.069 4.787.069s3.535-.012 4.787-.069c1.055-.048 1.63-.224 2.011-.372a3.07 3.07 0 0 0 1.138-.74 3.07 3.07 0 0 0 .74-1.138c.148-.382.324-.956.372-2.011.057-1.252.069-1.625.069-4.787s-.012-3.535-.069-4.787c-.048-1.055-.224-1.63-.372-2.011a3.07 3.07 0 0 0-.74-1.138 3.07 3.07 0 0 0-1.138-.74c-.382-.148-.956-.324-2.011-.372-1.252-.057-1.625-.069-4.787-.069ZM12 6.865a5.135 5.135 0 1 1 0 10.27 5.135 5.135 0 0 1 0-10.27Zm0 1.838a3.297 3.297 0 1 0 0 6.594 3.297 3.297 0 0 0 0-6.594Zm5.338-3.205a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("telegram")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#229ED9] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("email")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-500 ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("facebook")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#1877F2] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
-      </span>
-    );
-  }
-  // Default: WhatsApp (api channel or any other → assume WhatsApp since that's the main channel here)
-  return (
-    <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background">
-      <svg viewBox="0 0 24 24" className="h-3 w-3 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-    </span>
   );
 }
 

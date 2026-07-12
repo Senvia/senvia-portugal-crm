@@ -4,85 +4,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessagingChannels } from '@/hooks/useMessagingChannels';
 import { isActivityText } from '@/lib/activity-detection';
+import type {
+  InboxConversation,
+  InboxAttachment,
+  InboxMessage,
+  OutgoingAttachment,
+  PresencePeer,
+  SendMessageVars,
+  ContactMatch,
+  InboxLabel,
+  CannedResponse,
+  AutoReplyConfig,
+  ScheduledMessage,
+  CrmRecordDetail,
+} from './inbox-types';
 
-export interface InboxConversation {
-  id: number;
-  // Other Chatwoot conversations of the SAME contact, merged into this row.
-  alt_ids: number[];
-  contact_id: number | null;
-  contact_name: string;
-  contact_phone: string | null;
-  // Identity for channels without a phone number (Instagram / Messenger / email).
-  contact_email: string | null;
-  contact_identifier: string | null;
-  contact_thumbnail: string | null;
-  last_message: string | null;
-  // Direction/state of the last message — shows ✓/✓✓ before the preview for a
-  // message WE sent, WhatsApp-style (never shown for an incoming last message).
-  last_outgoing: boolean;
-  last_status: string | null;
-  // Email: subject line from Chatwoot additional_attributes.mail_subject
-  email_subject: string | null;
-  unread_count: number;
-  status: string;
-  channel: string | null;
-  // Chatwoot inbox id — which connected account/number this conversation belongs
-  // to. Used to route the outbound reply through the right WhatsApp instance.
-  inbox_id: number | null;
-  updated_at: number | null;
-  // Set when the LAST message is from the customer (they're waiting on us).
-  waiting_since: number | null;
-  labels: string[];
-  assigned_id: string | null;
-  assigned_name: string | null;
-  // Manual CRM link (overrides the phone-based auto-match).
-  crm_kind: 'lead' | 'client' | null;
-  crm_id: string | null;
-  crm_name: string | null;
-}
-
-export interface InboxAttachment {
-  id?: number;
-  file_type: string;
-  data_url: string | null;
-  thumb_url: string | null;
-  file_size: number | null;
-  extension: string | null;
-}
-
-export interface InboxMessage {
-  id: number;
-  content: string;
-  outgoing: boolean;
-  is_activity: boolean;
-  // Private note: agent-only, never sent to the customer's WhatsApp.
-  is_private?: boolean;
-  created_at: string | number | null;
-  sender_name: string | null;
-  // Delivery status of outgoing messages: sent | delivered | read | failed.
-  status: string | null;
-  // WhatsApp message id — used to quote/reply.
-  wa_id: string | null;
-  // When this message is a reply, the Chatwoot id of the quoted message.
-  reply_to_id?: number | null;
-  attachments: InboxAttachment[];
-  // Email-specific fields (null for non-email channels)
-  content_type: string | null;
-  email_from: string | null;
-  email_to: string | null;
-  email_cc: string | null;
-  email_subject: string | null;
-  // Full HTML body from content_attributes.email.html_content.full
-  email_html_body: string | null;
-}
-
-// Attachment payload for sending (base64, no data: prefix).
-export interface OutgoingAttachment {
-  data: string;
-  mimetype: string;
-  filename: string;
-  kind: 'image' | 'video' | 'document' | 'voice';
-}
+export type {
+  InboxConversation,
+  InboxAttachment,
+  InboxMessage,
+  OutgoingAttachment,
+  PresencePeer,
+  SendMessageVars,
+  ContactMatch,
+  InboxLabel,
+  CannedResponse,
+  AutoReplyConfig,
+  ScheduledMessage,
+  CrmRecordDetail,
+};
 
 async function invokeInbox<T>(organizationId: string, payload: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('chatwoot-inbox', {
@@ -316,13 +266,6 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
   const stale = live && since > 0 && (Date.now() - since > 45000);
 
   return live && !stale;
-}
-
-export interface PresencePeer {
-  userId: string;
-  name: string;
-  conversationId: number | null;
-  typing: boolean;
 }
 
 // Shared agent presence across the org: who currently has which conversation
@@ -775,15 +718,6 @@ export function useDownloadAttachment() {
   };
 }
 
-export interface SendMessageVars {
-  conversationId: number;
-  content: string;
-  contactPhone?: string | null;
-  inboxId?: number | null;
-  attachment?: OutgoingAttachment;
-  quotedId?: string | null;
-}
-
 // Sends are DISPATCHED strictly in order. Two quick sends used to fire two
 // parallel edge-function calls, and Evolution could deliver them to WhatsApp
 // inverted — the queue guarantees the first message leaves before the second.
@@ -922,15 +856,6 @@ export function useToggleConversationStatus() {
 
 // ---- CRM linking: find the lead/client behind a WhatsApp phone number ----
 
-export interface ContactMatch {
-  kind: 'lead' | 'client';
-  id: string;
-  name: string;
-  // Present on results from useSearchCrmRecords — needed to start a WhatsApp
-  // conversation with the picked lead/client.
-  phone?: string | null;
-}
-
 // Matches a CRM lead/client behind a conversation. By the last 9 digits of the
 // phone (PT national number, so "+351 910...", "351910...", "910..." all match)
 // and/or by email — the email path is what lets channels WITHOUT a phone
@@ -1015,12 +940,6 @@ export function useRenameContact() {
   });
 }
 
-export interface InboxLabel {
-  id: number;
-  title: string;
-  color: string | null;
-}
-
 export function useInboxLabels() {
   const { organization } = useAuth();
   return useQuery({
@@ -1086,11 +1005,6 @@ export function useSetConversationLabels() {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
-}
-
-export interface CannedResponse {
-  id: number;
-  content: string;
 }
 
 // Quick replies shared by the whole organization (stored as Chatwoot canned
@@ -1214,13 +1128,6 @@ export function useSuggestReply() {
 
 // ---- Out-of-hours auto-reply config (stored in messaging_channels.metadata) ----
 
-export interface AutoReplyConfig {
-  enabled: boolean;
-  start: string; // "09:00"
-  end: string;   // "18:00"
-  message: string;
-}
-
 const DEFAULT_AUTO_REPLY: AutoReplyConfig = {
   enabled: false,
   start: '09:00',
@@ -1271,18 +1178,7 @@ export function useSaveAutoReplyConfig() {
 
 // ---- Scheduled messages (write now, send later via pg_cron) ----
 
-export interface ScheduledMessage {
-  id: string;
-  phone: string;
-  content: string;
-  send_at: string;
-  status: string;
-  // Cheap label for the "scheduled" bar — set when the message carries an
-  // attachment; the (large) base64 payload itself is never pulled into the list.
-  attachment_name: string | null;
-}
-
-// The table is newer than the auto-generated Supabase types — hence the cast.
+// The table is newer than the auto-generated Supabase types - hence the cast.
 const scheduledTable = () => (supabase as any).from('scheduled_messages');
 
 export function useScheduledMessages(phone: string | null | undefined) {
@@ -1358,17 +1254,6 @@ export function useCancelScheduledMessage() {
 }
 
 // ---- CRM record behind the conversation (side panel) ----
-
-export interface CrmRecordDetail {
-  kind: 'lead' | 'client';
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  status: string | null;
-  value: number | null;
-  notes: string | null;
-}
 
 export function useCrmRecord(match: ContactMatch | null | undefined) {
   return useQuery({
