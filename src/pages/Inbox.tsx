@@ -4425,7 +4425,7 @@ export default function Inbox() {
                       key={key}
                       type="button"
                       className="relative block aspect-square cursor-zoom-in overflow-hidden rounded-lg bg-muted"
-                      onClick={() => attachment.data_url && setPreviewUrl(attachment.data_url)}
+                      onClick={() => attachment.data_url && openMediaViewer(attachment.data_url)}
                     >
                       {attachment.file_type === "video" ? (
                         <>
@@ -4454,11 +4454,11 @@ export default function Inbox() {
                 <div className="space-y-1.5 py-1">
                   {galleryData.docs.map(({ key, attachment }) => (
                     <div key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <FileTypeIcon extension={attachment.extension} size="sm" />
                       <span className="min-w-0 flex-1 truncate">
-                        {attachment.extension ? `Documento .${attachment.extension}` : "Documento"}
+                        {attachment.extension ? `Documento .${attachment.extension.toUpperCase()}` : "Documento"}
                       </span>
-                      {attachment.data_url && <DownloadButton url={attachment.data_url} extension={attachment.extension} />}
+                      {attachment.data_url && <ProgressDownloadButton url={attachment.data_url} extension={attachment.extension} />}
                     </div>
                   ))}
                 </div>
@@ -4931,7 +4931,7 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
             srcDoc={bodyForIframe(rawBody, isHtml)}
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             className="w-full border-0"
-            style={{ height: '120px' }}
+            style={{ height: '200px' }}
             title="Email"
             onLoad={() => {
               try {
@@ -5395,7 +5395,7 @@ function NewConversationPicker({
   useEffect(() => { if (open) setTerm(""); }, [open]);
   const { data: results = [], isFetching } = useSearchCrmRecords(term);
   const digits = term.replace(/\D/g, "");
-  const isPhone = digits.length >= 9;
+  const isPhone = digits.length >= 9 && digits.length <= 15;
 
   const hasConv = (phone?: string | null) => {
     const sfx = (phone || "").replace(/\D/g, "").slice(-9);
