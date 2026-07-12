@@ -821,6 +821,8 @@ export default function Inbox() {
   const [pinned, setPinned] = useState<number[]>(loadPinned);
   // Muted conversations (localStorage) — no sound/badge for these.
   const [muted, setMuted] = useState<number[]>(loadMutedIds);
+  const mutedRef = useRef(muted);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
   // Whether WE are actively typing — broadcast to teammates for collision warnings.
   const [selfTyping, setSelfTyping] = useState(false);
   const typingResetRef = useRef<number | null>(null);
@@ -1920,20 +1922,21 @@ export default function Inbox() {
         if (outAttachments.length > 0) {
           const list = outAttachments;
           setOutAttachments([]);
-          for (let i = 0; i < list.length; i++) {
-            const data = await fileToBase64(list[i].file);
-            await startConversation.mutateAsync({
-              phone,
-              content: i === 0 ? content : "",
-              inboxId,
-              attachment: {
-                data,
-                mimetype: list[i].file.type || "application/octet-stream",
-                filename: list[i].file.name,
-                kind: list[i].kind,
-              },
-            });
-          }
+          await Promise.all(list.map((item, i) =>
+            fileToBase64(item.file)
+              .then((data) => startConversation.mutateAsync({
+                phone,
+                content: i === 0 ? content : "",
+                inboxId,
+                attachment: {
+                  data,
+                  mimetype: item.file.type || "application/octet-stream",
+                  filename: item.file.name,
+                  kind: item.kind,
+                },
+              }))
+              .catch(() => toast({ title: `Falha ao ler ${item.file.name}`, variant: "destructive" })),
+          ));
         } else {
           await startConversation.mutateAsync({ phone, content, inboxId });
         }
@@ -1983,7 +1986,8 @@ export default function Inbox() {
       const accepted: Array<{ file: File; kind: OutgoingAttachment["kind"] }> = [];
       for (const file of Array.from(files)) {
         if (file.size > INBOX_CONFIG.ATTACHMENT_MAX_BYTES) {
-          toast({ title: `${file.name} é demasiado grande`, description: "Máximo 10 MB.", variant: "destructive" });
+          const maxMb = Math.round(INBOX_CONFIG.ATTACHMENT_MAX_BYTES / 1024 / 1024);
+          toast({ title: `${file.name} é demasiado grande`, description: `Máximo ${maxMb} MB.`, variant: "destructive" });
           continue;
         }
         accepted.push({ file, kind: attachmentKind(file.type) });
@@ -1998,7 +2002,7 @@ export default function Inbox() {
     e.target.value = "";
   };
 
-  const openMediaViewer = useCallback((clickedUrl: string) => {
+  const mediaItems = useMemo(() => {
     const items: MediaItem[] = [];
     for (const m of thread) {
       for (const a of m.attachments ?? []) {
@@ -2008,9 +2012,13 @@ export default function Inbox() {
         }
       }
     }
-    const idx = items.findIndex((it) => it.url === clickedUrl);
-    setMediaViewer({ items, index: Math.max(0, idx) });
+    return items;
   }, [thread]);
+
+  const openMediaViewer = useCallback((clickedUrl: string) => {
+    const idx = mediaItems.findIndex((it) => it.url === clickedUrl);
+    setMediaViewer({ items: mediaItems, index: Math.max(0, idx) });
+  }, [mediaItems]);
 
   // Paste an image/print straight into the composer.
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -2083,20 +2091,21 @@ export default function Inbox() {
     try {
       if (outAttachments.length > 0) {
         const list = outAttachments;
-        for (let i = 0; i < list.length; i++) {
-          const data = await fileToBase64(list[i].file);
-          await scheduleMessage.mutateAsync({
-            phone,
-            content: i === 0 ? content : "",
-            sendAt,
-            attachment: {
-              data,
-              mimetype: list[i].file.type || "application/octet-stream",
-              filename: list[i].file.name,
-              kind: list[i].kind,
-            },
-          });
-        }
+        await Promise.all(list.map((item, i) =>
+          fileToBase64(item.file)
+            .then((data) => scheduleMessage.mutateAsync({
+              phone,
+              content: i === 0 ? content : "",
+              sendAt,
+              attachment: {
+                data,
+                mimetype: item.file.type || "application/octet-stream",
+                filename: item.file.name,
+                kind: item.kind,
+              },
+            }))
+            .catch(() => toast({ title: `Falha ao agendar ${item.file.name}`, variant: "destructive" })),
+        ));
       } else {
         await scheduleMessage.mutateAsync({ phone, content, sendAt });
       }
@@ -2183,11 +2192,12 @@ export default function Inbox() {
   // changes on a mute/unmute itself) so ConversationRow's memo isn't defeated by
   // every composer keystroke.
   const toggleMuteFor = useCallback(async (id: number) => {
-    const wasMuted = muted.includes(id);
-    const next = wasMuted ? muted.filter((m) => m !== id) : [...muted, id];
+    const current = mutedRef.current;
+    const wasMuted = current.includes(id);
+    const next = wasMuted ? current.filter((m) => m !== id) : [...current, id];
     setMuted(next);
+    mutedRef.current = next;
     saveMutedIds(next);
-    // Sync to server so the push edge function can filter per-user
     if (user?.id && organization?.id) {
       await supabase
         .from('push_subscriptions')
@@ -2196,34 +2206,33 @@ export default function Inbox() {
         .eq('organization_id', organization.id);
     }
     toast({ title: wasMuted ? "Notificações reativadas" : "Conversa silenciada" });
-  }, [muted, user?.id, organization?.id, toast]);
+  }, [user?.id, organization?.id, toast]);
   const handleToggleMute = () => selected && toggleMuteFor(selected.id);
 
-  const handleExport = () => {
-    if (!selected) return;
-    const lines = thread
+  const handleExport = useCallback((conv: InboxConversation) => {
+    const msgs = conv.id === selectedId ? thread : [];
+    const lines = msgs
       .filter((m) => !m.is_activity)
       .map((m) => {
         const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
-        // In groups, pull the individual sender (and clean body) from the prefix.
         const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
-        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || selected.contact_name);
+        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || conv.contact_name);
         const text = parsed?.sender ? parsed.body : m.content;
         const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
         return `[${when}] ${who}: ${what}`;
       });
-    const contactRef = displayPhone(selected.contact_phone) || selected.contact_email || "";
+    const contactRef = displayPhone(conv.contact_phone) || conv.contact_email || "";
     const blob = new Blob(
-      [`Conversa com ${selected.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
+      [`Conversa com ${conv.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
       { type: "text/plain;charset=utf-8" },
     );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `conversa-${selected.contact_name.replace(/\W+/g, "-")}.txt`;
+    a.download = `conversa-${conv.contact_name.replace(/\W+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [selectedId, thread, isGroupSelected]);
 
   const handleRegisterClient = () => {
     if (!selected || contactMatch?.kind !== "client") return;
@@ -2288,40 +2297,6 @@ export default function Inbox() {
   }, [toggleStatus, toast, selectedId, filtered]);
 
   // Export a conversation's messages as a text file.
-  const handleExportConversation = useCallback(async (conv: InboxConversation) => {
-    try {
-      const lines: string[] = [];
-      lines.push(`Conversa: ${conv.contact_name}`);
-      lines.push(`Telefone: ${conv.contact_phone || "N/A"}`);
-      lines.push(`Data de exportação: ${new Date().toLocaleString("pt-PT")}`);
-      lines.push("=".repeat(50));
-      lines.push("");
-      const msgs = conv.id === selectedId ? thread : [];
-      if (msgs.length === 0) {
-        lines.push("(Abre a conversa para carregar as mensagens antes de exportar.)");
-      } else {
-        for (const m of msgs) {
-          const time = formatTime(m.created_at);
-          const sender = m.outgoing ? "Nós" : conv.contact_name;
-          lines.push(`[${time}] ${sender}: ${m.content || "[anexo]"}`);
-        }
-      }
-      lines.push("");
-      lines.push("=".repeat(50));
-      lines.push(`Total de mensagens: ${msgs.length}`);
-      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `conversa-${conv.contact_name.replace(/\s+/g, "-")}-${Date.now()}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Conversa exportada" });
-    } catch {
-      toast({ title: "Falha ao exportar", variant: "destructive" });
-    }
-  }, [selectedId, thread, toast]);
-
   // Quick action handler for the conversation row's "⋮" menu — opens the
   // conversation first, then triggers the relevant action.
   const handleQuickAction = useCallback((action: string, conv: InboxConversation) => {
@@ -2344,10 +2319,10 @@ export default function Inbox() {
         setReminderOpen(true);
         break;
       case "export":
-        handleExportConversation(conv);
+        handleExport(conv);
         break;
     }
-  }, [navigate, handleExportConversation]);
+  }, [navigate, handleExport]);
 
   const handleStatusChange = useCallback(
     (conversationId: number, newStatus: string) => {
@@ -3569,7 +3544,7 @@ export default function Inbox() {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => selected && handleExportConversation(selected)}>
+                    <DropdownMenuItem onClick={() => selected && handleExport(selected)}>
                       <FileDown className="mr-2 h-4 w-4" />
                       Exportar conversa
                     </DropdownMenuItem>
@@ -4808,7 +4783,7 @@ export default function Inbox() {
         onMarkCurrentRead={() => { if (selectedId) markRead({ conversationId: selectedId }); }}
         onAssignCurrent={() => setAssignOpen(true)}
         onManageLabels={() => setManagingLabels(true)}
-        onExportConversation={() => { if (selected) handleExportConversation(selected); }}
+        onExportConversation={() => { if (selected) handleExport(selected); }}
         onGoToSettings={() => navigate("/settings")}
         currentConversationId={selectedId}
       />
