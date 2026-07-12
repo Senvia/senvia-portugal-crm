@@ -1882,6 +1882,22 @@ export default function Inbox() {
     [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, dispatchSend, signing, myName],
   );
 
+  const [editTriggerId, setEditTriggerId] = useState<number | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "ArrowUp") {
+        const lastOutgoing = [...thread].reverse().find((m) => m.outgoing && m.wa_id);
+        if (lastOutgoing && (Date.now() - toMs(lastOutgoing.created_at)) < 15 * 60 * 1000) {
+          e.preventDefault();
+          setEditTriggerId(lastOutgoing.id);
+          setTimeout(() => setEditTriggerId(null), 100);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [thread]);
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     // Keep the composer focused so the keyboard stays up after sending (WhatsApp-like)
@@ -3738,6 +3754,8 @@ export default function Inbox() {
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
+                        isEdited={editedContent.has(row.msg.id)}
+                        editTrigger={editTriggerId === row.msg.id ? Date.now() : undefined}
                         onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
                         replyTargetWaId={highlightedWaId}
                         reaction={row.msg.wa_id ? optimisticReactions[row.msg.wa_id] : undefined}
@@ -4885,6 +4903,8 @@ const MessageBubble = memo(function MessageBubble({
   onReply,
   onDelete,
   onSaveEdit,
+  isEdited,
+  editTrigger,
   onTask,
   onReact,
   emailMode = false,
@@ -4904,6 +4924,8 @@ const MessageBubble = memo(function MessageBubble({
   onDelete?: (m: InboxMessage) => void;
   // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
   onSaveEdit?: (m: InboxMessage, text: string) => void;
+  isEdited?: boolean;
+  editTrigger?: number;
   onTask?: (m: InboxMessage) => void;
   onReact?: (m: InboxMessage, emoji: string) => void;
   // Preview of the quoted message when this one is a reply (sender + short text + id).
@@ -4932,9 +4954,28 @@ const MessageBubble = memo(function MessageBubble({
   // Highlight when this is the message currently being replied to (Telegram-style).
   const isReplyTarget = !!replyTargetWaId && !!m.wa_id && m.wa_id === replyTargetWaId;
   // Inline edit — only offered for own recent messages (WhatsApp caps editing at ~15 min; we use 5).
-  const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 5 * 60 * 1000;
+  const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 15 * 60 * 1000;
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState("");
+  const editRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editRef.current);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    if (editTrigger && canEdit && !editing) {
+      setEditDraft(body);
+      setEditing(true);
+    }
+  }, [editTrigger]);
   // Swipe/drag-to-reply — Pointer Events unify touch (mobile) and mouse (desktop).
   const dragRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -4943,7 +4984,6 @@ const MessageBubble = memo(function MessageBubble({
   // real movement so it never fires mid-scroll or mid-swipe-to-reply.
   const longPressTimerRef = useRef<number | null>(null);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
-  const editRef = useRef<HTMLDivElement>(null);
   const cancelLongPress = () => {
     if (longPressTimerRef.current != null) { window.clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
   };
@@ -5132,6 +5172,7 @@ const MessageBubble = memo(function MessageBubble({
         )}
         {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
+            {isEdited && <span className="italic opacity-80">Editado</span>}
             {formatTime(m.created_at)}
             {m.outgoing && <StatusTicks status={m.status} />}
           </p>
