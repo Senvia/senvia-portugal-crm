@@ -108,6 +108,12 @@ import { INBOX_CONFIG } from "@/lib/constants";
 import { isActivityText, translateActivity } from "@/lib/activity-detection";
 import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
 import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
+import { FileTypeIcon } from "@/components/inbox/FileTypeIcon";
+import { ProgressDownloadButton } from "@/components/inbox/ProgressDownloadButton";
+import { MediaViewer, type MediaItem } from "@/components/inbox/MediaViewer";
+import { WaveformPlayer } from "@/components/inbox/WaveformPlayer";
+import { GlobalAudioPill } from "@/components/inbox/GlobalAudioPill";
+import { VideoPlayer } from "@/components/inbox/VideoPlayer";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
@@ -438,44 +444,75 @@ function AudioPlayer({ url, outgoing }: { url: string; outgoing: boolean }) {
 }
 
 // Audio attachment with inline Groq Whisper transcription (on-demand, cached in localStorage).
-function AudioAttachment({ url, extension, outgoing, messageId }: {
-  url: string; extension: string | null; outgoing: boolean; messageId: number;
+function TranscribeButton({ url, outgoing, messageId }: {
+  url: string; outgoing: boolean; messageId: number;
 }) {
   const { text, loading, error, transcribe } = useTranscribeAudio(messageId, url);
+  if (text) {
+    return (
+      <p className={cn(
+        "rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
+        outgoing ? "bg-primary-foreground/10 text-primary-foreground/90" : "bg-muted text-foreground",
+      )}>
+        {text}
+      </p>
+    );
+  }
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1">
-        <AudioPlayer url={url} outgoing={outgoing} />
-        <DownloadButton url={url} extension={extension} className={outgoing ? "text-primary-foreground" : ""} />
-      </div>
-      {text ? (
-        <p className={cn(
-          "rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
-          outgoing ? "bg-primary-foreground/10 text-primary-foreground/90" : "bg-muted text-foreground",
-        )}>
-          {text}
-        </p>
-      ) : (
+    <button
+      type="button"
+      onClick={transcribe}
+      disabled={loading}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+        outgoing
+          ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25"
+          : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+        loading && "cursor-not-allowed opacity-60",
+      )}
+    >
+      {loading
+        ? <><Loader2 className="h-3 w-3 animate-spin" /> A transcrever...</>
+        : error
+          ? <><Mic className="h-3 w-3" /> Tentar novamente</>
+          : <><Mic className="h-3 w-3" /> Transcrever</>
+      }
+    </button>
+  );
+}
+
+function PendingAttachmentThumb({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const sizeLabel = file.size > 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(file.size / 1024)} KB`;
+  const url = useMemo(() => isImage ? URL.createObjectURL(file) : null, [file, isImage]);
+  useEffect(() => { if (url) return () => URL.revokeObjectURL(url); }, [url]);
+
+  if (isImage) {
+    return (
+      <div className="group relative h-20 w-20 overflow-hidden rounded-lg border bg-background">
+        {url && <img src={url} alt={file.name} className="h-full w-full object-cover" />}
         <button
           type="button"
-          onClick={transcribe}
-          disabled={loading}
-          className={cn(
-            "flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-            outgoing
-              ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25"
-              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-            loading && "cursor-not-allowed opacity-60",
-          )}
+          onClick={onRemove}
+          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
         >
-          {loading
-            ? <><Loader2 className="h-3 w-3 animate-spin" /> A transcrever...</>
-            : error
-              ? <><Mic className="h-3 w-3" /> Tentar novamente</>
-              : <><Mic className="h-3 w-3" /> Transcrever</>
-          }
+          <X className="h-3 w-3" />
         </button>
-      )}
+        <span className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[9px] text-white">{sizeLabel}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="group relative flex items-center gap-2 rounded-lg border bg-background px-2 py-1.5 text-xs">
+      <FileTypeIcon extension={ext} size="sm" />
+      <div className="min-w-0 max-w-[140px]">
+        <p className="truncate font-medium">{file.name}</p>
+        <p className="text-[10px] text-muted-foreground">{sizeLabel}</p>
+      </div>
+      <button type="button" onClick={onRemove} className="rounded p-0.5 hover:bg-accent">
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 }
@@ -514,35 +551,51 @@ function AttachmentView({
     );
   }
   if (attachment.file_type === "audio") {
-    return <AudioAttachment url={url} extension={attachment.extension} outgoing={outgoing} messageId={messageId} />;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <WaveformPlayer url={url} outgoing={outgoing} seed={messageId} />
+          <ProgressDownloadButton url={url} extension={attachment.extension} outgoing={outgoing} />
+        </div>
+        <TranscribeButton url={url} outgoing={outgoing} messageId={messageId} />
+      </div>
+    );
   }
   if (attachment.file_type === "video") {
     return (
       <div className="space-y-1">
-        <video controls src={url} className="max-h-64 max-w-full rounded-lg" preload="metadata" />
+        <VideoPlayer src={url} />
         <div className="flex justify-end">
-          <DownloadButton url={url} extension={attachment.extension} />
+          <ProgressDownloadButton url={url} extension={attachment.extension} />
         </div>
       </div>
     );
   }
+  // Telegram-style file card with colored type icon
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-        outgoing ? "border-primary-foreground/30" : "border-border",
+        "flex items-center gap-2.5 rounded-lg border p-2 text-sm transition-colors",
+        outgoing ? "border-primary-foreground/30 bg-primary-foreground/5" : "border-border bg-card",
       )}
     >
+      <FileTypeIcon extension={attachment.extension} size="md" showLabel />
       <a
         href={url}
         target="_blank"
         rel="noreferrer"
-        className="flex min-w-0 items-center gap-2 underline-offset-2 hover:underline"
+        className="flex min-w-0 flex-1 flex-col"
       >
-        <FileText className="h-4 w-4 shrink-0" />
-        <span className="truncate">{attachment.extension ? `Documento .${attachment.extension}` : "Documento"}</span>
+        <span className="truncate text-xs font-medium">
+          {attachment.extension ? `Documento .${attachment.extension.toUpperCase()}` : "Documento"}
+        </span>
+        {attachment.file_size != null && (
+          <span className={cn("text-[10px]", outgoing ? "text-primary-foreground/60" : "text-muted-foreground")}>
+            {attachment.file_size > 1024 * 1024 ? `${(attachment.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(attachment.file_size / 1024)} KB`}
+          </span>
+        )}
       </a>
-      <DownloadButton url={url} extension={attachment.extension} />
+      <ProgressDownloadButton url={url} extension={attachment.extension} outgoing={outgoing} />
     </div>
   );
 }
@@ -709,6 +762,7 @@ export default function Inbox() {
   }
   const [pending, setPending] = useState<PendingBubble[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [mediaViewer, setMediaViewer] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   // Contact panel: media / docs / links gallery dialog.
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -1898,6 +1952,20 @@ export default function Inbox() {
     if (e.target.files) addFiles(e.target.files);
     e.target.value = "";
   };
+
+  const openMediaViewer = useCallback((clickedUrl: string) => {
+    const items: MediaItem[] = [];
+    for (const m of thread) {
+      for (const a of m.attachments ?? []) {
+        if (!a.data_url) continue;
+        if (a.file_type === "image" || a.file_type === "video") {
+          items.push({ url: a.data_url, type: a.file_type as "image" | "video" });
+        }
+      }
+    }
+    const idx = items.findIndex((it) => it.url === clickedUrl);
+    setMediaViewer({ items, index: Math.max(0, idx) });
+  }, [thread]);
 
   // Paste an image/print straight into the composer.
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -3639,7 +3707,7 @@ export default function Inbox() {
                         displayContent={row.displayContent}
                         quoted={quoted}
                         onJumpToQuoted={scrollToMessage}
-                        onPreview={setPreviewUrl}
+                        onPreview={openMediaViewer}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
@@ -3767,23 +3835,14 @@ export default function Inbox() {
               </div>
             )}
 
-            {/* Pending attachment chips */}
+            {/* Pending attachment preview — thumbnails for images, file cards for others */}
             {outAttachments.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-t bg-muted/40 px-3 py-2">
-                {outAttachments.map((a, i) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs">
-                    <Paperclip className="h-3 w-3 text-muted-foreground" />
-                    <span className="max-w-[160px] truncate">{a.file.name}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{a.file.size > 1024 * 1024 ? `${(a.file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(a.file.size / 1024)} KB`}</span>
-                    <button
-                      type="button"
-                      onClick={() => setOutAttachments((prev) => prev.filter((_, j) => j !== i))}
-                      className="rounded p-0.5 hover:bg-accent"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+              <div className="space-y-2 border-t bg-muted/40 px-3 py-2">
+                <div className="flex flex-wrap gap-2">
+                  {outAttachments.map((a, i) => (
+                    <PendingAttachmentThumb key={i} file={a.file} onRemove={() => setOutAttachments((prev) => prev.filter((_, j) => j !== i))} />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -4178,7 +4237,20 @@ export default function Inbox() {
       )}
       </div>
 
-      {/* Image lightbox */}
+      {/* Media viewer — fullscreen with zoom/pan/swipe */}
+      {mediaViewer && mediaViewer.items.length > 0 && (
+        <MediaViewer
+          items={mediaViewer.items}
+          index={mediaViewer.index}
+          onClose={() => setMediaViewer(null)}
+          onNavigate={(idx) => setMediaViewer((prev) => prev ? { ...prev, index: idx } : null)}
+          onDownload={(item) => download(item.url)}
+        />
+      )}
+
+      <GlobalAudioPill activeMessageId={selected?.id ?? null} />
+
+      {/* Fallback single-image lightbox (still used by gallery) */}
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
         <DialogContent className="max-w-4xl border-none bg-transparent p-0 shadow-none">
           <DialogTitle className="sr-only">Pré-visualização de imagem</DialogTitle>
