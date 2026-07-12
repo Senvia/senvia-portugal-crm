@@ -2237,29 +2237,34 @@ export default function Inbox() {
   const handleToggleMute = () => selected && toggleMuteFor(selected.id);
 
   const handleExport = useCallback((conv: InboxConversation) => {
-    const msgs = conv.id === selectedId ? thread : [];
-    const lines = msgs
-      .filter((m) => !m.is_activity)
-      .map((m) => {
-        const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
-        const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
-        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || conv.contact_name);
-        const text = parsed?.sender ? parsed.body : m.content;
-        const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
-        return `[${when}] ${who}: ${what}`;
-      });
-    const contactRef = displayPhone(conv.contact_phone) || conv.contact_email || "";
-    const blob = new Blob(
-      [`Conversa com ${conv.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
-      { type: "text/plain;charset=utf-8" },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `conversa-${conv.contact_name.replace(/\W+/g, "-")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [selectedId, thread, isGroupSelected]);
+    try {
+      const msgs = conv.id === selectedId ? thread : [];
+      const lines = msgs
+        .filter((m) => !m.is_activity)
+        .map((m) => {
+          const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
+          const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
+          const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || conv.contact_name);
+          const text = parsed?.sender ? parsed.body : m.content;
+          const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
+          return `[${when}] ${who}: ${what}`;
+        });
+      const contactRef = displayPhone(conv.contact_phone) || conv.contact_email || "";
+      const blob = new Blob(
+        [`Conversa com ${conv.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
+        { type: "text/plain;charset=utf-8" },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversa-${conv.contact_name.replace(/\W+/g, "-")}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Conversa exportada" });
+    } catch {
+      toast({ title: "Falha ao exportar", variant: "destructive" });
+    }
+  }, [selectedId, thread, isGroupSelected, toast]);
 
   const handleRegisterClient = () => {
     if (!selected || contactMatch?.kind !== "client") return;
@@ -2370,7 +2375,8 @@ export default function Inbox() {
             });
           },
         },
-      );    },
+      );
+    },
     [toggleStatus, toast],
   );
 
@@ -2378,8 +2384,9 @@ export default function Inbox() {
   // composer keystroke (when only `draft` changed).
   const handleReplyTo = useCallback(
     (m: InboxMessage) => {
-      setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing });
-      setHighlightedWaId(m.wa_id!);
+      if (!m.wa_id) return;
+      setReplyTo({ waId: m.wa_id, content: m.content, outgoing: m.outgoing });
+      setHighlightedWaId(m.wa_id);
     },
     [],
   );
@@ -2393,7 +2400,11 @@ export default function Inbox() {
   const selectedPhone = selected?.contact_phone ?? null;
   const handleDeleteMessage = useCallback(
     (m: InboxMessage) => {
-      if (!selectedPhone) return;
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível apagar", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setConfirm({
         title: "Apagar mensagem?",
         description: "A mensagem será apagada para todos no WhatsApp.",
@@ -2414,15 +2425,17 @@ export default function Inbox() {
   );
   const handleSaveEdit = useCallback(
     (m: InboxMessage, text: string) => {
-      if (!m.wa_id || !selectedPhone) return;
-      // Show the new text immediately (overlay), then push the edit to WhatsApp.
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível editar", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setEditedContent((prev) => new Map(prev).set(m.id, text));
       editMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, content: text, inboxId: selected?.inbox_id },
         {
           onSuccess: () => toast({ title: "Mensagem editada" }),
           onError: (err) => {
-            // Roll back the overlay so the UI reflects reality.
             setEditedContent((prev) => {
               const next = new Map(prev);
               next.delete(m.id);
@@ -2613,7 +2626,6 @@ export default function Inbox() {
     mutation.mutate(payload, {
       onSuccess: (record) => {
         if (record?.id) {
-          // Persist the link so it survives phone-formatting mismatches.
           linkCrm.mutate({ conversationId: selected.id, kind, id: record.id, name: record.name ?? selected.contact_name });
         }
         toast({ title: kind === "lead" ? "Lead criada" : "Cliente criado", description: `${selected.contact_name} adicionado.` });
