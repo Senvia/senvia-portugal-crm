@@ -1944,11 +1944,11 @@ export default function Inbox() {
     if (draftConv) {
       if (!content && outAttachments.length === 0) return;
       const { phone, inboxId } = draftConv;
+      const list = outAttachments;
       setDraft("");
+      setOutAttachments([]);
       try {
-        if (outAttachments.length > 0) {
-          const list = outAttachments;
-          setOutAttachments([]);
+        if (list.length > 0) {
           await Promise.all(list.map((item, i) =>
             fileToBase64(item.file)
               .then((data) => startConversation.mutateAsync({
@@ -1970,7 +1970,8 @@ export default function Inbox() {
         setPendingSelectPhone(phone);
         toast({ title: "Mensagem enviada", description: "A abrir a conversa..." });
       } catch (err) {
-        if (content) setDraft((d) => (d.trim() ? d : content));
+        if (content) setDraft(content);
+        if (list.length > 0) setOutAttachments(list);
         toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
       }
       return;
@@ -2675,7 +2676,10 @@ export default function Inbox() {
   // Open the conversation for a phone: select the existing one, or start a draft.
   const openConversationForContact = (phone: string, name: string) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 9) return;
+    if (digits.length < 9) {
+      toast({ title: "Número inválido", description: "O número tem de ter pelo menos 9 dígitos.", variant: "destructive" });
+      return;
+    }
     const suffix = digits.slice(-9);
     const existing = conversations.find(
       (c) => (c.contact_phone || "").replace(/\D/g, "").slice(-9) === suffix,
@@ -3809,9 +3813,6 @@ export default function Inbox() {
                     );
                   })}
                   {visiblePending.map((p) => {
-                    // The auto-generated placeholder ("📎 file.png" / "🎵 Mensagem de
-                    // voz") is redundant once the real preview renders — only show
-                    // `content` as text when the user actually typed a caption.
                     const isPlaceholderText = p.content === "Mensagem de voz" || /^Anexo: /.test(p.content);
                     return (
                       <div key={p.key} className="mt-0.5 flex justify-end">
@@ -3839,7 +3840,7 @@ export default function Inbox() {
                             </div>
                           )}
                           {p.previewUrl && p.previewKind === "voice" && (
-                            <AudioPlayer url={p.previewUrl} outgoing />
+                            <WaveformPlayer url={p.previewUrl} outgoing seed={p.key.charCodeAt(0)} />
                           )}
                           {(!p.previewUrl || !isPlaceholderText) && (
                             <p className="whitespace-pre-wrap break-words">{p.content}</p>
@@ -3909,7 +3910,7 @@ export default function Inbox() {
                       {new Date(s.send_at).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </span>
                     <span className="min-w-0 flex-1 truncate">
-                      {s.content || (s.attachment_name ? `Anexo: ${s.attachment_name}` : "")}
+                      {s.content || (s.attachment_name ? `Anexo: ${s.attachment_name}` : "Mensagem agendada")}
                     </span>
                     <button
                       type="button"
