@@ -1858,7 +1858,7 @@ export default function Inbox() {
       // whole team shares one number.
       const text = signing && rawText && myName ? `*${firstName(myName)}:*\n${rawText}` : rawText;
       const key = `${selectedId}-${Date.now()}-${Math.random()}`;
-      const bubbleText = text || (attachment ? (attachment.kind === "voice" ? "🎵 Mensagem de voz" : `📎 ${attachment.filename}`) : "");
+      const bubbleText = text || (attachment ? (attachment.kind === "voice" ? "Mensagem de voz" : `Anexo: ${attachment.filename}`) : "");
       const previewUrl = previewSource && attachment && attachment.kind !== "document"
         ? URL.createObjectURL(previewSource)
         : undefined;
@@ -3734,7 +3734,7 @@ export default function Inbox() {
                         ? {
                             id: row.msg.reply_to_id,
                             sender: q.outgoing ? "Você" : (selected?.contact_name ?? "Contacto"),
-                            content: q.content || (q.attachments?.length ? "📎 Anexo" : "…"),
+                            content: q.content || (q.attachments?.length ? "Anexo" : "…"),
                           }
                         : { id: row.msg.reply_to_id, sender: "Resposta", content: "mensagem anterior" };
                     }
@@ -3767,7 +3767,7 @@ export default function Inbox() {
                     // The auto-generated placeholder ("📎 file.png" / "🎵 Mensagem de
                     // voz") is redundant once the real preview renders — only show
                     // `content` as text when the user actually typed a caption.
-                    const isPlaceholderText = p.content === "🎵 Mensagem de voz" || /^📎 /.test(p.content);
+                    const isPlaceholderText = p.content === "Mensagem de voz" || /^Anexo: /.test(p.content);
                     return (
                       <div key={p.key} className="mt-0.5 flex justify-end">
                         <div className={cn(
@@ -3864,7 +3864,7 @@ export default function Inbox() {
                       {new Date(s.send_at).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </span>
                     <span className="min-w-0 flex-1 truncate">
-                      {s.content || (s.attachment_name ? `📎 ${s.attachment_name}` : "")}
+                      {s.content || (s.attachment_name ? `Anexo: ${s.attachment_name}` : "")}
                     </span>
                     <button
                       type="button"
@@ -3884,7 +3884,7 @@ export default function Inbox() {
               <div className="flex animate-in fade-in slide-in-from-top-1 items-center gap-2 border-t bg-muted/40 px-3 py-2">
                 <Reply className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  A responder a: <span className="italic">{replyTo.content || "📎 anexo"}</span>
+                  A responder a: <span className="italic">{replyTo.content || "Anexo"}</span>
                 </p>
                 <button type="button" onClick={() => setReplyTo(null)} className="rounded p-1 hover:bg-accent">
                   <X className="h-3.5 w-3.5" />
@@ -3906,7 +3906,7 @@ export default function Inbox() {
             {/* Voice preview before sending */}
             {pendingVoice && (
               <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2">
-                <AudioPlayer url={pendingVoice.url} outgoing />
+                <WaveformPlayer url={pendingVoice.url} outgoing seed={Date.now()} />
                 <Button
                   type="button"
                   variant="ghost"
@@ -3955,7 +3955,7 @@ export default function Inbox() {
                   </div>
                 )}
               <form onSubmit={handleSend} onPaste={handlePaste} className="relative flex items-end gap-2 p-2.5">
-                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,application/pdf" className="hidden" onChange={handlePickFile} />
+                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
 
                 {/* "+" menu — single entry point for attach / emoji / quick replies / AI / schedule / signature */}
                 <Popover
