@@ -98,7 +98,7 @@ import {
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
-  MailOpen, Image as ImageIcon, Link2,
+  MailOpen, Image as ImageIcon, Link2, Star, Forward,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -114,6 +114,8 @@ import { MediaViewer, type MediaItem } from "@/components/inbox/MediaViewer";
 import { WaveformPlayer } from "@/components/inbox/WaveformPlayer";
 import { GlobalAudioPill } from "@/components/inbox/GlobalAudioPill";
 import { ChannelBadge } from "@/components/inbox/ChannelBadge";
+import { LinkPreview } from "@/components/inbox/LinkPreview";
+import { useStarredMessages } from "@/hooks/useStarredMessages";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
@@ -1823,6 +1825,31 @@ export default function Inbox() {
   const presence = useInboxPresence(selectedId, selfTyping, myName);
   const peersHere = selectedId ? presence.get(selectedId) ?? [] : [];
 
+  const { isStarred, toggleStar } = useStarredMessages();
+  const handleStar = useCallback((m: InboxMessage) => {
+    toggleStar({
+      id: m.id,
+      conversationId: selectedId ?? 0,
+      content: m.content || "",
+      sender: m.outgoing ? "Eu" : (selected?.contact_name ?? "Contacto"),
+      timestamp: toMs(m.created_at),
+    });
+  }, [selectedId, selected?.contact_name, toggleStar]);
+
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [forwardText, setForwardText] = useState("");
+  const handleForward = useCallback((m: InboxMessage) => {
+    setForwardText(m.content || "");
+    setForwardOpen(true);
+  }, []);
+  const handleForwardPick = useCallback((phone: string, _name: string) => {
+    setForwardOpen(false);
+    setNewConvOpen(true);
+    setDraftConv({ phone, name: _name, inboxId: null });
+    setTimeout(() => setDraft(forwardText), 100);
+    setForwardText("");
+  }, [forwardText]);
+
   // Fire (or re-fire, on retry) the actual mutation for a pending bubble.
   const dispatchSend = useCallback((key: string, vars: SendMessageVars) => {
     sendMessage.mutate(vars, {
@@ -3421,8 +3448,26 @@ export default function Inbox() {
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
+                  {peersHere.length > 0 && !peersHere.some((p) => p.typing) && (
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400" title={`${peersHere.map((p) => firstName(p.name)).join(", ")} ${peersHere.length > 1 ? "estão" : "está"} a ver`}>
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      {peersHere.length} {peersHere.length > 1 ? "agentes" : "agente"}
+                    </span>
+                  )}
                   {isEmailSelected && selected.email_subject ? (
                     <p className="truncate text-xs font-medium text-foreground/80">{selected.email_subject}</p>
+                  ) : peersHere.some((p) => p.typing) ? (
+                    <p className="flex items-center gap-1 truncate text-xs text-emerald-600 dark:text-emerald-400">
+                      {firstName(peersHere.find((p) => p.typing)?.name || "")} está a escrever
+                      <span className="flex gap-0.5">
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:0ms]" />
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:300ms]" />
+                      </span>
+                    </p>
                   ) : selected.contact_phone ? (
                     <p className="truncate text-xs text-muted-foreground">{displayPhone(selected.contact_phone)}</p>
                   ) : null}
@@ -3737,6 +3782,9 @@ export default function Inbox() {
                         isEdited={editedContent.has(row.msg.id)}
                         editTrigger={editTriggerId === row.msg.id ? Date.now() : undefined}
                         onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
+                        onStar={handleStar}
+                        isStarred={isStarred(row.msg.id)}
+                        onForward={handleForward}
                         replyTargetWaId={highlightedWaId}
                         reaction={row.msg.wa_id ? optimisticReactions[row.msg.wa_id] : undefined}
                         searchQuery={threadSearchOpen ? threadSearchQuery : undefined}
@@ -4893,6 +4941,9 @@ const MessageBubble = memo(function MessageBubble({
   editTrigger,
   onTask,
   onReact,
+  onStar,
+  isStarred,
+  onForward,
   emailMode = false,
   firstOfGroup = true,
   lastOfGroup = true,
@@ -4914,6 +4965,9 @@ const MessageBubble = memo(function MessageBubble({
   editTrigger?: number;
   onTask?: (m: InboxMessage) => void;
   onReact?: (m: InboxMessage, emoji: string) => void;
+  onStar?: (m: InboxMessage) => void;
+  isStarred?: boolean;
+  onForward?: (m: InboxMessage) => void;
   // Preview of the quoted message when this one is a reply (sender + short text + id).
   quoted?: { id: number; sender: string; content: string };
   // Scrolls to (and briefly highlights) the quoted message — WhatsApp lets you
@@ -5072,8 +5126,33 @@ const MessageBubble = memo(function MessageBubble({
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
+          {onForward && body && (
+            <button
+              type="button"
+              title="Reencaminhar"
+              aria-label="Reencaminhar"
+              onClick={() => onForward(m)}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+            >
+              <Forward className="h-3.5 w-3.5" />
+            </button>
+          )}
           {taskButton}
           {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
+          {onStar && (
+            <button
+              type="button"
+              title={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              aria-label={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              onClick={() => onStar(m)}
+              className={cn(
+                "rounded p-1 transition-opacity hover:bg-accent",
+                isStarred ? "opacity-100 text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", isStarred && "fill-amber-400 text-amber-400")} />
+            </button>
+          )}
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
         </div>
       )}
@@ -5156,7 +5235,10 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
         ) : (
-          body && <p className="whitespace-pre-wrap break-words">{autolink(body, m.outgoing, searchQuery)}</p>
+          <>
+            {body && <p className="whitespace-pre-wrap break-words">{autolink(body, m.outgoing, searchQuery)}</p>}
+            {body && <LinkPreview text={body} outgoing={m.outgoing} />}
+          </>
         )}
         {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
@@ -5178,6 +5260,20 @@ const MessageBubble = memo(function MessageBubble({
         <div className="flex items-center">
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
           {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
+          {onStar && (
+            <button
+              type="button"
+              title={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              aria-label={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              onClick={() => onStar(m)}
+              className={cn(
+                "rounded p-1 transition-opacity hover:bg-accent",
+                isStarred ? "opacity-100 text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", isStarred && "fill-amber-400 text-amber-400")} />
+            </button>
+          )}
           {taskButton}
         </div>
       )}
@@ -5218,6 +5314,15 @@ const MessageBubble = memo(function MessageBubble({
             >
               <FileText className="h-4 w-4 text-muted-foreground" /> Copiar texto
             </button>
+            {onForward && body && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); onForward(m); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+              >
+                <Forward className="h-4 w-4 text-muted-foreground" /> Reencaminhar
+              </button>
+            )}
             {onTask && (
               <button
                 type="button"
