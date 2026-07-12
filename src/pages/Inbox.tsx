@@ -564,7 +564,23 @@ function AttachmentView({
   if (attachment.file_type === "video") {
     return (
       <div className="space-y-1">
-        <VideoPlayer src={url} />
+        <button
+          type="button"
+          onClick={() => onPreview(url)}
+          className="group relative block cursor-pointer overflow-hidden rounded-lg bg-black"
+        >
+          <video
+            src={url}
+            preload="metadata"
+            muted
+            className="max-h-64 max-w-full object-contain"
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity group-hover:bg-black/40">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-black shadow-lg">
+              <Play className="h-6 w-6 translate-x-0.5" />
+            </span>
+          </span>
+        </button>
         <div className="flex justify-end">
           <ProgressDownloadButton url={url} extension={attachment.extension} />
         </div>
