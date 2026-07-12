@@ -98,7 +98,7 @@ import {
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
-  MailOpen, Image as ImageIcon, Link2, Star, Forward,
+  MailOpen, Image as ImageIcon, Link2, Star, Forward, RefreshCw,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -2441,7 +2441,11 @@ export default function Inbox() {
   const [optimisticReactions, setOptimisticReactions] = useState<Record<string, string>>({});
   const handleReact = useCallback(
     (m: InboxMessage, emoji: string) => {
-      if (!m.wa_id || !selectedPhone) return;
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível reagir", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setOptimisticReactions((prev) => ({ ...prev, [m.wa_id!]: emoji }));
       reactToMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji, inboxId: selected?.inbox_id },
@@ -3283,7 +3287,6 @@ export default function Inbox() {
           {/* Caixa selection moved to the unified left rail (InboxCaixaRail) */}
         </div>
 
-        
         <div ref={listScrollRef} className="flex-1 overflow-y-auto">
           <div className="animate-in fade-in" key={`${tab}-${caixaFilter}`}>
           {loadingConvos ? (
@@ -3302,7 +3305,7 @@ export default function Inbox() {
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
               <p>Não foi possível carregar as conversas.</p>
               <Button variant="outline" size="sm" onClick={() => refetchConvos()}>
-                <svg className="mr-1.5 h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 Tentar novamente
               </Button>
             </div>
@@ -3313,9 +3316,9 @@ export default function Inbox() {
                 : tab === "archived"
                   ? "Sem conversas arquivadas."
                   : tab === "unread"
-                    ? "Sem conversas por ler. 🎉"
+                    ? "Sem conversas por ler."
                     : tab === "waiting"
-                      ? "Ninguém à espera de resposta. 🎉"
+                      ? "Ninguém à espera de resposta."
                       : tab === "mine"
                         ? "Nenhuma conversa atribuída a ti."
                         : "Ainda não há conversas. Quando um cliente enviar uma mensagem, ela aparece aqui."}
@@ -3715,8 +3718,10 @@ export default function Inbox() {
               ) : loadingMessages && thread.length === 0 ? (
                 <div className="flex flex-col gap-2 px-4 py-6">
                   {[75, 55, 65, 80, 50, 70, 60].map((w, i) => (
-                    <div key={i} className={cn("flex", i % 2 === 0 ? "justify-start" : "justify-end")}>
+                    <div key={i} className={cn("flex items-center gap-2", i % 2 === 0 ? "justify-start" : "justify-end")}>
+                      {i % 2 === 0 && <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />}
                       <div className="h-10 animate-pulse rounded-2xl bg-muted" style={{ width: `${w}%` }} />
+                      {i % 2 === 1 && <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />}
                     </div>
                   ))}
                 </div>
@@ -3781,7 +3786,7 @@ export default function Inbox() {
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
                         isEdited={editedContent.has(row.msg.id)}
                         editTrigger={editTriggerId === row.msg.id ? Date.now() : undefined}
-                        onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
+                        onReact={row.msg.wa_id ? handleReact : undefined}
                         onStar={handleStar}
                         isStarred={isStarred(row.msg.id)}
                         onForward={handleForward}
@@ -5188,7 +5193,7 @@ const MessageBubble = memo(function MessageBubble({
             onClick={() => onJumpToQuoted?.(quoted.id)}
             title="Ir para a mensagem original"
             className={cn(
-              "mb-1 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80",
+              "mb-1 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80",
               m.outgoing ? "border-primary-foreground/50 bg-primary-foreground/10" : "border-primary/40 bg-muted",
             )}
           >
@@ -5219,7 +5224,7 @@ const MessageBubble = memo(function MessageBubble({
                   setEditing(false);
                 }
               }}
-              className="w-full resize-none rounded-3xl border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-2 text-sm text-inherit outline-none"
+              className="w-full resize-none rounded-lg border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-2 text-sm text-inherit outline-none"
             >{editDraft}</div>
             <div className="flex justify-end gap-1">
               <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-0.5 text-[11px] opacity-80 hover:opacity-100">
@@ -5242,7 +5247,7 @@ const MessageBubble = memo(function MessageBubble({
         )}
         {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
-            {isEdited && <span className="italic opacity-80">Editado</span>}
+            {isEdited && <><span className="italic opacity-80">Editado</span><span className="opacity-40">·</span></>}
             {formatTime(m.created_at)}
             {m.outgoing && <StatusTicks status={m.status} />}
           </p>
