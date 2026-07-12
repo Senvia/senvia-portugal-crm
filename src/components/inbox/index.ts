@@ -12,5 +12,4 @@ export { ProgressDownloadButton } from "./ProgressDownloadButton";
 export { MediaViewer } from "./MediaViewer";
 export type { MediaItem } from "./MediaViewer";
 export { WaveformPlayer } from "./WaveformPlayer";
-export { VideoPlayer } from "./VideoPlayer";
 export { GlobalAudioPill } from "./GlobalAudioPill";

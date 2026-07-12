@@ -1,6 +1,6 @@
 // Waveform-style voice message visualization with playback speed control.
 // Uses the global audio store so playback continues across conversation switches.
-import { useState, useRef, useCallback, memo } from 'react';
+import { useRef, useCallback, memo } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGlobalAudio } from '@/stores/useGlobalAudio';
@@ -32,9 +32,7 @@ export const WaveformPlayer = memo(function WaveformPlayer({
   compact?: boolean;
 }) {
   const bars = useRef(generateBars(seed)).current;
-  const { url: activeUrl, playing, cur, dur, speed, toggle, setSpeed, setProgress } = useGlobalAudio();
-  const [seeking, setSeeking] = useState(false);
-  const seekRef = useRef<HTMLDivElement>(null);
+  const { url: activeUrl, playing, cur, dur, speed, toggle, setSpeed, seek } = useGlobalAudio();
 
   const isActive = activeUrl === url;
   const pct = isActive && dur ? (cur / dur) * 100 : 0;
@@ -46,17 +44,15 @@ export const WaveformPlayer = memo(function WaveformPlayer({
     return `${m}:${String(Math.floor(adj % 60)).padStart(2, '0')}`;
   };
 
-  const seek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const onSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isActive || !dur) {
       toggle(url, seed);
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    setProgress(ratio * dur, dur);
-    const audioEl = (window as unknown as { __globalAudioEl?: HTMLAudioElement }).__globalAudioEl;
-    if (audioEl) audioEl.currentTime = ratio * dur;
-  }, [isActive, dur, url, seed, toggle, setProgress]);
+    seek(ratio);
+  }, [isActive, dur, url, seed, toggle, seek]);
 
   const cycleSpeed = useCallback(() => {
     const idx = SPEEDS.indexOf(speed);
@@ -79,8 +75,7 @@ export const WaveformPlayer = memo(function WaveformPlayer({
       </button>
 
       <div
-        ref={seekRef}
-        onClick={seek}
+        onClick={onSeek}
         className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-[2px]"
       >
         {bars.map((h, i) => {
@@ -124,8 +119,6 @@ export const WaveformPlayer = memo(function WaveformPlayer({
       )}>
         {isActive && (playing || cur > 0) ? fmt(cur) : fmt(dur)}
       </span>
-
-      {seeking && <span className="sr-only">A procurar</span>}
     </div>
   );
 });

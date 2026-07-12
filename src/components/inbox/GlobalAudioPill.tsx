@@ -4,7 +4,7 @@ import { Play, Pause, X } from 'lucide-react';
 import { useGlobalAudio } from '@/stores/useGlobalAudio';
 
 export function GlobalAudioPill({ activeMessageId }: { activeMessageId: number | null }) {
-  const { url, messageId, playing, cur, dur, toggle, pause, stop } = useGlobalAudio();
+  const { url, messageId, playing, cur, dur, toggle, stop } = useGlobalAudio();
 
   if (!url || !playing) return null;
   if (messageId != null && messageId === activeMessageId) return null;

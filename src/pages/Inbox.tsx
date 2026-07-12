@@ -113,7 +113,6 @@ import { ProgressDownloadButton } from "@/components/inbox/ProgressDownloadButto
 import { MediaViewer, type MediaItem } from "@/components/inbox/MediaViewer";
 import { WaveformPlayer } from "@/components/inbox/WaveformPlayer";
 import { GlobalAudioPill } from "@/components/inbox/GlobalAudioPill";
-import { VideoPlayer } from "@/components/inbox/VideoPlayer";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";

@@ -15,6 +15,7 @@ interface GlobalAudioState {
   toggle: (url: string, messageId: number) => void;
   setSpeed: (speed: number) => void;
   setProgress: (cur: number, dur: number) => void;
+  seek: (ratio: number) => void;
   stop: () => void;
 }
 
@@ -76,6 +77,15 @@ export const useGlobalAudio = create<GlobalAudioState>((set, get) => {
     },
 
     setProgress: (cur, dur) => set({ cur, dur }),
+
+    seek: (ratio) => {
+      const a = getAudio();
+      const d = a.duration || get().dur;
+      if (d && isFinite(d)) {
+        a.currentTime = Math.max(0, Math.min(1, ratio)) * d;
+        set({ cur: a.currentTime });
+      }
+    },
 
     stop: () => {
       const a = getAudio();

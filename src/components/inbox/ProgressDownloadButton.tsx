@@ -1,10 +1,9 @@
-// Download button with progress bar overlay — Telegram-style.
-// Falls back to the existing useDownloadAttachment hook if XHR progress isn't
-// available (e.g. CORS-restricted endpoints or the chatwoot proxy).
 import { useState, useRef, useCallback } from 'react';
 import { Download, Loader2, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDownloadAttachment } from '@/hooks/useChatwootInbox';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 type State = 'idle' | 'downloading' | 'done' | 'error';
 
@@ -21,7 +20,8 @@ export function ProgressDownloadButton({
   className?: string;
   outgoing?: boolean;
 }) {
-  const download = useDownloadAttachment();
+  const fallbackDownload = useDownloadAttachment();
+  const { organization } = useAuth();
   const [state, setState] = useState<State>('idle');
   const [pct, setPct] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -30,7 +30,6 @@ export function ProgressDownloadButton({
 
   const start = useCallback(async () => {
     if (state === 'downloading') {
-      // Click while downloading → cancel
       abortRef.current?.abort();
       return;
     }
@@ -40,14 +39,32 @@ export function ProgressDownloadButton({
     abortRef.current = controller;
 
     try {
-      const res = await fetch(url, { signal: controller.signal });
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatwoot-inbox`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            organization_id: organization?.id,
+            action: 'download_attachment',
+            url,
+          }),
+          signal: controller.signal,
+        },
+      );
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const total = Number(res.headers.get('content-length') || 0);
       const reader = res.body?.getReader();
 
       if (!reader || !total) {
-        // No streaming/size info — fallback to blob all-at-once
         const blob = await res.blob();
         triggerDownload(blob, name);
         setState('done');
@@ -76,9 +93,8 @@ export function ProgressDownloadButton({
         setPct(0);
         return;
       }
-      // Fallback: use the existing proxy-based download
       try {
-        await download(url, extension);
+        await fallbackDownload(url, extension);
         setState('done');
         setTimeout(() => setState('idle'), 2000);
       } catch {
@@ -86,7 +102,7 @@ export function ProgressDownloadButton({
         setTimeout(() => setState('idle'), 2000);
       }
     }
-  }, [state, url, extension, name, download]);
+  }, [state, url, extension, name, organization?.id, fallbackDownload]);
 
   return (
     <button
@@ -99,7 +115,6 @@ export function ProgressDownloadButton({
         className,
       )}
     >
-      {/* Progress bar overlay */}
       {state === 'downloading' && pct > 0 && (
         <span
           className={cn(
@@ -112,9 +127,7 @@ export function ProgressDownloadButton({
       <span className="relative flex items-center justify-center">
         {state === 'downloading' ? (
           pct > 0 ? (
-            <span className="flex items-center gap-1 text-[10px] font-medium tabular-nums">
-              {pct}%
-            </span>
+            <span className="text-[10px] font-medium tabular-nums">{pct}%</span>
           ) : (
             <Loader2 className="h-4 w-4 animate-spin" />
           )
@@ -138,6 +151,5 @@ function triggerDownload(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  // Small delay before revoking — some browsers race on the download
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

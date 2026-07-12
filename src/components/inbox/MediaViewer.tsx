@@ -33,6 +33,8 @@ export const MediaViewer = memo(function MediaViewer({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showControls, setShowControls] = useState(true);
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const touchRef = useRef<{ startX: number; startY: number; horizontal: boolean } | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
   const controlsTimer = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +117,40 @@ export const MediaViewer = memo(function MediaViewer({
   const onDoubleClick = () => {
     if (zoom > 1) resetZoom();
     else setZoom(2.5);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (zoom > 1) return;
+    const t = e.touches[0];
+    touchRef.current = { startX: t.clientX, startY: t.clientY, horizontal: false };
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    const st = touchRef.current;
+    if (!st) return;
+    const t = e.touches[0];
+    const dx = t.clientX - st.startX;
+    const dy = t.clientY - st.startY;
+    if (!st.horizontal && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      st.horizontal = true;
+    }
+    if (st.horizontal) {
+      setSwipeOffset(dx);
+    }
+  };
+
+  const onTouchEnd = () => {
+    const st = touchRef.current;
+    touchRef.current = null;
+    if (!st || !st.horizontal) return;
+    if (swipeOffset < -80 && index < items.length - 1) {
+      onNavigate(index + 1);
+      resetZoom();
+    } else if (swipeOffset > 80 && index > 0) {
+      onNavigate(index - 1);
+      resetZoom();
+    }
+    setSwipeOffset(0);
   };
 
   const prevItem = index > 0 ? items[index - 1] : null;
@@ -207,6 +243,9 @@ export const MediaViewer = memo(function MediaViewer({
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onDoubleClick={onDoubleClick}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
           style={{ cursor: zoom > 1 ? (dragRef.current ? 'grabbing' : 'grab') : 'default' }}
         >
           <img
@@ -215,8 +254,8 @@ export const MediaViewer = memo(function MediaViewer({
             draggable={false}
             className="max-h-[90vh] max-w-[95vw] select-none rounded-lg object-contain transition-transform duration-100"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-              transition: dragRef.current ? 'none' : undefined,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) translateX(${swipeOffset}px)`,
+              transition: dragRef.current || touchRef.current ? 'none' : undefined,
             }}
           />
         </div>
