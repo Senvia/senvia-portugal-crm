@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon,
   Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare,
@@ -199,7 +198,6 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     try { return parseInt(localStorage.getItem('email-list-width-v1') || '', 10) || DEFAULT_LIST_W; } catch { return DEFAULT_LIST_W; }
   });
   const listWidthRef = useRef(listWidth);
-  const listScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { listWidthRef.current = listWidth; }, [listWidth]);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const onResizeStart = (e: React.MouseEvent) => {
@@ -266,13 +264,6 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     }
     return order.map((key) => byThread.get(key)!);
   }, [messages, searching]);
-  const ROW_HEIGHT = 76;
-  const rowVirtualizer = useVirtualizer({
-    count: threadGroups.length,
-    getScrollElement: () => listScrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 5,
-  });
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened, isLoading: loadingMessage } = useEmailMessage(messageId);
 
@@ -575,7 +566,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
             </div>
           )}
         </header>
-        <div ref={listScrollRef} className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-2">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -610,35 +601,26 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               </div>
             )
           ) : (
-            <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-              {rowVirtualizer.getVirtualItems().map((vItem) => {
-                const group = threadGroups[vItem.index];
-                const m = group[0];
-                const threadCount = group.length;
-                const active = group.some((x) => x.id === messageId);
-                const selected = selectedIds.has(m.id);
-                const who = m.from_name || m.from_address || '(desconhecido)';
-                return (
-                  <div
-                    key={m.id}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: `translateY(${vItem.start}px)`,
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setMessageId(m.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && setMessageId(m.id)}
-                    className={cn(
-                      'group flex w-full cursor-pointer items-start border-b text-left transition-colors',
-                      active ? 'bg-accent' : 'hover:bg-accent/50',
-                      !m.seen && !active && 'bg-primary/[0.03]',
-                      selected && 'bg-primary/10',
-                    )}
-                  >
+            threadGroups.map((group) => {
+              const m = group[0];
+              const threadCount = group.length;
+              const active = group.some((x) => x.id === messageId);
+              const selected = selectedIds.has(m.id);
+              const who = m.from_name || m.from_address || '(desconhecido)';
+              return (
+                <div
+                  key={m.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setMessageId(m.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && setMessageId(m.id)}
+                  className={cn(
+                    'group flex w-full cursor-pointer items-start border-b text-left transition-colors',
+                    active ? 'bg-accent' : 'hover:bg-accent/50',
+                    !m.seen && !active && 'bg-primary/[0.03]',
+                    selected && 'bg-primary/10',
+                  )}
+                >
                   {/* Checkbox — visible on hover or when any row is selected */}
                   <div
                     className={cn(
@@ -712,8 +694,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                   </div>
                 </div>
               );
-            })}
-            </div>
+            })
           )}
           {/* Load older — asks the gateway to sync the next batch from IMAP */}
           {!isDraftsFolder && !searching && !isLoading && messages.length > 0 && (
