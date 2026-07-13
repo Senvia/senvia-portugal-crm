@@ -575,7 +575,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
             </div>
           )}
         </header>
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listScrollRef} className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-2">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -833,7 +833,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                 </PopoverContent>
               </Popover>
             </div>
-        <div ref={listScrollRef} className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">
               <h1 className="mb-4 text-xl font-semibold leading-snug">{opened.message.subject || '(sem assunto)'}</h1>
               <div className="mb-4 flex items-start gap-3 border-b pb-4">
