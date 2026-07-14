@@ -49,8 +49,8 @@ export function useCreateProduct() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string; price?: number; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; commission_value?: number | null; commission_renewal_value?: number | null }) => {
-      const { error } = await supabase
+    mutationFn: async (data: { name: string; description?: string; price?: number; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; commission_value?: number | null; commission_renewal_value?: number | null }): Promise<Product> => {
+      const { data: inserted, error } = await supabase
         .from('products')
         .insert({
           organization_id: organization!.id,
@@ -62,9 +62,12 @@ export function useCreateProduct() {
           tax_exemption_reason: data.tax_exemption_reason || null,
           commission_value: data.commission_value ?? null,
           commission_renewal_value: data.commission_renewal_value ?? null,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+      return inserted as Product;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });

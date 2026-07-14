@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "active_work_id": null,
+  "works": {
+    "senvia-paid-traffic-filter": {
+      "work_id": "senvia-paid-traffic-filter",
+      "active_plan": ".omo/plans/senvia-paid-traffic-filter.md",
+      "plan_name": "senvia-paid-traffic-filter",
+      "session_ids": ["codex:opencode-current"],
+      "status": "completed",
+      "worktree_path": "C:\\Users\\THIAGO~1\\AppData\\Local\\Temp\\opencode\\senvia-crm-worktrees\\feat-paid-traffic-filter",
+      "current_head": "91a701e0",
+      "merged_into_cactus": true,
+      "completed_at": "2026-07-10",
+      "notes": "Implemented directly (not via delegation) due to worker pipeline slowness — user explicitly requested speed. 5 granular commits on feat/paid-traffic-filter, fast-forward merged into Cactus. All 13 plan checkboxes marked done. tsc passes (exit 0); lint errors are pre-existing in untouched files. Curl 200 on :8081 with HMR-rebuilt bundle. Dev server still running (PID 4272). NOT pushed to origin yet — awaiting user approval."
+    }
+  }
+}

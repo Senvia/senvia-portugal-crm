@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { RefreshCw } from 'lucide-react';
 import { useUpdateProduct } from '@/hooks/useProducts';
 import { useOrganization } from '@/hooks/useOrganization';
+import { ProductImageGallery } from './ProductImageGallery';
 import type { Product } from '@/types/proposals';
 
 interface EditProductModalProps {
@@ -66,12 +67,13 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Editar Produto</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+            <div className="space-y-2">
             <Label htmlFor="edit-name">Nome *</Label>
             <Input
               id="edit-name"
@@ -175,6 +177,12 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
               onCheckedChange={setIsActive}
             />
           </div>
+
+          <div className="rounded-lg border p-3">
+            <ProductImageGallery productId={product.id} />
+          </div>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
