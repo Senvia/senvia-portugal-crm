@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MobileHeaderProps {
@@ -10,6 +10,7 @@ interface MobileHeaderProps {
 
 export function MobileHeader({
   onMenuToggle,
+  isMenuOpen = false,
   organizationName = "Senvia OS"
 }: MobileHeaderProps) {
   const { organization } = useAuth();
@@ -17,8 +18,8 @@ export function MobileHeader({
   return (
     <header className="fixed top-0 left-0 right-0 z-[60] bg-background border-b border-border safe-top">
       <div className="h-14 flex items-center justify-between px-4">
-        <Button variant="ghost" size="icon" onClick={onMenuToggle} aria-label="Abrir menu">
-          <Menu className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={onMenuToggle} aria-label={isMenuOpen ? "Fechar menu" : "Abrir menu"}>
+          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         <img 
           alt={organization?.name || "SENVIA"} 

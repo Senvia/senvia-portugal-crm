@@ -50,7 +50,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           />
         )}
         {!immersive && showBanner && (
-          <div style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}>
+          <div style={{ paddingTop: 'calc(3.5rem + var(--safe-area-top))' }}>
             {showTrialBanner
               ? <TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} totalDays={14} />
               : <PaymentOverdueBanner daysUntilBlock={subscriptionStatus!.days_until_block ?? 0} blockAt={subscriptionStatus!.block_at} />}
@@ -66,7 +66,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
         )}
         <main
           className={immersive || hideNav ? undefined : "pb-20"}
-          style={immersive || showBanner ? undefined : { paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
+          style={{ paddingTop: immersive ? undefined : 'calc(3.5rem + var(--safe-area-top))' }}
         >
           <div className={immersive || hideNav ? undefined : "min-h-[calc(100vh-8.5rem)]"}>
             {children}
