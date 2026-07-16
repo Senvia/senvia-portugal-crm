@@ -58,12 +58,28 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       // --- Direct commissions (delivered/fulfilled sales with commission) ---
       const { data: sales, error: salesErr } = await supabase
         .from('sales')
-        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status')
+        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status, has_recurring')
         .eq('organization_id', organizationId)
         .in('status', ['delivered', 'fulfilled']);
       if (salesErr) throw salesErr;
 
       const commissionSales = (sales || []).filter((s: any) => Number(s.comissao || 0) > 0);
+
+      // For recurring sales, fetch existing stripe_commission_records so we
+      // can skip the direct commission — the recurring one already covers it.
+      const recurringSaleIds = commissionSales
+        .filter((s: any) => s.has_recurring)
+        .map((s: any) => s.id) as string[];
+      const existingRecurringIds = new Set<string>();
+      if (recurringSaleIds.length > 0) {
+        const { data: recs } = await (supabase as any)
+          .from('stripe_commission_records')
+          .select('sale_id')
+          .in('sale_id', recurringSaleIds);
+        for (const r of (recs || []) as any[]) {
+          existingRecurringIds.add(r.sale_id);
+        }
+      }
 
       const allIds = commissionSales.map((s: any) => s.id);
       const { data: allPays } = allIds.length
@@ -88,6 +104,9 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
 
       const candidateSales = commissionSales.filter((s: any) => {
         if (!isFullyPaid(s)) return false;
+        // Skip direct commission for recurring sales that already have a
+        // recurring commission record — the recurring one covers it.
+        if (s.has_recurring && existingRecurringIds.has(s.id)) return false;
         const saleRef = s.activation_date || s.sale_date;
         if (!saleRef) return false;
         const fullyPaidDate = lastPaidDate.get(s.id) || saleRef;
