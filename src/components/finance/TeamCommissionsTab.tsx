@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChevronDown, ChevronRight, FileX, Search, Wallet, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileX, Search, Wallet, RefreshCw, Check } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/format';
 import { cn, matchesSearch } from '@/lib/utils';
@@ -23,7 +23,7 @@ import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 import { BankAccountSelect } from '@/components/finance/BankAccountSelect';
 import {
-  useCommercialCommissions, usePayCommercialCommissions, type CommercialCommission,
+  useCommercialCommissions, usePayCommercialCommissions, useMarkCommissionPaid, type CommercialCommission,
 } from '@/hooks/useCommercialCommissions';
 
 function generateMonthOptions() {
@@ -52,6 +52,7 @@ export function TeamCommissionsTab() {
 
   const { data, isLoading } = useCommercialCommissions(selectedMonth, effectiveUserIds);
   const payMutation = usePayCommercialCommissions();
+  const markPaidMutation = useMarkCommissionPaid();
 
   const toggle = (id: string) => {
     setExpanded(prev => {
@@ -244,6 +245,11 @@ export function TeamCommissionsTab() {
                                           ) : (
                                             <span className="text-muted-foreground">Direta</span>
                                           )}
+                                          {item.proportional && (
+                                            <span className="ml-1 inline-flex items-center rounded border border-blue-500/30 bg-blue-500/10 px-1 py-0.5 text-[9px] font-medium text-blue-600">
+                                              Proporcional
+                                            </span>
+                                          )}
                                         </TableCell>
                                         <TableCell className="text-xs">{item.label}</TableCell>
                                         <TableCell className="text-xs">
@@ -254,17 +260,30 @@ export function TeamCommissionsTab() {
                                         </TableCell>
                                         <TableCell className="text-right text-xs font-medium">{formatCurrency(item.amount)}</TableCell>
                                         <TableCell>
-                                          <Badge
-                                            variant="outline"
-                                            className={cn(
-                                              'text-[10px]',
-                                              item.paid
-                                                ? 'border-green-500/30 bg-green-500/20 text-green-600'
-                                                : 'border-amber-500/30 bg-amber-500/20 text-amber-600',
+                                          <div className="flex items-center gap-1.5">
+                                            <Badge
+                                              variant="outline"
+                                              className={cn(
+                                                'text-[10px]',
+                                                item.paid
+                                                  ? 'border-green-500/30 bg-green-500/20 text-green-600'
+                                                  : 'border-amber-500/30 bg-amber-500/20 text-amber-600',
+                                              )}
+                                            >
+                                              {item.paid ? 'Pago' : 'Pendente'}
+                                            </Badge>
+                                            {!item.paid && (
+                                              <button
+                                                type="button"
+                                                title="Marcar como paga"
+                                                disabled={markPaidMutation.isPending}
+                                                onClick={() => markPaidMutation.mutate({ kind: item.kind, id: item.id })}
+                                                className="inline-flex h-5 w-5 items-center justify-center rounded text-green-600 hover:bg-green-500/20 disabled:opacity-40"
+                                              >
+                                                <Check className="h-3 w-3" />
+                                              </button>
                                             )}
-                                          >
-                                            {item.paid ? 'Pago' : 'Pendente'}
-                                          </Badge>
+                                          </div>
                                         </TableCell>
                                       </TableRow>
                                     ))}

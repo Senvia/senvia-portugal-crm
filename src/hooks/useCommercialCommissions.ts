@@ -14,6 +14,7 @@ export interface CommissionItem {
   amount: number;        // commission amount
   saleValue: number | null; // sale total value (direct sales); null for recurring
   paid: boolean;
+  proportional?: boolean; // true when amount is proportional to partial payment
 }
 
 export interface CommercialCommission {
@@ -86,39 +87,70 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         ? await supabase.from('sale_payments').select('sale_id, amount, status, payment_date').in('sale_id', allIds)
         : { data: [] as any[] };
 
-      const paidSum = new Map<string, number>();
-      const lastPaidDate = new Map<string, string>();
-      for (const p of (allPays as any[]) || []) {
-        if (p.status === 'paid') {
-          paidSum.set(p.sale_id, (paidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
-          const pd = p.payment_date || '';
-          if (pd && (!lastPaidDate.get(p.sale_id) || pd > (lastPaidDate.get(p.sale_id) || ''))) {
-            lastPaidDate.set(p.sale_id, pd);
+      // --- Direct commissions: proportional to payments received in the month ---
+      // A sale with 150€ total and 37.50€ commission that's 50€-paid in June
+      // contributes (50/150) × 37.50€ = 12.50€ to June. Subsequent payments in
+      // later months contribute their share to those months. One item per
+      // (sale, month) keeps React keys and selection unique in the UI.
+      const monthKey = format(monthStart, 'yyyy-MM');
+      const monthItems: { sale: any; amount: number; date: string; monthKey: string; proportional: boolean }[] = [];
+      for (const s of commissionSales) {
+        // Skip recurring sales already covered by stripe_commission_records.
+        if (s.has_recurring && existingRecurringIds.has(s.id)) continue;
+
+        const tv = Number(s.total_value) || 0;
+        const comissao = Number(s.comissao || 0);
+        if (comissao <= 0) continue;
+
+        const salePays = (allPays as any[]).filter(
+          (p: any) => p.sale_id === s.id && p.status === 'paid' && p.payment_date,
+        );
+
+        if (salePays.length === 0) {
+          // Fallback: payment_status='paid' but no payment rows. Show full
+          // commission in the sale month (preserves legacy behavior for
+          // sales marked paid without recorded payment rows).
+          if (s.payment_status === 'paid') {
+            const saleRef = s.activation_date || s.sale_date;
+            if (saleRef) {
+              const sd = new Date(saleRef);
+              if (sd >= monthStart && sd <= monthEnd) {
+                monthItems.push({ sale: s, amount: comissao, date: saleRef, monthKey, proportional: false });
+              }
+            }
           }
+          continue;
         }
+
+        if (tv <= 0) continue;
+        const ratio = comissao / tv;
+
+        // Sum payments received in the current month only — payments in
+        // other months are recognized in their own month view.
+        let paidThisMonth = 0;
+        let lastPayDate: string | null = null;
+        for (const p of salePays) {
+          const pd = p.payment_date as string;
+          const payDate = new Date(pd);
+          if (payDate < monthStart || payDate > monthEnd) continue;
+          const amt = Number(p.amount || 0);
+          if (amt <= 0) continue;
+          paidThisMonth += amt;
+          if (!lastPayDate || pd > lastPayDate) lastPayDate = pd;
+        }
+        if (paidThisMonth <= 0) continue;
+
+        monthItems.push({
+          sale: s,
+          amount: paidThisMonth * ratio,
+          date: lastPayDate || s.activation_date || s.sale_date,
+          monthKey,
+          proportional: paidThisMonth < tv,
+        });
       }
 
-      const isFullyPaid = (s: any) =>
-        (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
-        s.payment_status === 'paid';
-
-      const candidateSales = commissionSales.filter((s: any) => {
-        if (!isFullyPaid(s)) return false;
-        // Skip direct commission for recurring sales that already have a
-        // recurring commission record — the recurring one covers it.
-        if (s.has_recurring && existingRecurringIds.has(s.id)) return false;
-        const saleRef = s.activation_date || s.sale_date;
-        if (!saleRef) return false;
-        const fullyPaidDate = lastPaidDate.get(s.id) || saleRef;
-        const effectiveDate = fullyPaidDate > saleRef ? fullyPaidDate : saleRef;
-        const d = new Date(effectiveDate);
-        return d >= monthStart && d <= monthEnd;
-      });
-
-      const candPaidSum = paidSum;
-
-      const clientIds = [...new Set(candidateSales.map((s: any) => s.client_id).filter(Boolean))] as string[];
-      const leadIds = [...new Set(candidateSales.map((s: any) => s.lead_id).filter(Boolean))] as string[];
+      const clientIds = [...new Set(monthItems.map((mi) => mi.sale.client_id).filter(Boolean))] as string[];
+      const leadIds = [...new Set(monthItems.map((mi) => mi.sale.lead_id).filter(Boolean))] as string[];
       const [clientsRes, leadsRes] = await Promise.all([
         clientIds.length
           ? supabase.from('crm_clients').select('id, name, company, assigned_to').in('id', clientIds)
@@ -206,13 +238,23 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         return e;
       };
 
-      for (const s of candidateSales) {
+      for (const mi of monthItems) {
+        const s = mi.sale;
         const e = ensure(getCommercial(s));
-        const amount = Number(s.comissao || 0);
         const paid = !!s.commission_paid_at;
-        e.items.push({ kind: 'direct', id: s.id, label: getClientName(s), date: s.activation_date || s.sale_date || null, amount, saleValue: Number(s.total_value || 0), paid });
-        e.total += amount;
-        if (paid) e.totalPaid += amount; else { e.totalPending += amount; e.pendingSaleIds.push(s.id); }
+        e.items.push({
+          kind: 'direct',
+          id: s.id,
+          label: getClientName(s),
+          date: mi.date,
+          amount: mi.amount,
+          saleValue: Number(s.total_value || 0),
+          paid,
+          proportional: mi.proportional,
+        });
+        e.total += mi.amount;
+        if (paid) e.totalPaid += mi.amount;
+        else { e.totalPending += mi.amount; e.pendingSaleIds.push(s.id); }
       }
       for (const r of recs) {
         const e = ensure((r.user_id as string) || 'unassigned');
@@ -373,5 +415,35 @@ export function usePayCommercialCommissions() {
       toast.success('Comissões marcadas como pagas e registadas como despesa!');
     },
     onError: () => toast.error('Erro ao pagar comissões'),
+  });
+}
+
+/**
+ * Mark a single commission item as paid without recording an expense — for
+ * cases where payment happened externally (bank transfer, cash) and the user
+ * just needs the flag flipped so the item stops showing as pending.
+ */
+export function useMarkCommissionPaid() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ kind, id }: { kind: 'direct' | 'recurring'; id: string }) => {
+      const nowIso = new Date().toISOString();
+      if (kind === 'direct') {
+        const { error } = await (supabase as any).from('sales')
+          .update({ commission_paid_at: nowIso })
+          .eq('id', id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any).from('stripe_commission_records')
+          .update({ status: 'paid', paid_at: nowIso })
+          .eq('id', id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['commercial-commissions'] });
+      toast.success('Comissão marcada como paga.');
+    },
+    onError: () => toast.error('Erro ao marcar comissão'),
   });
 }
