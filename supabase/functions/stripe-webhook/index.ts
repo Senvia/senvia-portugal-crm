@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { rateLimit } from "../_shared/security.ts";
 
 const SENVIA_AGENCY_ORG_ID = "06fe9e1d-9670-45b0-8717-c5a6e90be380";
 
@@ -24,6 +25,13 @@ const logStep = (step: string, details?: any) => {
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // Rate limit: 30 req/min per IP (Stripe never bursts that hard).
+  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  const rl = rateLimit(`stripe-webhook:${ip}`, 30, 60_000);
+  if (!rl.allowed) {
+    return new Response("Too many requests", { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetAfterMs / 1000)) } });
   }
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
