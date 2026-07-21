@@ -1036,7 +1036,7 @@ Deno.serve(async (req) => {
       const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
-      const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${await getInstance()}`, 'DELETE', {
+      const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${await getInstance()}`, 'POST', {
         key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
       });
       if (!res.ok) {
