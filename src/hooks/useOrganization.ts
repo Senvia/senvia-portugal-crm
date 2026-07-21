@@ -17,7 +17,7 @@ export function useOrganization() {
 
       const { data, error } = await supabase
         .from('organizations')
-        .select('*')
+        .select('id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode')
         .eq('id', organization.id)
         .single();
 

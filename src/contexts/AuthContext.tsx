@@ -27,11 +27,6 @@ interface Organization {
   niche?: string;
   enabled_modules?: unknown;
   logo_url?: string | null;
-  invoicexpress_account_name?: string | null;
-  invoicexpress_api_key?: string | null;
-  whatsapp_instance?: string | null;
-  whatsapp_api_key?: string | null;
-  whatsapp_base_url?: string | null;
   integrations_enabled?: any;
   tax_config?: any;
   sales_settings?: any;
@@ -111,11 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMfaStatus('verified');
   }, []);
 
-  // Load organization by ID
+  // Load organization by ID — only safe fields, never API keys/secrets.
+  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode';
   const loadOrganization = useCallback(async (orgId: string) => {
     const { data: orgData } = await supabase
       .from('organizations')
-      .select('*')
+      .select(SAFE_ORG_FIELDS)
       .eq('id', orgId)
       .maybeSingle();
     
