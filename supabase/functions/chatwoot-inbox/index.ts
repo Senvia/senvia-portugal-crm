@@ -1100,8 +1100,15 @@ Deno.serve(async (req) => {
       // Chatwoot attachments directly (no CORS headers on Active Storage).
       const fileUrl = String(body.url ?? '');
       // Only proxy files hosted on OUR Chatwoot — never arbitrary URLs (SSRF).
-      if (!fileUrl.startsWith(`${cfg.chatwootUrl}/`)) {
-        return json({ error: 'URL inválido' }, 400);
+      // URL origin check (not startsWith) prevents bypass via subdomain tricks.
+      try {
+        const parsed = new URL(fileUrl);
+        const allowed = new URL(cfg.chatwootUrl);
+        if (parsed.origin !== allowed.origin) {
+          return json({ error: 'URL inválida' }, 400);
+        }
+      } catch {
+        return json({ error: 'URL inválida' }, 400);
       }
       const fileRes = await fetch(fileUrl);
       if (!fileRes.ok) return json({ error: 'Falha ao transferir o ficheiro' }, 502);
