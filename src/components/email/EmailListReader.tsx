@@ -694,8 +694,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                   </div>
                 </div>
               );
-            })}
-            </div>
+            })
           )}
           {/* Load older — asks the gateway to sync the next batch from IMAP */}
           {!isDraftsFolder && !searching && !isLoading && messages.length > 0 && (
