@@ -2,19 +2,9 @@ import { useMemo } from 'react';
 import { useLeads } from '@/hooks/useLeads';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, isWithinInterval } from 'date-fns';
-
-export type ReportPeriod = 'week' | 'month' | 'quarter' | 'all';
-
-function getPeriodInterval(period: ReportPeriod): { start: Date; end: Date } | null {
-  const now = new Date();
-  switch (period) {
-    case 'week': return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
-    case 'month': return { start: startOfMonth(now), end: endOfMonth(now) };
-    case 'quarter': return { start: startOfQuarter(now), end: endOfMonth(now) };
-    case 'all': return null;
-  }
-}
+import { getTrafficMatcher, type TrafficFilterKey } from '@/lib/paid-traffic';
+import { isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
 
 export interface CommercialReport {
   userId: string;
@@ -24,20 +14,27 @@ export interface CommercialReport {
   conversionRate: number;
 }
 
-export function useLeadReporting(period: ReportPeriod) {
+export function useLeadReporting(dateRange: DateRange | undefined, filterKey: TrafficFilterKey = 'all') {
   const { data: leads = [] } = useLeads();
   const { data: stages = [] } = usePipelineStages();
   const { data: members = [] } = useTeamMembers();
 
   return useMemo(() => {
-    const interval = getPeriodInterval(period);
+    let filteredLeads = leads;
 
-    const filteredLeads = interval
-      ? leads.filter(l => {
-          const d = l.created_at ? new Date(l.created_at) : null;
-          return d && isWithinInterval(d, interval);
-        })
-      : leads;
+    if (dateRange?.from) {
+      const start = startOfDay(dateRange.from);
+      const end = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+      filteredLeads = filteredLeads.filter(l => {
+        const d = l.created_at ? new Date(l.created_at) : null;
+        return d && isWithinInterval(d, { start, end });
+      });
+    }
+
+    if (filterKey !== 'all') {
+      const matcher = getTrafficMatcher(filterKey);
+      filteredLeads = filteredLeads.filter(l => matcher(l.source));
+    }
 
     const wonKey = stages.find(s => s.is_final_positive)?.key;
     const lostKey = stages.find(s => s.is_final_negative)?.key;
@@ -93,5 +90,5 @@ export function useLeadReporting(period: ReportPeriod) {
       commercials,
       stages,
     };
-  }, [leads, stages, members, period]);
+  }, [leads, stages, members, dateRange, filterKey]);
 }

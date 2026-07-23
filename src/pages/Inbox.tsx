@@ -47,14 +47,20 @@ import {
   InboxMessage,
   OutgoingAttachment,
   PresencePeer,
+  SendMessageVars,
   useInboxPresence,
   useTranscribeAudio,
 } from "@/hooks/useChatwootInbox";
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { InboxProductSection } from "@/components/inbox/InboxProductPicker";
+import { InboxErrorBoundary } from "@/components/inbox/InboxErrorBoundary";
+import { useSendProductInbox } from "@/hooks/inbox/useSendProductInbox";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
+import { CommandPalette } from "@/components/inbox/CommandPalette";
+import { ShortcutsOverlay } from "@/components/inbox/ShortcutsOverlay";
 // Lazy: the email client (list+reader+composer) is a big chunk of code that
 // pure-WhatsApp users never touch — no reason to ship it in the initial Inbox bundle.
 const EmailListReader = lazy(() => import("@/components/email/EmailListReader").then(m => ({ default: m.EmailListReader })));
@@ -73,7 +79,7 @@ const LeadDetailsModal = lazy(() => import("@/components/leads/LeadDetailsModal"
 // Lazy: only needed the rare times the WhatsApp session needs (re)connecting.
 const ConnectWhatsAppModal = lazy(() => import("@/components/settings/ConnectWhatsAppModal").then(m => ({ default: m.ConnectWhatsAppModal })));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -92,69 +98,38 @@ import {
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown, Eye, Inbox as InboxIcon, Mailbox, Play, Pause, MoreVertical,
-  MailOpen, Image as ImageIcon, Link2,
+  MailOpen, Image as ImageIcon, Link2, Star, Forward, RefreshCw,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
 import { INBOX_CONFIG } from "@/lib/constants";
+import { isActivityText, translateActivity } from "@/lib/activity-detection";
+import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
+import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
+import { FileTypeIcon } from "@/components/inbox/FileTypeIcon";
+import { ProgressDownloadButton } from "@/components/inbox/ProgressDownloadButton";
+import { MediaViewer, type MediaItem } from "@/components/inbox/MediaViewer";
+import { WaveformPlayer } from "@/components/inbox/WaveformPlayer";
+import { GlobalAudioPill } from "@/components/inbox/GlobalAudioPill";
+import { ChannelBadge } from "@/components/inbox/ChannelBadge";
+import { LinkPreview } from "@/components/inbox/LinkPreview";
+import { useStarredMessages } from "@/hooks/useStarredMessages";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabase } from "@/integrations/supabase/client";
-import { renderWithEmoji } from "@/lib/emoji";
+import { renderWithEmoji, searchEmojis } from "@/lib/emoji";
 const EmojiPicker = lazy(() => import("@/components/inbox/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
-// WhatsApp-style inline formatting: *bold*, _italic_, ~strikethrough~ and
-// ```monospace```. Mirrors WhatsApp's own (deliberately non-nesting) rule: the
-// delimiter must hug non-space text on both sides, so "* item" bullet lists and
-// "a * b" arithmetic are left untouched. Each plain-text run is still passed
-// through the Apple emoji renderer; a monospace span is left as raw text (a
-// code block shouldn't have its glyphs swapped for images).
-const WA_FORMAT_RE = /(\*[^\s*](?:[^*]*[^\s*])?\*)|(_[^\s_](?:[^_]*[^_])?_)|(~[^\s~](?:[^~]*[^~])?~)|(```[^`]+```)/g;
-
-// Used to build the contact panel's "Links" gallery tab from message text.
-// The schemeless alternative requires a "www." prefix (unlike autolink()'s own
-// looser bare-domain matcher used for the thread bubbles) — a bare "word.Word"
-// match with no scheme or www is far too easy to false-positive on ordinary
-// pt-PT text with no space after a period (e.g. "ontem.Aguardo confirmação").
+// WhatsApp-style inline formatting is handled by the shared renderWhatsAppFormatting
+// (imported from MessageBubble.tsx). The autolink helper below wraps it for URLs.
 const LINK_RE = /(https?:\/\/[^\s<]+|www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<]*)?)/gi;
 // A URL glued to trailing punctuation with no space ("confirma aqui: site.pt.")
 // would otherwise swallow the period into the link and 404 on click.
 function trimTrailingLinkPunct(url: string): string {
   return url.replace(/[.,;:!?)\]}'"]+$/, "");
 }
-function renderWhatsAppFormatting(text: string, keyPrefix = ""): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  WA_FORMAT_RE.lastIndex = 0;
-  while ((match = WA_FORMAT_RE.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(...renderWithEmoji(text.slice(lastIndex, match.index), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
-    }
-    const token = match[0];
-    const isMono = token.startsWith("```");
-    const inner = isMono ? token.slice(3, -3) : token.slice(1, -1);
-    const key = `${keyPrefix}f${match.index}`;
-    if (match[1]) {
-      parts.push(<strong key={key} className="font-semibold">{renderWithEmoji(inner, { keyPrefix: key })}</strong>);
-    } else if (match[2]) {
-      parts.push(<em key={key} className="italic">{renderWithEmoji(inner, { keyPrefix: key })}</em>);
-    } else if (match[3]) {
-      parts.push(<span key={key} className="line-through">{renderWithEmoji(inner, { keyPrefix: key })}</span>);
-    } else {
-      parts.push(<code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[0.9em] dark:bg-white/10">{inner}</code>);
-    }
-    lastIndex = match.index + token.length;
-  }
-  if (lastIndex < text.length) {
-    parts.push(...renderWithEmoji(text.slice(lastIndex), { keyPrefix: `${keyPrefix}t${lastIndex}` }));
-  }
-  return parts.length > 0 ? parts : renderWithEmoji(text, { keyPrefix });
-}
-
-  // autolink: converte URLs em links clicaveis e aplica a formatacao WhatsApp
-function autolink(text: string): React.ReactNode {
+function autolink(text: string, outgoing = false, highlight?: string): React.ReactNode {
   if (!text) return text;
   const urlRegex = /(https?:\/\/[^\s<]+|[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s<]*)?)/gi;
   const parts: React.ReactNode[] = [];
@@ -162,7 +137,7 @@ function autolink(text: string): React.ReactNode {
   let match: RegExpExecArray | null;
   while ((match = urlRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(...renderWhatsAppFormatting(text.slice(lastIndex, match.index), `al${lastIndex}`));
+      parts.push(...renderWhatsAppFormatting(text.slice(lastIndex, match.index), `al${lastIndex}`, highlight));
     }
     let url = match[0];
     let href = url;
@@ -175,7 +150,10 @@ function autolink(text: string): React.ReactNode {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-primary underline underline-offset-2 hover:opacity-80"
+        className={cn(
+          "underline underline-offset-2 hover:opacity-80",
+          outgoing ? "text-primary-foreground/90" : "text-primary",
+        )}
       >
         {url}
       </a>
@@ -183,19 +161,13 @@ function autolink(text: string): React.ReactNode {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    parts.push(...renderWhatsAppFormatting(text.slice(lastIndex), `al${lastIndex}`));
+    parts.push(...renderWhatsAppFormatting(text.slice(lastIndex), `al${lastIndex}`, highlight));
   }
-  return parts.length > 0 ? parts : renderWhatsAppFormatting(text);
+  return parts.length > 0 ? parts : renderWhatsAppFormatting(text, undefined, highlight);
 }
-
-
 
 function initials(name: string): string {
   return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
-}
-
-function firstName(name: string): string {
-  return (name || "").trim().split(/\s+/)[0] || "";
 }
 
 // Group messages arrive from Evolution with the individual sender embedded in the
@@ -255,19 +227,7 @@ function formatTime(value: string | number | null): string {
   return new Date(ms).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
 }
 
-// WhatsApp-style list timestamp: today → 14:30, yesterday → "Ontem",
-// this week → "ter.", older → 05/06/26.
-function formatListDate(value: string | number | null): string {
-  const ms = toMs(value);
-  if (!ms) return "";
-  const d = new Date(ms);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (ms >= startOfToday) return d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-  if (ms >= startOfToday - 86400000) return "Ontem";
-  if (ms >= startOfToday - 6 * 86400000) return d.toLocaleDateString("pt-PT", { weekday: "short" });
-  return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
+// formatListDate is imported from helpers.ts
 
 // Thread date separator: "Hoje", "Ontem", "5 de junho".
 function dayLabel(ms: number): string {
@@ -312,78 +272,16 @@ const SLA_BADGE: Record<SlaLevel, string> = {
   late: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 };
 
-// "à espera 5m / 2h / 3d"
-function waitingLabel(since: number | null): string | null {
-  if (!since) return null;
-  const mins = Math.floor((Date.now() - since * 1000) / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
+// "à espera 5m / 2h / 3d" — imported from helpers.ts
 
 // Chatwoot emits conversation activity/system messages in English ("X added
-// <label>", "Conversation resolved by Y"). Translate the common ones to pt-PT so
-// the list preview reads in Portuguese even before the backend (which now hides
-// activities from the preview) is redeployed. Patterns are tightly shaped — a
-// capitalised agent name + a verb — so real customer messages are left untouched.
-// Precompiled once (was rebuilding two RegExp objects per call, per row, per render).
-const _ACT_NAME = String.raw`\p{Lu}[\p{L}]+(?:[ '\-]\p{L}+)*`;
-const _ACT_LABELS = String.raw`[\p{L}\p{N}_-]+(?:,\s*[\p{L}\p{N}_-]+)*`;
-const RE_ACT_ADDED = new RegExp(`^(${_ACT_NAME}) added (${_ACT_LABELS})$`, "u");
-const RE_ACT_REMOVED = new RegExp(`^(${_ACT_NAME}) removed (${_ACT_LABELS})$`, "u");
+// <label>", "Conversation resolved by Y"). translateActivity (imported from
+// activity-detection.ts) handles the translation. isActivityText (also imported)
+// is used below to filter activity from the thread and list preview.
 
-function translateActivity(text: string): string {
-  if (!text) return text;
-  let m: RegExpMatchArray | null;
-  if ((m = text.match(RE_ACT_ADDED))) {
-    return `${m[1]} adicionou ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
-  }
-  if ((m = text.match(RE_ACT_REMOVED))) {
-    return `${m[1]} removeu ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
-  }
-  if ((m = text.match(/^Assigned to (.+?) by (.+)$/))) return `Atribuída a ${m[1]} por ${m[2]}`;
-  if ((m = text.match(/^(.+?) self-assigned this conversation$/i))) return `${m[1]} atribuiu a conversa a si`;
-  if ((m = text.match(/^Conversation was marked resolved by (.+)$/i))) return `Conversa resolvida por ${m[1]}`;
-  if ((m = text.match(/^Conversation was (?:marked )?reopened by (.+)$/i))) return `Conversa reaberta por ${m[1]}`;
-  if (/^Conversation was marked resolved$/i.test(text)) return "Conversa resolvida";
-  if (/^Conversation was reopened$/i.test(text)) return "Conversa reaberta";
-  if (/^Conversation was marked pending$/i.test(text)) return "Conversa marcada como pendente";
-  return text;
-}
-
-// Replace {{nome}} with the contact's first name in quick replies.
 function applyVars(content: string, contactName: string): string {
   return content.replace(/\{\{\s*nome\s*\}\}/gi, firstName(contactName));
 }
-
-const EMOJI_MAP: Record<string, string> = {
-  ":sorriso": "😀", ":alegria": "😂", ":gargalhada": "😂", ":chorar": "😂", ":feliz": "😍", ":olhos": "😍", ":coracao": "😍", ":apaixonado": "🥰", ":piscar": "😉",
-  ":sunga": "😎", ":fixe": "😎", ":legal": "😎", ":pensando": "🤔", ":pensativo": "🤔", ":refletir": "🤔", ":suor": "😅", ":triste": "😢", ":raiva": "😡",
-  ":joia": "👍", ":like": "👍", ":gosto": "👍", ":joinha": "👍", ":nao_gosto": "👎", ":ruim": "👎", ":rezar": "🙏", ":obrigado": "🙏", ":por_favor": "🙏",
-  ":palmas": "👏", ":parabens": "👏", ":forca": "💪", ":musculo": "💪", ":aperto_mao": "🤝", ":combinado": "🤝", ":ok": "👌", ":beleza": "👌",
-  ":gesto_coracao": "🫶", ":ama": "🫶", ":amor": "❤️", ":coracao_vermelho": "❤️", ":coracao_azul": "💙", ":coracao_roxo": "💜", ":coracao_preto": "🖤",
-  ":festa": "🎉", ":comemorar": "🎉", ":fogo": "🔥", ":incrivel": "🔥", ":top": "🔥", ":estrela": "⭐", ":sim": "✅", ":check": "✅", ":nao": "❌",
-  ":errado": "❌", ":aviso": "⚠️", ":alerta": "⚠️", ":calendario": "📅", ":data": "📅", ":telefone": "📞", ":ligar": "📞", ":dinheiro": "💰",
-  ":foguete": "🚀", ":lancar": "🚀", ":acelerar": "🚀", ":alvo": "🎯", ":acertar": "🎯", ":presente": "🎁", ":presentear": "🎁", ":trofeu": "🏆",
-  ":vencedor": "🏆", ":lampada": "💡", ":ideia": "💡", ":pino": "📌", ":fixar": "📌", ":chave": "🔑", ":escudo": "🛡️", ":seguro": "🛡️",
-  ":nota": "🎵", ":musica": "🎵", ":documento": "📝", ":escrever": "📝", ":lapis": "✏️", ":editar": "✏️", ":computador": "🖥️", ":pc": "🖥️",
-  ":telemovel": "📱", ":mobile": "📱", ":cafe": "☕", ":pizza": "🍕", ":pizza": "🍕",
-  ":cao": "🐶", ":cachorro": "🐶", ":gato": "🐱", ":panda": "🐼", ":sapo": "🐸", ":passaro": "🐦", ":abelha": "🐝", ":borboleta": "🦋", ":polvo": "🐙",
-  ":golfinho": "🐬", ":tubarao": "🦈", ":elefante": "🐘", ":girafa": "🦒", ":raposa": "🦊", ":coelho": "🐰", ":urso": "🐻", ":leao": "🦁", ":tigre": "🐯",
-  ":onda": "👋", ":tchau": "👋", ":adeus": "👋", ":boa_sorte": "🤞", ":cruzado": "🤞", ":paz": "✌️", ":vitoria": "✌️",
-  ":chorar_riso": "🤣", ":morto_riso": "💀", ":corno": "🤘", ":rock": "🤘", ":show": "🙌",
-};
-
-const EMOJI_CATEGORIES: Record<string, string[]> = {
-  "Carinhas": ["😀", "😂", "🤣", "😍", "🥰", "😉", "😎", "🤔", "😅", "😢", "😡", "🤩", "🥳", "😏", "😴", "🤗", "🙃", "😇", "🤠", "🤡", "🥺", "😤", "😭", "😱", "🤯", "🥶", "🥵", "🤢", "🤮", "🤧", "💀"],
-  "Gestos": ["👍", "👎", "🙏", "👏", "💪", "🤝", "✌️", "👌", "🫶", "🖐️", "✋", "🤙", "👋", "🤘", "🫵", "🙌", "🤲", "👐", "💅", "👀", "🫣", "🤞"],
-  "Coracoes": ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💗", "💖", "💘", "💝", "❣️", "💓", "💔", "🫰"],
-  "Objetos": ["🎉", "🔥", "⭐", "✅", "❌", "⚠️", "📅", "📞", "💰", "🚀", "🎯", "🎁", "🎈", "🏆", "🪄", "💡", "📌", "🔑", "🛡️", "🎵", "📝", "✏️", "🖥️", "📱", "☕", "🍕"],
-  "Animais": ["🐶", "🐱", "🐼", "🐸", "🐦", "🐝", "🦋", "🐙", "🦀", "🐬", "🦈", "🐘", "🦒", "🦊", "🐰", "🐻", "🐨", "🦁", "🐯", "🐮", "🦄"],
-};
-const EMOJIS = Object.values(EMOJI_CATEGORIES).flat();
 
 const PINNED_KEY = "inbox-pinned-v1";
 
@@ -419,9 +317,25 @@ function saveDraftsMap(map: Map<number, string>) {
 }
 
 // Short notification beep via WebAudio — no asset needed.
-function playNotificationBeep() {
+// A single shared AudioContext is reused across beeps: creating a new one per
+// notification leaks resources (each counts against the browser's ~6-context
+// cap) and can leave dangling suspended contexts. The context auto-suspends
+// when idle; resume() is a no-op if already running.
+let _beepCtx: AudioContext | null = null;
+function getBeepCtx(): AudioContext | null {
+  if (_beepCtx) return _beepCtx;
   try {
-    const ctx = new AudioContext();
+    _beepCtx = new AudioContext();
+  } catch {
+    return null; // AudioContext unavailable (older browsers / SSR).
+  }
+  return _beepCtx;
+}
+function playNotificationBeep() {
+  const ctx = getBeepCtx();
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended") void ctx.resume();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -431,7 +345,7 @@ function playNotificationBeep() {
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
     osc.start();
     osc.stop(ctx.currentTime + 0.25);
-    osc.onended = () => ctx.close();
+    // No ctx.close() — the singleton stays alive for the next beep.
   } catch {
     // Audio blocked (no user gesture yet) — silently skip.
   }
@@ -532,44 +446,75 @@ function AudioPlayer({ url, outgoing }: { url: string; outgoing: boolean }) {
 }
 
 // Audio attachment with inline Groq Whisper transcription (on-demand, cached in localStorage).
-function AudioAttachment({ url, extension, outgoing, messageId }: {
-  url: string; extension: string | null; outgoing: boolean; messageId: number;
+function TranscribeButton({ url, outgoing, messageId }: {
+  url: string; outgoing: boolean; messageId: number;
 }) {
   const { text, loading, error, transcribe } = useTranscribeAudio(messageId, url);
+  if (text) {
+    return (
+      <p className={cn(
+        "rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
+        outgoing ? "bg-primary-foreground/10 text-primary-foreground/90" : "bg-muted text-foreground",
+      )}>
+        {text}
+      </p>
+    );
+  }
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1">
-        <AudioPlayer url={url} outgoing={outgoing} />
-        <DownloadButton url={url} extension={extension} className={outgoing ? "text-primary-foreground" : ""} />
-      </div>
-      {text ? (
-        <p className={cn(
-          "rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
-          outgoing ? "bg-primary-foreground/10 text-primary-foreground/90" : "bg-muted text-foreground",
-        )}>
-          {text}
-        </p>
-      ) : (
+    <button
+      type="button"
+      onClick={transcribe}
+      disabled={loading}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+        outgoing
+          ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25"
+          : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+        loading && "cursor-not-allowed opacity-60",
+      )}
+    >
+      {loading
+        ? <><Loader2 className="h-3 w-3 animate-spin" /> A transcrever...</>
+        : error
+          ? <><Mic className="h-3 w-3" /> Tentar novamente</>
+          : <><Mic className="h-3 w-3" /> Transcrever</>
+      }
+    </button>
+  );
+}
+
+function PendingAttachmentThumb({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const sizeLabel = file.size > 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(file.size / 1024)} KB`;
+  const url = useMemo(() => isImage ? URL.createObjectURL(file) : null, [file, isImage]);
+  useEffect(() => { if (url) return () => URL.revokeObjectURL(url); }, [url]);
+
+  if (isImage) {
+    return (
+      <div className="group relative h-20 w-20 overflow-hidden rounded-lg border bg-background">
+        {url && <img src={url} alt={file.name} className="h-full w-full object-cover" />}
         <button
           type="button"
-          onClick={transcribe}
-          disabled={loading}
-          className={cn(
-            "flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-            outgoing
-              ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25"
-              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-            loading && "cursor-not-allowed opacity-60",
-          )}
+          onClick={onRemove}
+          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
         >
-          {loading
-            ? <><Loader2 className="h-3 w-3 animate-spin" /> A transcrever...</>
-            : error
-              ? <><Mic className="h-3 w-3" /> Tentar novamente</>
-              : <><Mic className="h-3 w-3" /> Transcrever</>
-          }
+          <X className="h-3 w-3" />
         </button>
-      )}
+        <span className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[9px] text-white">{sizeLabel}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="group relative flex items-center gap-2 rounded-lg border bg-background px-2 py-1.5 text-xs">
+      <FileTypeIcon extension={ext} size="sm" />
+      <div className="min-w-0 max-w-[140px]">
+        <p className="truncate font-medium">{file.name}</p>
+        <p className="text-[10px] text-muted-foreground">{sizeLabel}</p>
+      </div>
+      <button type="button" onClick={onRemove} className="rounded p-0.5 hover:bg-accent">
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 }
@@ -587,55 +532,99 @@ function AttachmentView({
   onPreview: (url: string) => void;
 }) {
   const url = attachment.data_url;
-  if (!url) return <p className="text-xs italic opacity-70">📎 anexo indisponível</p>;
+  if (!url) return (
+    <div className={cn(
+      "flex items-center gap-2.5 rounded-xl border p-2 text-sm",
+      outgoing ? "border-primary-foreground/30 bg-primary-foreground/5" : "border-border bg-card",
+    )}>
+      <FileTypeIcon extension={attachment.extension} size="md" />
+      <span className="text-xs italic opacity-70">Anexo indisponível</span>
+    </div>
+  );
 
   if (attachment.file_type === "image") {
-    // Bubbles load the (much smaller) thumbnail — the full-size original is only
-    // fetched when the user opens the lightbox preview. min-h reserves some
-    // vertical space before the image loads so the thread jumps less as photos
-    // pop in (a real fix would need server-side dimensions, out of scope here).
     const thumb = attachment.thumb_url ?? url;
     return (
-      <button type="button" onClick={() => onPreview(url)} className="block cursor-zoom-in">
-        <img
-          src={thumb}
-          alt="Imagem"
-          loading="lazy"
-          className="max-h-64 min-h-[120px] max-w-full rounded-lg object-contain"
-        />
+      <button type="button" onClick={() => onPreview(url)} className="block w-[260px] max-w-full cursor-zoom-in overflow-hidden rounded-xl">
+        <div className="relative aspect-[4/3] w-full bg-muted">
+          <img
+            src={thumb}
+            alt="Imagem"
+            loading="lazy"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.background = 'transparent'; }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
       </button>
     );
   }
   if (attachment.file_type === "audio") {
-    return <AudioAttachment url={url} extension={attachment.extension} outgoing={outgoing} messageId={messageId} />;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <WaveformPlayer url={url} outgoing={outgoing} seed={messageId} />
+          <ProgressDownloadButton url={url} extension={attachment.extension} outgoing={outgoing} />
+        </div>
+        <TranscribeButton url={url} outgoing={outgoing} messageId={messageId} />
+      </div>
+    );
   }
   if (attachment.file_type === "video") {
     return (
       <div className="space-y-1">
-        <video controls src={url} className="max-h-64 max-w-full rounded-lg" preload="metadata" />
+        <button
+          type="button"
+          onClick={() => onPreview(url)}
+          className="group relative block w-[260px] max-w-full cursor-pointer overflow-hidden rounded-xl bg-black"
+        >
+          <div className="relative aspect-[4/3] w-full">
+            <video
+              src={url}
+              preload="metadata"
+              muted
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity group-hover:bg-black/30">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-black shadow-lg transition-transform group-hover:scale-110">
+              <Play className="h-6 w-6 translate-x-0.5" />
+            </span>
+          </span>
+          <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            Vídeo
+          </span>
+        </button>
         <div className="flex justify-end">
-          <DownloadButton url={url} extension={attachment.extension} />
+          <ProgressDownloadButton url={url} extension={attachment.extension} />
         </div>
       </div>
     );
   }
+  // Telegram-style file card with colored type icon
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-        outgoing ? "border-primary-foreground/30" : "border-border",
+        "flex items-center gap-2.5 rounded-xl border p-2 text-sm transition-colors hover:bg-accent/50",
+        outgoing ? "border-primary-foreground/30 bg-primary-foreground/5" : "border-border bg-card",
       )}
     >
+      <FileTypeIcon extension={attachment.extension} size="md" showLabel />
       <a
         href={url}
         target="_blank"
         rel="noreferrer"
-        className="flex min-w-0 items-center gap-2 underline-offset-2 hover:underline"
+        className="flex min-w-0 flex-1 flex-col"
       >
-        <FileText className="h-4 w-4 shrink-0" />
-        <span className="truncate">{attachment.extension ? `Documento .${attachment.extension}` : "Documento"}</span>
+        <span className="truncate text-xs font-medium">
+          {attachment.extension ? `Documento .${attachment.extension.toUpperCase()}` : "Documento"}
+        </span>
+        {attachment.file_size != null && (
+          <span className={cn("text-[10px]", outgoing ? "text-primary-foreground/60" : "text-muted-foreground")}>
+            {attachment.file_size > 1024 * 1024 ? `${(attachment.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(attachment.file_size / 1024)} KB`}
+          </span>
+        )}
       </a>
-      <DownloadButton url={url} extension={attachment.extension} />
+      <ProgressDownloadButton url={url} extension={attachment.extension} outgoing={outgoing} />
     </div>
   );
 }
@@ -689,6 +678,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       title="Responder"
+      aria-label="Responder"
       onClick={onClick}
       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
     >
@@ -698,7 +688,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
 }
 
 // WhatsApp's default quick-reaction set.
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "👏", "💯", "🎉"];
 
 // Hover-revealed reaction trigger (desktop). `open` forces full opacity so the
 // button doesn't fade out from under the pointer while its popover is open —
@@ -712,6 +702,7 @@ function ReactionButton({ onPick }: { onPick: (emoji: string) => void }) {
         <button
           type="button"
           title="Reagir"
+          aria-label="Reagir com emoji"
           className={cn(
             "rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100",
             open && "opacity-100",
@@ -786,15 +777,23 @@ export default function Inbox() {
   const [drafts, setDrafts] = useState<Map<number, string>>(() => loadDraftsMap());
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
-  const [pending, setPending] = useState<Array<{
+  interface PendingBubble {
     key: string; conversationId: number; content: string; at: number; sent?: boolean;
+    // Send failed — the bubble stays visible in an error state with retry/discard
+    // (WhatsApp-style) instead of silently vanishing from the thread.
+    failed?: boolean;
+    // Exact mutation payload, kept so "Tentar novamente" resends precisely what
+    // failed (same signature/quote/attachment).
+    retry?: SendMessageVars;
     // Local object-URL preview for an attachment being sent (image/video/voice) —
     // real bytes, not a "📎 filename" placeholder, WhatsApp-style. Revoked once
-    // the bubble is pruned (see the prune effect and doSend's onError below).
+    // the bubble is pruned (see the prune effect and discardPending below).
     previewUrl?: string;
     previewKind?: OutgoingAttachment["kind"];
-  }>>([]);
+  }
+  const [pending, setPending] = useState<PendingBubble[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [mediaViewer, setMediaViewer] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   // Contact panel: media / docs / links gallery dialog.
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -803,6 +802,9 @@ export default function Inbox() {
   const [outAttachments, setOutAttachments] = useState<Array<{ file: File; kind: OutgoingAttachment["kind"] }>>([]);
   // Reply/quote target.
   const [replyTo, setReplyTo] = useState<{ waId: string; content: string; outgoing: boolean } | null>(null);
+  // Persisted highlight (Telegram-style): the message we're replying to stays
+  // highlighted even after the reply is sent. Cleared on conversation switch.
+  const [highlightedWaId, setHighlightedWaId] = useState<string | null>(null);
   // Voice recording + pre-send preview.
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -821,6 +823,8 @@ export default function Inbox() {
   const [pinned, setPinned] = useState<number[]>(loadPinned);
   // Muted conversations (localStorage) — no sound/badge for these.
   const [muted, setMuted] = useState<number[]>(loadMutedIds);
+  const mutedRef = useRef(muted);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
   // Whether WE are actively typing — broadcast to teammates for collision warnings.
   const [selfTyping, setSelfTyping] = useState(false);
   const typingResetRef = useRef<number | null>(null);
@@ -875,6 +879,9 @@ export default function Inbox() {
   const [railSheetOpen, setRailSheetOpen] = useState(false);
   // Generic destructive-action confirmation (replaces window.confirm).
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
+  // Command palette (Cmd/Ctrl+K) and keyboard shortcuts overlay (Cmd/Ctrl+/).
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -898,10 +905,16 @@ export default function Inbox() {
     filtered: InboxConversation[];
     selectedId: number | null;
     archive: () => void;
-  }>({ filtered: [], selectedId: null, archive: () => {} });
+    openCommandPalette: () => void;
+    showShortcuts: () => void;
+    closePanel: () => void;
+  }>({ filtered: [], selectedId: null, archive: () => {}, openCommandPalette: () => {}, showShortcuts: () => {}, closePanel: () => {} });
   const prevUnreadRef = useRef<number>(0);
   const lastTypingRef = useRef<number>(0);
   const lastAutoReadRef = useRef<number>(0);
+  // Latest ":" query requested — guards the async emoji search against stale
+  // results (the user keeps typing while emoji-mart resolves).
+  const emojiReqRef = useRef<string>("");
 
   // The full connect screen only shows when the channel was NEVER configured.
   // A configured-but-dropped channel keeps the inbox usable (Chatwoot still
@@ -910,8 +923,12 @@ export default function Inbox() {
   const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
-  const live = useInboxRealtime();
-  const { data: conversations = [], isLoading: loadingConvos, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
+  // The getter tells the handler which thread is being read, so it doesn't
+  // bump unread / beep for a message arriving on the OPEN conversation.
+  const selectedIdRef = useRef<number | null>(null);
+  selectedIdRef.current = selectedId;
+  const live = useInboxRealtime(() => selectedIdRef.current);
+  const { data: conversations = [], isLoading: loadingConvos, isFetching: fetchingConvos, isError: convosError, refetch: refetchConvos } = useInboxConversations(channelConfigured, live);
   // Synthetic conversation for the draft (id < 0 so it never collides with a real
   // Chatwoot id). selectedId stays null for drafts, so message fetch / mark-read /
   // presence all stay disabled — the thread is simply empty until the first send.
@@ -991,8 +1008,8 @@ export default function Inbox() {
   const clientId = contactMatch?.kind === "client" ? contactMatch.id : null;
   const { data: openProposals = [] } = useClientProposals(clientId);
   const { data: openSales = [] } = useClientSales(clientId);
-  const activeProposals = openProposals.filter((p: any) => ["draft","sent","negotiating"].includes(p.status));
-  const activeSales = openSales.filter((s: any) => ["in_progress","fulfilled"].includes(s.status));
+  const activeProposals = openProposals.filter((p) => ["draft","sent","negotiating"].includes(p.status));
+  const activeSales = openSales.filter((s) => ["in_progress","fulfilled"].includes(s.status));
   // Associate-to-existing combobox.
   // Edit client / lead modal — opens inline without leaving inbox.
   const [editCrmOpen, setEditCrmOpen] = useState(false);
@@ -1027,6 +1044,9 @@ export default function Inbox() {
   const saveAutoReply = useSaveAutoReplyConfig();
   const createCommunication = useCreateCommunication();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // ---- Produtos ----
+  const { sendProduct: sendProductInbox } = useSendProductInbox();
 
   // ---- Tarefas ----
   const { data: openTasks = [] } = useOpenInboxTasks(channelConfigured);
@@ -1081,6 +1101,9 @@ export default function Inbox() {
   // Selecting a real conversation always dismisses any open draft.
   useEffect(() => {
     if (selectedId != null && draftConv) setDraftConv(null);
+    // Clear the persisted reply highlight when switching conversations.
+    setHighlightedWaId(null);
+    setSheetOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -1203,6 +1226,15 @@ export default function Inbox() {
     }
     if (unreadTotal > prevUnreadRef.current) playNotificationBeep();
     prevUnreadRef.current = unreadTotal;
+  }, [unreadTotal]);
+
+  // Screen-reader announcement of new messages (aria-live region).
+  const [srAnnouncement, setSrAnnouncement] = useState("");
+  useEffect(() => {
+    if (!beepInitRef.current) return;
+    if (unreadTotal > prevUnreadRef.current) {
+      setSrAnnouncement(`Nova mensagem recebida. ${unreadTotal} conversa${unreadTotal !== 1 ? "s" : ""} por ler.`);
+    }
   }, [unreadTotal]);
 
   // "Mensagens não lidas" divider: anchored to a SPECIFIC message id, resolved
@@ -1410,20 +1442,42 @@ export default function Inbox() {
   }, []);
 
   // Drop optimistic bubbles once the real (mirrored) message arrives in the feed.
-  // Attachment/voice bubbles never text-match the mirror, so confirmed ("sent")
-  // bubbles also expire after 8s — by then the mirror is in the thread.
+  // Three rules learned the hard way (each was a visible "message vanished" bug):
+  //  1. Only messages that arrived AFTER the bubble was sent may claim it — an
+  //     OLD outgoing "ok" in the history must not swallow a fresh "ok" the
+  //     instant it's sent (message invisible until the mirror landed).
+  //  2. One mirror claims ONE bubble — sending the same text twice must not let
+  //     the first mirror prune both bubbles.
+  //  3. No early expiry for confirmed bubbles: the old 8s timeout made messages
+  //     disappear whenever Chatwoot was slow to receive the mirror, then pop
+  //     back seconds later. Attachment bubbles now match any outgoing message
+  //     with attachments (instead of expiring blind); 45s is the hard cap.
   useEffect(() => {
     if (pending.length === 0) return;
     const prune = () =>
       setPending((prev) => {
+        const claimed = new Set<number>();
         const next = prev.filter((p) => {
-          // Hard cap: never keep an optimistic bubble forever (covers attachment
-          // bubbles and pendings of conversations that aren't currently open).
-          if (Date.now() - p.at > 30000) return false;
-          if (p.sent && Date.now() - p.at > 8000) return false;
-          return !messages.some(
-            (m) => m.outgoing && m.content === p.content && p.conversationId === selectedId,
-          );
+          // Failed bubbles stay until the user retries or discards them.
+          if (p.failed) return true;
+          // Hard cap: never keep an optimistic bubble forever (covers lost
+          // broadcasts and bubbles of conversations that aren't open).
+          if (Date.now() - p.at > 45000) return false;
+          // Can only match against the OPEN thread's messages.
+          if (p.conversationId !== selectedId) return true;
+          const match = messages.find((m) => {
+            if (!m.outgoing || claimed.has(m.id)) return false;
+            // 60s slack for client/server clock skew.
+            if (toMs(m.created_at) < p.at - 60000) return false;
+            return p.previewKind
+              ? (m.attachments?.length ?? 0) > 0
+              : !!p.content && m.content === p.content;
+          });
+          if (match) {
+            claimed.add(match.id);
+            return false;
+          }
+          return true;
         });
         // Revoke the local preview URLs of bubbles that just got pruned — the
         // real message (with its own Chatwoot-hosted attachment) is in `messages`
@@ -1639,12 +1693,18 @@ export default function Inbox() {
   }, [vv.height, mobileConvOpen]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
+  // Skip the call entirely when there's nothing unread — opening an
+  // already-read chat used to fire update_last_seen + a background WhatsApp
+  // read-receipt sweep (several Chatwoot + Evolution round trips) for no reason,
+  // which piled avoidable load on a Chatwoot that saturates in bursts.
   useEffect(() => {
     if (selectedId) {
-      const conv = conversations.find((c) => c.id === selectedId);
+      const conv = conversations.find(
+        (c) => c.id === selectedId || (c.alt_ids ?? []).includes(selectedId),
+      );
       markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
+      navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_NOTIFICATIONS" });
     }
-    // Reset per-conversation composer state.
     setReplyTo(null);
     setOutAttachments([]);
     setPendingVoice(null);
@@ -1765,6 +1825,60 @@ export default function Inbox() {
   const presence = useInboxPresence(selectedId, selfTyping, myName);
   const peersHere = selectedId ? presence.get(selectedId) ?? [] : [];
 
+  const { isStarred, toggleStar } = useStarredMessages();
+  const handleStar = useCallback((m: InboxMessage) => {
+    toggleStar({
+      id: m.id,
+      conversationId: selectedId ?? 0,
+      content: m.content || "",
+      sender: m.outgoing ? "Eu" : (selected?.contact_name ?? "Contacto"),
+      timestamp: toMs(m.created_at),
+    });
+  }, [selectedId, selected?.contact_name, toggleStar]);
+
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [forwardText, setForwardText] = useState("");
+  const handleForward = useCallback((m: InboxMessage) => {
+    setForwardText(m.content || "");
+    setForwardOpen(true);
+  }, []);
+  const handleForwardPick = useCallback((phone: string, _name: string) => {
+    setForwardOpen(false);
+    setNewConvOpen(true);
+    setDraftConv({ phone, name: _name, inboxId: null });
+    setTimeout(() => setDraft(forwardText), 100);
+    setForwardText("");
+  }, [forwardText]);
+
+  // Fire (or re-fire, on retry) the actual mutation for a pending bubble.
+  const dispatchSend = useCallback((key: string, vars: SendMessageVars) => {
+    sendMessage.mutate(vars, {
+      // Evolution accepted the message — it IS on WhatsApp now; show the tick
+      // while we wait for the mirrored copy to land in Chatwoot.
+      onSuccess: () => {
+        setPending((prev) => prev.map((p) => (p.key === key ? { ...p, sent: true, failed: false } : p)));
+      },
+      onError: (err) => {
+        // Keep the bubble, flagged as failed, with retry/discard. The old
+        // behaviour (remove the bubble + restore the draft) read as "the inbox
+        // ate my message" — especially when sending several in a row.
+        setPending((prev) => prev.map((p) => (p.key === key ? { ...p, failed: true } : p)));
+        toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
+      },
+    });
+  }, [sendMessage, toast]);
+
+  const retryPending = useCallback((p: { key: string; retry?: SendMessageVars }) => {
+    if (!p.retry) return;
+    setPending((prev) => prev.map((x) => (x.key === p.key ? { ...x, failed: false, at: Date.now() } : x)));
+    dispatchSend(p.key, p.retry);
+  }, [dispatchSend]);
+
+  const discardPending = useCallback((p: { key: string; previewUrl?: string }) => {
+    if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+    setPending((prev) => prev.filter((x) => x.key !== p.key));
+  }, []);
+
   const doSend = useCallback(
     // previewSource: the raw File/Blob behind an image/video/voice attachment —
     // lets the optimistic bubble show the REAL picture/waveform instantly
@@ -1776,48 +1890,45 @@ export default function Inbox() {
       // whole team shares one number.
       const text = signing && rawText && myName ? `*${firstName(myName)}:*\n${rawText}` : rawText;
       const key = `${selectedId}-${Date.now()}-${Math.random()}`;
-      const bubbleText = text || (attachment ? (attachment.kind === "voice" ? "🎵 Mensagem de voz" : `📎 ${attachment.filename}`) : "");
+      const bubbleText = text || (attachment ? (attachment.kind === "voice" ? "Mensagem de voz" : `Anexo: ${attachment.filename}`) : "");
       const previewUrl = previewSource && attachment && attachment.kind !== "document"
         ? URL.createObjectURL(previewSource)
         : undefined;
+      const vars: SendMessageVars = {
+        conversationId: selectedId,
+        content: text,
+        contactPhone: selected?.contact_phone,
+        inboxId: selected?.inbox_id,
+        attachment,
+        quotedId: replyTo?.waId ?? undefined,
+      };
       setPending((prev) => [...prev, {
         key, conversationId: selectedId, content: bubbleText, at: Date.now(),
-        previewUrl, previewKind: attachment?.kind,
+        retry: vars, previewUrl, previewKind: attachment?.kind,
       }]);
-      sendMessage.mutate(
-        {
-          conversationId: selectedId,
-          content: text,
-          contactPhone: selected?.contact_phone,
-          inboxId: selected?.inbox_id,
-          attachment,
-          quotedId: replyTo?.waId ?? undefined,
-        },
-        {
-          // Evolution accepted the message — it IS on WhatsApp now; show the tick
-          // while we wait for the mirrored copy to land in Chatwoot.
-          onSuccess: () => {
-            setPending((prev) => prev.map((p) => (p.key === key ? { ...p, sent: true } : p)));
-          },
-          onError: (err) => {
-            setPending((prev) => {
-              const removed = prev.find((p) => p.key === key);
-              if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
-              return prev.filter((p) => p.key !== key);
-            });
-            // Restore the text ONLY if the composer is still empty — never clobber
-            // something the user has started typing since.
-            if (rawText) setDraft((d) => d.trim() ? d : rawText);
-            toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
-          },
-        },
-      );
+      dispatchSend(key, vars);
       setReplyTo(null);
       setSelfTyping(false);
       if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
     },
-    [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, sendMessage, toast, signing, myName],
+    [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, dispatchSend, signing, myName],
   );
+
+  const [editTriggerId, setEditTriggerId] = useState<number | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "ArrowUp") {
+        const lastOutgoing = [...thread].reverse().find((m) => m.outgoing && m.wa_id);
+        if (lastOutgoing && (Date.now() - toMs(lastOutgoing.created_at)) < 15 * 60 * 1000) {
+          e.preventDefault();
+          setEditTriggerId(lastOutgoing.id);
+          setTimeout(() => setEditTriggerId(null), 100);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [thread]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1833,32 +1944,34 @@ export default function Inbox() {
     if (draftConv) {
       if (!content && outAttachments.length === 0) return;
       const { phone, inboxId } = draftConv;
+      const list = outAttachments;
       setDraft("");
+      setOutAttachments([]);
       try {
-        if (outAttachments.length > 0) {
-          const list = outAttachments;
-          setOutAttachments([]);
-          for (let i = 0; i < list.length; i++) {
-            const data = await fileToBase64(list[i].file);
-            await startConversation.mutateAsync({
-              phone,
-              content: i === 0 ? content : "",
-              inboxId,
-              attachment: {
-                data,
-                mimetype: list[i].file.type || "application/octet-stream",
-                filename: list[i].file.name,
-                kind: list[i].kind,
-              },
-            });
-          }
+        if (list.length > 0) {
+          await Promise.all(list.map((item, i) =>
+            fileToBase64(item.file)
+              .then((data) => startConversation.mutateAsync({
+                phone,
+                content: i === 0 ? content : "",
+                inboxId,
+                attachment: {
+                  data,
+                  mimetype: item.file.type || "application/octet-stream",
+                  filename: item.file.name,
+                  kind: item.kind,
+                },
+              }))
+              .catch(() => toast({ title: `Falha ao ler ${item.file.name}`, variant: "destructive" })),
+          ));
         } else {
           await startConversation.mutateAsync({ phone, content, inboxId });
         }
         setPendingSelectPhone(phone);
         toast({ title: "Mensagem enviada", description: "A abrir a conversa..." });
       } catch (err) {
-        if (content) setDraft((d) => (d.trim() ? d : content));
+        if (content) setDraft(content);
+        if (list.length > 0) setOutAttachments(list);
         toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
       }
       return;
@@ -1879,20 +1992,18 @@ export default function Inbox() {
     if (outAttachments.length > 0) {
       const list = outAttachments;
       setOutAttachments([]);
-      // First file carries the caption; the rest go bare.
-      for (let i = 0; i < list.length; i++) {
-        try {
-          const data = await fileToBase64(list[i].file);
-          await doSend(i === 0 ? content : "", {
+      // First file carries the caption; the rest go bare. Send in parallel —
+      // the hook's internal sendChain serializes the actual API calls.
+      await Promise.all(list.map((item, i) =>
+        fileToBase64(item.file)
+          .then((data) => doSend(i === 0 ? content : "", {
             data,
-            mimetype: list[i].file.type || "application/octet-stream",
-            filename: list[i].file.name,
-            kind: list[i].kind,
-          }, list[i].file);
-        } catch {
-          toast({ title: `Falha ao ler ${list[i].file.name}`, variant: "destructive" });
-        }
-      }
+            mimetype: item.file.type || "application/octet-stream",
+            filename: item.file.name,
+            kind: item.kind,
+          }, item.file))
+          .catch(() => toast({ title: `Falha ao ler ${item.file.name}`, variant: "destructive" })),
+      ));
       return;
     }
     doSend(content);
@@ -1903,7 +2014,8 @@ export default function Inbox() {
       const accepted: Array<{ file: File; kind: OutgoingAttachment["kind"] }> = [];
       for (const file of Array.from(files)) {
         if (file.size > INBOX_CONFIG.ATTACHMENT_MAX_BYTES) {
-          toast({ title: `${file.name} é demasiado grande`, description: "Máximo 10 MB.", variant: "destructive" });
+          const maxMb = Math.round(INBOX_CONFIG.ATTACHMENT_MAX_BYTES / 1024 / 1024);
+          toast({ title: `${file.name} é demasiado grande`, description: `Máximo ${maxMb} MB.`, variant: "destructive" });
           continue;
         }
         accepted.push({ file, kind: attachmentKind(file.type) });
@@ -1917,6 +2029,24 @@ export default function Inbox() {
     if (e.target.files) addFiles(e.target.files);
     e.target.value = "";
   };
+
+  const mediaItems = useMemo(() => {
+    const items: MediaItem[] = [];
+    for (const m of thread) {
+      for (const a of m.attachments ?? []) {
+        if (!a.data_url) continue;
+        if (a.file_type === "image" || a.file_type === "video") {
+          items.push({ url: a.data_url, type: a.file_type as "image" | "video" });
+        }
+      }
+    }
+    return items;
+  }, [thread]);
+
+  const openMediaViewer = useCallback((clickedUrl: string) => {
+    const idx = mediaItems.findIndex((it) => it.url === clickedUrl);
+    setMediaViewer({ items: mediaItems, index: Math.max(0, idx) });
+  }, [mediaItems]);
 
   // Paste an image/print straight into the composer.
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -1973,6 +2103,55 @@ export default function Inbox() {
       await doSend("", { data, mimetype: voice.blob.type, filename: "voz.webm", kind: "voice" }, voice.blob);
     } catch {
       toast({ title: "Falha ao enviar o áudio", variant: "destructive" });
+    }
+  };
+
+  // Schedule the current composer (text and/or attachments) for later delivery.
+  // Attachments ride along as base64 in the scheduled row — one row per file, the
+  // first carrying the caption, mirroring the live send. The cron
+  // (send-scheduled-messages) sends them through Evolution at send_at.
+  const handleScheduleConfirm = async () => {
+    if (!selected?.contact_phone || !scheduleAt) return;
+    const sendAt = new Date(scheduleAt);
+    if (sendAt <= new Date()) return;
+    const phone = selected.contact_phone;
+    const content = draft.trim();
+    try {
+      if (outAttachments.length > 0) {
+        const list = outAttachments;
+        await Promise.all(list.map((item, i) =>
+          fileToBase64(item.file)
+            .then((data) => scheduleMessage.mutateAsync({
+              phone,
+              content: i === 0 ? content : "",
+              sendAt,
+              attachment: {
+                data,
+                mimetype: item.file.type || "application/octet-stream",
+                filename: item.file.name,
+                kind: item.kind,
+              },
+            }))
+            .catch(() => toast({ title: `Falha ao agendar ${item.file.name}`, variant: "destructive" })),
+        ));
+      } else {
+        await scheduleMessage.mutateAsync({ phone, content, sendAt });
+      }
+      setScheduleOpen(false);
+      setDraft("");
+      setOutAttachments([]);
+      if (selectedId != null) {
+        setDrafts((prev) => {
+          if (!prev.has(selectedId)) return prev;
+          const next = new Map(prev);
+          next.delete(selectedId);
+          saveDraftsMap(next);
+          return next;
+        });
+      }
+      toast({ title: "Mensagem agendada", description: `Será enviada a ${sendAt.toLocaleString("pt-PT")}.` });
+    } catch (err) {
+      toast({ title: "Falha ao agendar", description: (err as Error).message, variant: "destructive" });
     }
   };
 
@@ -2041,11 +2220,12 @@ export default function Inbox() {
   // changes on a mute/unmute itself) so ConversationRow's memo isn't defeated by
   // every composer keystroke.
   const toggleMuteFor = useCallback(async (id: number) => {
-    const wasMuted = muted.includes(id);
-    const next = wasMuted ? muted.filter((m) => m !== id) : [...muted, id];
+    const current = mutedRef.current;
+    const wasMuted = current.includes(id);
+    const next = wasMuted ? current.filter((m) => m !== id) : [...current, id];
     setMuted(next);
+    mutedRef.current = next;
     saveMutedIds(next);
-    // Sync to server so the push edge function can filter per-user
     if (user?.id && organization?.id) {
       await supabase
         .from('push_subscriptions')
@@ -2054,34 +2234,38 @@ export default function Inbox() {
         .eq('organization_id', organization.id);
     }
     toast({ title: wasMuted ? "Notificações reativadas" : "Conversa silenciada" });
-  }, [muted, user?.id, organization?.id, toast]);
+  }, [user?.id, organization?.id, toast]);
   const handleToggleMute = () => selected && toggleMuteFor(selected.id);
 
-  const handleExport = () => {
-    if (!selected) return;
-    const lines = thread
-      .filter((m) => !m.is_activity)
-      .map((m) => {
-        const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
-        // In groups, pull the individual sender (and clean body) from the prefix.
-        const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
-        const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || selected.contact_name);
-        const text = parsed?.sender ? parsed.body : m.content;
-        const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
-        return `[${when}] ${who}: ${what}`;
-      });
-    const contactRef = displayPhone(selected.contact_phone) || selected.contact_email || "";
-    const blob = new Blob(
-      [`Conversa com ${selected.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
-      { type: "text/plain;charset=utf-8" },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `conversa-${selected.contact_name.replace(/\W+/g, "-")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleExport = useCallback((conv: InboxConversation) => {
+    try {
+      const msgs = conv.id === selectedId ? thread : [];
+      const lines = msgs
+        .filter((m) => !m.is_activity)
+        .map((m) => {
+          const when = new Date(toMs(m.created_at)).toLocaleString("pt-PT");
+          const parsed = !m.outgoing && isGroupSelected ? parseGroupMessage(m.content || "") : null;
+          const who = m.outgoing ? (m.sender_name || "Eu") : (parsed?.sender || conv.contact_name);
+          const text = parsed?.sender ? parsed.body : m.content;
+          const what = text || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
+          return `[${when}] ${who}: ${what}`;
+        });
+      const contactRef = displayPhone(conv.contact_phone) || conv.contact_email || "";
+      const blob = new Blob(
+        [`Conversa com ${conv.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
+        { type: "text/plain;charset=utf-8" },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversa-${conv.contact_name.replace(/\W+/g, "-")}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Conversa exportada" });
+    } catch {
+      toast({ title: "Falha ao exportar", variant: "destructive" });
+    }
+  }, [selectedId, thread, isGroupSelected, toast]);
 
   const handleRegisterClient = () => {
     if (!selected || contactMatch?.kind !== "client") return;
@@ -2108,12 +2292,18 @@ export default function Inbox() {
   const handleToggleArchive = () => {
     if (!selected) return;
     const archived = selected.status === "resolved";
+    const currentId = selected.id;
     toggleStatus.mutate(
-      { conversationId: selected.id, status: archived ? "open" : "resolved" },
+      { conversationId: currentId, status: archived ? "open" : "resolved" },
       {
         onSuccess: () => {
           toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" });
-          if (!archived) setSelectedId(null);
+          if (!archived) {
+            // Auto-select the next conversation in the list (Telegram-style).
+            const idx = filtered.findIndex((c) => c.id === currentId);
+            const next = filtered[idx + 1] ?? filtered[idx - 1] ?? null;
+            setSelectedId(next ? next.id : null);
+          }
         },
       },
     );
@@ -2125,14 +2315,80 @@ export default function Inbox() {
     const archived = currentStatus === "resolved";
     toggleStatus.mutate(
       { conversationId: id, status: archived ? "open" : "resolved" },
-      { onSuccess: () => toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" }) },
+      {
+        onSuccess: () => {
+          toast({ title: archived ? "Conversa restaurada" : "Conversa arquivada" });
+          if (!archived && selectedId === id) {
+            // Auto-select the next conversation when archiving the active one.
+            const idx = filtered.findIndex((c) => c.id === id);
+            const next = filtered[idx + 1] ?? filtered[idx - 1] ?? null;
+            setSelectedId(next ? next.id : null);
+          }
+        },
+      },
     );
-  }, [toggleStatus, toast]);
+  }, [toggleStatus, toast, selectedId, filtered]);
+
+  // Export a conversation's messages as a text file.
+  // Quick action handler for the conversation row's "⋮" menu — opens the
+  // conversation first, then triggers the relevant action.
+  const handleQuickAction = useCallback((action: string, conv: InboxConversation) => {
+    setSelectedId(conv.id);
+    switch (action) {
+      case "create_lead":
+        setAddToCrmOpen(true);
+        setAddToCrmTab("lead");
+        break;
+      case "schedule_meeting":
+        navigate("/calendar?new=true");
+        break;
+      case "assign":
+        setAssignOpen(true);
+        break;
+      case "labels":
+        setManagingLabels(true);
+        break;
+      case "snooze":
+        setReminderOpen(true);
+        break;
+      case "export":
+        handleExport(conv);
+        break;
+    }
+  }, [navigate, handleExport]);
+
+  const handleStatusChange = useCallback(
+    (conversationId: number, newStatus: string) => {
+      const status = newStatus === "resolved" ? "resolved" : "open";
+      toggleStatus.mutate(
+        { conversationId, status },
+        {
+          onSuccess: () => {
+            toast({
+              title: status === "resolved" ? "Conversa arquivada" : "Conversa reaberta",
+            });
+          },
+          onError: () => {
+            toast({
+              title: "Erro ao alterar estado",
+              description: "Tenta novamente.",
+              variant: "destructive",
+            });
+          },
+        },
+      );
+    },
+    [toggleStatus, toast],
+  );
 
   // Stable callbacks so memoized MessageBubble rows don't re-render on every
   // composer keystroke (when only `draft` changed).
   const handleReplyTo = useCallback(
-    (m: InboxMessage) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing }),
+    (m: InboxMessage) => {
+      if (!m.wa_id) return;
+      setReplyTo({ waId: m.wa_id, content: m.content, outgoing: m.outgoing });
+      setHighlightedWaId(m.wa_id);
+    },
     [],
   );
   const handleTaskFromMessage = useCallback(
@@ -2145,7 +2401,11 @@ export default function Inbox() {
   const selectedPhone = selected?.contact_phone ?? null;
   const handleDeleteMessage = useCallback(
     (m: InboxMessage) => {
-      if (!selectedPhone) return;
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível apagar", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setConfirm({
         title: "Apagar mensagem?",
         description: "A mensagem será apagada para todos no WhatsApp.",
@@ -2166,15 +2426,17 @@ export default function Inbox() {
   );
   const handleSaveEdit = useCallback(
     (m: InboxMessage, text: string) => {
-      if (!m.wa_id || !selectedPhone) return;
-      // Show the new text immediately (overlay), then push the edit to WhatsApp.
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível editar", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
       setEditedContent((prev) => new Map(prev).set(m.id, text));
       editMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, content: text, inboxId: selected?.inbox_id },
         {
           onSuccess: () => toast({ title: "Mensagem editada" }),
           onError: (err) => {
-            // Roll back the overlay so the UI reflects reality.
             setEditedContent((prev) => {
               const next = new Map(prev);
               next.delete(m.id);
@@ -2187,15 +2449,26 @@ export default function Inbox() {
     },
     [selectedPhone, selected?.inbox_id, editMessage, toast],
   );
-  // Send-only WhatsApp reaction (👍❤️😂...). No optimistic UI — receiving the
-  // reaction back into the thread isn't wired up (see the edge function's
-  // `react` action comment), so there's no local state to show it echoed back.
+  // Send-only WhatsApp reaction (👍❤️😂...). Optimistic: show the emoji on the
+  // bubble immediately, roll back on error. Receiving the contact's reaction
+  // back isn't wired up (Chatwoot doesn't surface WhatsApp reactions).
+  const [optimisticReactions, setOptimisticReactions] = useState<Record<string, string>>({});
   const handleReact = useCallback(
     (m: InboxMessage, emoji: string) => {
-      if (!m.wa_id || !selectedPhone) return;
+      if (!m.wa_id) return;
+      if (!selectedPhone) {
+        toast({ title: "Não foi possível reagir", description: "Esta conversa não tem número de telefone associado.", variant: "destructive" });
+        return;
+      }
+      setOptimisticReactions((prev) => ({ ...prev, [m.wa_id!]: emoji }));
       reactToMessage.mutate(
         { waId: m.wa_id, phone: selectedPhone, fromMe: m.outgoing, emoji, inboxId: selected?.inbox_id },
-        { onError: (err) => toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" }) },
+        {
+          onError: (err) => {
+            toast({ title: "Falha ao reagir", description: (err as Error).message, variant: "destructive" });
+            setOptimisticReactions((prev) => { const n = { ...prev }; delete n[m.wa_id!]; return n; });
+          },
+        },
       );
     },
     [selectedPhone, selected?.inbox_id, reactToMessage, toast],
@@ -2225,7 +2498,14 @@ export default function Inbox() {
   }, [draft, emojiSuggestQuery]);
 
   // Keep the keyboard handler's data fresh without rebinding the listener.
-  kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
+  kbdRef.current = {
+    filtered,
+    selectedId,
+    archive: handleToggleArchive,
+    openCommandPalette: () => setCommandPaletteOpen(true),
+    showShortcuts: () => setShortcutsOpen(true),
+    closePanel: () => setSelectedId(null),
+  };
 
   // Virtual list for the conversation panel — only renders ~15 visible rows
   // instead of the full 200-cap, dramatically reducing DOM nodes and memory.
@@ -2237,20 +2517,53 @@ export default function Inbox() {
     overscan: 5,
   });
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
-  // / search, c new conversation, n toggle note. Ignored while typing. ----
+  // / search, c new conversation, Enter opens, Esc closes, Cmd/Ctrl+K palette,
+  // Cmd/Ctrl+/ shortcuts overlay, Cmd/Ctrl+Enter sends. ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Don't let single-key shortcuts (e archive, c new conversation, ...) fire
-      // while a modal/sheet is open — they'd act on the list behind the dialog.
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
-      const t = e.target as HTMLElement | null;
-      const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) {
-        if (e.key === "Escape") t?.blur();
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl+K → command palette (works even in inputs)
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
         return;
       }
-      const { filtered: list, selectedId: sel, archive } = kbdRef.current;
+      // Cmd/Ctrl+/ → shortcuts overlay (works even in inputs)
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+Enter → submit message (works inside the composer)
+      if (mod && e.key === "Enter") {
+        e.preventDefault();
+        // Find the composer form and submit it
+        const form = document.querySelector<HTMLFormElement>('section form');
+        if (form) form.requestSubmit();
+        return;
+      }
+
+      // Below: single-key shortcuts only — bail if modifier is held.
+      if (mod || e.altKey) return;
+
+      // Don't let single-key shortcuts fire while a modal/sheet is open.
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
+
+      if (inInput) {
+        // Esc blurs the input / closes the conversation panel.
+        if (e.key === "Escape") {
+          e.preventDefault();
+          t?.blur();
+        }
+        return;
+      }
+
+      const { filtered: list, selectedId: sel, archive, openCommandPalette, showShortcuts, closePanel } = kbdRef.current;
       const move = (delta: number) => {
         if (list.length === 0) return;
         const idx = list.findIndex((c) => c.id === sel);
@@ -2271,6 +2584,13 @@ export default function Inbox() {
           e.preventDefault();
           move(-1);
           break;
+        case "Enter":
+          // Open the selected conversation (if not already open)
+          if (sel != null) {
+            e.preventDefault();
+            // Already open — no-op, but prevent default to avoid scrolling
+          }
+          break;
         case "e":
           if (sel) {
             e.preventDefault();
@@ -2284,6 +2604,12 @@ export default function Inbox() {
         case "c":
           e.preventDefault();
           setNewConvOpen(true);
+          break;
+        case "Escape":
+          if (sel != null) {
+            e.preventDefault();
+            closePanel();
+          }
           break;
         default:
           break;
@@ -2301,7 +2627,6 @@ export default function Inbox() {
     mutation.mutate(payload, {
       onSuccess: (record) => {
         if (record?.id) {
-          // Persist the link so it survives phone-formatting mismatches.
           linkCrm.mutate({ conversationId: selected.id, kind, id: record.id, name: record.name ?? selected.contact_name });
         }
         toast({ title: kind === "lead" ? "Lead criada" : "Cliente criado", description: `${selected.contact_name} adicionado.` });
@@ -2351,7 +2676,10 @@ export default function Inbox() {
   // Open the conversation for a phone: select the existing one, or start a draft.
   const openConversationForContact = (phone: string, name: string) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 9) return;
+    if (digits.length < 9) {
+      toast({ title: "Número inválido", description: "O número tem de ter pelo menos 9 dígitos.", variant: "destructive" });
+      return;
+    }
     const suffix = digits.slice(-9);
     const existing = conversations.find(
       (c) => (c.contact_phone || "").replace(/\D/g, "").slice(-9) === suffix,
@@ -2702,7 +3030,7 @@ export default function Inbox() {
       {(activeProposals.length > 0 || activeSales.length > 0) && (
         <div className="rounded-xl border border-amber-200/60 bg-amber-500/5 p-3 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Em aberto</p>
-          {activeSales.map((s: any) => {
+          {activeSales.map((s) => {
             const saleStatusLabel: Record<string, string> = { in_progress: "Em curso", fulfilled: "Concluída", pending: "Pendente" };
             const saleStatusColor: Record<string, string> = { in_progress: "bg-amber-500 text-white", fulfilled: "bg-emerald-500 text-white", pending: "bg-slate-400 text-white" };
             return (
@@ -2730,7 +3058,7 @@ export default function Inbox() {
               </button>
             );
           })}
-          {activeProposals.map((p: any) => {
+          {activeProposals.map((p) => {
             const propStatusLabel: Record<string, string> = { draft: "Rascunho", sent: "Enviada", negotiating: "Em negociação" };
             const propStatusColor: Record<string, string> = { draft: "bg-slate-400 text-white", sent: "bg-blue-500 text-white", negotiating: "bg-violet-500 text-white" };
             return (
@@ -2759,6 +3087,21 @@ export default function Inbox() {
             );
           })}
         </div>
+      )}
+
+      {/* Produtos — enviar com 1 clique */}
+      {selected?.contact_phone && selected.id > 0 && (
+        <InboxProductSection
+          onSelectProduct={async (product) => {
+            await sendProductInbox(
+              selected.id,
+              product,
+              selected.contact_phone,
+              selected.inbox_id,
+            );
+            toast({ title: "Produto enviado", description: product.name });
+          }}
+        />
       )}
 
       {/* Tarefas da conversa — "prometi e não esqueço" */}
@@ -2883,6 +3226,9 @@ export default function Inbox() {
                   live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/40",
                 )}
               />
+              {fetchingConvos && !loadingConvos && conversations.length === 0 && (
+                <span className="ml-2 animate-pulse text-[11px] text-muted-foreground">a atualizar...</span>
+              )}
             </h1>
             <div className="flex gap-1.5">
               <Button
@@ -2958,6 +3304,7 @@ export default function Inbox() {
         </div>
 
         <div ref={listScrollRef} className="flex-1 overflow-y-auto">
+          <div className="animate-in fade-in" key={`${tab}-${caixaFilter}`}>
           {loadingConvos ? (
             <div className="p-2">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -2970,6 +3317,14 @@ export default function Inbox() {
                 </div>
               ))}
             </div>
+          ) : convosError ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+              <p>Não foi possível carregar as conversas.</p>
+              <Button variant="outline" size="sm" onClick={() => refetchConvos()}>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                Tentar novamente
+              </Button>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
               {search
@@ -2977,9 +3332,9 @@ export default function Inbox() {
                 : tab === "archived"
                   ? "Sem conversas arquivadas."
                   : tab === "unread"
-                    ? "Sem conversas por ler. 🎉"
+                    ? "Sem conversas por ler."
                     : tab === "waiting"
-                      ? "Ninguém à espera de resposta. 🎉"
+                      ? "Ninguém à espera de resposta."
                       : tab === "mine"
                         ? "Nenhuma conversa atribuída a ti."
                         : "Ainda não há conversas. Quando um cliente enviar uma mensagem, ela aparece aqui."}
@@ -3015,13 +3370,15 @@ export default function Inbox() {
                       onToggleMute={toggleMuteFor}
                       onMarkUnread={markUnread}
                       onArchiveToggle={handleArchiveToggleFor}
+                      onQuickAction={handleQuickAction}
                     />
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+          </div>
+          </div>
       </aside>
 
       {/* ---- Thread ---- */}
@@ -3110,8 +3467,26 @@ export default function Inbox() {
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
+                  {peersHere.length > 0 && !peersHere.some((p) => p.typing) && (
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400" title={`${peersHere.map((p) => firstName(p.name)).join(", ")} ${peersHere.length > 1 ? "estão" : "está"} a ver`}>
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      {peersHere.length} {peersHere.length > 1 ? "agentes" : "agente"}
+                    </span>
+                  )}
                   {isEmailSelected && selected.email_subject ? (
                     <p className="truncate text-xs font-medium text-foreground/80">{selected.email_subject}</p>
+                  ) : peersHere.some((p) => p.typing) ? (
+                    <p className="flex items-center gap-1 truncate text-xs text-emerald-600 dark:text-emerald-400">
+                      {firstName(peersHere.find((p) => p.typing)?.name || "")} está a escrever
+                      <span className="flex gap-0.5">
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:0ms]" />
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
+                        <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:300ms]" />
+                      </span>
+                    </p>
                   ) : selected.contact_phone ? (
                     <p className="truncate text-xs text-muted-foreground">{displayPhone(selected.contact_phone)}</p>
                   ) : null}
@@ -3191,6 +3566,54 @@ export default function Inbox() {
                 >
                   <Search className={cn("h-4 w-4", threadSearchOpen && "text-primary")} />
                 </Button>
+
+                {/* Quick actions menu (3 dots) — contextual actions for the open conversation */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" title="Ações rápidas">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setAddToCrmOpen(true)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Criar lead / Adicionar ao CRM
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/calendar?new=true")}>
+                      <CalendarClock className="mr-2 h-4 w-4" />
+                      Marcar reunião
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAssignOpen(true)}>
+                      <UserCog className="mr-2 h-4 w-4" />
+                      Atribuir a...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setManagingLabels(true)}>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Gerir etiquetas
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setReminderOpen(true)}>
+                      <AlarmClock className="mr-2 h-4 w-4" />
+                      Adiar (snooze)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleToggleArchive}>
+                      {isArchived
+                        ? <><ArchiveRestore className="mr-2 h-4 w-4" /> Reabrir conversa</>
+                        : <><Archive className="mr-2 h-4 w-4" /> Arquivar conversa</>}
+                    </DropdownMenuItem>
+                    {selected?.contact_phone && selected.unread_count === 0 && (
+                      <DropdownMenuItem onClick={() => selectedId && markUnread({ conversationId: selectedId })}>
+                        <MailOpen className="mr-2 h-4 w-4" />
+                        Marcar como não lida
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => selected && handleExport(selected)}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Exportar conversa
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
                 <Button
@@ -3283,8 +3706,11 @@ export default function Inbox() {
 
             {/* Messages */}
             <div className="relative flex min-h-0 flex-1 flex-col">
+            <InboxErrorBoundary resetKey={selectedId} label="thread">
             <div
               ref={scrollRef}
+              role="log"
+              aria-label="Mensagens da conversa"
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-muted/20 p-4"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
@@ -3306,9 +3732,14 @@ export default function Inbox() {
                   )}
                 </div>
               ) : loadingMessages && thread.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">A carregar mensagens...</span>
+                <div className="flex flex-col gap-2 px-4 py-6">
+                  {[75, 55, 65, 80, 50, 70, 60].map((w, i) => (
+                    <div key={i} className={cn("flex items-center gap-2", i % 2 === 0 ? "justify-start" : "justify-end")}>
+                      {i % 2 === 0 && <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />}
+                      <div className="h-10 animate-pulse rounded-2xl bg-muted" style={{ width: `${w}%` }} />
+                      {i % 2 === 1 && <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
@@ -3349,7 +3780,7 @@ export default function Inbox() {
                         ? {
                             id: row.msg.reply_to_id,
                             sender: q.outgoing ? "Você" : (selected?.contact_name ?? "Contacto"),
-                            content: q.content || (q.attachments?.length ? "📎 Anexo" : "…"),
+                            content: q.content || (q.attachments?.length ? "Anexo" : "…"),
                           }
                         : { id: row.msg.reply_to_id, sender: "Resposta", content: "mensagem anterior" };
                     }
@@ -3364,39 +3795,82 @@ export default function Inbox() {
                         displayContent={row.displayContent}
                         quoted={quoted}
                         onJumpToQuoted={scrollToMessage}
-                        onPreview={setPreviewUrl}
+                        onPreview={openMediaViewer}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
                         onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                         onSaveEdit={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleSaveEdit : undefined}
-                        onReact={row.msg.wa_id && selectedPhone ? handleReact : undefined}
+                        isEdited={editedContent.has(row.msg.id)}
+                        editTrigger={editTriggerId === row.msg.id ? Date.now() : undefined}
+                        onReact={row.msg.wa_id ? handleReact : undefined}
+                        onStar={handleStar}
+                        isStarred={isStarred(row.msg.id)}
+                        onForward={handleForward}
+                        replyTargetWaId={highlightedWaId}
+                        reaction={row.msg.wa_id ? optimisticReactions[row.msg.wa_id] : undefined}
+                        searchQuery={threadSearchOpen ? threadSearchQuery : undefined}
                       />
                     );
                   })}
                   {visiblePending.map((p) => {
-                    // The auto-generated placeholder ("📎 file.png" / "🎵 Mensagem de
-                    // voz") is redundant once the real preview renders — only show
-                    // `content` as text when the user actually typed a caption.
-                    const isPlaceholderText = p.content === "🎵 Mensagem de voz" || /^📎 /.test(p.content);
+                    const isPlaceholderText = p.content === "Mensagem de voz" || /^Anexo: /.test(p.content);
                     return (
                       <div key={p.key} className="mt-0.5 flex justify-end">
-                        <div className="max-w-[75%] space-y-1 rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
+                        <div className={cn(
+                          "max-w-[75%] space-y-1 rounded-2xl rounded-br-sm px-3 py-2 text-sm text-primary-foreground",
+                          p.failed ? "bg-destructive/90" : "bg-primary/80",
+                        )}>
                           {p.previewUrl && p.previewKind === "image" && (
-                            <img src={p.previewUrl} alt="" className="max-h-64 max-w-full rounded-lg object-contain" />
+                            <div className="w-[260px] max-w-full overflow-hidden rounded-xl">
+                              <div className="relative aspect-[4/3] w-full bg-black/20">
+                                <img src={p.previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                              </div>
+                            </div>
                           )}
                           {p.previewUrl && p.previewKind === "video" && (
-                            <video src={p.previewUrl} className="max-h-64 max-w-full rounded-lg" muted />
+                            <div className="w-[260px] max-w-full overflow-hidden rounded-xl">
+                              <div className="relative aspect-[4/3] w-full bg-black/50">
+                                <video src={p.previewUrl} className="absolute inset-0 h-full w-full object-cover" muted />
+                                <span className="absolute inset-0 flex items-center justify-center">
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/80 text-black">
+                                    <Play className="h-5 w-5 translate-x-0.5" />
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
                           )}
                           {p.previewUrl && p.previewKind === "voice" && (
-                            <AudioPlayer url={p.previewUrl} outgoing />
+                            <WaveformPlayer url={p.previewUrl} outgoing seed={p.key.charCodeAt(0)} />
                           )}
                           {(!p.previewUrl || !isPlaceholderText) && (
                             <p className="whitespace-pre-wrap break-words">{p.content}</p>
                           )}
-                          <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
-                            {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
-                            {p.sent ? "" : "a enviar..."}
-                          </p>
+                          {p.failed ? (
+                            <div className="mt-1 flex items-center justify-end gap-2 text-[10px]">
+                              <span className="flex items-center gap-1 font-medium">
+                                <X className="h-2.5 w-2.5" /> Não enviada
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => retryPending(p)}
+                                className="rounded bg-white/20 px-1.5 py-0.5 font-medium transition-colors hover:bg-white/30"
+                              >
+                                Tentar novamente
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => discardPending(p)}
+                                className="rounded px-1.5 py-0.5 transition-colors hover:bg-white/20"
+                              >
+                                Descartar
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
+                              {p.sent ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+                              {p.sent ? "" : "a enviar..."}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -3405,6 +3879,7 @@ export default function Inbox() {
               )}
               <div ref={bottomRef} />
             </div>
+            </InboxErrorBoundary>
             {/* Jump-to-bottom FAB, WhatsApp-style: appears once scrolled away from
                 the bottom, with a badge counting messages that arrived meanwhile. */}
             {farFromBottom && !draftConv && (
@@ -3412,7 +3887,8 @@ export default function Inbox() {
                 type="button"
                 onClick={() => { jumpToBottom(); setNewArrivedCount(0); }}
                 title="Ir para o fim"
-                className="absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-transform hover:scale-105"
+                aria-label="Ir para o fim"
+                className="absolute bottom-4 right-4 z-10 flex h-10 w-10 animate-in fade-in slide-in-from-bottom-2 items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-transform hover:scale-105"
               >
                 <ChevronDown className="h-5 w-5" />
                 {newArrivedCount > 0 && (
@@ -3433,7 +3909,9 @@ export default function Inbox() {
                     <span className="shrink-0 font-medium text-violet-600">
                       {new Date(s.send_at).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{s.content}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {s.content || (s.attachment_name ? `Anexo: ${s.attachment_name}` : "Mensagem agendada")}
+                    </span>
                     <button
                       type="button"
                       title="Cancelar envio"
@@ -3449,10 +3927,10 @@ export default function Inbox() {
 
             {/* Reply quote bar */}
             {replyTo && (
-              <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2">
+              <div className="flex animate-in fade-in slide-in-from-top-1 items-center gap-2 border-t bg-muted/40 px-3 py-2">
                 <Reply className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  A responder a: <span className="italic">{replyTo.content || "📎 anexo"}</span>
+                  A responder a: <span className="italic">{replyTo.content || "Anexo"}</span>
                 </p>
                 <button type="button" onClick={() => setReplyTo(null)} className="rounded p-1 hover:bg-accent">
                   <X className="h-3.5 w-3.5" />
@@ -3460,29 +3938,21 @@ export default function Inbox() {
               </div>
             )}
 
-            {/* Pending attachment chips */}
+            {/* Pending attachment preview — thumbnails for images, file cards for others */}
             {outAttachments.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-t bg-muted/40 px-3 py-2">
-                {outAttachments.map((a, i) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs">
-                    <Paperclip className="h-3 w-3 text-muted-foreground" />
-                    <span className="max-w-[160px] truncate">{a.file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setOutAttachments((prev) => prev.filter((_, j) => j !== i))}
-                      className="rounded p-0.5 hover:bg-accent"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+              <div className="space-y-2 border-t bg-muted/40 px-3 py-2">
+                <div className="flex flex-wrap gap-2">
+                  {outAttachments.map((a, i) => (
+                    <PendingAttachmentThumb key={i} file={a.file} onRemove={() => setOutAttachments((prev) => prev.filter((_, j) => j !== i))} />
+                  ))}
+                </div>
               </div>
             )}
 
             {/* Voice preview before sending */}
             {pendingVoice && (
               <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2">
-                <audio controls src={pendingVoice.url} className="h-9 flex-1" />
+                <WaveformPlayer url={pendingVoice.url} outgoing seed={Date.now()} />
                 <Button
                   type="button"
                   variant="ghost"
@@ -3504,12 +3974,12 @@ export default function Inbox() {
             {/* Composer */}
             {recording ? (
               <div
-                className="flex shrink-0 items-center gap-3 border-t bg-background p-3"
+                className="flex shrink-0 animate-in fade-in slide-in-from-bottom-1 items-center gap-3 border-t bg-background p-3"
                 style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" } : undefined}
               >
                 <span className="flex items-center gap-2 text-sm text-red-500">
                   <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-                  A gravar... {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
+                  A gravar... {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:{String(recordSeconds % 60).padStart(2, "0")}
                 </span>
                 <div className="flex-1" />
                 <Button type="button" variant="ghost" size="icon" title="Cancelar" onClick={() => stopRecording(true)}>
@@ -3521,7 +3991,7 @@ export default function Inbox() {
               </div>
             ) : (
               <div
-                className="shrink-0 border-t bg-background"
+                className="shrink-0 animate-in fade-in slide-in-from-bottom-1 border-t bg-background"
                 style={mobileConvOpen && !vv.keyboardOpen && !composerFocused ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" } : undefined}
               >
                 {isEmailSelected && selected.email_subject && (
@@ -3670,7 +4140,7 @@ export default function Inbox() {
                         {selected.contact_phone && (
                           <button
                             type="button"
-                            disabled={!draft.trim()}
+                            disabled={!draft.trim() && outAttachments.length === 0}
                             onClick={() => {
                               setPlusOpen(false);
                               const d = new Date();
@@ -3713,15 +4183,15 @@ export default function Inbox() {
                     It grows naturally with the text up to ~6 lines, then scrolls.
                     Secondary actions live in the "+" menu to keep the bar uncluttered. */}
                 {emojiSuggestions.length > 0 && (
-                  <div className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
+                  <div role="listbox" aria-label="Sugestões de emoji" className="absolute bottom-full left-2 z-50 mb-1 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-lg">
                     {emojiSuggestions.map((e, i) => (
                       <button
                         key={e}
                         type="button"
                         title="Inserir emoji"
-                        // onMouseDown + preventDefault (not onClick): keeps the composer
-                        // focused and stops the button from submitting the form. Works for
-                        // ANY emoji in the bar, not just the first.
+                        role="option"
+                        aria-selected={i === emojiSuggestIndex}
+                        aria-label={`Emoji ${e}`}
                         onMouseDown={(ev) => { ev.preventDefault(); applyEmojiSuggestion(e); }}
                         onMouseEnter={() => setEmojiSuggestIndex(i)}
                         className={cn(
@@ -3729,9 +4199,7 @@ export default function Inbox() {
                           i === emojiSuggestIndex ? "bg-primary/15" : "hover:bg-muted",
                         )}
                       >
-                        {/* draggable=false so a click on the emoji image never starts an
-                            image-drag instead of selecting it. */}
-                        <em-emoji native={e} set="apple" size="1.4em" fallback={e} draggable={false} />
+                        <em-emoji native={e} set="native" size="1.4em" fallback={e} draggable={false} />
                       </button>
                     ))}
                     <span className="ml-1 shrink-0 pr-1 text-[10px] text-muted-foreground opacity-60">↔ Enter</span>
@@ -3750,6 +4218,7 @@ export default function Inbox() {
                   <div
                     ref={composerRef}
                     role="textbox"
+                    aria-label="Mensagem"
                     aria-multiline="true"
                     contentEditable
                     suppressContentEditableWarning
@@ -3763,29 +4232,22 @@ export default function Inbox() {
                     onInput={(e) => {
                       const text = e.currentTarget.innerText;
                       setDraft(text);
-                      // Detetar ":" para sugerir emojis
+                      // Detetar ":" para sugerir emojis (busca completa via emoji-mart
+                      // + aliases PT — cobre todos os ~1800 emojis, incluindo :sol, :lua).
                       const colonIdx = text.lastIndexOf(":");
-                      if (colonIdx !== -1) {
-                        const query = text.slice(colonIdx + 1).toLowerCase().trim();
-                        if (query.length > 0 && query.indexOf(" ") === -1 && query.indexOf("\n") === -1) {
-                          // Search emojis by character match OR by name (:sorriso -> 😀)
-                          const charMatches = Object.values(EMOJI_CATEGORIES).flat()
-                            .filter(e => e.toLowerCase().includes(query));
-                          const nameMatches = Object.entries(EMOJI_MAP)
-                            .filter(([key]) => key.replace(":", "").includes(query))
-                            .map(([, emoji]) => emoji);
-                          const matches = [...new Set([...charMatches, ...nameMatches])].slice(0, 6);
-                          if (matches.length > 0) {
-                            setEmojiSuggestions(matches);
-                            setEmojiSuggestQuery(query);
-                            setEmojiSuggestIndex(0);
-                          } else {
-                            setEmojiSuggestions([]);
-                          }
-                        } else {
-                          setEmojiSuggestions([]);
-                        }
+                      const query = colonIdx !== -1 ? text.slice(colonIdx + 1) : "";
+                      if (colonIdx !== -1 && query.length >= 2 && !/[\s\n:]/.test(query)) {
+                        const q = query.toLowerCase();
+                        emojiReqRef.current = q;
+                        setEmojiSuggestQuery(query);
+                        searchEmojis(q, 8).then((matches) => {
+                          // Ignore a result that arrived after the user typed more.
+                          if (emojiReqRef.current !== q) return;
+                          setEmojiSuggestions(matches);
+                          setEmojiSuggestIndex(0);
+                        });
                       } else {
+                        emojiReqRef.current = "";
                         setEmojiSuggestions([]);
                       }
                       // Show "typing..." on the contact's WhatsApp (throttled, not for email).
@@ -3832,12 +4294,18 @@ export default function Inbox() {
                       }
                     }}
                     onPaste={(e) => {
-                      // Force plain-text paste (no rich HTML). Images still bubble to
-                      // the form's onPaste (handlePaste) since we only handle text here.
                       if (e.clipboardData?.files?.length) return;
                       e.preventDefault();
                       const text = e.clipboardData?.getData("text/plain") ?? "";
-                      document.execCommand("insertText", false, text);
+                      const sel = window.getSelection();
+                      if (sel && sel.rangeCount > 0) {
+                        const range = sel.getRangeAt(0);
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(text));
+                        range.collapse(false);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                      }
                     }}
                     // min-h-[1.5rem] keeps one line tall when empty (a bare contentEditable
                     // collapses); leading-6 gives a stable line box. text-base (16px) on
@@ -3846,12 +4314,17 @@ export default function Inbox() {
                   />
                 </div>
 
+                {/* The send button is NEVER disabled during a normal send: the round
+                    trip takes 1-3s and a dead spinner-button blocked the 2nd message
+                    of a rapid sequence (sends are queued in order by the hook; the
+                    bubble shows the in-flight state). Only a draft's first send
+                    locks — a double start_conversation would create two conversations. */}
                 {draft.trim() || outAttachments.length > 0 ? (
-                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" disabled={sendMessage.isPending || startConversation.isPending}>
-                    {(sendMessage.isPending || startConversation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <Button type="submit" size="icon" className="shrink-0 rounded-full shadow-sm" title="Enviar (Enter)" aria-label="Enviar mensagem" disabled={!!draftConv && startConversation.isPending}>
+                    {draftConv && startConversation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 ) : !isEmailSelected ? (
-                  <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" onClick={startRecording}>
+                  <Button type="button" size="icon" variant="ghost" className="shrink-0 rounded-full" title="Gravar mensagem de voz" aria-label="Gravar mensagem de voz" onClick={startRecording}>
                     <Mic className="h-4 w-4" />
                   </Button>
                 ) : null}
@@ -3864,15 +4337,29 @@ export default function Inbox() {
 
       {/* ---- Contact panel (desktop right column) ---- */}
       {selected && panelOpen && (
-        <aside className="hidden w-72 shrink-0 flex-col border-l 2xl:flex">
+        <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
           {contactPanel}
         </aside>
       )}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">{srAnnouncement}</div>
       </>
       )}
       </div>
 
-      {/* Image lightbox */}
+      {/* Media viewer — fullscreen with zoom/pan/swipe */}
+      {mediaViewer && mediaViewer.items.length > 0 && (
+        <MediaViewer
+          items={mediaViewer.items}
+          index={mediaViewer.index}
+          onClose={() => setMediaViewer(null)}
+          onNavigate={(idx) => setMediaViewer((prev) => prev ? { ...prev, index: idx } : null)}
+          onDownload={(item) => download(item.url)}
+        />
+      )}
+
+      <GlobalAudioPill activeMessageId={selected?.id ?? null} />
+
+      {/* Fallback single-image lightbox (still used by gallery) */}
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
         <DialogContent className="max-w-4xl border-none bg-transparent p-0 shadow-none">
           <DialogTitle className="sr-only">Pré-visualização de imagem</DialogTitle>
@@ -3938,7 +4425,7 @@ export default function Inbox() {
                       key={key}
                       type="button"
                       className="relative block aspect-square cursor-zoom-in overflow-hidden rounded-lg bg-muted"
-                      onClick={() => attachment.data_url && setPreviewUrl(attachment.data_url)}
+                      onClick={() => attachment.data_url && openMediaViewer(attachment.data_url)}
                     >
                       {attachment.file_type === "video" ? (
                         <>
@@ -3967,11 +4454,11 @@ export default function Inbox() {
                 <div className="space-y-1.5 py-1">
                   {galleryData.docs.map(({ key, attachment }) => (
                     <div key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <FileTypeIcon extension={attachment.extension} size="sm" />
                       <span className="min-w-0 flex-1 truncate">
-                        {attachment.extension ? `Documento .${attachment.extension}` : "Documento"}
+                        {attachment.extension ? `Documento .${attachment.extension.toUpperCase()}` : "Documento"}
                       </span>
-                      {attachment.data_url && <DownloadButton url={attachment.data_url} extension={attachment.extension} />}
+                      {attachment.data_url && <ProgressDownloadButton url={attachment.data_url} extension={attachment.extension} />}
                     </div>
                   ))}
                 </div>
@@ -4031,40 +4518,28 @@ export default function Inbox() {
             <DialogTitle>Agendar envio</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="rounded-md bg-muted px-3 py-2 text-sm">{draft}</p>
+            {draft.trim() && <p className="whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">{draft}</p>}
+            {outAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {outAttachments.map((a, i) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
+                    <Paperclip className="h-3 w-3 text-muted-foreground" />
+                    <span className="max-w-[160px] truncate">{a.file.name}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Enviar em</label>
               <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             </div>
             <Button
               className="w-full"
-              disabled={!scheduleAt || new Date(scheduleAt) <= new Date() || scheduleMessage.isPending}
-              onClick={() =>
-                scheduleMessage.mutate(
-                  { phone: selected!.contact_phone!, content: draft.trim(), sendAt: new Date(scheduleAt) },
-                  {
-                    onSuccess: () => {
-                      setScheduleOpen(false);
-                      setDraft("");
-                      if (selectedId != null) {
-                        setDrafts((prev) => {
-                          if (!prev.has(selectedId)) return prev;
-                          const next = new Map(prev);
-                          next.delete(selectedId);
-                          saveDraftsMap(next);
-                          return next;
-                        });
-                      }
-                      toast({
-                        title: "Mensagem agendada",
-                        description: `Será enviada a ${new Date(scheduleAt).toLocaleString("pt-PT")}.`,
-                      });
-                    },
-                    onError: (err) =>
-                      toast({ title: "Falha ao agendar", description: (err as Error).message, variant: "destructive" }),
-                  },
-                )
+              disabled={
+                !scheduleAt || new Date(scheduleAt) <= new Date() || scheduleMessage.isPending
+                || (!draft.trim() && outAttachments.length === 0)
               }
+              onClick={handleScheduleConfirm}
             >
               {scheduleMessage.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
               Agendar
@@ -4362,6 +4837,25 @@ export default function Inbox() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Command Palette (Cmd/Ctrl+K) */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        conversations={visible}
+        onOpenConversation={(id) => setSelectedId(id)}
+        onNewConversation={() => setNewConvOpen(true)}
+        onArchiveCurrent={handleToggleArchive}
+        onMarkCurrentRead={() => { if (selectedId) markRead({ conversationId: selectedId }); }}
+        onAssignCurrent={() => setAssignOpen(true)}
+        onManageLabels={() => setManagingLabels(true)}
+        onExportConversation={() => { if (selected) handleExport(selected); }}
+        onGoToSettings={() => navigate("/settings")}
+        currentConversationId={selectedId}
+      />
+
+      {/* Keyboard shortcuts overlay (Cmd/Ctrl+/) */}
+      <ShortcutsOverlay open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }
@@ -4437,7 +4931,7 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
             srcDoc={bodyForIframe(rawBody, isHtml)}
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             className="w-full border-0"
-            style={{ height: '120px' }}
+            style={{ height: '200px' }}
             title="Email"
             onLoad={() => {
               try {
@@ -4461,8 +4955,13 @@ const MessageBubble = memo(function MessageBubble({
   onReply,
   onDelete,
   onSaveEdit,
+  isEdited,
+  editTrigger,
   onTask,
   onReact,
+  onStar,
+  isStarred,
+  onForward,
   emailMode = false,
   firstOfGroup = true,
   lastOfGroup = true,
@@ -4470,6 +4969,9 @@ const MessageBubble = memo(function MessageBubble({
   displayContent,
   quoted,
   onJumpToQuoted,
+  replyTargetWaId,
+  reaction,
+  searchQuery,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
@@ -4477,8 +4979,13 @@ const MessageBubble = memo(function MessageBubble({
   onDelete?: (m: InboxMessage) => void;
   // Provided only for editable messages (own recent WhatsApp text). Persists the edit.
   onSaveEdit?: (m: InboxMessage, text: string) => void;
+  isEdited?: boolean;
+  editTrigger?: number;
   onTask?: (m: InboxMessage) => void;
   onReact?: (m: InboxMessage, emoji: string) => void;
+  onStar?: (m: InboxMessage) => void;
+  isStarred?: boolean;
+  onForward?: (m: InboxMessage) => void;
   // Preview of the quoted message when this one is a reply (sender + short text + id).
   quoted?: { id: number; sender: string; content: string };
   // Scrolls to (and briefly highlights) the quoted message — WhatsApp lets you
@@ -4491,14 +4998,42 @@ const MessageBubble = memo(function MessageBubble({
   groupSender?: string | null;
   // Body with the group-sender prefix stripped; falls back to m.content.
   displayContent?: string;
+  // WhatsApp message id of the message currently being replied to (highlight target).
+  replyTargetWaId?: string | null;
+  // Optimistic reaction emoji shown on this bubble before the server confirms.
+  reaction?: string;
+  // Search query for in-thread text highlighting.
+  searchQuery?: string;
 }) {
   // Show the per-participant avatar + name only for incoming group messages.
   const showGroupSender = !m.outgoing && !!groupSender;
   const body = displayContent ?? m.content;
+  const { toast: copyToast } = useToast();
+  // Highlight when this is the message currently being replied to (Telegram-style).
+  const isReplyTarget = !!replyTargetWaId && !!m.wa_id && m.wa_id === replyTargetWaId;
   // Inline edit — only offered for own recent messages (WhatsApp caps editing at ~15 min; we use 5).
-  const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 5 * 60 * 1000;
+  const canEdit = !!onSaveEdit && (Date.now() - toMs(m.created_at)) < 15 * 60 * 1000;
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState("");
+  const editRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editRef.current);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    if (editTrigger && canEdit && !editing) {
+      setEditDraft(body);
+      setEditing(true);
+    }
+  }, [editTrigger]);
   // Swipe/drag-to-reply — Pointer Events unify touch (mobile) and mouse (desktop).
   const dragRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -4564,13 +5099,13 @@ const MessageBubble = memo(function MessageBubble({
         cancelLongPress();
         const st = dragRef.current;
         dragRef.current = null;
-        if (st?.active && Math.abs(dragX) > 55 && m.wa_id) onReply(m);
+        if (st?.active && Math.abs(dragX) > 40 && m.wa_id) onReply(m);
         setDragX(0);
       }}
       onPointerCancel={() => { cancelLongPress(); dragRef.current = null; setDragX(0); }}
       style={{ transform: dragX ? `translateX(${dragX}px)` : undefined, touchAction: "pan-y" }}
       className={cn(
-        "group relative flex items-end gap-1",
+        "group relative flex animate-in fade-in items-end gap-1",
         firstOfGroup ? "mt-2.5" : "mt-0.5",
         m.outgoing ? "justify-end" : "justify-start",
       )}
@@ -4591,6 +5126,7 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Editar mensagem"
+              aria-label="Editar mensagem"
               onClick={() => { setEditDraft(body); setEditing(true); }}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >
@@ -4601,14 +5137,40 @@ const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               title="Apagar para todos"
+              aria-label="Apagar para todos"
               onClick={() => onDelete(m)}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
+          {onForward && body && (
+            <button
+              type="button"
+              title="Reencaminhar"
+              aria-label="Reencaminhar"
+              onClick={() => onForward(m)}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+            >
+              <Forward className="h-3.5 w-3.5" />
+            </button>
+          )}
           {taskButton}
           {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
+          {onStar && (
+            <button
+              type="button"
+              title={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              aria-label={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              onClick={() => onStar(m)}
+              className={cn(
+                "rounded p-1 transition-opacity hover:bg-accent",
+                isStarred ? "opacity-100 text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", isStarred && "fill-amber-400 text-amber-400")} />
+            </button>
+          )}
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
         </div>
       )}
@@ -4625,10 +5187,11 @@ const MessageBubble = memo(function MessageBubble({
       )}
       <div
         className={cn(
-          "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm",
+          "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm transition-shadow",
           m.outgoing
             ? cn("bg-primary text-primary-foreground", lastOfGroup && "rounded-br-sm")
             : cn("border bg-card", lastOfGroup && "rounded-bl-sm"),
+          isReplyTarget && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         )}
       >
         {m.outgoing && m.sender_name && firstOfGroup && (
@@ -4643,7 +5206,7 @@ const MessageBubble = memo(function MessageBubble({
             onClick={() => onJumpToQuoted?.(quoted.id)}
             title="Ir para a mensagem original"
             className={cn(
-              "mb-1 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80",
+              "mb-1 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs transition-opacity hover:opacity-80",
               m.outgoing ? "border-primary-foreground/50 bg-primary-foreground/10" : "border-primary/40 bg-muted",
             )}
           >
@@ -4660,11 +5223,11 @@ const MessageBubble = memo(function MessageBubble({
         ))}
         {editing ? (
           <div className="space-y-1.5">
-            <textarea
-              value={editDraft}
-              onChange={(e) => setEditDraft(e.target.value)}
-              rows={2}
-              autoFocus
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              ref={editRef}
+              onInput={(e) => setEditDraft(e.currentTarget.innerText)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -4674,8 +5237,8 @@ const MessageBubble = memo(function MessageBubble({
                   setEditing(false);
                 }
               }}
-              className="w-full resize-none rounded-md border border-primary-foreground/30 bg-primary-foreground/10 p-1.5 text-sm text-inherit outline-none"
-            />
+              className="w-full resize-none rounded-lg border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-2 text-sm text-inherit outline-none"
+            >{editDraft}</div>
             <div className="flex justify-end gap-1">
               <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-0.5 text-[11px] opacity-80 hover:opacity-100">
                 Cancelar
@@ -4690,19 +5253,45 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
         ) : (
-          body && <p className="whitespace-pre-wrap break-words">{autolink(body)}</p>
+          <>
+            {body && <p className="whitespace-pre-wrap break-words">{autolink(body, m.outgoing, searchQuery)}</p>}
+            {body && <LinkPreview text={body} outgoing={m.outgoing} />}
+          </>
         )}
         {lastOfGroup && !editing && (
           <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
+            {isEdited && <><span className="italic opacity-80">Editado</span><span className="opacity-40">·</span></>}
             {formatTime(m.created_at)}
             {m.outgoing && <StatusTicks status={m.status} />}
           </p>
+        )}
+        {reaction && (
+          <div className={cn(
+            "absolute -bottom-2.5 rounded-full border px-1.5 py-0.5 text-xs shadow-sm",
+            m.outgoing ? "right-2 border-primary-foreground/20 bg-primary-foreground/10" : "left-2 border-border bg-card",
+          )}>
+            {reaction}
+          </div>
         )}
       </div>
       {!m.outgoing && (
         <div className="flex items-center">
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
           {onReact && <ReactionButton onPick={(emoji) => onReact(m, emoji)} />}
+          {onStar && (
+            <button
+              type="button"
+              title={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              aria-label={isStarred ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              onClick={() => onStar(m)}
+              className={cn(
+                "rounded p-1 transition-opacity hover:bg-accent",
+                isStarred ? "opacity-100 text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", isStarred && "fill-amber-400 text-amber-400")} />
+            </button>
+          )}
           {taskButton}
         </div>
       )}
@@ -4738,11 +5327,20 @@ const MessageBubble = memo(function MessageBubble({
             )}
             <button
               type="button"
-              onClick={() => { setActionsSheetOpen(false); navigator.clipboard?.writeText(body || ""); }}
+              onClick={() => { setActionsSheetOpen(false); navigator.clipboard?.writeText(body || ""); copyToast({ title: "Texto copiado" }); }}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
             >
               <FileText className="h-4 w-4 text-muted-foreground" /> Copiar texto
             </button>
+            {onForward && body && (
+              <button
+                type="button"
+                onClick={() => { setActionsSheetOpen(false); onForward(m); }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent"
+              >
+                <Forward className="h-4 w-4 text-muted-foreground" /> Reencaminhar
+              </button>
+            )}
             {onTask && (
               <button
                 type="button"
@@ -4797,7 +5395,7 @@ function NewConversationPicker({
   useEffect(() => { if (open) setTerm(""); }, [open]);
   const { data: results = [], isFetching } = useSearchCrmRecords(term);
   const digits = term.replace(/\D/g, "");
-  const isPhone = digits.length >= 9;
+  const isPhone = digits.length >= 9 && digits.length <= 15;
 
   const hasConv = (phone?: string | null) => {
     const sfx = (phone || "").replace(/\D/g, "").slice(-9);
@@ -4919,46 +5517,6 @@ function NewConversationPicker({
   );
 }
 
-function ChannelBadge({ channel }: { channel: string | null }) {
-  if (!channel) return null;
-  const ch = channel.toLowerCase();
-  if (ch.includes("instagram")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-background"
-        style={{ background: "linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)" }}>
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.97.24 2.43.403a4.9 4.9 0 0 1 1.772 1.153 4.9 4.9 0 0 1 1.153 1.772c.163.46.35 1.26.403 2.43.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.24 1.97-.403 2.43a4.9 4.9 0 0 1-1.153 1.772 4.9 4.9 0 0 1-1.772 1.153c-.46.163-1.26.35-2.43.403-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.97-.24-2.43-.403a4.9 4.9 0 0 1-1.772-1.153 4.9 4.9 0 0 1-1.153-1.772c-.163-.46-.35-1.26-.403-2.43C2.175 15.747 2.163 15.367 2.163 12s.012-3.584.07-4.85c.054-1.17.24-1.97.403-2.43A4.9 4.9 0 0 1 3.79 2.948a4.9 4.9 0 0 1 1.772-1.153c.46-.163 1.26-.35 2.43-.403C9.258 1.334 9.638 1.322 12 1.322Zm0 1.838c-3.162 0-3.535.012-4.787.069-1.055.048-1.63.224-2.011.372a3.07 3.07 0 0 0-1.138.74 3.07 3.07 0 0 0-.74 1.138c-.148.382-.324.956-.372 2.011-.057 1.252-.069 1.625-.069 4.787s.012 3.535.069 4.787c.048 1.055.224 1.63.372 2.011.19.487.45.9.74 1.138.238.29.651.55 1.138.74.382.148.956.324 2.011.372 1.252.057 1.625.069 4.787.069s3.535-.012 4.787-.069c1.055-.048 1.63-.224 2.011-.372a3.07 3.07 0 0 0 1.138-.74 3.07 3.07 0 0 0 .74-1.138c.148-.382.324-.956.372-2.011.057-1.252.069-1.625.069-4.787s-.012-3.535-.069-4.787c-.048-1.055-.224-1.63-.372-2.011a3.07 3.07 0 0 0-.74-1.138 3.07 3.07 0 0 0-1.138-.74c-.382-.148-.956-.324-2.011-.372-1.252-.057-1.625-.069-4.787-.069ZM12 6.865a5.135 5.135 0 1 1 0 10.27 5.135 5.135 0 0 1 0-10.27Zm0 1.838a3.297 3.297 0 1 0 0 6.594 3.297 3.297 0 0 0 0-6.594Zm5.338-3.205a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("telegram")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#229ED9] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("email")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-      </span>
-    );
-  }
-  if (ch.includes("facebook")) {
-    return (
-      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1877F2] ring-2 ring-background">
-        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
-      </span>
-    );
-  }
-  // Default: WhatsApp (api channel or any other → assume WhatsApp since that's the main channel here)
-  return (
-    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background">
-      <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-    </span>
-  );
-}
-
 const ConversationRow = memo(function ConversationRow({
   conversation,
   active,
@@ -4975,6 +5533,7 @@ const ConversationRow = memo(function ConversationRow({
   onToggleMute,
   onMarkUnread,
   onArchiveToggle,
+  onQuickAction,
 }: {
   conversation: InboxConversation;
   active: boolean;
@@ -5001,6 +5560,9 @@ const ConversationRow = memo(function ConversationRow({
   onToggleMute: (id: number) => void;
   onMarkUnread: (id: number) => void;
   onArchiveToggle: (id: number, currentStatus: string) => void;
+  // Quick action callback for context-menu items that need the conversation
+  // to be opened first (create lead, schedule meeting, assign, labels, snooze, export).
+  onQuickAction?: (action: string, conversation: InboxConversation) => void;
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
@@ -5014,7 +5576,7 @@ const ConversationRow = memo(function ConversationRow({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(conversation.id); } }}
       onMouseEnter={() => onHover?.(conversation.id, conversation.alt_ids ?? [])}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
+        "group flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
         active && "bg-accent",
       )}
     >
@@ -5088,6 +5650,35 @@ const ConversationRow = memo(function ConversationRow({
                     ? <><Archive className="mr-2 h-3.5 w-3.5" /> Arquivar</>
                     : <><ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Reabrir</>}
                 </DropdownMenuItem>
+                {onQuickAction && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onQuickAction("create_lead", conversation)}>
+                      <UserPlus className="mr-2 h-3.5 w-3.5" />
+                      Criar lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("schedule_meeting", conversation)}>
+                      <CalendarClock className="mr-2 h-3.5 w-3.5" />
+                      Marcar reunião
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("assign", conversation)}>
+                      <UserCog className="mr-2 h-3.5 w-3.5" />
+                      Atribuir a...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("labels", conversation)}>
+                      <Tag className="mr-2 h-3.5 w-3.5" />
+                      Etiquetas
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("snooze", conversation)}>
+                      <AlarmClock className="mr-2 h-3.5 w-3.5" />
+                      Adiar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onQuickAction("export", conversation)}>
+                      <FileDown className="mr-2 h-3.5 w-3.5" />
+                      Exportar conversa
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -5109,7 +5700,11 @@ const ConversationRow = memo(function ConversationRow({
               <>
                 {conversation.last_outgoing && <ListStatusTicks status={conversation.last_status} />}
                 <span className="min-w-0 flex-1 truncate">
-                  {conversation.last_message ? renderWhatsAppFormatting(translateActivity(conversation.last_message)) : "—"}
+                  {conversation.last_message
+                    ? isActivityText(conversation.last_message)
+                      ? <span className="italic text-muted-foreground/60">{translateActivity(conversation.last_message)}</span>
+                      : renderWhatsAppFormatting(translateActivity(conversation.last_message))
+                    : "—"}
                 </span>
               </>
             )}

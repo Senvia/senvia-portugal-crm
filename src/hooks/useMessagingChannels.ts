@@ -119,6 +119,80 @@ export function useDeleteChannel() {
   });
 }
 
+// Connect an Instagram channel via OAuth (Facebook login popup).
+// Flow: get OAuth URL → open popup → user logs in → edge function callback
+// → postMessage back → we resolve/reject.
+export function useInstagramConnect() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { label: string }): Promise<{ ig_username?: string }> => {
+      return new Promise(async (resolve, reject) => {
+        if (!organization?.id) { reject(new Error('Organização não encontrada')); return; }
+
+        // 1. Get OAuth URL from edge function
+        const { data, error } = await supabase.functions.invoke('instagram-connect', {
+          body: { action: 'oauth_url', organization_id: organization.id, label: vars.label },
+        });
+        if (error) { reject(error); return; }
+        const url = (data as { url?: string })?.url;
+        if (!url) { reject(new Error('Não foi possível obter o URL de login')); return; }
+
+        // 2. Open popup centered on screen
+        const w = 580, h = 700;
+        const left = window.screenX + (window.outerWidth - w) / 2;
+        const top = window.screenY + (window.outerHeight - h) / 2;
+        const popup = window.open(url, 'instagram-oauth', `width=${w},height=${h},left=${left},top=${top}`);
+        if (!popup) { reject(new Error('Popup bloqueado pelo navegador. Permite popups para este site.')); return; }
+
+        // 3. Listen for postMessage from the edge function callback
+        const handler = (ev: MessageEvent) => {
+          if (ev.data?.type !== 'instagram-oauth') return;
+          window.removeEventListener('message', handler);
+          clearInterval(pollTimer);
+          if (ev.data.error) {
+            reject(new Error(ev.data.error));
+          } else {
+            resolve({ ig_username: ev.data.ig_username });
+          }
+        };
+        window.addEventListener('message', handler);
+
+        // 4. Detect popup closed manually (user closed without completing)
+        const pollTimer = setInterval(() => {
+          if (popup.closed) {
+            window.removeEventListener('message', handler);
+            clearInterval(pollTimer);
+            reject(new Error('Login cancelado'));
+          }
+        }, 800);
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
+// Delete an Instagram channel (Chatwoot inbox + DB row).
+export function useDeleteInstagramChannel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('instagram-connect', {
+        body: { action: 'delete', organization_id: organization.id, channel_id: channelId },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
 // Update which collaborators attend a caixa (+ optional round-robin). Admin-gated
 // by RLS. Empty list = everyone can see it.
 export function useUpdateChannelAssignment() {

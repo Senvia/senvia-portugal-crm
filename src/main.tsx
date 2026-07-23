@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { ErrorBoundary, reloadOnce } from "./components/ErrorBoundary";
+import { PaidTrafficFilterProvider } from "@/contexts/PaidTrafficFilterContext";
 
 // When a lazily-loaded chunk fails to preload (e.g. a new deploy replaced the
 // hashed files while this tab was open), Vite fires `vite:preloadError`.
@@ -57,6 +58,8 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator && !import.met
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <App />
+    <PaidTrafficFilterProvider>
+      <App />
+    </PaidTrafficFilterProvider>
   </ErrorBoundary>
 );

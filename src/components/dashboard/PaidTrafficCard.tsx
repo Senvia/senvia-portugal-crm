@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { getTrafficMatcher, isPaidFilter } from "@/lib/paid-traffic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -34,6 +36,7 @@ function buildMonthOptions() {
 export function PaidTrafficCard() {
   const { organization } = useAuth();
   const { data: stages = [] } = usePipelineStages();
+  const { filterKey } = usePaidTrafficFilter();
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   // "all" = todo o histórico; caso contrário, o início do mês selecionado (yyyy-MM-dd).
   const [period, setPeriod] = useState("all");
@@ -42,16 +45,25 @@ export function PaidTrafficCard() {
   const FALLBACK_WON = ["won", "fechado", "ganho", "closed", "convertido"];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["paid-traffic-conversions", organization?.id, wonKeys.join(","), period],
+    queryKey: ["paid-traffic-conversions", organization?.id, wonKeys.join(","), period, filterKey],
     queryFn: async () => {
       if (!organization?.id) return null;
+
+      // When the dashboard filter is "all", we still show only paid traffic in
+      // this card (it's the "Tráfego Pago" card). When a specific platform is
+      // selected, we fetch ALL leads and filter in memory by the matcher, so
+      // the card reflects the selected platform.
+      const usePaidRestFilter = filterKey === "all" || filterKey === "paid-all";
 
       let query = supabase
         .from("leads")
         .select("id, status, value, source, created_at")
         .eq("organization_id", organization.id)
-        .is("archived_at", null)
-        .or(PAID_FILTER);
+        .is("archived_at", null);
+
+      if (usePaidRestFilter) {
+        query = query.or(PAID_FILTER);
+      }
 
       // Restringe às leads que ENTRARAM no mês selecionado (por data de criação).
       if (period !== "all") {
@@ -65,7 +77,15 @@ export function PaidTrafficCard() {
       const { data: leads, error } = await query;
       if (error) throw error;
 
-      const list = leads ?? [];
+      let list = leads ?? [];
+
+      // When a specific platform is selected (not "all" and not "paid-all"),
+      // apply the in-memory matcher to filter by that platform.
+      if (isPaidFilter(filterKey) && filterKey !== "paid-all") {
+        const matcher = getTrafficMatcher(filterKey);
+        list = list.filter((l) => matcher(l.source));
+      }
+
       const total = list.length;
       const lowerWonKeys = wonKeys.map((k) => k.toLowerCase());
       const keys = lowerWonKeys.length > 0 ? lowerWonKeys : FALLBACK_WON;

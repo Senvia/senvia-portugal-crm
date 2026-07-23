@@ -36,7 +36,7 @@ function maxUsersForOrg(orgData: any): number {
 // (the real failure date) — NOT current_period_end, which can be stale. Within
 // this window the customer sees a warning banner; past it, the plan-expired
 // blocker shows up.
-const GRACE_DAYS = 3;
+const GRACE_DAYS = 4;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -223,20 +223,16 @@ serve(async (req) => {
         // First time we see this org actually paying (active) — stamp now.
         orgUpdates.first_paid_at = firstPaidAt;
       }
-      // Sub healthy again → clear any lingering failure clock (self-heal in case
-      // the webhook's clear was missed).
-      if (isHealthy && orgData?.payment_failed_at) {
-        orgUpdates.payment_failed_at = null;
-      }
+      // Sub healthy again → clear any lingering failure clock ONLY via webhook.
+      // Do NOT clear here: Stripe keeps "active" during retry attempts, which
+      // would reset the grace window and give the customer infinite free access.
       await supabase.from('organizations').update(orgUpdates).eq('id', orgId);
     }
 
-    // Anchor the grace window on the real failure date. If the webhook missed
-    // stamping payment_failed_at, self-heal using the period end (the renewal
-    // date ≈ when the charge failed). Write-once: never overwrite an existing
-    // stamp — doing so would push the block date forward and reintroduce the
-    // very bug we're fixing.
-    let failedAt: string | null = isHealthy ? null : (orgData?.payment_failed_at ?? null);
+    // Always compute overdue state from payment_failed_at if it exists.
+    // Even if Stripe says "active" (during retry attempts), if a payment
+    // failed and the grace window has passed, the customer is blocked.
+    let failedAt: string | null = orgData?.payment_failed_at ?? null;
     if (isOverdue && !failedAt) {
       failedAt = subscriptionEnd ?? new Date().toISOString();
       if (orgId) {

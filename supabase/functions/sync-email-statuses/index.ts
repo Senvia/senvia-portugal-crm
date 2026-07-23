@@ -23,12 +23,19 @@ async function syncOrganization(supabase: any, orgId: string, brevoApiKey: strin
     return { updated: 0, errors: 0 };
   }
 
-  console.log(`Syncing ${pendingEmails.length} emails for org ${orgId}`);
+  // Cap per invocation to avoid edge function timeout — cron will pick up the rest.
+  const BATCH_LIMIT = 50;
+  const batch = pendingEmails.slice(0, BATCH_LIMIT);
+  if (pendingEmails.length > BATCH_LIMIT) {
+    console.log(`Org ${orgId}: ${pendingEmails.length} pending, processing first ${BATCH_LIMIT}`);
+  }
+
+  console.log(`Syncing ${batch.length} emails for org ${orgId}`);
 
   let updated = 0;
   let errors = 0;
 
-  for (const email of pendingEmails) {
+  for (const email of batch) {
     try {
       const brevoRes = await fetch(
         `https://api.brevo.com/v3/smtp/statistics/events?messageId=${email.brevo_message_id}&limit=50`,
@@ -37,6 +44,7 @@ async function syncOrganization(supabase: any, orgId: string, brevoApiKey: strin
             "api-key": brevoApiKey,
             "Accept": "application/json",
           },
+          signal: AbortSignal.timeout(15000),
         }
       );
 
@@ -100,7 +108,7 @@ async function syncOrganization(supabase: any, orgId: string, brevoApiKey: strin
         }
       }
 
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 100));
     } catch (err) {
       console.error(`Error processing email ${email.id}:`, err);
       errors++;
@@ -113,6 +121,17 @@ async function syncOrganization(supabase: any, orgId: string, brevoApiKey: strin
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (cronSecret) {
+    const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+    if (provided !== cronSecret) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   try {

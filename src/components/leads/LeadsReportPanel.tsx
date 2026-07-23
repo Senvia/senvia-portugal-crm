@@ -1,37 +1,45 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Users, Target, XCircle } from "lucide-react";
-import { useLeadReporting, type ReportPeriod } from "@/hooks/useLeadReporting";
-
-const PERIOD_LABELS: Record<ReportPeriod, string> = {
-  week: 'Esta semana',
-  month: 'Este mês',
-  quarter: 'Este trimestre',
-  all: 'Todo o período',
-};
+import { TrendingUp, Users, Target, XCircle, MousePointerClick } from "lucide-react";
+import { useLeadReporting } from "@/hooks/useLeadReporting";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { TRAFFIC_FILTER_OPTIONS, type TrafficFilterKey } from "@/lib/paid-traffic";
+import type { DateRange } from "react-day-picker";
 
 export function LeadsReportPanel() {
-  const [period, setPeriod] = useState<ReportPeriod>('month');
-  const report = useLeadReporting(period);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const { filterKey, setFilter } = usePaidTrafficFilter();
+  const report = useLeadReporting(dateRange, filterKey);
 
   return (
     <div className="space-y-4">
-      {/* Period filter */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-semibold">Relatório de Leads</h2>
-        <Select value={period} onValueChange={(v) => setPeriod(v as ReportPeriod)}>
-          <SelectTrigger className="w-[160px] h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(PERIOD_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={filterKey} onValueChange={(v) => setFilter(v as TrafficFilterKey)}>
+            <SelectTrigger className="w-[170px] h-9 gap-1.5">
+              <MousePointerClick className="h-4 w-4 shrink-0 text-primary" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TRAFFIC_FILTER_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Período"
+            className="h-9"
+          />
+        </div>
       </div>
 
       {/* Summary cards */}

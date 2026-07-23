@@ -3,85 +3,36 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessagingChannels } from '@/hooks/useMessagingChannels';
+import { isActivityText } from '@/lib/activity-detection';
+import type {
+  InboxConversation,
+  InboxAttachment,
+  InboxMessage,
+  OutgoingAttachment,
+  PresencePeer,
+  SendMessageVars,
+  ContactMatch,
+  InboxLabel,
+  CannedResponse,
+  AutoReplyConfig,
+  ScheduledMessage,
+  CrmRecordDetail,
+} from './inbox-types';
 
-export interface InboxConversation {
-  id: number;
-  // Other Chatwoot conversations of the SAME contact, merged into this row.
-  alt_ids: number[];
-  contact_id: number | null;
-  contact_name: string;
-  contact_phone: string | null;
-  // Identity for channels without a phone number (Instagram / Messenger / email).
-  contact_email: string | null;
-  contact_identifier: string | null;
-  contact_thumbnail: string | null;
-  last_message: string | null;
-  // Direction/state of the last message — shows ✓/✓✓ before the preview for a
-  // message WE sent, WhatsApp-style (never shown for an incoming last message).
-  last_outgoing: boolean;
-  last_status: string | null;
-  // Email: subject line from Chatwoot additional_attributes.mail_subject
-  email_subject: string | null;
-  unread_count: number;
-  status: string;
-  channel: string | null;
-  // Chatwoot inbox id — which connected account/number this conversation belongs
-  // to. Used to route the outbound reply through the right WhatsApp instance.
-  inbox_id: number | null;
-  updated_at: number | null;
-  // Set when the LAST message is from the customer (they're waiting on us).
-  waiting_since: number | null;
-  labels: string[];
-  assigned_id: string | null;
-  assigned_name: string | null;
-  // Manual CRM link (overrides the phone-based auto-match).
-  crm_kind: 'lead' | 'client' | null;
-  crm_id: string | null;
-  crm_name: string | null;
-}
-
-export interface InboxAttachment {
-  id?: number;
-  file_type: string;
-  data_url: string | null;
-  thumb_url: string | null;
-  file_size: number | null;
-  extension: string | null;
-}
-
-export interface InboxMessage {
-  id: number;
-  content: string;
-  outgoing: boolean;
-  is_activity: boolean;
-  // Private note: agent-only, never sent to the customer's WhatsApp.
-  is_private?: boolean;
-  created_at: string | number | null;
-  sender_name: string | null;
-  // Delivery status of outgoing messages: sent | delivered | read | failed.
-  status: string | null;
-  // WhatsApp message id — used to quote/reply.
-  wa_id: string | null;
-  // When this message is a reply, the Chatwoot id of the quoted message.
-  reply_to_id?: number | null;
-  attachments: InboxAttachment[];
-  // Email-specific fields (null for non-email channels)
-  content_type: string | null;
-  email_from: string | null;
-  email_to: string | null;
-  email_cc: string | null;
-  email_subject: string | null;
-  // Full HTML body from content_attributes.email.html_content.full
-  email_html_body: string | null;
-}
-
-// Attachment payload for sending (base64, no data: prefix).
-export interface OutgoingAttachment {
-  data: string;
-  mimetype: string;
-  filename: string;
-  kind: 'image' | 'video' | 'document' | 'voice';
-}
+export type {
+  InboxConversation,
+  InboxAttachment,
+  InboxMessage,
+  OutgoingAttachment,
+  PresencePeer,
+  SendMessageVars,
+  ContactMatch,
+  InboxLabel,
+  CannedResponse,
+  AutoReplyConfig,
+  ScheduledMessage,
+  CrmRecordDetail,
+};
 
 async function invokeInbox<T>(organizationId: string, payload: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('chatwoot-inbox', {
@@ -125,7 +76,10 @@ function rollbackConversations(
 
 // Append a realtime-delivered message to every message cache that contains the
 // given conversation (the open thread, whatever its merged altIds). Deduped by
-// id so the later reconciling refetch never double-counts. Key shape:
+// id so the later reconciling refetch never double-counts; a repeated id UPDATES
+// the cached entry in place (message_updated re-broadcasts once Chatwoot finishes
+// downloading media — without the replace, the bubble kept the attachment-less
+// first version until the next full refetch). Key shape:
 // ['inbox-messages', orgId, conversationId, altIdsCsv].
 function appendMessageToCaches(
   queryClient: QueryClient,
@@ -143,7 +97,12 @@ function appendMessageToCaches(
     if (!belongs) continue;
     queryClient.setQueryData<InboxMessage[]>(cache.queryKey, (old) => {
       if (!old) return old; // thread not loaded yet — let the refetch populate it
-      if (old.some((m) => m.id === msg.id)) return old;
+      const idx = old.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        const next = old.slice();
+        next[idx] = msg;
+        return next;
+      }
       return [...old, msg];
     });
   }
@@ -153,10 +112,23 @@ function appendMessageToCaches(
 // lands in Chatwoot (incoming, or our own send mirrored back). Refetching on the
 // event makes receiving near-instant; polling becomes a relaxed fallback.
 // Returns `live` so callers can stretch their poll intervals while connected.
-export function useInboxRealtime(): boolean {
+// `getOpenConversationId` (ref-backed getter, optional) tells the handler which
+// thread the agent is LOOKING at, so an incoming message there doesn't flash the
+// unread badge / trigger the beep only to be auto-marked-read a moment later.
+export function useInboxRealtime(getOpenConversationId?: () => number | null): boolean {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const [live, setLive] = useState(false);
+  // Track when we actually RECEIVED a broadcast. If the WebSocket is connected
+  // (live=true) but no broadcast arrives in ~45s, the webhook is likely not
+  // registered or broadcasts are going to the wrong project. In that case
+  // callers should use faster polling instead of the relaxed "live" intervals.
+  const lastBroadcastRef = useRef<number>(0);
+  const connectedAtRef = useRef<number>(0);
+  const [, forceTick] = useState(0);
+  // Keep the latest getter without resubscribing the channel.
+  const getOpenRef = useRef(getOpenConversationId);
+  getOpenRef.current = getOpenConversationId;
 
   useEffect(() => {
     if (!organization?.id) return;
@@ -171,6 +143,7 @@ export function useInboxRealtime(): boolean {
     const channel = supabase
       .channel(`inbox-${orgId}`, { config: { private: true } })
       .on('broadcast', { event: 'message' }, ({ payload }) => {
+        lastBroadcastRef.current = Date.now();
         // Instant append: the webhook now ships the message itself, so the OPEN
         // thread updates immediately without waiting for the Chatwoot refetch.
         // The debounced invalidate below still runs to reconcile (attachments,
@@ -178,7 +151,13 @@ export function useInboxRealtime(): boolean {
         const convId = Number(payload?.conversation_id);
         const msg = payload?.message as InboxMessage | undefined;
         if (convId && msg && msg.id != null) {
-          appendMessageToCaches(queryClient, orgId, convId, msg);
+          // Skip system/activity messages entirely: they're not real messages
+          // ("O sistema reabriu a conversa...", "Conversa resolvida...") and must
+          // never appear in the thread OR overwrite the list preview. Some
+          // Chatwoot instances emit these with is_activity=false, so check the
+          // content too.
+          const isActivity = msg.is_activity || isActivityText(msg.content);
+          if (!isActivity) appendMessageToCaches(queryClient, orgId, convId, msg);
           // Patch the conversation ROW immediately too. Without this, the bubble
           // appears in the open thread in <1s but the LIST (preview, unread badge,
           // reordering, sound) only catches up 2-3s later on the debounced
@@ -188,17 +167,38 @@ export function useInboxRealtime(): boolean {
             : msg.created_at
               ? Math.floor(new Date(msg.created_at).getTime() / 1000)
               : Math.floor(Date.now() / 1000);
+          // An incoming message on the thread the agent is READING (tab visible)
+          // is auto-marked-read a moment later — bumping unread here would just
+          // flash the badge and fire the beep for a chat they're looking at.
+          // openId can be the merged row's primary OR one of its alts, so the
+          // row-level check below matches both.
+          const openId = document.visibilityState === 'visible'
+            ? getOpenRef.current?.() ?? null
+            : null;
           patchConversations(
             queryClient, orgId,
             (c) => c.id === convId || (c.alt_ids ?? []).includes(convId),
-            (c) => ({
-              last_message: msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message),
-              last_outgoing: msg.outgoing,
-              last_status: msg.status ?? null,
-              updated_at: createdAtSec,
-              unread_count: msg.outgoing ? c.unread_count : c.unread_count + 1,
-              waiting_since: msg.outgoing ? null : createdAtSec,
-            }),
+            (c) => {
+              const isOpenRow = openId != null
+                && (c.id === openId || (c.alt_ids ?? []).includes(openId));
+              // Treat as activity if flagged OR if the content itself is a system
+              // message (some Chatwoot instances emit these as type 0/1, so the
+              // is_activity flag is false even though the text is "O sistema
+              // reabriu a conversa..." — without this content check the preview
+              // gets overwritten with the system line instead of staying on the
+              // last real customer message).
+              const isActivity = msg.is_activity || isActivityText(msg.content);
+              return {
+                last_message: isActivity
+                  ? c.last_message
+                  : (msg.content || (msg.attachments?.length ? '📎 Anexo' : c.last_message)),
+                last_outgoing: isActivity ? c.last_outgoing : msg.outgoing,
+                last_status: isActivity ? c.last_status : (msg.status ?? null),
+                updated_at: createdAtSec,
+                unread_count: isActivity || msg.outgoing || isOpenRow ? c.unread_count : c.unread_count + 1,
+                waiting_since: isActivity ? c.waiting_since : (msg.outgoing ? null : createdAtSec),
+              };
+            },
           );
         }
         // AI task suggestions land a few seconds after the message — refresh
@@ -218,8 +218,16 @@ export function useInboxRealtime(): boolean {
       })
       .subscribe((status) => setLive((prev) => {
         const next = status === 'SUBSCRIBED';
+        if (next && !prev) connectedAtRef.current = Date.now();
         return prev === next ? prev : next;
       }));
+
+    // Periodic staleness check: if the WebSocket is connected but no broadcast
+    // has arrived in 45s, force a re-render so callers re-evaluate their poll
+    // intervals (they'll switch from the relaxed "live" cadence to a faster one).
+    const staleTicker = window.setInterval(() => {
+      forceTick((n) => n + 1);
+    }, 15000);
 
     // Wake on tab focus. Desktop browsers throttle background tabs — timers slow
     // down and the realtime socket is often suspended/dropped — so a PC left on
@@ -243,20 +251,21 @@ export function useInboxRealtime(): boolean {
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       if (taskTimer !== null) window.clearTimeout(taskTimer);
+      window.clearInterval(staleTicker);
       document.removeEventListener('visibilitychange', onVisible);
       setLive(false);
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);
 
-  return live;
-}
+  // Realtime is "fresh" only if we've received a broadcast recently. If the
+  // WebSocket is up but silent for >45s (since connect or since last broadcast),
+  // the webhook is likely not firing — callers should poll faster instead of
+  // trusting the dead "live" flag.
+  const since = lastBroadcastRef.current || connectedAtRef.current;
+  const stale = live && since > 0 && (Date.now() - since > 45000);
 
-export interface PresencePeer {
-  userId: string;
-  name: string;
-  conversationId: number | null;
-  typing: boolean;
+  return live && !stale;
 }
 
 // Shared agent presence across the org: who currently has which conversation
@@ -368,6 +377,29 @@ function saveCachedConversations(orgId: string, list: InboxConversation[]) {
   }
 }
 
+async function fetchLastRealMessage(orgId: string, conversationId: number): Promise<string | null> {
+  try {
+    const res = await invokeInbox<{ messages: InboxMessage[] }>(orgId, {
+      action: 'get_messages',
+      conversation_ids: [conversationId],
+    });
+    const msgs = (res.messages || []).filter((m) => !m.is_activity && !m.is_private);
+    const last = msgs[msgs.length - 1];
+    if (!last) return null;
+    if (last.content) return last.content;
+    if (last.attachments?.length) {
+      const ft = last.attachments[0].file_type;
+      if (ft === 'image') return '📷 Foto';
+      if (ft === 'audio') return '🎵 Áudio';
+      if (ft === 'video') return '🎬 Vídeo';
+      return '📎 Anexo';
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Shared fetch+merge for the conversations cache. BOTH the inbox list and the
 // sidebar unread badge use this exact queryFn under the same key, so the badge's
 // poll can never overwrite the list's merged cache with a raw fetch (the bug
@@ -377,9 +409,6 @@ async function fetchConversationsMerged(
   queryClient: QueryClient,
   orgId: string,
 ): Promise<InboxConversation[]> {
-  // Fall back to the localStorage cache when the in-memory cache is cold (page
-  // reload): lets the refresh run in the cheaper 'fresh' mode (2 pages) AND keeps
-  // the older history rows the merge below preserves.
   const previous =
     queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]) ??
     loadCachedConversations(orgId);
@@ -389,22 +418,28 @@ async function fetchConversationsMerged(
     mode,
   });
   const fresh = res.conversations || [];
+  const activityConvs = fresh.filter((c) => isActivityText(c.last_message));
+  if (activityConvs.length > 0 && activityConvs.length <= 10) {
+    const fixes = await Promise.all(
+      activityConvs.map(async (c) => {
+        const real = await fetchLastRealMessage(orgId, c.id);
+        return { id: c.id, last_message: real };
+      }),
+    );
+    for (const fix of fixes) {
+      if (fix.last_message) {
+        const idx = fresh.findIndex((c) => c.id === fix.id);
+        if (idx >= 0) fresh[idx] = { ...fresh[idx], last_message: fix.last_message };
+      }
+    }
+  }
   if (mode === 'full' || !previous) { saveCachedConversations(orgId, fresh); return fresh; }
-  // Merge: fresh rows win; keep cached rows for contacts not in the fresh window
-  // (no recent activity — their state can only have changed through our own
-  // optimistic patches, which are already in `previous`).
   const seenKeys = new Set(fresh.map(convKey));
   const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
-  // Cap older rows to prevent unbounded cache growth when the org has hundreds of
-  // historical conversations. 200 is well above what fits in the viewport but
-  // avoids accumulating the entire Chatwoot history in browser memory.
   const MAX_CACHED = 200;
   const rest = previous
     .filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id))
     .slice(0, Math.max(0, MAX_CACHED - fresh.length));
-  // Reuse previous object references for conversations whose visible data has not
-  // changed (updated_at + unread_count are the two fields that drive re-renders).
-  // This lets ConversationRow.memo bail out on every poll when nothing actually changed.
   const prevById = new Map(previous.map((c) => [c.id, c]));
   const stabilize = (c: InboxConversation): InboxConversation => {
     const p = prevById.get(c.id);
@@ -413,7 +448,9 @@ async function fetchConversationsMerged(
         && p.assigned_id === c.assigned_id) return p;
     return c;
   };
-  return [...fresh.map(stabilize), ...rest];
+  const merged = [...fresh.map(stabilize), ...rest];
+  saveCachedConversations(orgId, merged);
+  return merged;
 }
 
 // List the open conversations for the org's Chatwoot account.
@@ -427,20 +464,11 @@ export function useInboxConversations(enabled = true, live = false) {
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    // Paint the last known inbox INSTANTLY from localStorage instead of a blank
-    // "A carregar conversas..." skeleton on every page load/reload. initialDataUpdatedAt: 0
-    // marks it as infinitely stale, so React Query still kicks off the real
-    // (fresh-mode) fetch in the background to reconcile — this is display-only.
     initialData: () => (organization?.id ? loadCachedConversations(organization.id) : undefined),
-    initialDataUpdatedAt: 0,
-    // Gentle fallback polling (realtime is the primary freshness path). 5s was too
-    // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
-    refetchInterval: !enabled ? false : live ? 15000 : 6000,
-    // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
-    // realtime invalidate already keep this fresh. Without this, every focus
-    // change re-ran the read-modify-write merge and re-rendered the whole inbox.
-    staleTime: 10000,
-    refetchOnWindowFocus: false,
+    initialDataUpdatedAt: () => 0,
+    staleTime: 0,
+    refetchInterval: !enabled ? false : live ? false : 5000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -503,8 +531,8 @@ export function useInboxUnreadTotal(enabled = true) {
     // stops the badge poll from clobbering the list cache.
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled ? 20000 : false,
-    staleTime: 10000,
+    refetchInterval: enabled ? 30000 : false,
+    staleTime: 5000,
     refetchOnWindowFocus: false,
   });
   return { total: countUnreadConversations(query.data || [], emailInboxIds), isLoading: query.isLoading };
@@ -514,39 +542,41 @@ export function useInboxUnreadTotal(enabled = true) {
 // Passing altIds merges the threads of the contact's other conversations into one.
 export function useInboxMessages(conversationId: number | null, altIds: number[] = [], live = false) {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
   const allIds = conversationId ? [conversationId, ...altIds] : [];
+  const queryKey = ['inbox-messages', organization?.id, conversationId, altIds.join(',')];
   return useQuery({
-    queryKey: ['inbox-messages', organization?.id, conversationId, altIds.join(',')],
+    queryKey,
     queryFn: async (): Promise<InboxMessage[]> => {
       if (!organization?.id || !conversationId) return [];
       const res = await invokeInbox<{ messages: InboxMessage[] }>(organization.id, {
         action: 'get_messages',
         conversation_ids: allIds,
       });
-      return res.messages || [];
+      const fetched = res.messages || [];
+      // Merge-grace: keep very recent cache-only messages (landed via the
+      // realtime broadcast append) that this GET doesn't include yet — under
+      // load, Chatwoot's read API can lag its own webhook by a few seconds.
+      // Without this, the refetch "un-appends" a message that was already on
+      // screen (it flickers away and comes back on a later poll).
+      const cached = queryClient.getQueryData<InboxMessage[]>(queryKey);
+      if (!cached?.length) return fetched;
+      const fetchedIds = new Set(fetched.map((m) => m.id));
+      const now = Date.now();
+      const grace = cached.filter((m) => {
+        if (fetchedIds.has(m.id)) return false;
+        const ms = typeof m.created_at === 'number'
+          ? m.created_at * 1000
+          : m.created_at ? Date.parse(m.created_at) : 0;
+        return ms > 0 && now - ms < 20_000;
+      });
+      return grace.length > 0 ? [...fetched, ...grace] : fetched;
     },
     enabled: !!organization?.id && !!conversationId,
-    // Realtime is the primary freshness path; polling is the safety net. When
-    // realtime is connected (live) a relaxed 20s net is plenty; when it isn't,
-    // poll every 8s so incoming messages don't lag tens of seconds. We do NOT
-    // suspend on global useIsMutating: the messages cache has no optimistic
-    // patches to protect (sends use local `pending` state, not the cache), and a
-    // background mark_read mutation was needlessly freezing the messages poll —
-    // that was why incoming messages took so long to appear after a read receipt.
-    // Open-thread poll is the safety net behind realtime. Offline (no realtime)
-    // it's kept tight (3s) so an incoming message still lands fast. Connected
-    // (live), the append+invalidate on the broadcast event already does the real
-    // work — a poll every 6s was pure rework (each tick re-fetches EVERY merged
-    // alt conversation from Chatwoot, for every open thread, forever), so
-    // it's stretched to a relaxed safety net instead of a redundant fast poll.
-    refetchInterval: !conversationId ? false : live ? 25000 : 3000,
-    // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
-    // the poll already keep the open thread fresh.
+    staleTime: 0,
+    refetchInterval: false,
     refetchOnWindowFocus: false,
-    // 5 minutes: long enough to switch back to a conversation without a reload,
-    // short enough not to accumulate message data across many conversations and
-    // exhaust browser memory (original 30min caused OOM in dev).
-    gcTime: 5 * 60 * 1000,
+    gcTime: 0,
   });
 }
 
@@ -688,6 +718,11 @@ export function useDownloadAttachment() {
   };
 }
 
+// Sends are DISPATCHED strictly in order. Two quick sends used to fire two
+// parallel edge-function calls, and Evolution could deliver them to WhatsApp
+// inverted — the queue guarantees the first message leaves before the second.
+let sendChain: Promise<unknown> = Promise.resolve();
+
 // Send a reply on a conversation (text, attachment, and/or quoting a message).
 export function useSendInboxMessage() {
   const { organization } = useAuth();
@@ -700,26 +735,26 @@ export function useSendInboxMessage() {
       inboxId,
       attachment,
       quotedId,
-    }: {
-      conversationId: number;
-      content: string;
-      contactPhone?: string | null;
-      inboxId?: number | null;
-      attachment?: OutgoingAttachment;
-      quotedId?: string | null;
-    }) => {
+    }: SendMessageVars) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox<{ ok: boolean }>(organization.id, {
-        action: 'send_message',
-        conversation_id: conversationId,
-        content,
-        // Passing the phone lets the edge function skip a Chatwoot lookup.
-        contact_phone: contactPhone ?? undefined,
-        // Routes the reply through the right WhatsApp instance (multi-account).
-        inbox_id: inboxId ?? undefined,
-        attachment,
-        quoted_id: quotedId ?? undefined,
-      });
+      const orgId = organization.id;
+      const dispatch = () =>
+        invokeInbox<{ ok: boolean }>(orgId, {
+          action: 'send_message',
+          conversation_id: conversationId,
+          content,
+          // Passing the phone lets the edge function skip a Chatwoot lookup.
+          contact_phone: contactPhone ?? undefined,
+          // Routes the reply through the right WhatsApp instance (multi-account).
+          inbox_id: inboxId ?? undefined,
+          attachment,
+          quoted_id: quotedId ?? undefined,
+        });
+      // Chain behind the previous send whether it succeeded or failed — one
+      // failed message must not block the rest of the queue.
+      const run = sendChain.then(dispatch, dispatch);
+      sendChain = run.then(() => undefined, () => undefined);
+      return run;
     },
     // Optimistic: the conversation row updates instantly (preview + jumps to the
     // top); the thread bubble is handled by the page's `pending` mechanism.
@@ -738,7 +773,14 @@ export function useSendInboxMessage() {
     }),
     onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id, variables.conversationId] });
+      // Reconcile AFTER the mirror has had time to land in Chatwoot. An instant
+      // refetch here was a wasted round trip on every send (the mirror is never
+      // there yet) and piled load on an already-slow Chatwoot during bursts —
+      // the realtime broadcast covers the instant path; this is the safety net.
+      const orgId = organization?.id;
+      window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId, variables.conversationId] });
+      }, 2500);
     },
   });
 }
@@ -813,15 +855,6 @@ export function useToggleConversationStatus() {
 }
 
 // ---- CRM linking: find the lead/client behind a WhatsApp phone number ----
-
-export interface ContactMatch {
-  kind: 'lead' | 'client';
-  id: string;
-  name: string;
-  // Present on results from useSearchCrmRecords — needed to start a WhatsApp
-  // conversation with the picked lead/client.
-  phone?: string | null;
-}
 
 // Matches a CRM lead/client behind a conversation. By the last 9 digits of the
 // phone (PT national number, so "+351 910...", "351910...", "910..." all match)
@@ -907,12 +940,6 @@ export function useRenameContact() {
   });
 }
 
-export interface InboxLabel {
-  id: number;
-  title: string;
-  color: string | null;
-}
-
 export function useInboxLabels() {
   const { organization } = useAuth();
   return useQuery({
@@ -980,11 +1007,6 @@ export function useSetConversationLabels() {
   });
 }
 
-export interface CannedResponse {
-  id: number;
-  content: string;
-}
-
 // Quick replies shared by the whole organization (stored as Chatwoot canned
 // responses — no extra table needed). Use {{nome}} for the contact's first name.
 export function useCannedResponses() {
@@ -1035,10 +1057,15 @@ export function useDeleteCannedResponse() {
 // send_message already does) — omit only for caixas with no restriction.
 export function useDeleteMessage() {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ waId, phone, inboxId }: { waId: string; phone: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox(organization.id, { action: 'delete_message', wa_id: waId, phone, inbox_id: inboxId ?? undefined });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
 }
@@ -1101,13 +1128,6 @@ export function useSuggestReply() {
 
 // ---- Out-of-hours auto-reply config (stored in messaging_channels.metadata) ----
 
-export interface AutoReplyConfig {
-  enabled: boolean;
-  start: string; // "09:00"
-  end: string;   // "18:00"
-  message: string;
-}
-
 const DEFAULT_AUTO_REPLY: AutoReplyConfig = {
   enabled: false,
   start: '09:00',
@@ -1158,15 +1178,7 @@ export function useSaveAutoReplyConfig() {
 
 // ---- Scheduled messages (write now, send later via pg_cron) ----
 
-export interface ScheduledMessage {
-  id: string;
-  phone: string;
-  content: string;
-  send_at: string;
-  status: string;
-}
-
-// The table is newer than the auto-generated Supabase types — hence the cast.
+// The table is newer than the auto-generated Supabase types - hence the cast.
 const scheduledTable = () => (supabase as any).from('scheduled_messages');
 
 export function useScheduledMessages(phone: string | null | undefined) {
@@ -1177,12 +1189,21 @@ export function useScheduledMessages(phone: string | null | undefined) {
     queryFn: async (): Promise<ScheduledMessage[]> => {
       if (!organization?.id || suffix.length < 9) return [];
       const { data, error } = await scheduledTable()
-        .select('id, phone, content, send_at, status')
+        .select('id, phone, content, send_at, status, attachment_name')
         .eq('organization_id', organization.id)
         .eq('status', 'pending')
         .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
         .order('send_at', { ascending: true });
-      if (error) return []; // degrade gracefully (e.g. column not yet migrated)
+      if (error) {
+        // Degrade gracefully if attachment_name isn't migrated yet: retry without it.
+        const { data: d2 } = await scheduledTable()
+          .select('id, phone, content, send_at, status')
+          .eq('organization_id', organization.id)
+          .eq('status', 'pending')
+          .eq('phone_key', suffix)
+          .order('send_at', { ascending: true });
+        return ((d2 ?? []) as ScheduledMessage[]).map((m) => ({ ...m, attachment_name: null }));
+      }
       return (data ?? []) as ScheduledMessage[];
     },
     enabled: !!organization?.id && suffix.length >= 9,
@@ -1195,14 +1216,20 @@ export function useScheduleMessage() {
   const { organization, user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ phone, content, sendAt }: { phone: string; content: string; sendAt: Date }) => {
+    mutationFn: async ({ phone, content, sendAt, attachment }: {
+      phone: string; content: string; sendAt: Date; attachment?: OutgoingAttachment;
+    }) => {
       if (!organization?.id || !user?.id) throw new Error('Organização não encontrada');
+      // Only reference the attachment columns when there IS one, so text-only
+      // scheduling keeps working even if the attachment migration hasn't run yet
+      // (referencing an unknown column fails the whole insert in Postgres).
       const { error } = await scheduledTable().insert({
         organization_id: organization.id,
         created_by: user.id,
         phone: phone.replace(/\D/g, ''),
         content,
         send_at: sendAt.toISOString(),
+        ...(attachment ? { attachment, attachment_name: attachment.filename } : {}),
       });
       if (error) throw error;
     },
@@ -1227,17 +1254,6 @@ export function useCancelScheduledMessage() {
 }
 
 // ---- CRM record behind the conversation (side panel) ----
-
-export interface CrmRecordDetail {
-  kind: 'lead' | 'client';
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  status: string | null;
-  value: number | null;
-  notes: string | null;
-}
 
 export function useCrmRecord(match: ContactMatch | null | undefined) {
   return useQuery({

@@ -8,6 +8,8 @@ import { useProposals } from "@/hooks/useProposals";
 import { useTeamMembers, type TeamMember } from "@/hooks/useTeam";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { getTrafficMatcher } from "@/lib/paid-traffic";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +60,7 @@ export function TeamPerformanceTable() {
   }, [pipelineStages]);
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
+  const { filterKey } = usePaidTrafficFilter();
   const cardRef = useRef<HTMLDivElement>(null);
 
   const orgId = organization?.id;
@@ -129,12 +132,12 @@ export function TeamPerformanceTable() {
   }, [memberIds, monthEndMs, monthStartMs, scopedProposals]);
 
   const { data: leadsData, isLoading: leadsLoading } = useQuery({
-    queryKey: ["team-perf-leads", orgId, monthStart, monthEnd, memberIds],
+    queryKey: ["team-perf-leads", orgId, monthStart, monthEnd, memberIds, filterKey],
     queryFn: async () => {
       if (!orgId || memberIds.length === 0) return [];
       const { data, error } = await supabase
         .from("leads")
-        .select("assigned_to, status")
+        .select("assigned_to, status, source")
         .eq("organization_id", orgId)
         .is("archived_at", null)
         .gte("created_at", monthStart)
@@ -145,6 +148,12 @@ export function TeamPerformanceTable() {
     },
     enabled: !!orgId && memberIds.length > 0,
   });
+
+  const trafficFilteredLeads = useMemo(() => {
+    if (filterKey === "all") return leadsData || [];
+    const matcher = getTrafficMatcher(filterKey);
+    return (leadsData || []).filter((lead) => matcher(lead.source));
+  }, [leadsData, filterKey]);
 
   const { data: salesData, isLoading: salesLoading } = useQuery({
     queryKey: ["team-perf-sales", orgId, monthStart, monthEnd, memberIds],
@@ -167,7 +176,7 @@ export function TeamPerformanceTable() {
 
   const rows: MemberPerformance[] = useMemo(() => {
     return filteredMembers.map((member) => {
-      const memberLeadRows = (leadsData || []).filter((lead) => lead.assigned_to === member.user_id);
+      const memberLeadRows = trafficFilteredLeads.filter((lead) => lead.assigned_to === member.user_id);
       const memberLeads = memberLeadRows.length;
       const wonLeads = memberLeadRows.filter((lead) => lead.status && convertedStatusKeys.has(lead.status)).length;
       const memberProposals = proposalsInPeriod.filter((proposal) => proposal.created_by === member.user_id);
@@ -192,7 +201,7 @@ export function TeamPerformanceTable() {
         conversionRate,
       };
     });
-  }, [filteredMembers, leadsData, proposalsInPeriod, salesData, user?.id, convertedStatusKeys]);
+  }, [filteredMembers, trafficFilteredLeads, proposalsInPeriod, salesData, user?.id, convertedStatusKeys]);
 
   const totals = useMemo(() => {
     return rows.reduce(

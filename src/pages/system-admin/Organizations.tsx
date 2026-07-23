@@ -22,6 +22,8 @@ interface OrgWithMeta {
   created_at: string | null;
   member_count: number;
   created_by_email: string | null;
+  first_paid_at: string | null;
+  payment_failed_at: string | null;
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -41,7 +43,7 @@ export default function SystemAdminOrganizations() {
     queryFn: async (): Promise<OrgWithMeta[]> => {
       const { data: orgs, error } = await supabase
         .from("organizations")
-        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at")
+        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, first_paid_at, payment_failed_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
 

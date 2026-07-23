@@ -42,7 +42,7 @@ export interface AdminContact {
   email?: string;
 }
 
-type Filter = "all" | "paying" | "trial" | "overdue" | "expired" | "exempt";
+type Filter = "all" | "paying" | "trial" | "overdue" | "blocked" | "expired" | "exempt";
 type SortKey = "name" | "activity" | "mrr" | "members" | "created";
 
 interface OrganizationsTableProps {
@@ -59,6 +59,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "paying", label: "Pagantes" },
   { key: "trial", label: "Trial" },
   { key: "overdue", label: "Em atraso" },
+  { key: "blocked", label: "Bloqueados" },
   { key: "expired", label: "Expirados" },
   { key: "exempt", label: "Isentos" },
 ];
@@ -66,6 +67,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 function matchesFilter(status: OrgBucket, filter: Filter): boolean {
   if (filter === "all") return true;
   if (filter === "expired") return status === "expired" || status === "canceled";
+  if (filter === "overdue") return status === "overdue" || status === "blocked";
   return status === filter;
 }
 
@@ -76,6 +78,7 @@ function contextLine(status: OrgBucket, o: Organization, now: Date): string {
     case "paying": return o.first_paid_at ? `cliente há ${since(o.first_paid_at, now)}` : "ativo";
     case "trial": return o.trial_ends_at ? `faltam ${until(o.trial_ends_at, now)}` : "trial";
     case "overdue": return "pagamento falhou";
+    case "blocked": return o.payment_failed_at ? `bloqueado há ${since(o.payment_failed_at, now)}` : "bloqueado";
     case "expired": return o.trial_ends_at ? `expirou há ${since(o.trial_ends_at, now)}` : "expirado";
     case "canceled": return "cancelado";
     case "exempt": return "conta interna";

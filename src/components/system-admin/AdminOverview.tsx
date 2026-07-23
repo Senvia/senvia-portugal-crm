@@ -12,7 +12,7 @@ const INK = "hsl(220 9% 46%)";
 const GRID = "hsl(220 13% 91%)";
 const PRIMARY = "hsl(217 91% 60%)";
 
-const ORDER: OrgBucket[] = ["paying", "trial", "overdue", "expired", "canceled", "exempt"];
+const ORDER: OrgBucket[] = ["paying", "trial", "overdue", "blocked", "expired", "canceled", "exempt"];
 
 export interface OverviewOrg {
   id: string;
@@ -46,7 +46,7 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
   }, [stripeStats]);
 
   const { buckets, trialExpiringSoon, monthly } = useMemo(() => {
-    const counts: Record<OrgBucket, number> = { paying: 0, trial: 0, overdue: 0, expired: 0, canceled: 0, exempt: 0 };
+    const counts: Record<OrgBucket, number> = { paying: 0, trial: 0, overdue: 0, blocked: 0, expired: 0, canceled: 0, exempt: 0 };
     let trialExpiringSoon = 0;
 
     for (const o of organizations) {
@@ -77,9 +77,9 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
 
   const mrr = stripeStats?.mrr ?? 0;
   const arr = mrr * 12;
-  const activeTotal = buckets.paying + buckets.trial + buckets.overdue;
+  const activeTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.blocked;
   const payingPct = activeTotal > 0 ? Math.round((buckets.paying / activeTotal) * 100) : 0;
-  const barTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.expired + buckets.canceled;
+  const barTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.blocked + buckets.expired + buckets.canceled;
 
   return (
     <div className="space-y-6">

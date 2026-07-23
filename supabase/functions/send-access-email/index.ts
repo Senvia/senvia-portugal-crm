@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 interface SendAccessEmailRequest {
   organizationId: string;
   recipientEmail: string;
@@ -211,7 +217,7 @@ serve(async (req) => {
 </html>`;
 
     // Send via Brevo API
-    const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+    const brevoRes = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
         'accept': 'application/json',

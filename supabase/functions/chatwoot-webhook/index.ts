@@ -58,13 +58,17 @@ async function broadcastInboxMessage(
     file_size: a?.file_size ?? null,
     extension: a?.extension ?? null,
   }));
-  // Chatwoot webhook message_type is a STRING here (incoming/outgoing/...).
+  // Chatwoot webhook message_type is a STRING here (incoming/outgoing/...),
+  // but activity messages can arrive as the numeric code '2' as well as the
+  // word 'activity' depending on the payload source. Match both so system
+  // messages ("O sistema reabriu a conversa...", "Conversa resolvida...") are
+  // correctly flagged and never overwrite the list preview with an activity line.
   const mt = String(event.message_type ?? '');
   const broadcastMessage = {
     id: event.id,
     content: String(event.content ?? ''),
     outgoing: mt === 'outgoing' || mt === 'template',
-    is_activity: mt === 'activity',
+    is_activity: mt === 'activity' || mt === '2',
     is_private: event.private === true,
     created_at: event.created_at ?? null,
     sender_name: event.sender?.name ?? null,

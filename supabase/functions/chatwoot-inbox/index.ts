@@ -20,8 +20,17 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   corsHeaders, json, getConfig, authOrgMember, getOrgChatwoot, chatwootFetch,
-  instanceNameForOrg, evolutionFetch,
+  instanceNameForOrg, evolutionFetch, fetchWithTimeout,
 } from '../_shared/multicanal.ts';
+import { isActivityContent } from '../_shared/activity-detection.ts';
+
+// Decode a base64 payload (no data: prefix) into bytes for a multipart upload.
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
 
 interface NormalizedConversation {
   id: number;
@@ -117,14 +126,17 @@ function cleanGroupPreview(content: string): string {
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
-  // Prefer the last REAL message for the preview (skip Chatwoot activity/system
-  // messages, message_type 2). But the list window often contains ONLY the last
-  // message — if that is an activity, filtering would leave nothing, so fall
-  // back to the actual last message and let the client translate it to pt-PT.
-  const realMessages = messages.filter((m: any) => m?.message_type !== 2 && !isEvoStatusContent(m?.content ?? null));
-  const last = realMessages[realMessages.length - 1] ?? messages[messages.length - 1];
-  // Media messages have no text — show the type label ("🎵 Áudio") in the
-  // list preview instead of an empty dash, WhatsApp-style.
+  // Filter out activity/system messages (message_type=2) AND any message whose
+  // content matches an activity pattern (some localized Chatwoot instances emit
+  // these as type 0/1 instead of 2). This guarantees the list preview is always
+  // the last REAL customer/agent message, never a system line like "O sistema
+  // reabriu a conversa...".
+  const realMessages = messages.filter((m: any) =>
+    m?.message_type !== 2 &&
+    !isEvoStatusContent(m?.content ?? null) &&
+    !isActivityContent(m?.content ?? null),
+  );
+  const last = realMessages[realMessages.length - 1] ?? null;
   let lastMessage = prettyContent(last?.content ?? null);
   if (!lastMessage && Array.isArray(last?.attachments) && last.attachments.length > 0) {
     const ft = String(last.attachments[0]?.file_type ?? 'file');
@@ -341,6 +353,32 @@ const MEDIA_TYPES: Record<string, string> = {
 // Org -> Chatwoot creds cache (60s TTL): saves a DB round trip on EVERY call.
 // Auth still runs per request — this only caches the org's account id + token.
 const orgCwCache = new Map<string, { v: { accountId: number; token: string }; at: number }>();
+
+// Per-org channel-routing cache (30s TTL): channel type + Evolution instance per
+// Chatwoot inbox. send_message paid TWO messaging_channels queries on EVERY
+// send (the email-channel check + the instance lookup) — pure latency between
+// hitting Enter and the message reaching WhatsApp. Channel wiring changes
+// rarely; update_groups invalidates explicitly, the TTL bounds the rest.
+type ChannelRoute = {
+  channel_type: string | null;
+  evolution_instance: string | null;
+  chatwoot_inbox_id: number | null;
+};
+const routesCache = new Map<string, { v: ChannelRoute[]; at: number }>();
+async function getChannelRoutes(
+  admin: ReturnType<typeof createClient>,
+  organizationId: string,
+): Promise<ChannelRoute[]> {
+  const hit = routesCache.get(organizationId);
+  if (hit && Date.now() - hit.at < 30_000) return hit.v;
+  const { data } = await admin
+    .from('messaging_channels')
+    .select('channel_type, evolution_instance, chatwoot_inbox_id')
+    .eq('organization_id', organizationId);
+  const v = (data ?? []) as ChannelRoute[];
+  routesCache.set(organizationId, { v, at: Date.now() });
+  return v;
+}
 async function getOrgChatwootCached(
   admin: ReturnType<typeof createClient>,
   organizationId: string,
@@ -408,13 +446,10 @@ Deno.serve(async (req) => {
     const getInstance = async (): Promise<string> => {
       if (_instance) return _instance;
       let inst = instanceNameForOrg(organization_id);
-      const { data: chs } = await auth.admin
-        .from('messaging_channels')
-        .select('evolution_instance, chatwoot_inbox_id')
-        .eq('organization_id', organization_id);
-      if (chs && chs.length) {
+      const chs = await getChannelRoutes(auth.admin, organization_id);
+      if (chs.length) {
         const inboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
-        const match = inboxId != null ? chs.find((c: any) => c.chatwoot_inbox_id === inboxId) : null;
+        const match = inboxId != null ? chs.find((c) => c.chatwoot_inbox_id === inboxId) : null;
         if (match?.evolution_instance) inst = match.evolution_instance;
         else if (chs.length === 1 && chs[0].evolution_instance) inst = chs[0].evolution_instance;
       }
@@ -626,24 +661,49 @@ Deno.serve(async (req) => {
       // Detect by matching the inbox_id against email channels in the org.
       const sendInboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
       if (sendInboxId) {
-        const { data: emailCh } = await auth.admin
-          .from('messaging_channels')
-          .select('channel_type')
-          .eq('organization_id', organization_id)
-          .eq('chatwoot_inbox_id', sendInboxId)
-          .eq('channel_type', 'email')
-          .maybeSingle();
-        if (emailCh) {
-          // Email: let Chatwoot handle SMTP delivery.
-          if (attachment) return json({ error: 'Anexos em email ainda não suportados nesta versão' }, 422);
-          const emailRes = await chatwootFetch(
+        const routes = await getChannelRoutes(auth.admin, organization_id);
+        const emailCh = routes.find(
+          (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'email',
+        );
+        // Instagram channels also route through Chatwoot (Meta API), not Evolution.
+        const igCh = routes.find(
+          (c) => c.chatwoot_inbox_id === sendInboxId && c.channel_type === 'instagram',
+        );
+        if (emailCh || igCh) {
+          // Email/Instagram WITH an attachment: Chatwoot's create-message endpoint accepts
+          // multipart/form-data with attachments[] file parts. chatwootFetch sends
+          // JSON, so build the request directly here (fetch must set the multipart
+          // boundary itself — never set Content-Type manually for FormData).
+          if (attachment) {
+            const form = new FormData();
+            if (text) form.append('content', text);
+            form.append('message_type', 'outgoing');
+            form.append('private', 'false');
+            form.append(
+              'attachments[]',
+              new Blob([base64ToBytes(attachment.data)], { type: attachment.mimetype || 'application/octet-stream' }),
+              attachment.filename || 'anexo',
+            );
+            const attRes = await fetchWithTimeout(
+              `${cfg.chatwootUrl}${base}/conversations/${conversation_id}/messages`,
+              { method: 'POST', headers: { api_access_token: cw.token }, body: form },
+              30000,
+            );
+            if (!attRes.ok) {
+              console.error('[chatwoot-inbox] email/instagram attachment send failed:', attRes.status, await attRes.text());
+              return json({ error: 'Falha ao enviar o anexo' }, 502);
+            }
+            return json({ ok: true });
+          }
+          // Email/Instagram text-only: let Chatwoot handle delivery (SMTP or Meta API).
+          const textRes = await chatwootFetch(
             cfg, cw.token,
             `${base}/conversations/${conversation_id}/messages`, 'POST',
             { content: text, message_type: 'outgoing', private: false },
           );
-          if (!emailRes.ok) {
-            console.error('[chatwoot-inbox] email send failed:', emailRes.status, await emailRes.text());
-            return json({ error: 'Falha ao enviar email' }, 502);
+          if (!textRes.ok) {
+            console.error('[chatwoot-inbox] email/instagram send failed:', textRes.status, await textRes.text());
+            return json({ error: 'Falha ao enviar a mensagem' }, 502);
           }
           return json({ ok: true });
         }
@@ -977,9 +1037,7 @@ Deno.serve(async (req) => {
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${await getInstance()}`, 'DELETE', {
-        id: waId,
-        remoteJid: `${phone}@s.whatsapp.net`,
-        fromMe: true,
+        key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
       });
       if (!res.ok) {
         console.error('Evolution delete failed:', res.status, await res.text());
@@ -1001,8 +1059,10 @@ Deno.serve(async (req) => {
       const emoji = String(body.emoji ?? '');
       if (!waId || !phone || !emoji) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/message/sendReaction/${await getInstance()}`, 'POST', {
-        key: { remoteJid: `${phone}@s.whatsapp.net`, fromMe: !!body.from_me, id: waId },
-        reaction: emoji,
+        reaction: {
+          key: { remoteJid: `${phone}@s.whatsapp.net`, fromMe: !!body.from_me, id: waId },
+          text: emoji,
+        },
       });
       if (!res.ok) {
         console.error('Evolution reaction failed:', res.status, await res.text());
@@ -1023,8 +1083,10 @@ Deno.serve(async (req) => {
       if (!waId || !phone || !text) return json({ error: 'Dados em falta' }, 400);
       const res = await evolutionFetch(cfg, `/chat/updateMessage/${await getInstance()}`, 'POST', {
         number: phone,
-        key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
-        text,
+        edit: {
+          key: { id: waId, remoteJid: `${phone}@s.whatsapp.net`, fromMe: true },
+          message: { conversation: text },
+        },
       });
       if (!res.ok) {
         console.error('Evolution edit failed:', res.status, await res.text());
@@ -1151,6 +1213,7 @@ Deno.serve(async (req) => {
       // groupsInboxes just changed — drop cached visibility for this org so the
       // toggle takes effect on the very next list_conversations, not up to VISIBILITY_TTL_MS later.
       for (const k of [...visCache.keys()]) if (k.startsWith(`${organization_id}:`)) visCache.delete(k);
+      routesCache.delete(organization_id);
 
       // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
       if (ch.evolution_instance) {

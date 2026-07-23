@@ -20,10 +20,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret) {
-    const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
-    if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
+  if (!cronSecret) {
+    return json({ error: 'CRON_SECRET não configurado' }, 500);
   }
+  const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
+  if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
 
   try {
     const cfg = getConfig();
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
 
     const { data: due, error } = await admin
       .from('scheduled_messages')
-      .select('id, organization_id, phone, content')
+      .select('id, organization_id, phone, content, attachment')
       .eq('status', 'pending')
       .lte('send_at', new Date().toISOString())
       .order('send_at', { ascending: true })
@@ -78,11 +79,30 @@ Deno.serve(async (req) => {
       }
 
       const number = normalizePhone(String(msg.phone));
+      // Optional inline attachment (base64), same media path as the live inbox send.
+      const att = (msg as { attachment?: { data?: string; mimetype?: string; filename?: string; kind?: string } | null }).attachment;
+      const caption = String(msg.content ?? '');
       try {
-        const res = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
-          number,
-          text: msg.content,
-        });
+        let res: Response;
+        if (att?.data && att.kind === 'voice') {
+          res = await evolutionFetch(cfg, `/message/sendWhatsAppAudio/${instance}`, 'POST', {
+            number, audio: att.data, encoding: true,
+          });
+        } else if (att?.data) {
+          const mediatype = att.kind === 'image' ? 'image' : att.kind === 'video' ? 'video' : 'document';
+          res = await evolutionFetch(cfg, `/message/sendMedia/${instance}`, 'POST', {
+            number,
+            mediatype,
+            mimetype: att.mimetype || 'application/octet-stream',
+            media: att.data,
+            fileName: att.filename || 'anexo',
+            ...(caption ? { caption } : {}),
+          });
+        } else {
+          res = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+            number, text: caption,
+          });
+        }
         if (res.ok) {
           await admin
             .from('scheduled_messages')

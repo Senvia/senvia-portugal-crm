@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { useLeads } from "@/hooks/useLeads";
+import { useFilteredLeads } from "@/hooks/useFilteredLeads";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
 import { useSales } from "@/hooks/useSales";
 import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -22,13 +23,31 @@ export interface WidgetData {
 }
 
 export function useWidgetData(widgetType: WidgetType): WidgetData {
-  const { data: leads = [], isLoading: leadsLoading } = useLeads();
-  const { data: sales = [], isLoading: salesLoading } = useSales();
-  const { data: proposals = [], isLoading: proposalsLoading } = useProposals();
+  const { data: leads = [], isLoading: leadsLoading } = useFilteredLeads();
+  const { filterKey } = usePaidTrafficFilter();
+  const { data: allSales = [], isLoading: salesLoading } = useSales();
+  const { data: allProposals = [], isLoading: proposalsLoading } = useProposals();
   const { data: events = [], isLoading: eventsLoading } = useCalendarEvents();
-  const { data: clients = [], isLoading: clientsLoading } = useClients();
+  const { data: allClients = [], isLoading: clientsLoading } = useClients();
   const ecommerceStats = useEcommerceStats();
   const { data: stages = [] } = usePipelineStages();
+
+  const filteredLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
+
+  const sales = useMemo(() => {
+    if (filterKey === "all") return allSales;
+    return allSales.filter((s) => s.lead_id != null && filteredLeadIds.has(s.lead_id));
+  }, [allSales, filterKey, filteredLeadIds]);
+
+  const proposals = useMemo(() => {
+    if (filterKey === "all") return allProposals;
+    return allProposals.filter((p) => p.lead_id != null && filteredLeadIds.has(p.lead_id));
+  }, [allProposals, filterKey, filteredLeadIds]);
+
+  const clients = useMemo(() => {
+    if (filterKey === "all") return allClients;
+    return allClients.filter((c) => c.lead_id != null && filteredLeadIds.has(c.lead_id));
+  }, [allClients, filterKey, filteredLeadIds]);
 
   return useMemo(() => {
     const today = startOfDay(new Date());
@@ -416,5 +435,5 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
           isLoading: false,
         };
     }
-  }, [widgetType, leads, sales, proposals, events, clients, ecommerceStats, leadsLoading, salesLoading, proposalsLoading, eventsLoading, clientsLoading]);
+  }, [widgetType, leads, sales, proposals, events, clients, ecommerceStats, leadsLoading, salesLoading, proposalsLoading, eventsLoading, clientsLoading, filterKey]);
 }

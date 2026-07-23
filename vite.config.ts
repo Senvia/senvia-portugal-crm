@@ -9,7 +9,7 @@ import { componentTagger } from "lovable-tagger";
 // kill-switch in /public.
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: true,
     port: 8080,
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

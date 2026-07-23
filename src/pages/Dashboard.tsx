@@ -21,6 +21,10 @@ import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
 import { PaidTrafficCard } from "@/components/dashboard/PaidTrafficCard";
 import { OttoDashboardSetup } from "@/components/otto/OttoDashboardSetup";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { TRAFFIC_FILTER_OPTIONS, type TrafficFilterKey } from "@/lib/paid-traffic";
+import { MousePointerClick } from "lucide-react";
 
 export default function Dashboard() {
   useRealtimeSubscription([
@@ -35,11 +39,12 @@ export default function Dashboard() {
   const calendarModuleEnabled = modules.calendar !== false;
   const salesSettings = (organization?.sales_settings as any) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
-  const { 
-    visibleWidgets, 
-    isLoading, 
-    niche, 
+  const {
+    visibleWidgets,
+    isLoading,
+    niche,
   } = useDashboardWidgets();
+  const { filterKey, setFilter } = usePaidTrafficFilter();
 
   const greeting = profile?.full_name 
     ? `Olá, ${profile.full_name.split(' ')[0]}` 
@@ -47,24 +52,39 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <PageHeader
-        icon={LayoutDashboard}
-        title={greeting}
-        subtitle={`Bem-vindo ao painel de controlo da ${organization?.name || 'sua organização'}.`}
-        actions={
-          <>
-            <Link
-              to="/novidades"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span className="hidden sm:inline">O que há de novo</span>
-            </Link>
-            <DashboardPeriodFilter />
-            <TeamMemberFilter className="w-[150px] sm:w-[180px]" />
-          </>
-        }
-      />
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pb-2 pt-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-b">
+        <PageHeader
+          icon={LayoutDashboard}
+          title={greeting}
+          subtitle={`Bem-vindo ao painel de controlo da ${organization?.name || 'sua organização'}.`}
+          actions={
+            <>
+              <Link
+                to="/novidades"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">O que há de novo</span>
+              </Link>
+              <DashboardPeriodFilter />
+              <Select value={filterKey} onValueChange={(v) => setFilter(v as TrafficFilterKey)}>
+                <SelectTrigger className="h-9 w-[160px] sm:w-[180px] gap-1.5">
+                  <MousePointerClick className="h-4 w-4 shrink-0 text-primary" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRAFFIC_FILTER_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <TeamMemberFilter className="w-[150px] sm:w-[180px]" />
+            </>
+          }
+        />
+      </div>
 
       <OttoDashboardSetup />
 

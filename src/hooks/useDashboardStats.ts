@@ -1,13 +1,27 @@
 import { useMemo } from "react";
-import { useLeads } from "./useLeads";
+import { useFilteredLeads } from "./useFilteredLeads";
+import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
 import { useProposals } from "./useProposals";
 import { useSales } from "./useSales";
 import { startOfDay, subDays, format, parseISO, isWithinInterval } from "date-fns";
 
 export function useDashboardStats() {
-  const { data: leads = [], isLoading: leadsLoading } = useLeads();
-  const { data: proposals = [], isLoading: proposalsLoading } = useProposals();
-  const { data: sales = [], isLoading: salesLoading } = useSales();
+  const { data: leads = [], isLoading: leadsLoading } = useFilteredLeads();
+  const { filterKey } = usePaidTrafficFilter();
+  const { data: allProposals = [], isLoading: proposalsLoading } = useProposals();
+  const { data: allSales = [], isLoading: salesLoading } = useSales();
+
+  const filteredLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
+
+  const sales = useMemo(() => {
+    if (filterKey === "all") return allSales;
+    return allSales.filter((s) => s.lead_id != null && filteredLeadIds.has(s.lead_id));
+  }, [allSales, filterKey, filteredLeadIds]);
+
+  const proposals = useMemo(() => {
+    if (filterKey === "all") return allProposals;
+    return allProposals.filter((p) => p.lead_id != null && filteredLeadIds.has(p.lead_id));
+  }, [allProposals, filterKey, filteredLeadIds]);
 
   const stats = useMemo(() => {
     const today = startOfDay(new Date());
@@ -174,7 +188,7 @@ export function useDashboardStats() {
         bySource: socialBySource,
       },
     };
-  }, [leads, proposals, sales]);
+  }, [leads, proposals, sales, filterKey]);
 
   return {
     ...stats,

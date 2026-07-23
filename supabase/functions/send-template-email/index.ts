@@ -9,6 +9,12 @@ const corsHeaders = {
 const BATCH_SIZE = 10;
 const APP_BASE_URL = "https://app.senvia.pt";
 
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 interface Recipient {
   email: string;
   name: string;
@@ -436,7 +442,7 @@ serve(async (req: Request): Promise<Response> => {
           brevoPayload.tags = [settingsData.tag];
         }
 
-        const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+        const brevoResponse = await fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
             "accept": "application/json",

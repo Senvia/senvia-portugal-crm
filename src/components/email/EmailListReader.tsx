@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon,
   Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare,
@@ -198,6 +199,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     try { return parseInt(localStorage.getItem('email-list-width-v1') || '', 10) || DEFAULT_LIST_W; } catch { return DEFAULT_LIST_W; }
   });
   const listWidthRef = useRef(listWidth);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { listWidthRef.current = listWidth; }, [listWidth]);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const onResizeStart = (e: React.MouseEvent) => {
@@ -264,8 +266,15 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     }
     return order.map((key) => byThread.get(key)!);
   }, [messages, searching]);
+  const ROW_HEIGHT = 76;
+  const rowVirtualizer = useVirtualizer({
+    count: threadGroups.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  });
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
-  const { data: opened } = useEmailMessage(messageId);
+  const { data: opened, isLoading: loadingMessage } = useEmailMessage(messageId);
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
@@ -282,10 +291,17 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
     });
   }, []);
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-  const batchArchive = () => { [...selectedIds].forEach((id) => actions.archive(id)); clearSelection(); };
-  const batchTrash = () => { [...selectedIds].forEach((id) => actions.trash(id)); clearSelection(); };
-  const batchSpam = () => { [...selectedIds].forEach((id) => actions.spam(id)); clearSelection(); };
-  const batchSetRead = (read: boolean) => { [...selectedIds].forEach((id) => actions.setRead(id, read)); clearSelection(); };
+  const runBatch = async (fn: (id: string) => Promise<unknown>, label: string) => {
+    const ids = [...selectedIds];
+    clearSelection();
+    const results = await Promise.allSettled(ids.map((id) => fn(id)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) toast({ title: `${failed} de ${ids.length} operações falharam (${label})`, variant: 'destructive' });
+  };
+  const batchArchive = () => { runBatch(actions.archive, 'arquivar'); };
+  const batchTrash = () => { runBatch(actions.trash, 'apagar'); };
+  const batchSpam = () => { runBatch(actions.spam, 'spam'); };
+  const batchSetRead = (read: boolean) => { runBatch((id) => actions.setRead(id, read), 'marcar'); };
   const markAllRead = () => { if (folderId) actions.markFolderRead(folderId); };
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -594,26 +610,35 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               </div>
             )
           ) : (
-            threadGroups.map((group) => {
-              const m = group[0];
-              const threadCount = group.length;
-              const active = group.some((x) => x.id === messageId);
-              const selected = selectedIds.has(m.id);
-              const who = m.from_name || m.from_address || '(desconhecido)';
-              return (
-                <div
-                  key={m.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setMessageId(m.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && setMessageId(m.id)}
-                  className={cn(
-                    'group flex w-full cursor-pointer items-start border-b text-left transition-colors',
-                    active ? 'bg-accent' : 'hover:bg-accent/50',
-                    !m.seen && !active && 'bg-primary/[0.03]',
-                    selected && 'bg-primary/10',
-                  )}
-                >
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+              {rowVirtualizer.getVirtualItems().map((vItem) => {
+                const group = threadGroups[vItem.index];
+                const m = group[0];
+                const threadCount = group.length;
+                const active = group.some((x) => x.id === messageId);
+                const selected = selectedIds.has(m.id);
+                const who = m.from_name || m.from_address || '(desconhecido)';
+                return (
+                  <div
+                    key={m.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${vItem.start}px)`,
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setMessageId(m.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && setMessageId(m.id)}
+                    className={cn(
+                      'group flex w-full cursor-pointer items-start border-b text-left transition-colors',
+                      active ? 'bg-accent' : 'hover:bg-accent/50',
+                      !m.seen && !active && 'bg-primary/[0.03]',
+                      selected && 'bg-primary/10',
+                    )}
+                  >
                   {/* Checkbox — visible on hover or when any row is selected */}
                   <div
                     className={cn(
@@ -715,16 +740,23 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
             <p className="text-sm">Clica num rascunho para continuar a escrever</p>
           </div>
         ) : !opened ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-              <Mail className="h-8 w-8 text-primary" />
+          messageId && loadingMessage ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin opacity-50" />
+              <span className="text-sm">A abrir email...</span>
             </div>
-            <div>
-              <p className="text-base font-semibold text-foreground">Os teus emails</p>
-              <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
-              <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <Mail className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-foreground">Os teus emails</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
+                <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <>
             <div className="flex items-center gap-1 border-b bg-background px-2 pt-5 pb-2 sm:px-3">
@@ -800,7 +832,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                 </PopoverContent>
               </Popover>
             </div>
-            <div className="flex-1 overflow-y-auto">
+        <div ref={listScrollRef} className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">
               <h1 className="mb-4 text-xl font-semibold leading-snug">{opened.message.subject || '(sem assunto)'}</h1>
               <div className="mb-4 flex items-start gap-3 border-b pb-4">

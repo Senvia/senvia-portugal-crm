@@ -123,6 +123,32 @@ serve(async (req) => {
             await clearTempBillingExempt(supabase, email);
             await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
             await syncStripeAutoLists(supabase, email, orgName, "renewed", plan || null);
+
+            // Sync recurring_value when subscription items change (e.g., seat add/remove)
+            if (plan) {
+              const clientOrgId = await findOrgByEmail(supabase, email);
+              if (clientOrgId) {
+                const recurringTotal = sub.items.data.reduce((sum: number, item: any) => {
+                  if (item.price?.recurring && item.price.unit_amount != null) {
+                    return sum + (item.price.unit_amount / 100) * (item.quantity || 1);
+                  }
+                  return sum;
+                }, 0);
+                if (recurringTotal > 0) {
+                  const { error: syncErr } = await supabase
+                    .from("sales")
+                    .update({ recurring_value: recurringTotal })
+                    .eq("client_org_id", clientOrgId)
+                    .eq("recurring_status", "active")
+                    .eq("organization_id", SENVIA_AGENCY_ORG_ID);
+                  if (syncErr) {
+                    logStep("subscription.updated: recurring_value sync error", { error: syncErr.message });
+                  } else {
+                    logStep("subscription.updated: recurring_value synced", { clientOrgId, recurringTotal });
+                  }
+                }
+              }
+            }
           }
         }
         break;
@@ -173,139 +199,168 @@ serve(async (req) => {
   });
 });
 
-// --- Invoice Paid → Recurring Commission ---
+// --- Invoice Paid → Recurring Commission + Sale Update ---
 
 async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.Invoice) {
   try {
     const email = invoice.customer_email;
     if (!email) { logStep("invoice.paid: no email"); return; }
 
-    const amount = (invoice.amount_paid || 0) / 100; // cents to euros
+    const amount = (invoice.amount_paid || 0) / 100;
     if (amount <= 0) { logStep("invoice.paid: zero amount"); return; }
 
-    // Determine plan from subscription
+    // Determine plan + compute real recurring total from subscription items
     let plan: string | null = null;
+    let recurringTotal = 0;
+    let subscriptionRenewalDate: string | null = null;
     const subId = invoice.subscription as string | null;
     if (subId) {
-      const sub = await stripe.subscriptions.retrieve(subId);
-      const productId = sub.items.data[0]?.price?.product as string;
-      plan = PRODUCT_TO_PLAN[productId] || null;
+      try {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        const productId = sub.items.data[0]?.price?.product as string;
+        plan = PRODUCT_TO_PLAN[productId] || null;
+
+        recurringTotal = sub.items.data.reduce((sum: number, item: any) => {
+          if (item.price?.recurring && item.price.unit_amount != null) {
+            return sum + (item.price.unit_amount / 100) * (item.quantity || 1);
+          }
+          return sum;
+        }, 0);
+
+        await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
+        if (sub.current_period_end) {
+          subscriptionRenewalDate = new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
+        }
+      } catch (e) {
+        logStep("invoice.paid: failed to fetch sub details", { error: (e as Error).message });
+      }
     }
 
     // Find the client organization by email
     const clientOrgId = await findOrgByEmail(supabase, email);
     if (!clientOrgId) { logStep("invoice.paid: no org found for email", { email }); return; }
 
-    // Renewals: refresh current_period_end + clear any temp billing_exempt
-    // workaround. (markFirstPaid is a no-op for orgs that already have it set,
-    // so it's safe to call here too — covers the rare case of a webhook gap
-    // where checkout.session.completed didn't reach us.)
     await markFirstPaid(supabase, email);
-    const subForPeriod = invoice.subscription as string | null;
-    let subscriptionRenewalDate: string | null = null;
-    if (subForPeriod) {
-      try {
-        const subDetails = await stripe.subscriptions.retrieve(subForPeriod);
-        await setCurrentPeriodEnd(supabase, email, subDetails.current_period_end);
-        if (subDetails.current_period_end) {
-          subscriptionRenewalDate = new Date(subDetails.current_period_end * 1000).toISOString().split("T")[0];
-        }
-      } catch (e) {
-        logStep("invoice.paid: failed to fetch sub for current_period_end", { error: (e as Error).message });
-      }
-    }
     await clearTempBillingExempt(supabase, email);
 
-    // Check for duplicate (same stripe invoice ID)
-    const stripeInvoiceId = invoice.id;
-    const { data: existing } = await supabase
-      .from("stripe_commission_records")
-      .select("id")
-      .eq("stripe_invoice_id", stripeInvoiceId)
-      .limit(1);
-    
-    if (existing && existing.length > 0) {
-      logStep("invoice.paid: commission already recorded", { stripeInvoiceId });
-      return;
-    }
+    // Compute payment date + period end
+    const paidAtUnix = invoice.status_transitions?.paid_at ?? invoice.created;
+    const paymentDate = paidAtUnix
+      ? new Date(paidAtUnix * 1000).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0];
+    const periodEnd = invoice.period_end
+      ? new Date(invoice.period_end * 1000).toISOString().split("T")[0]
+      : null;
 
     // Find sale in Senvia org linked to this client org
     const { data: sales, error: salesErr } = await supabase
       .from("sales")
-      .select("id, created_by, total_value, has_recurring")
+      .select("id, created_by, total_value, has_recurring, status")
       .eq("organization_id", SENVIA_AGENCY_ORG_ID)
       .eq("client_org_id", clientOrgId)
       .in("status", ["in_progress", "fulfilled", "delivered"])
       .limit(1);
 
-    if (salesErr) { logStep("invoice.paid: sales query error", { error: salesErr.message }); return; }
-    if (!sales || sales.length === 0) { logStep("invoice.paid: no linked sale found", { clientOrgId }); return; }
-
-    const sale = sales[0];
-    if (!sale.created_by) { logStep("invoice.paid: sale has no created_by"); return; }
-
-    // Get commission rate for the salesperson
-    const salesSettings = await getOrgSalesSettings(supabase);
-    const globalRate = salesSettings?.commission_percentage || 0;
-
-    const { data: member } = await supabase
-      .from("organization_members")
-      .select("commission_rate")
-      .eq("organization_id", SENVIA_AGENCY_ORG_ID)
-      .eq("user_id", sale.created_by)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
-
-    // Extract period
-    const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000).toISOString().split("T")[0] : null;
-    const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000).toISOString().split("T")[0] : null;
-
-    // Insert commission record (only if rate > 0)
-    if (rate > 0) {
-      const commissionAmount = amount * (rate / 100);
-      const { error: insertErr } = await supabase
-        .from("stripe_commission_records")
-        .insert({
-          organization_id: SENVIA_AGENCY_ORG_ID,
-          sale_id: sale.id,
-          user_id: sale.created_by,
-          client_org_id: clientOrgId,
-          amount,
-          commission_rate: rate,
-          commission_amount: commissionAmount,
-          stripe_invoice_id: stripeInvoiceId,
-          period_start: periodStart,
-          period_end: periodEnd,
-          plan,
-          status: "pending",
-        });
-
-      if (insertErr) {
-        logStep("invoice.paid: commission insert error", { error: insertErr.message });
-      } else {
-        logStep("invoice.paid: commission recorded", {
-          userId: sale.created_by, amount, rate, commissionAmount, plan
-        });
-      }
+    let sale: any = null;
+    if (salesErr) {
+      logStep("invoice.paid: sales query error", { error: salesErr.message });
+    } else if (!sales || sales.length === 0) {
+      logStep("invoice.paid: no linked sale found", { clientOrgId });
     } else {
-      logStep("invoice.paid: no commission rate, skipping commission record", { userId: sale.created_by });
+      sale = sales[0];
+      // Update sale immediately — always, even if no salesperson assigned.
+      // This guarantees recurring_status flips to 'active' and next_renewal_date
+      // is set before any commission/payment logic that could fail.
+      const updatePayload: Record<string, any> = {
+        recurring_status: "active",
+        next_renewal_date: subscriptionRenewalDate || periodEnd,
+        last_renewal_date: paymentDate,
+      };
+      if (recurringTotal > 0) updatePayload.recurring_value = recurringTotal;
+      if (sale.status === "pending") updatePayload.status = "in_progress";
+
+      const { error: saleUpdateErr } = await supabase
+        .from("sales")
+        .update(updatePayload)
+        .eq("id", sale.id);
+
+      if (saleUpdateErr) {
+        logStep("invoice.paid: sale update error", { error: saleUpdateErr.message });
+      } else {
+        logStep("invoice.paid: sale updated to active", { saleId: sale.id, recurringTotal, plan });
+      }
     }
 
-    // Create sale_payments record so it appears in Finance.
-    // Use the actual payment date (when the invoice was paid), NOT the billing
-    // period start — otherwise the payment shows up in the wrong month.
-    const paidAtUnix = invoice.status_transitions?.paid_at ?? invoice.created;
-    const paymentDate = paidAtUnix
-      ? new Date(paidAtUnix * 1000).toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0];
+    // --- Commission record (only if sale + salesperson exist) ---
+    if (sale?.created_by) {
+      const stripeInvoiceId = invoice.id;
 
-    // The amount recorded in Finance is the NET actually received (gross minus
-    // Stripe fees): the card processing fee (from the balance transaction) PLUS
-    // the Stripe Billing usage fee (~0,7%, charged separately, approximated).
-    // Commission and the sale value stay on the gross (plan price). Falls back
-    // to gross if the balance transaction is unavailable.
+      const { data: existing } = await supabase
+        .from("stripe_commission_records")
+        .select("id")
+        .eq("stripe_invoice_id", stripeInvoiceId)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        logStep("invoice.paid: commission already recorded — skipping", { stripeInvoiceId });
+      } else {
+        const salesSettings = await getOrgSalesSettings(supabase);
+        const globalRate = salesSettings?.commission_percentage || 0;
+
+        const { data: member } = await supabase
+          .from("organization_members")
+          .select("commission_rate")
+          .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+          .eq("user_id", sale.created_by)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
+
+        const periodStart = invoice.period_start
+          ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
+          : null;
+
+        if (rate > 0) {
+          const commissionAmount = amount * (rate / 100);
+          const { error: insertErr } = await supabase
+            .from("stripe_commission_records")
+            .insert({
+              organization_id: SENVIA_AGENCY_ORG_ID,
+              sale_id: sale.id,
+              user_id: sale.created_by,
+              client_org_id: clientOrgId,
+              amount,
+              commission_rate: rate,
+              commission_amount: commissionAmount,
+              stripe_invoice_id: stripeInvoiceId,
+              period_start,
+              period_end: periodEnd,
+              plan,
+              status: "pending",
+            });
+
+          if (insertErr) {
+            logStep("invoice.paid: commission insert error", { error: insertErr.message });
+          } else {
+            logStep("invoice.paid: commission recorded", {
+              userId: sale.created_by, amount, rate, commissionAmount, plan
+            });
+          }
+        } else {
+          logStep("invoice.paid: no commission rate, skipping commission record", { userId: sale.created_by });
+        }
+      }
+    } else if (sale) {
+      logStep("invoice.paid: sale has no created_by, skipping commission", { saleId: sale.id });
+    }
+
+    // --- Payment record (only if sale found) ---
+    if (!sale) {
+      logStep("invoice.paid: no sale linked, skipping payment record");
+      return;
+    }
+
     const BILLING_FEE_RATE = 0.007;
     const round2 = (n: number) => Math.round(n * 100) / 100;
     let netAmount = amount;
@@ -339,6 +394,7 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       logStep("invoice.paid: could not fetch balance_transaction for net amount", { error: (e as Error).message });
     }
 
+    const stripeInvoiceId = invoice.id;
     const planLabel = plan ? PLAN_LIST_NAMES[plan] || plan : "subscription";
     const feeNote = stripeFee > 0 ? ` · bruto ${amount.toFixed(2)}€, taxa ${stripeFee.toFixed(2)}€` : "";
     const { error: paymentErr } = await supabase
@@ -357,29 +413,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       logStep("invoice.paid: payment insert error", { error: paymentErr.message });
     } else {
       logStep("invoice.paid: payment recorded in sale_payments", { saleId: sale.id, amount });
-    }
-
-    // Update linked sale value to reflect actual Stripe payment
-    const { error: saleUpdateErr } = await supabase
-      .from("sales")
-      .update({
-        total_value: amount,
-        recurring_value: amount,
-        recurring_status: "active",
-        // Next renewal = the subscription's real current period end. The invoice
-        // period can lag a cycle behind, which left the sale flagged "to renew"
-        // right after a successful payment. Fall back to the invoice period only
-        // if the subscription period is unavailable.
-        next_renewal_date: subscriptionRenewalDate || periodEnd,
-        last_renewal_date: paymentDate,
-        ...(sale.status === "pending" ? { status: "in_progress" } : {}),
-      })
-      .eq("id", sale.id);
-
-    if (saleUpdateErr) {
-      logStep("invoice.paid: sale update error", { error: saleUpdateErr.message });
-    } else {
-      logStep("invoice.paid: sale value updated", { saleId: sale.id, amount, plan });
     }
   } catch (err) {
     logStep("invoice.paid: error", { error: (err as Error).message });
