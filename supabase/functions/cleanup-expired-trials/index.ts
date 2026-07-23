@@ -18,17 +18,22 @@ serve(async (req) => {
   }
 
   // Guard: this function PERMANENTLY DELETES data for expired-trial orgs and must
-  // not be publicly invokable. When CRON_SECRET is set, require it (x-cron-secret
-  // header or ?key=). Set CRON_SECRET in Supabase and pass it from the scheduler.
+  // not be publicly invokable. FAILS CLOSED: if CRON_SECRET isn't configured,
+  // the request is rejected rather than silently skipping the check (the
+  // previous `if (cronSecret) {...}` shape meant a forgotten/unset secret left
+  // this endpoint wide open to anyone on the internet).
   {
     const cronSecret = Deno.env.get("CRON_SECRET");
-    if (cronSecret) {
-      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
-      if (provided !== cronSecret) {
-        return new Response(JSON.stringify({ error: "Não autorizado" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    if (!cronSecret) {
+      return new Response(JSON.stringify({ error: "CRON_SECRET não configurado" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+    if (provided !== cronSecret) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
   }
 

@@ -23,6 +23,20 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // SECURITY: this function had no auth check — an anonymous caller could
+    // supply an arbitrary organization_id + record.email and have a real,
+    // org-branded email sent (via send-template-email, invoked below with the
+    // service-role bearer) to any address they chose. This is internal-only:
+    // every legitimate caller (stripe-webhook, trial-inactivity-check,
+    // check-trial-status, and the DB triggers dispatching automations) is a
+    // trusted backend process, never an end user.
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!bearer || bearer !== supabaseServiceKey) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { trigger_type, organization_id, record, old_record }: AutomationEvent = await req.json();
 
     if (!trigger_type || !organization_id || !record) {

@@ -511,13 +511,17 @@ async function handleCustomerLogin(supabase: any, orgId: string, body: any) {
     throw new Error('Customer not found');
   }
 
-  // Simple phone verification (last 4 digits)
-  if (phone && customer.phone) {
-    const last4Input = phone.replace(/\D/g, '').slice(-4);
-    const last4Stored = customer.phone.replace(/\D/g, '').slice(-4);
-    if (last4Input !== last4Stored) {
-      throw new Error('Invalid credentials');
-    }
+  // SECURITY: phone verification MUST be mandatory — the previous
+  // `if (phone && customer.phone)` skipped it entirely whenever the caller
+  // simply omitted `phone` from the request, letting anyone log in as any
+  // customer knowing only their email address.
+  if (!customer.phone) {
+    throw new Error('Phone verification required');
+  }
+  const last4Input = (phone || '').replace(/\D/g, '').slice(-4);
+  const last4Stored = customer.phone.replace(/\D/g, '').slice(-4);
+  if (!last4Input || last4Input !== last4Stored) {
+    throw new Error('Invalid credentials');
   }
 
   return {
@@ -531,6 +535,7 @@ async function handleCustomerLogin(supabase: any, orgId: string, body: any) {
 async function handleGetOrders(supabase: any, orgId: string, params: URLSearchParams) {
   const customerId = params.get('customer_id');
   const email = params.get('email');
+  const phone = params.get('phone');
 
   if (!customerId && !email) {
     throw new Error('Customer ID or email is required');
@@ -541,7 +546,7 @@ async function handleGetOrders(supabase: any, orgId: string, params: URLSearchPa
   if (!customerIdToUse && email) {
     const { data: customer } = await supabase
       .from('customers')
-      .select('id')
+      .select('id, phone')
       .eq('organization_id', orgId)
       .eq('email', email.toLowerCase())
       .single();
@@ -549,6 +554,20 @@ async function handleGetOrders(supabase: any, orgId: string, params: URLSearchPa
     if (!customer) {
       return { orders: [] };
     }
+
+    // SECURITY: looking up orders by a bare email with no proof of ownership
+    // leaked full order history (items, totals, statuses) to anyone who knew
+    // a customer's email. Require the same phone-last-4 check as
+    // customer/login before resolving email -> customer_id.
+    if (!customer.phone) {
+      throw new Error('Phone verification required');
+    }
+    const last4Input = (phone || '').replace(/\D/g, '').slice(-4);
+    const last4Stored = customer.phone.replace(/\D/g, '').slice(-4);
+    if (!last4Input || last4Input !== last4Stored) {
+      throw new Error('Invalid credentials');
+    }
+
     customerIdToUse = customer.id;
   }
 

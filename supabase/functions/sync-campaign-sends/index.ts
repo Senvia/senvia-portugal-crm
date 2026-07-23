@@ -34,6 +34,32 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // SECURITY: this is invoked from the browser (src/hooks/useCampaigns.ts)
+    // with no auth check at all — anyone could force ANY org's Brevo API key
+    // to be used for a stats pull and write to that org's campaign counters.
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: isMember } = await supabase.rpc("is_org_member", {
+      _user_id: user.id,
+      _org_id: organizationId,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get campaign details
     const { data: campaign, error: campaignError } = await supabase
       .from("email_campaigns")

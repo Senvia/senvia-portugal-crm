@@ -136,6 +136,26 @@ Deno.serve(async (req) => {
         );
       }
       sharedOrgId = targetMemberships[0].organization_id;
+
+      // SECURITY: `isAdmin` above only proved the caller is 'admin' role
+      // SOMEWHERE (user_roles is global, not per-org) — a user who is admin of
+      // their OWN org but merely a viewer/salesperson invited into a SECOND
+      // org could otherwise manage/demote/delete members of that second org.
+      // Re-check the caller's actual role in `sharedOrgId` specifically.
+      const { data: callerMembership, error: callerMembershipError } = await supabaseAdmin
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', currentUser.id)
+        .eq('organization_id', sharedOrgId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (callerMembershipError || callerMembership?.role !== 'admin') {
+        return new Response(
+          JSON.stringify({ error: 'Apenas administradores desta organização podem gerir membros' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Prevent admin from modifying themselves for certain actions

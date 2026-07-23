@@ -47,6 +47,25 @@ Deno.serve(async (req) => {
       );
     }
 
+    // SECURITY: this endpoint is intentionally reachable by anonymous visitors
+    // (it fires from the public Login/signup page before any auth exists), so
+    // it can't require a session. Without these checks it was a fully open
+    // proxy for firing arbitrary events — using OUR shared
+    // META_CONVERSIONS_API_TOKEN — at any Meta pixel/event name an attacker
+    // chose (e.g. fabricated high-value "Purchase" events polluting our own ad
+    // analytics/attribution, since the token only actually has permission on
+    // our own pixel). Restrict to the one pixel and event names this
+    // integration legitimately sends; real purchases are reported exclusively
+    // by the separate, server-side meta-capi-purchase function.
+    const ALLOWED_PIXEL_IDS = new Set(['2027821837745963']);
+    const ALLOWED_EVENT_NAMES = new Set(['Lead', 'PageView', 'ViewContent', 'CompleteRegistration']);
+    if (!ALLOWED_PIXEL_IDS.has(body.pixel_id) || !ALLOWED_EVENT_NAMES.has(body.event_name)) {
+      return new Response(
+        JSON.stringify({ error: 'pixel_id/event_name não permitido' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const accessToken = body.access_token || Deno.env.get('META_CONVERSIONS_API_TOKEN');
     if (!accessToken) {
       console.error('No META_CONVERSIONS_API_TOKEN configured');

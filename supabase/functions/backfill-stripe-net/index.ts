@@ -62,18 +62,20 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // Guard: this function rewrites financial records across ALL orgs and must not be
-  // publicly invokable. When CRON_SECRET is set, require it (x-cron-secret header or
-  // ?key=). NOTE: set CRON_SECRET in Supabase and pass it when invoking, otherwise
-  // this stays open (no regression, but no protection either).
+  // publicly invokable. FAILS CLOSED: an unset CRON_SECRET rejects the request
+  // instead of silently leaving this endpoint open to anyone on the internet.
   {
     const cronSecret = Deno.env.get("CRON_SECRET");
-    if (cronSecret) {
-      const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
-      if (provided !== cronSecret) {
-        return new Response(JSON.stringify({ error: "Não autorizado" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    if (!cronSecret) {
+      return new Response(JSON.stringify({ error: "CRON_SECRET não configurado" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+    if (provided !== cronSecret) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
   }
 

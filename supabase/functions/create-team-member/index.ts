@@ -110,15 +110,31 @@ serve(async (req) => {
       }
     }
 
-    // Check if current user is admin of this organization
-    const { data: roleData, error: roleError } = await supabaseAdmin
+    // Check the current user is admin of THIS organization specifically.
+    // user_roles is global (not per-org) — checking it alone would let an
+    // admin of some OTHER org pass this check; organization_members.role for
+    // `organizationId` is the actual per-org authority. super_admin is still
+    // checked globally since it's an intentionally cross-org role.
+    const { data: superRoleData } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', currentUser.id)
-      .in('role', ['admin', 'super_admin']);
+      .eq('role', 'super_admin')
+      .maybeSingle();
 
-    if (roleError || !roleData || roleData.length === 0) {
-      console.error('Error checking role:', roleError);
+    let isAuthorized = !!superRoleData;
+    if (!isAuthorized) {
+      const { data: membership } = await supabaseAdmin
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', currentUser.id)
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .maybeSingle();
+      isAuthorized = membership?.role === 'admin';
+    }
+
+    if (!isAuthorized) {
       return new Response(
         JSON.stringify({ error: 'Apenas administradores podem adicionar membros' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

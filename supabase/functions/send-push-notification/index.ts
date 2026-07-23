@@ -276,6 +276,43 @@ Deno.serve(async (req) => {
       });
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // SECURITY: this function had NO auth check at all — anyone who knew (or
+    // guessed) an organization_id could send arbitrary push content (title/
+    // body/url) to every device of that org, a phishing/spam vector. Trusted
+    // backend callers (chatwoot-webhook, task-reminders, submit-lead,
+    // check-reminders) already send `Authorization: Bearer <service role key>`
+    // — accept that, or a real user JWT that's actually a member of
+    // `organization_id` (the settings page's "test notification" button).
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const isInternalServiceCall = !!token && token === supabaseKey;
+    if (!isInternalServiceCall) {
+      if (!token) {
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: isMember } = await supabase.rpc('is_org_member', {
+        _user_id: user.id,
+        _org_id: organization_id,
+      });
+      if (!isMember) {
+        return new Response(JSON.stringify({ error: 'Sem acesso a esta organização' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
     if (!vapidPrivateKey) {
       console.error('VAPID_PRIVATE_KEY not configured');
@@ -284,10 +321,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let query = supabase
       .from('push_subscriptions')
