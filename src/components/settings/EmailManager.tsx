@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import { useSidebarStore } from '@/stores/useSidebarStore';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -458,14 +459,14 @@ function EmailFullScreenEditor({
 // --- AddEmailModal ---
 
 export function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  if (!open) return null;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-0 z-50 max-w-none w-full h-full rounded-none border-0 p-0 gap-0 translate-x-0 translate-y-0 left-0 top-0">
-        <DialogTitle className="sr-only">Adicionar Caixa de Email</DialogTitle>
-        <DialogDescription className="sr-only">Configurar IMAP/SMTP</DialogDescription>
+    <div className="fixed inset-y-0 right-0 z-50" style={{ left: sidebarCollapsed ? 64 : 256 }}>
+      <div className="h-full w-full overflow-auto bg-background">
         <EmailFullScreenEditor channel={null} onDone={() => onOpenChange(false)} />
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
 
@@ -479,14 +480,14 @@ export function EditEmailModal({
   onOpenChange: (o: boolean) => void;
   members?: { id: string; user_id?: string; full_name: string | null }[];
 }) {
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  if (!open) return null;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-0 z-50 max-w-none w-full h-full rounded-none border-0 p-0 gap-0 translate-x-0 translate-y-0 left-0 top-0">
-        <DialogTitle className="sr-only">{channel.label ?? 'Caixa de Email'}</DialogTitle>
-        <DialogDescription className="sr-only">{channel.metadata?.email_address ?? ''}</DialogDescription>
+    <div className="fixed inset-y-0 right-0 z-50" style={{ left: sidebarCollapsed ? 64 : 256 }}>
+      <div className="h-full w-full overflow-auto bg-background">
         <EmailFullScreenEditor channel={channel} onDone={() => onOpenChange(false)} members={members} />
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
 

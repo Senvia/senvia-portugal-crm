@@ -234,7 +234,10 @@ export function KanbanTabs({
                   <LeadCard
                     lead={lead}
                     upcomingEvent={leadEvents[lead.id]}
-                    onStatusChange={onStatusChange}
+                    onStatusChange={(id, status) => {
+                      onStatusChange(id, status);
+                      setActiveStatus(status);
+                    }}
                     onTemperatureChange={onTemperatureChange}
                     onViewDetails={onViewDetails}
                     onDelete={onDelete}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { rateLimit } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,13 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Rate limit: 60 req/min per IP (Brevo sends bursts during campaigns).
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const rl = rateLimit(`brevo-webhook:${ip}`, 60, 60_000);
+    if (!rl.allowed) {
+      return new Response("Too many requests", { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetAfterMs / 1000)) } });
+    }
+
     // Webhook guard: Brevo posts unauthenticated. When BREVO_WEBHOOK_SECRET is set,
     // require it (via ?key= in the configured webhook URL, or an x-webhook-secret
     // header) so an attacker can't forge delivery/open/bounce/unsubscribe events.

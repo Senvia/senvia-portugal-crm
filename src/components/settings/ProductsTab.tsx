@@ -160,7 +160,8 @@ export function ProductsTab() {
 
       <CreateProductModal 
         open={createModalOpen} 
-        onOpenChange={setCreateModalOpen} 
+        onOpenChange={setCreateModalOpen}
+        onCreated={(product) => setEditingProduct(product)}
       />
 
       {editingProduct && (

@@ -2,6 +2,7 @@
 // pushes a notification to the org's users when a WhatsApp message arrives.
 // Registered automatically per account by chatwoot-inbox (ensureChatwootWebhook).
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { rateLimit } from '../_shared/security.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -207,6 +208,13 @@ function suggestTaskFromMessage(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return ok();
+
+  // Rate limit: 120 req/min per IP (Chatwoot bursts during sync).
+  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const rl = rateLimit(`chatwoot-webhook:${ip}`, 120, 60_000);
+  if (!rl.allowed) {
+    return new Response('Too many requests', { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } });
+  }
 
   try {
     const event = await req.json().catch(() => null);

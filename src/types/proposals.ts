@@ -25,6 +25,17 @@ export interface Product {
   updated_at: string;
 }
 
+export interface ServiceImage {
+  id: string;
+  product_id: string;
+  organization_id: string;
+  url: string;
+  alt_text?: string | null;
+  position: number;
+  is_primary: boolean;
+  created_at: string;
+}
+
 export interface Proposal {
   id: string;
   organization_id: string;

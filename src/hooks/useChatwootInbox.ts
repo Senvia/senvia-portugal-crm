@@ -1188,23 +1188,54 @@ export function useScheduledMessages(phone: string | null | undefined) {
     queryKey: ['inbox-scheduled', organization?.id, suffix],
     queryFn: async (): Promise<ScheduledMessage[]> => {
       if (!organization?.id || suffix.length < 9) return [];
-      const { data, error } = await scheduledTable()
+
+      const orgId = organization.id;
+      // 3-tier fallback: handle DBs where attachment_name and/or phone_key
+      // migrations haven't been applied yet, without spamming 400s in console.
+      const r1 = await scheduledTable()
         .select('id, phone, content, send_at, status, attachment_name')
-        .eq('organization_id', organization.id)
+        .eq('organization_id', orgId)
         .eq('status', 'pending')
-        .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
+        .eq('phone_key', suffix)
         .order('send_at', { ascending: true });
-      if (error) {
-        // Degrade gracefully if attachment_name isn't migrated yet: retry without it.
-        const { data: d2 } = await scheduledTable()
-          .select('id, phone, content, send_at, status')
-          .eq('organization_id', organization.id)
-          .eq('status', 'pending')
-          .eq('phone_key', suffix)
-          .order('send_at', { ascending: true });
-        return ((d2 ?? []) as ScheduledMessage[]).map((m) => ({ ...m, attachment_name: null }));
+      if (!r1.error) {
+        return ((r1.data ?? []) as ScheduledMessage[]).map((m) => ({
+          ...m,
+          attachment_name: (m as any).attachment_name ?? null,
+        }));
       }
-      return (data ?? []) as ScheduledMessage[];
+
+      if (!r1.error) {
+        return ((r1.data ?? []) as ScheduledMessage[]).map((m) => ({
+          ...m,
+          attachment_name: (m as any).attachment_name ?? null,
+        }));
+      }
+
+      // Drop attachment_name if column missing.
+      const r2 = await scheduledTable()
+        .select('id, phone, content, send_at, status')
+        .eq('organization_id', orgId)
+        .eq('status', 'pending')
+        .eq('phone_key', suffix)
+        .order('send_at', { ascending: true });
+      if (!r2.error) {
+        return ((r2.data ?? []) as ScheduledMessage[]).map((m) => ({ ...m, attachment_name: null }));
+      }
+
+      // Fallback B: oldest schema without phone_key column — filter by phone suffix.
+      const r3 = await scheduledTable()
+        .select('id, phone, content, send_at, status')
+        .eq('organization_id', orgId)
+        .eq('status', 'pending')
+        .like('phone', `%${suffix}`)
+        .order('send_at', { ascending: true });
+      if (!r3.error) {
+        return ((r3.data ?? []) as ScheduledMessage[]).map((m) => ({ ...m, attachment_name: null }));
+      }
+
+      console.warn('[useScheduledMessages] all queries failed', { r1: r1.error, r2: r2.error, r3: r3.error });
+      return [];
     },
     enabled: !!organization?.id && suffix.length >= 9,
     retry: false,

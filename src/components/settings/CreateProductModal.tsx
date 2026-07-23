@@ -7,13 +7,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { RefreshCw } from 'lucide-react';
 import { useCreateProduct } from '@/hooks/useProducts';
+import type { Product } from '@/types/proposals';
 
 interface CreateProductModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: (product: Product) => void;
 }
 
-export function CreateProductModal({ open, onOpenChange }: CreateProductModalProps) {
+export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProductModalProps) {
   const createProduct = useCreateProduct();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -36,7 +38,7 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
       commission_value: commissionValue ? parseFloat(commissionValue) : null,
       commission_renewal_value: commissionRenewalValue ? parseFloat(commissionRenewalValue) : null,
     }, {
-      onSuccess: () => {
+      onSuccess: (product) => {
         setName('');
         setDescription('');
         setPrice('');
@@ -44,6 +46,7 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
         setCommissionValue('');
         setCommissionRenewalValue('');
         onOpenChange(false);
+        if (onCreated) onCreated(product);
       },
     });
   };
