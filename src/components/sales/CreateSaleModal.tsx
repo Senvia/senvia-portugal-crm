@@ -1175,8 +1175,8 @@ export function CreateSaleModal({
                   </Card>
                 )}
 
-                {/* Telecom Servicos Section (direct sale without proposal or servicos proposal) */}
-                {isTelecom && (isNewFormat && catalog) && (!proposalId || proposalType === 'servicos') && (
+                {/* Servicos Section (direct sale without proposal or servicos proposal) */}
+                {(isNewFormat && catalog) && (!proposalId || proposalType === 'servicos') && (
                   <Card>
                     <CardContent className="p-4">
                       <ServicosSection
