@@ -1,6 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  PLAN_RANK,
+  MODULE_REQUIRED_RANK,
+  MODULE_REQUIRED_PLAN,
+  DEFAULT_PLAN_FEATURES,
+  isOrgOnTrial,
+  getPlanRank,
+} from '@/lib/plan-config';
 
 type ModuleKey = 'sales' | 'finance' | 'marketing' | 'ecommerce';
 type IntegrationKey = 'whatsapp' | 'invoicing' | 'meta_pixels' | 'stripe';
@@ -22,60 +30,20 @@ interface SubscriptionPlan {
   price_monthly: number;
 }
 
+// Fallback plan construído a partir da fonte de verdade.
 const DEFAULT_PLAN: SubscriptionPlan = {
-  id: 'starter',
-  name: 'Starter',
-  max_users: 5,
-  max_forms: 5,
-  max_inboxes: 2,
-  price_monthly: 49,
+  id: DEFAULT_PLAN_FEATURES.id,
+  name: DEFAULT_PLAN_FEATURES.name,
+  max_users: DEFAULT_PLAN_FEATURES.max_users,
+  max_forms: DEFAULT_PLAN_FEATURES.max_forms,
+  max_inboxes: DEFAULT_PLAN_FEATURES.max_inboxes,
+  price_monthly: DEFAULT_PLAN_FEATURES.price_monthly,
   features: {
-    modules: { sales: true, finance: false, marketing: false, ecommerce: false },
-    integrations: { whatsapp: false, invoicing: false, meta_pixels: true, stripe: false },
-    features: { conversational_forms: false, multi_org: false, push_notifications: false, fidelization_alerts: false },
+    modules: DEFAULT_PLAN_FEATURES.modules,
+    integrations: { ...DEFAULT_PLAN_FEATURES.integrations, whatsapp: false },
+    features: { ...DEFAULT_PLAN_FEATURES.featureFlags, multi_org: DEFAULT_PLAN_FEATURES.featureFlags.multi_org },
   },
 };
-
-// Map module keys to minimum required plan for upsell messaging
-const MODULE_REQUIRED_PLAN: Record<string, string> = {
-  marketing: 'Pro',
-  finance: 'Elite',
-  ecommerce: 'Elite',
-  prospects: 'Elite',
-};
-
-// Plan tier ranking — used as a fallback for module locking when the plan's
-// features.modules map doesn't include a given key (e.g. "prospects" is in
-// MODULE_REQUIRED_PLAN but not in the plan-features modules map).
-const PLAN_RANK: Record<string, number> = {
-  basic: 0,
-  starter: 0,
-  pro: 1,
-  elite: 2,
-};
-
-// Minimum plan rank each gated module needs. Keep aligned with MODULE_REQUIRED_PLAN.
-const MODULE_REQUIRED_RANK: Record<string, number> = {
-  sales: 0,      // Starter+
-  marketing: 1,  // Pro+
-  finance: 2,    // Elite+
-  ecommerce: 2,  // Elite+
-  prospects: 2,  // Elite+
-};
-
-function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean; first_paid_at?: string | null } | null): boolean {
-  if (!org) return false;
-  if ((org as any).billing_exempt) return false;
-  // A customer who has ever paid is NOT on trial — they keep the plan they pay
-  // for, never the trial's full (elite) access, even if trial_ends_at is still
-  // in the future.
-  if ((org as any).first_paid_at) return false;
-  const trialEnd = (org as any).trial_ends_at;
-  if (!trialEnd) return false;
-  return new Date(trialEnd).getTime() > Date.now();
-}
-
-export function useSubscription() {
   const { organization } = useAuth();
 
   // Billing-exempt orgs (demos, internal, partners) get full access regardless

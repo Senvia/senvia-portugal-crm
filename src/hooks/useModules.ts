@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { Json } from '@/integrations/supabase/types';
+import {
+  DEFAULT_MODULES,
+  getPlanRank,
+  isPlanSufficient,
+} from '@/lib/plan-config';
 
 export interface EnabledModules {
   proposals: boolean;
@@ -17,46 +22,6 @@ export interface EnabledModules {
   inbox: boolean;
 }
 
-export const DEFAULT_MODULES: EnabledModules = {
-  proposals: true,
-  calendar: true,
-  sales: true,
-  ecommerce: false,
-  clients: true,
-  marketing: false,
-  finance: false,
-  energy: true,
-  prospects: false,
-  inbox: true,
-};
-
-// Module keys that are restricted by plan tier. Core modules (clients, inbox,
-// calendar, energy, proposals) are always available and NOT listed here.
-const MODULE_REQUIRED_RANK: Record<string, number> = {
-  sales: 0,     // Starter+
-  marketing: 1, // Pro+
-  finance: 2,   // Elite+
-  ecommerce: 2, // Elite+
-  prospects: 2, // Elite+
-};
-
-// Plan tier ranks. Must match subscription_plans.features.modules in the DB.
-const PLAN_RANK: Record<string, number> = {
-  basic: 0,
-  starter: 0,
-  pro: 1,
-  elite: 2,
-};
-
-function isOrgOnTrial(org: any): boolean {
-  if (!org) return false;
-  if (org.billing_exempt) return false;
-  if (org.first_paid_at) return false;
-  const trialEnd = org.trial_ends_at;
-  if (!trialEnd) return false;
-  return new Date(trialEnd).getTime() > Date.now();
-}
-
 export function useModules() {
   const { organization } = useAuth();
   const organizationId = organization?.id;
@@ -65,7 +30,7 @@ export function useModules() {
   const { data: modules, isLoading } = useQuery({
     queryKey: ['modules', organizationId],
     queryFn: async () => {
-      if (!organizationId) return DEFAULT_MODULES;
+      if (!organizationId) return { ...DEFAULT_MODULES } as EnabledModules;
 
       const { data, error } = await supabase
         .from('organizations')
@@ -75,7 +40,7 @@ export function useModules() {
 
       if (error) {
         console.error('Error fetching modules:', error);
-        return DEFAULT_MODULES;
+        return { ...DEFAULT_MODULES } as EnabledModules;
       }
 
       const enabledModules = data?.enabled_modules as Record<string, boolean> | null;
@@ -89,10 +54,9 @@ export function useModules() {
       // Enforce plan restrictions: modules gated by plan tier are force-disabled
       // when the org's plan doesn't reach the required rank. Trial orgs get elite
       // access (full rank).
-      const onTrial = isOrgOnTrial(organization as any);
-      const planRank = onTrial ? 2 : (PLAN_RANK[organization?.plan || 'starter'] ?? 0);
-      for (const [key, requiredRank] of Object.entries(MODULE_REQUIRED_RANK)) {
-        if (planRank < requiredRank && key in merged) {
+      const planRank = getPlanRank(organization as any);
+      for (const key of Object.keys(merged)) {
+        if (!isPlanSufficient(planRank, key)) {
           (merged as any)[key] = false;
         }
       }
