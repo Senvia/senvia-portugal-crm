@@ -30,7 +30,7 @@ const DEFAULT_PLAN: SubscriptionPlan = {
   max_inboxes: 2,
   price_monthly: 49,
   features: {
-    modules: { sales: false, finance: false, marketing: false, ecommerce: false },
+    modules: { sales: true, finance: false, marketing: false, ecommerce: false },
     integrations: { whatsapp: false, invoicing: false, meta_pixels: false, stripe: false },
     features: { conversational_forms: false, multi_org: false, push_notifications: false, fidelization_alerts: false },
   },
@@ -38,9 +38,8 @@ const DEFAULT_PLAN: SubscriptionPlan = {
 
 // Map module keys to minimum required plan for upsell messaging
 const MODULE_REQUIRED_PLAN: Record<string, string> = {
-  sales: 'Pro',
-  finance: 'Elite',
   marketing: 'Pro',
+  finance: 'Elite',
   ecommerce: 'Elite',
   prospects: 'Elite',
 };
@@ -57,11 +56,11 @@ const PLAN_RANK: Record<string, number> = {
 
 // Minimum plan rank each gated module needs. Keep aligned with MODULE_REQUIRED_PLAN.
 const MODULE_REQUIRED_RANK: Record<string, number> = {
-  sales: 1,
-  finance: 2,
-  marketing: 1,
-  ecommerce: 2,
-  prospects: 2,
+  sales: 0,      // Starter+
+  marketing: 1,  // Pro+
+  finance: 2,    // Elite+
+  ecommerce: 2,  // Elite+
+  prospects: 2,  // Elite+
 };
 
 function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean; first_paid_at?: string | null } | null): boolean {

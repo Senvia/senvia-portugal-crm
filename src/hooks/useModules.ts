@@ -17,22 +17,45 @@ export interface EnabledModules {
   inbox: boolean;
 }
 
-// Core modules ship ACTIVE by default; access is gated only by the plan (the
-// padlock from useSubscription.isModuleLocked). The three advanced modules
-// (prospects, marketing, ecommerce) ship HIDDEN by default and are turned on
-// per-org in Definições → Módulos when needed.
 export const DEFAULT_MODULES: EnabledModules = {
   proposals: true,
   calendar: true,
-  sales: true,
+  sales: false,
   ecommerce: false,
   clients: true,
   marketing: false,
-  finance: true,
+  finance: false,
   energy: true,
   prospects: false,
   inbox: true,
 };
+
+// Module keys that are restricted by plan tier. Core modules (clients, inbox,
+// calendar, energy, proposals) are always available and NOT listed here.
+const MODULE_REQUIRED_RANK: Record<string, number> = {
+  sales: 0,     // Starter+
+  marketing: 1, // Pro+
+  finance: 2,   // Elite+
+  ecommerce: 2, // Elite+
+  prospects: 2, // Elite+
+};
+
+// Plan tier ranks. Must match subscription_plans.features.modules in the DB.
+const PLAN_RANK: Record<string, number> = {
+  basic: 0,
+  starter: 0,
+  pro: 1,
+  elite: 2,
+};
+
+function isOrgOnTrial(org: any): boolean {
+  if (!org) return false;
+  if (org.billing_exempt) return false;
+  if (org.first_paid_at) return false;
+  const trialEnd = org.trial_ends_at;
+  if (!trialEnd) return false;
+  return new Date(trialEnd).getTime() > Date.now();
+}
 
 export function useModules() {
   const { organization } = useAuth();
@@ -56,11 +79,25 @@ export function useModules() {
       }
 
       const enabledModules = data?.enabled_modules as Record<string, boolean> | null;
-      
-      return {
+
+      // Merge DB overrides on top of defaults.
+      const merged = {
         ...DEFAULT_MODULES,
         ...(enabledModules || {}),
       } as EnabledModules;
+
+      // Enforce plan restrictions: modules gated by plan tier are force-disabled
+      // when the org's plan doesn't reach the required rank. Trial orgs get elite
+      // access (full rank).
+      const onTrial = isOrgOnTrial(organization as any);
+      const planRank = onTrial ? 2 : (PLAN_RANK[organization?.plan || 'starter'] ?? 0);
+      for (const [key, requiredRank] of Object.entries(MODULE_REQUIRED_RANK)) {
+        if (planRank < requiredRank && key in merged) {
+          (merged as any)[key] = false;
+        }
+      }
+
+      return merged;
     },
     enabled: !!organizationId,
   });
