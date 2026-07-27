@@ -20,11 +20,11 @@ export interface EnabledModules {
 export const DEFAULT_MODULES: EnabledModules = {
   proposals: true,
   calendar: true,
-  sales: false,
+  sales: true,
   ecommerce: false,
   clients: true,
   marketing: false,
-  finance: false,
+  finance: true,
   energy: true,
   prospects: false,
   inbox: true,
