@@ -21,7 +21,8 @@ RETURNS TABLE (
   msg_template_hot text,
   msg_template_warm text,
   msg_template_cold text,
-  ai_response_mode text
+  ai_response_mode text,
+  servicos_products_config jsonb
 )
 LANGUAGE sql
 STABLE
@@ -33,7 +34,7 @@ AS $$
     o.created_at, o.form_settings, o.niche, o.enabled_modules,
     o.logo_url, o.integrations_enabled, o.tax_config, o.sales_settings,
     o.ai_qualification_rules, o.msg_template_hot, o.msg_template_warm,
-    o.msg_template_cold, o.ai_response_mode
+    o.msg_template_cold, o.ai_response_mode, o.servicos_products_config
   FROM public.organizations o
   WHERE o.id = _org_id
   LIMIT 1;

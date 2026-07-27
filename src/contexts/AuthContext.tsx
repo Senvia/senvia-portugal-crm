@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Load organization by ID — only safe fields, never API keys/secrets.
-  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode';
+  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config';
   const loadOrganization = useCallback(async (orgId: string) => {
     const { data: orgData } = await supabase
       .from('organizations')
