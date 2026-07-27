@@ -24,7 +24,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   ecommerce: false,
   clients: true,
   marketing: false,
-  finance: true,
+  finance: false,
   energy: true,
   prospects: false,
   inbox: true,

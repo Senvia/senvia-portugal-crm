@@ -31,7 +31,7 @@ const DEFAULT_PLAN: SubscriptionPlan = {
   price_monthly: 49,
   features: {
     modules: { sales: true, finance: false, marketing: false, ecommerce: false },
-    integrations: { whatsapp: false, invoicing: false, meta_pixels: false, stripe: false },
+    integrations: { whatsapp: false, invoicing: false, meta_pixels: true, stripe: false },
     features: { conversational_forms: false, multi_org: false, push_notifications: false, fidelization_alerts: false },
   },
 };

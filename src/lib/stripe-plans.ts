@@ -45,6 +45,7 @@ export const STRIPE_PLANS: StripePlan[] = [
       "CRM Base (Leads + Clientes)",
       "Calendário",
       "Propostas",
+      "Vendas + Comissões",
     ],
     integrations: ["Meta Pixels"],
     limits: { users: "Até 5", forms: "5 formulários", inboxes: "2 caixas de entrada" },
@@ -54,6 +55,7 @@ export const STRIPE_PLANS: StripePlan[] = [
       "5 formulários",
       "2 caixas de entrada (WhatsApp, Instagram, Facebook, Email)",
       "Calendário e propostas",
+      "Vendas + Comissões",
     ],
   },
   {
