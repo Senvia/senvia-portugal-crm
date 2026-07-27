@@ -194,7 +194,7 @@ export function CreateSaleModal({
   const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
 
   // Sale status
-  const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
+  const [saleStatus, setSaleStatus] = useState<SaleStatus>("fulfilled");
   const [edpProposalNumber, setEdpProposalNumber] = useState("");
   const [activationDate, setActivationDate] = useState<Date | undefined>(undefined);
 
@@ -308,7 +308,7 @@ export function CreateSaleModal({
       
       setSaleDate(new Date());
       // Para telecom, quando vem de proposta, estado padrão = fulfilled (Entregue)
-      setSaleStatus(isTelecom && prefillProposal ? 'fulfilled' : 'in_progress');
+      setSaleStatus('fulfilled');
       setEdpProposalNumber("");
       setActivationDate(undefined);
       setItems([]);
