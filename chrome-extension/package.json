@@ -1,0 +1,25 @@
+{
+  "name": "senvia-whatsapp-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Senvia OS — painel de CRM dentro do WhatsApp Web",
+  "scripts": {
+    "build": "vite build && vite build --config vite.content.config.ts",
+    "dev": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react-swc": "^3.7.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

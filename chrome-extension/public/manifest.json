@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Senvia OS — WhatsApp",
+  "version": "0.1.0",
+  "description": "Mostra a ficha do CRM Senvia (contacto, notas, tarefas, propostas e vendas) ao lado da conversa no WhatsApp Web.",
+  "minimum_chrome_version": "114",
+  "permissions": ["storage"],
+  "host_permissions": ["https://chhmfwlimtbsyjmgtokn.supabase.co/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://app.senvia.pt/*",
+        "http://localhost/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.html", "assets/*"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
+  ],
+  "action": {
+    "default_title": "Senvia OS"
+  }
+}
