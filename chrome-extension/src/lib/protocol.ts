@@ -66,20 +66,40 @@ export function phoneKey(phone: string | null | undefined): string {
 }
 
 /**
- * Parses the `data-id` attribute WhatsApp Web puts on every message row.
+ * Matches a WhatsApp JID anywhere inside a string.
  *
- * Format: `{fromMe}_{chatJid}_{messageId}` and, in groups, a trailing
- * `_{participantJid}`. The chat JID is the stable part we care about — every
- * message in the open conversation carries the same one, so reading a single
- * row is enough to know which chat is on screen.
+ * Servers seen in the wild: `c.us` (contact), `g.us` (group), `lid` (privacy
+ * addressing), `s.whatsapp.net` (raw protocol form). Group ids carry a
+ * `<creator>-<timestamp>` user part, hence the optional dash segment.
+ */
+const JID_RE = /(\d+(?:-\d+)?)@(c\.us|g\.us|lid|s\.whatsapp\.net)/;
+
+/**
+ * Pulls the chat JID out of the `data-id` attribute WhatsApp Web puts on
+ * message rows.
+ *
+ * The documented format is `{fromMe}_{chatJid}_{messageId}` (plus a trailing
+ * `_{participantJid}` in groups), but the separator layout has changed between
+ * releases — so we scan for the first JID-shaped token instead of splitting on
+ * '_' and trusting a fixed position. In groups the chat JID always precedes the
+ * participant JID, so "first match" stays correct.
  */
 export function chatJidFromDataId(dataId: string | null | undefined): string | null {
   if (!dataId) return null;
-  const parts = dataId.split('_');
-  if (parts.length < 3) return null;
-  const jid = parts[1];
-  if (!jid || !jid.includes('@')) return null;
-  return jid;
+  const m = dataId.match(JID_RE);
+  return m ? `${m[1]}@${m[2]}` : null;
+}
+
+/**
+ * Last-resort identification: for contacts that aren't saved in the address
+ * book, WhatsApp shows the raw number as the conversation title
+ * ("+351 969 829 933"). That's enough to reach the CRM.
+ */
+export function phoneFromTitle(title: string | null | undefined): string | null {
+  const t = String(title ?? '').trim();
+  if (!t.startsWith('+')) return null;
+  const digits = t.replace(/\D/g, '');
+  return digits.length >= 9 ? digits : null;
 }
 
 /** Turns a WhatsApp JID into the contact shape the panel consumes. */

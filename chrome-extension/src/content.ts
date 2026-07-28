@@ -3,6 +3,7 @@ import {
   PANEL_SOURCE,
   chatJidFromDataId,
   contactFromJid,
+  phoneFromTitle,
   type ActiveContact,
   type PairedSession,
   type PanelToContent,
@@ -136,18 +137,59 @@ function mountPanel(): HTMLIFrameElement {
   return iframe;
 }
 
-/** Reads the JID of the conversation currently rendered in the main pane. */
+const debugOn = () => {
+  try {
+    return localStorage.getItem('senvia-debug') === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** Reads the title WhatsApp shows for the open conversation. */
+function readTitle(scope: ParentNode): string | null {
+  const header = scope.querySelector('header');
+  if (!header) return null;
+  const titled = header.querySelector('span[title]')?.getAttribute('title');
+  if (titled?.trim()) return titled.trim();
+  // Fallback for layouts where the title isn't carried on a `title` attribute.
+  const dir = header.querySelector('span[dir="auto"]')?.textContent;
+  return dir?.trim() || null;
+}
+
+/**
+ * Identifies the conversation on screen, trying progressively looser strategies
+ * because WhatsApp's markup shifts between releases:
+ *   1. a JID on any `data-id` inside the conversation pane
+ *   2. the same, anywhere in the document (in case the pane id changed)
+ *   3. the header title, when it's an unsaved contact's raw number
+ */
 function readActiveContact(): ActiveContact | null {
-  const main = document.querySelector('#main');
-  if (!main) return null;
+  const pane = document.querySelector('#main');
+  const scope: ParentNode = pane ?? document;
+  const title = readTitle(scope);
 
-  // Every message row carries the chat JID, so the first one is enough.
-  const row = main.querySelector('[data-id]');
-  const jid = chatJidFromDataId(row?.getAttribute('data-id'));
-  if (!jid) return null;
+  for (const root of pane ? [pane, document] : [document]) {
+    const rows = root.querySelectorAll('[data-id]');
+    for (const row of rows) {
+      const jid = chatJidFromDataId(row.getAttribute('data-id'));
+      if (jid) return contactFromJid(jid, title);
+    }
+  }
 
-  const title = main.querySelector('header span[title]')?.getAttribute('title') ?? null;
-  return contactFromJid(jid, title);
+  const phone = phoneFromTitle(title);
+  if (phone) return { jid: `${phone}@c.us`, phone, isGroup: false, isPrivacyId: false, name: title };
+
+  if (debugOn()) {
+    console.log('[senvia] sem contacto', {
+      mainFound: !!pane,
+      title,
+      dataIdCount: (pane ?? document).querySelectorAll('[data-id]').length,
+      sampleDataIds: Array.from((pane ?? document).querySelectorAll('[data-id]'))
+        .slice(0, 5)
+        .map((n) => n.getAttribute('data-id')),
+    });
+  }
+  return null;
 }
 
 function bootWhatsApp() {
@@ -184,6 +226,7 @@ function bootWhatsApp() {
       (next?.jid ?? null) !== (current?.jid ?? null) || (next?.name ?? null) !== (current?.name ?? null);
     if (!changed) return;
     current = next;
+    if (debugOn()) console.log('[senvia] contacto', current);
     post();
   }, POLL_MS);
 }
