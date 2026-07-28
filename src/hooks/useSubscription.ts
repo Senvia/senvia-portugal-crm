@@ -44,6 +44,8 @@ const DEFAULT_PLAN: SubscriptionPlan = {
     features: { ...DEFAULT_PLAN_FEATURES.featureFlags, multi_org: DEFAULT_PLAN_FEATURES.featureFlags.multi_org },
   },
 };
+
+export function useSubscription() {
   const { organization } = useAuth();
 
   // Billing-exempt orgs (demos, internal, partners) get full access regardless
