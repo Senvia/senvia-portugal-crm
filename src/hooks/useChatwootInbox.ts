@@ -248,11 +248,24 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
     };
     document.addEventListener('visibilitychange', onVisible);
 
+    // Supabase access tokens rotate roughly hourly. The private channel's
+    // authorization was only ever set once at mount (and on visibility/focus)
+    // — left open across a rotation, the socket keeps LOOKING connected
+    // (`live` stays true) while broadcasts silently stop being delivered
+    // server-side, since the stale token no longer authorizes the channel.
+    // Re-authing on every refresh closes that gap.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'TOKEN_REFRESHED') {
+        supabase.realtime.setAuth();
+      }
+    });
+
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       if (taskTimer !== null) window.clearTimeout(taskTimer);
       window.clearInterval(staleTicker);
       document.removeEventListener('visibilitychange', onVisible);
+      authSub.subscription.unsubscribe();
       setLive(false);
       supabase.removeChannel(channel);
     };
@@ -574,7 +587,13 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     },
     enabled: !!organization?.id && !!conversationId,
     staleTime: 0,
-    refetchInterval: false,
+    // Realtime broadcast + debounced invalidate handles the normal case near-
+    // instantly. But if the socket never connects, drops, or goes silent (the
+    // 45s staleness check in useInboxRealtime), `live` flips to false and this
+    // becomes the ONLY thing standing between the agent and a thread that just
+    // stops updating until they blur/refocus the tab. Without this fallback the
+    // open conversation could sit stale indefinitely.
+    refetchInterval: !!conversationId && !live ? 5000 : false,
     refetchOnWindowFocus: false,
     gcTime: 0,
   });
