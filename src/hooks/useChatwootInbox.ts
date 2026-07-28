@@ -255,9 +255,16 @@ export function useInboxRealtime(getOpenConversationId?: () => number | null): b
     // server-side, since the stale token no longer authorizes the channel.
     // Re-authing on every refresh closes that gap.
     const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'TOKEN_REFRESHED') {
+      if (event !== 'TOKEN_REFRESHED') return;
+      // NEVER call back into supabase.auth (directly or indirectly) from inside
+      // this callback. The auth client holds the `navigator.locks` lock while
+      // emitting, and setAuth() reads the session — that self-deadlock is what
+      // the safeLock hardening in integrations/supabase/client.ts describes, and
+      // it hangs the page on a blank screen. Deferring to a macrotask lets the
+      // lock be released first.
+      setTimeout(() => {
         supabase.realtime.setAuth();
-      }
+      }, 0);
     });
 
     return () => {
@@ -588,12 +595,15 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     enabled: !!organization?.id && !!conversationId,
     staleTime: 0,
     // Realtime broadcast + debounced invalidate handles the normal case near-
-    // instantly. But if the socket never connects, drops, or goes silent (the
-    // 45s staleness check in useInboxRealtime), `live` flips to false and this
-    // becomes the ONLY thing standing between the agent and a thread that just
-    // stops updating until they blur/refocus the tab. Without this fallback the
-    // open conversation could sit stale indefinitely.
-    refetchInterval: !!conversationId && !live ? 5000 : false,
+    // instantly. This is only the safety net for when the socket never connects,
+    // drops, or goes silent (the 45s staleness check in useInboxRealtime) —
+    // otherwise the open thread would sit stale until the agent blurs/refocuses.
+    //
+    // Deliberately slower than the conversation list's 5s: every tick is a full
+    // get_messages round-trip to Chatwoot, and in a quiet inbox `live` is false
+    // permanently, so this runs forever. React Query pauses it while the tab is
+    // in the background (refetchIntervalInBackground defaults to false).
+    refetchInterval: !!conversationId && !live ? 15000 : false,
     refetchOnWindowFocus: false,
     gcTime: 0,
   });
