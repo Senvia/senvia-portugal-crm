@@ -136,3 +136,9 @@ textarea:focus, input[type="text"]:focus { outline: 2px solid var(--accent); out
   border: 1px solid var(--danger); color: var(--danger);
   border-radius: 8px; padding: 6px 8px; font-size: 11px;
 }
+
+select {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+}
+select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }

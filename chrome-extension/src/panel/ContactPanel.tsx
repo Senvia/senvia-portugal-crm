@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ActiveContact, PairedSession } from '../lib/protocol';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ActiveContact, DetectDiag, PairedSession } from '../lib/protocol';
 import { CRM_ORIGIN } from './supabase';
+import { Diag } from './Diag';
+import { getOverride, setOverride as setOverrideStored } from './overrides';
+import { getCached, getCachedPhone, invalidate, setCached, setCachedPhone } from './cache';
+import { ConversationActions } from './ConversationActions';
+import { dropWarm, getWarm } from './warm';
 import {
   addNote,
   addTask,
@@ -8,9 +13,12 @@ import {
   fetchDeals,
   fetchNotes,
   fetchTasks,
+  findConversation,
   findCrmMatch,
+  resolvePhoneFromSenvia,
   toggleTask,
   type ContactNote,
+  type ConvRow,
   type CrmMatch,
   type DealRow,
   type InboxTask,
@@ -27,43 +35,126 @@ function openInCrm(path: string) {
 export function ContactPanel({
   contact,
   session,
+  diag,
 }: {
   contact: ActiveContact;
   session: PairedSession;
+  diag?: DetectDiag | null;
 }) {
   const orgId = session.organizationId;
-  const phone = contact.phone;
+  // Seed from cache so a revisited chat paints on the first frame, with no
+  // spinner. The refresh below still runs and swaps in fresher data.
+  const seed = getCached(contact.jid);
 
-  const [match, setMatch] = useState<CrmMatch | null>(null);
-  const [notes, setNotes] = useState<ContactNote[]>([]);
-  const [tasks, setTasks] = useState<InboxTask[]>([]);
-  const [deals, setDeals] = useState<{ proposals: DealRow[]; sales: DealRow[] }>({ proposals: [], sales: [] });
-  const [loading, setLoading] = useState(true);
+  const [match, setMatch] = useState<CrmMatch | null>(seed?.match ?? null);
+  // WhatsApp doesn't always expose the number (saved contacts show a name). In
+  // that case Senvia's conversation list or the CRM record supplies it — and
+  // notes/tasks are keyed by phone, so everything downstream needs this rather
+  // than contact.phone.
+  const [phone, setPhone] = useState(seed?.phone || contact.phone);
+  const [notes, setNotes] = useState<ContactNote[]>(seed?.notes ?? []);
+  const [tasks, setTasks] = useState<InboxTask[]>(seed?.tasks ?? []);
+  const [deals, setDeals] = useState<{ proposals: DealRow[]; sales: DealRow[] }>(
+    seed?.deals ?? { proposals: [], sales: [] },
+  );
+  const [loading, setLoading] = useState(!seed);
   const [error, setError] = useState<string | null>(null);
+  const [conv, setConv] = useState<ConvRow | null>(null);
 
   const [noteDraft, setNoteDraft] = useState('');
   const [taskDraft, setTaskDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  // Manual number, for the chats detection can't crack.
+  const [override, setOverride] = useState<string | null>(null);
+  const [phoneDraft, setPhoneDraft] = useState('');
+
+  // The header name flickers — WhatsApp swaps in "online", "a escrever…",
+  // "visto por último" as presence changes. Keeping it in a ref means those
+  // wobbles can't retrigger load() and make the panel reload constantly.
+  const nameRef = useRef(contact.name);
+  nameRef.current = contact.name;
+
+  // A manual number, once set, outranks detection for this conversation.
+  useEffect(() => {
+    let cancelled = false;
+    void getOverride(contact.jid).then((v) => {
+      if (!cancelled) setOverride(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [contact.jid]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Wait for the override lookup — starting without it would query the CRM
+    // with the wrong key and flash the wrong record.
+    if (override === null) return;
+    // Only show the spinner on a cold contact — a revisit already has something
+    // on screen and should refresh silently underneath.
+    if (!getCached(contact.jid)) setLoading(true);
     setError(null);
     try {
-      const [m, n, t] = await Promise.all([
-        findCrmMatch(orgId, phone),
-        fetchNotes(orgId, phone),
-        fetchTasks(orgId, phone),
-      ]);
+      // Senvia's own conversation list is the authoritative answer to "what
+      // number is this chat?" — Chatwoot hands it over, which is exactly why
+      // the CRM inbox never has to guess. Ask it before falling back to
+      // matching the CRM by name.
+      let known = override || contact.phone || getCachedPhone(contact.jid);
+      if (!known) {
+        known = await resolvePhoneFromSenvia(orgId, nameRef.current);
+        if (known) setCachedPhone(contact.jid, known);
+      }
+
+      // Paint from the bulk warm-up index before touching the network. This is
+      // what makes a never-before-opened chat appear instantly instead of
+      // waiting on its own round trip.
+      if (known) {
+        const warm = getWarm(known);
+        if (warm) {
+          setPhone(known);
+          setMatch(warm.match);
+          setNotes(warm.notes);
+          setTasks(warm.tasks);
+          setLoading(false);
+          void findConversation(orgId, known).then(setConv);
+        }
+      }
+
+      let m: CrmMatch | null;
+      let n: ContactNote[];
+      let t: InboxTask[];
+
+      if (known) {
+        // The number is the key for all three, so fire them together.
+        [m, n, t] = await Promise.all([
+          findCrmMatch(orgId, known, nameRef.current),
+          fetchNotes(orgId, known),
+          fetchTasks(orgId, known),
+        ]);
+      } else {
+        // Last resort: match the CRM by name, and take the number from there.
+        m = await findCrmMatch(orgId, '', nameRef.current);
+        const derived = m?.phone ?? '';
+        [n, t] = await Promise.all([fetchNotes(orgId, derived), fetchTasks(orgId, derived)]);
+      }
+
+      const resolved = known || m?.phone || '';
+      if (resolved) void findConversation(orgId, resolved).then(setConv);
       setMatch(m);
+      setPhone(resolved);
       setNotes(n);
       setTasks(t);
-      setDeals(m?.kind === 'client' ? await fetchDeals(m.id) : { proposals: [], sales: [] });
+      setLoading(false);
+
+      // Deals are secondary — don't hold the first paint for them.
+      const d = m?.kind === 'client' ? await fetchDeals(m.id) : { proposals: [], sales: [] };
+      setDeals(d);
+      setCached(contact.jid, { phone: resolved, match: m, notes: n, tasks: t, deals: d });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [orgId, phone]);
+  }, [orgId, contact.jid, contact.phone, override]);
 
   // Reload whenever the agent switches conversation.
   useEffect(() => {
@@ -77,6 +168,8 @@ export function ContactPanel({
     try {
       await addNote(orgId, phone, text, session.userEmail);
       setNoteDraft('');
+      invalidate(contact.jid);
+      dropWarm(phone);
       setNotes(await fetchNotes(orgId, phone));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -92,6 +185,8 @@ export function ContactPanel({
     try {
       await addTask(orgId, phone, text, contact.name, match);
       setTaskDraft('');
+      invalidate(contact.jid);
+      dropWarm(phone);
       setTasks(await fetchTasks(orgId, phone));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -108,7 +203,24 @@ export function ContactPanel({
       await toggleTask(t.id, done);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      invalidate(contact.jid);
+      dropWarm(phone);
       setTasks(await fetchTasks(orgId, phone));
+    }
+  };
+
+  const saveOverride = async () => {
+    const digits = phoneDraft.replace(/\D/g, '');
+    if (digits.length < 9 || busy) return;
+    setBusy(true);
+    try {
+      await setOverrideStored(contact.jid, digits);
+      setPhoneDraft('');
+      setOverride(digits); // triggers a reload through the load() dependency
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -127,6 +239,9 @@ export function ContactPanel({
 
   const openTasks = tasks.filter((t) => !t.done_at);
   const doneTasks = tasks.filter((t) => t.done_at);
+  // Notes and tasks are filed under the phone number — without one there's
+  // nothing to attach them to.
+  const canWrite = phone.replace(/\D/g, '').length >= 9;
 
   return (
     <div className="body">
@@ -137,7 +252,7 @@ export function ContactPanel({
         <div className="row">
           <div className="grow">
             <p className="name">{match?.name || contact.name || 'Sem nome'}</p>
-            <p className="sub">+{phone}</p>
+            <p className="sub">{phone ? `+${phone}` : 'número não exposto pelo WhatsApp'}</p>
           </div>
           {match && <span className={`badge ${match.kind}`}>{match.kind === 'client' ? 'Cliente' : 'Lead'}</span>}
         </div>
@@ -153,6 +268,11 @@ export function ContactPanel({
                 {match.value != null && <>Valor: {eur.format(match.value)}</>}
               </p>
             )}
+            {match.matchedBy === 'name' && (
+              <p className="small muted" style={{ marginTop: 6 }}>
+                Encontrado pelo nome — o WhatsApp não expôs o número desta conversa.
+              </p>
+            )}
             <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
               <button
                 onClick={() =>
@@ -161,20 +281,67 @@ export function ContactPanel({
               >
                 Abrir ficha
               </button>
-              <button onClick={() => openInCrm(`/inbox?phone=${phone}`)}>Abrir no Senvia</button>
+              {phone && <button onClick={() => openInCrm(`/inbox?phone=${phone}`)}>Abrir no Senvia</button>}
             </div>
           </>
         ) : (
           <div style={{ marginTop: 8 }}>
             <p className="small muted" style={{ margin: '0 0 8px' }}>
-              Este número não está no CRM.
+              {phone
+                ? 'Este número não está no CRM.'
+                : 'Sem correspondência no CRM por nome, e o WhatsApp não expôs o número.'}
             </p>
-            <button className="primary" onClick={makeLead} disabled={busy}>
-              Criar lead
-            </button>
+            {phone && (
+              <button className="primary" onClick={makeLead} disabled={busy}>
+                Criar lead
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Escape hatch: detection can't cover every chat (business accounts,
+            privacy ids, stored names that differ from the header). Typing the
+            number once unlocks everything and is remembered for this chat. */}
+        {!phone && !loading && (
+          <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <p className="small muted" style={{ margin: '0 0 6px' }}>
+              Não consegui detetar o número. Escreve-o e fica guardado para esta conversa.
+            </p>
+            <div className="row">
+              <input
+                type="text"
+                className="grow"
+                value={phoneDraft}
+                placeholder="+351 912 345 678"
+                onChange={(e) => setPhoneDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveOverride();
+                  }
+                }}
+              />
+              <button
+                className="primary"
+                disabled={phoneDraft.replace(/\D/g, '').length < 9 || busy}
+                onClick={saveOverride}
+              >
+                Guardar
+              </button>
+            </div>
+            <Diag diag={diag ?? null} />
           </div>
         )}
       </div>
+
+      {/* --- Conversation actions (Chatwoot-backed, so only when matched) --- */}
+      {conv && (
+        <ConversationActions
+          orgId={orgId}
+          conv={conv}
+          onChanged={() => invalidate(contact.jid)}
+        />
+      )}
 
       {/* --- Notes --- */}
       <div className="card">
@@ -185,7 +352,10 @@ export function ContactPanel({
           <textarea
             rows={2}
             value={noteDraft}
-            placeholder="Escreve uma nota… (Ctrl+Enter guarda)"
+            disabled={!canWrite}
+            placeholder={
+              canWrite ? 'Escreve uma nota… (Ctrl+Enter guarda)' : 'Define o número acima para guardar notas'
+            }
             onChange={(e) => setNoteDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -194,7 +364,12 @@ export function ContactPanel({
               }
             }}
           />
-          <button className="primary" style={{ alignSelf: 'flex-end' }} disabled={!noteDraft.trim() || busy} onClick={submitNote}>
+          <button
+            className="primary"
+            style={{ alignSelf: 'flex-end' }}
+            disabled={!canWrite || !noteDraft.trim() || busy}
+            onClick={submitNote}
+          >
             Adicionar
           </button>
         </div>
@@ -227,7 +402,8 @@ export function ContactPanel({
             type="text"
             className="grow"
             value={taskDraft}
-            placeholder="Nova tarefa…"
+            disabled={!canWrite}
+            placeholder={canWrite ? 'Nova tarefa…' : 'Define o número acima para criar tarefas'}
             onChange={(e) => setTaskDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -236,7 +412,7 @@ export function ContactPanel({
               }
             }}
           />
-          <button className="primary" disabled={!taskDraft.trim() || busy} onClick={submitTask}>
+          <button className="primary" disabled={!canWrite || !taskDraft.trim() || busy} onClick={submitTask}>
             +
           </button>
         </div>

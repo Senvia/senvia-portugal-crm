@@ -37,8 +37,34 @@ export type PanelToContent =
   /** User collapsed/expanded the panel from inside the iframe. */
   | { source: typeof PANEL_SOURCE; type: 'SET_COLLAPSED'; collapsed: boolean };
 
+/**
+ * What the detector actually saw in the page. Surfaced in the panel so DOM
+ * drift in WhatsApp Web can be diagnosed from a screenshot, without asking
+ * anyone to open a console.
+ */
+export interface DetectDiag {
+  mainFound: boolean;
+  title: string | null;
+  dataIdCount: number;
+  sample: string[];
+  /** Where the phone number ultimately came from, once we have one. */
+  resolvedVia?: 'dom' | 'indexeddb' | null;
+  /** What the IndexedDB lookup saw, when the DOM alone wasn't enough. */
+  db?: {
+    databases: string[];
+    scannedStores: string[];
+    recordsScanned: number;
+    error: string | null;
+  } | null;
+}
+
 export type ContentToPanel =
-  | { source: typeof CONTENT_SOURCE; type: 'CONTACT'; contact: ActiveContact | null };
+  | {
+      source: typeof CONTENT_SOURCE;
+      type: 'CONTACT';
+      contact: ActiveContact | null;
+      diag: DetectDiag;
+    };
 
 // --- Content script / panel <-> service worker, over chrome.runtime ----------
 

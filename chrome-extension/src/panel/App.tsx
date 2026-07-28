@@ -4,10 +4,14 @@ import {
   PANEL_SOURCE,
   type ActiveContact,
   type ContentToPanel,
+  type DetectDiag,
   type PairedSession,
 } from '../lib/protocol';
 import { CRM_ORIGIN, clearPairedSession, restoreSession } from './supabase';
 import { ContactPanel } from './ContactPanel';
+import { Diag } from './Diag';
+import { prefetchConversations } from './data';
+import { warmup } from './warm';
 
 type Boot = 'loading' | 'unpaired' | 'ready';
 
@@ -15,6 +19,7 @@ export function App() {
   const [boot, setBoot] = useState<Boot>('loading');
   const [session, setSession] = useState<PairedSession | null>(null);
   const [contact, setContact] = useState<ActiveContact | null>(null);
+  const [diag, setDiag] = useState<DetectDiag | null>(null);
 
   // Bootstrap the Supabase session from whatever the CRM tab handed over.
   useEffect(() => {
@@ -24,6 +29,11 @@ export function App() {
       if (cancelled) return;
       setSession(paired);
       setBoot(paired ? 'ready' : 'unpaired');
+      // Warm the conversation list now, so the first chat opened is already fast.
+      if (paired) {
+        prefetchConversations(paired.organizationId);
+        void warmup(paired.organizationId);
+      }
     })();
     return () => {
       cancelled = true;
@@ -35,7 +45,10 @@ export function App() {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as ContentToPanel;
       if (data?.source !== CONTENT_SOURCE) return;
-      if (data.type === 'CONTACT') setContact(data.contact);
+      if (data.type === 'CONTACT') {
+        setContact(data.contact);
+        setDiag(data.diag);
+      }
     };
     window.addEventListener('message', onMessage);
     window.parent.postMessage({ source: PANEL_SOURCE, type: 'READY' }, '*');
@@ -79,17 +92,26 @@ export function App() {
         </div>
       )}
 
-      {boot === 'ready' && session && <Content contact={contact} session={session} />}
+      {boot === 'ready' && session && <Content contact={contact} session={session} diag={diag} />}
     </>
   );
 }
 
-function Content({ contact, session }: { contact: ActiveContact | null; session: PairedSession }) {
+function Content({
+  contact,
+  session,
+  diag,
+}: {
+  contact: ActiveContact | null;
+  session: PairedSession;
+  diag: DetectDiag | null;
+}) {
   if (!contact) {
     return (
       <div className="empty">
         <h2>Nenhuma conversa aberta</h2>
         <p>Abre uma conversa no WhatsApp para veres a ficha do contacto.</p>
+        <Diag diag={diag} />
       </div>
     );
   }
@@ -101,17 +123,21 @@ function Content({ contact, session }: { contact: ActiveContact | null; session:
       </div>
     );
   }
-  if (contact.isPrivacyId || !contact.phone) {
+  // No number AND no name means nothing to go on. With a name we can still
+  // match the CRM record, and take the number from there.
+  if (!contact.phone && !contact.name) {
     return (
       <div className="empty">
-        <h2>Número indisponível</h2>
+        <h2>Contacto não identificado</h2>
         <p>
-          Este contacto usa o modo de privacidade do WhatsApp, que esconde o número. Sem número não é
-          possível encontrar a ficha no CRM.
+          O WhatsApp não expõe o número nem o nome desta conversa
+          {contact.isPrivacyId ? ' (modo de privacidade ativo)' : ''}, por isso não é possível
+          encontrar a ficha no CRM.
         </p>
+        <Diag diag={diag} />
       </div>
     );
   }
   // Remount on contact change so no state leaks between conversations.
-  return <ContactPanel key={contact.jid} contact={contact} session={session} />;
+  return <ContactPanel key={contact.jid} contact={contact} session={session} diag={diag} />;
 }
