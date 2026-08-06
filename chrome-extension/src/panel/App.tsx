@@ -7,13 +7,13 @@ import {
   type DetectDiag,
   type PairedSession,
 } from '../lib/protocol';
-import { CRM_ORIGIN, clearPairedSession, restoreSession } from './supabase';
+import { CRM_ORIGIN, clearPairedSession, onPairingChanged, restoreSession } from './supabase';
 import { ContactPanel } from './ContactPanel';
 import { Diag } from './Diag';
 import { prefetchConversations } from './data';
 import { warmup } from './warm';
 
-type Boot = 'loading' | 'unpaired' | 'ready';
+type Boot = 'loading' | 'unpaired' | 'expired' | 'ready';
 
 export function App() {
   const [boot, setBoot] = useState<Boot>('loading');
@@ -21,22 +21,30 @@ export function App() {
   const [contact, setContact] = useState<ActiveContact | null>(null);
   const [diag, setDiag] = useState<DetectDiag | null>(null);
 
-  // Bootstrap the Supabase session from whatever the CRM tab handed over.
+  // Bootstrap the Supabase session from whatever the CRM tab handed over, and
+  // re-run it whenever the pairing changes — clicking "Ligar extensão" happens
+  // in a DIFFERENT tab, so without this the panel would keep showing the
+  // pairing prompt until the WhatsApp tab was reloaded by hand.
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const paired = await restoreSession();
+
+    const boot = async () => {
+      const { session: paired, expired } = await restoreSession();
       if (cancelled) return;
       setSession(paired);
-      setBoot(paired ? 'ready' : 'unpaired');
+      setBoot(paired ? 'ready' : expired ? 'expired' : 'unpaired');
       // Warm the conversation list now, so the first chat opened is already fast.
       if (paired) {
         prefetchConversations(paired.organizationId);
         void warmup(paired.organizationId);
       }
-    })();
+    };
+
+    void boot();
+    const off = onPairingChanged(() => void boot());
     return () => {
       cancelled = true;
+      off();
     };
   }, []);
 
@@ -79,10 +87,14 @@ export function App() {
 
       {boot === 'loading' && <div className="empty">A carregar…</div>}
 
-      {boot === 'unpaired' && (
+      {(boot === 'unpaired' || boot === 'expired') && (
         <div className="empty">
-          <h2>Liga ao Senvia OS</h2>
-          <p>Abre o Senvia, entra na tua conta e clica em “Ligar extensão”.</p>
+          <h2>{boot === 'expired' ? 'Sessão expirada' : 'Liga ao Senvia OS'}</h2>
+          <p>
+            {boot === 'expired'
+              ? 'A ligação caducou por inatividade. Abre o Senvia e liga outra vez — o painel atualiza-se sozinho.'
+              : 'Abre o Senvia, entra na tua conta e clica em “Ligar extensão”.'}
+          </p>
           <button
             className="primary"
             onClick={() => window.open(`${CRM_ORIGIN}/extension-auth`, '_blank', 'noopener')}

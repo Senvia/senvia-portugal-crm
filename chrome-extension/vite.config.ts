@@ -10,6 +10,10 @@ export default defineConfig({
   // project as the app — no duplicated URL/key to drift out of sync.
   envDir: '..',
   build: {
+    // Readable stack traces: errors point at src/, not the minified bundle.
+    sourcemap: true,
+    // Extension pages load from disk; the polyfill only produces console noise.
+    modulePreload: false,
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {

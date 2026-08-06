@@ -344,6 +344,26 @@ export async function addTask(
   if (error) throw error;
 }
 
+/**
+ * Accepts an AI suggestion, turning it into a real task assigned to whoever
+ * accepted it. Mirrors `useAcceptSuggestedTask` in the CRM — a row with
+ * `suggested: true` is a proposal awaiting a decision, never a commitment.
+ */
+export async function acceptTask(id: string) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { error } = await db
+    .from('inbox_tasks')
+    .update({ suggested: false, assigned_to: auth.user?.id ?? null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Ignoring a suggestion deletes it outright, same as the CRM does. */
+export async function deleteTask(id: string) {
+  const { error } = await db.from('inbox_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function toggleTask(id: string, done: boolean) {
   const { error } = await db
     .from('inbox_tasks')

@@ -7,6 +7,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   envDir: '..',
   build: {
+    // Readable stack traces: errors point at src/, not the minified bundle.
+    sourcemap: true,
     outDir: 'dist',
     emptyOutDir: false,
     lib: {

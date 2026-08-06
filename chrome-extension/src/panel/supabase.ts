@@ -40,22 +40,52 @@ export async function clearPairedSession(): Promise<void> {
   await supabase.auth.signOut().catch(() => undefined);
 }
 
+export interface RestoreResult {
+  session: PairedSession | null;
+  /** True when tokens WERE stored but are no longer usable. */
+  expired: boolean;
+}
+
 /**
  * Restores a usable Supabase session. Prefers the one this panel already owns
  * (it self-refreshes); only falls back to the handshake tokens on first run or
  * after they've been revoked.
+ *
+ * Supabase refresh tokens rotate and eventually expire, so a pairing left alone
+ * for long enough stops working. That's reported as `expired` rather than as
+ * "never paired" — the two look identical otherwise, and the stale tokens are
+ * cleared so the next pairing starts from a clean slate.
  */
-export async function restoreSession(): Promise<PairedSession | null> {
+export async function restoreSession(): Promise<RestoreResult> {
   const paired = await getPairedSession();
-  if (!paired) return null;
+  if (!paired) return { session: null, expired: false };
 
   const { data } = await supabase.auth.getSession();
-  if (data.session) return paired;
+  if (data.session) return { session: paired, expired: false };
 
   const { error } = await supabase.auth.setSession({
     access_token: paired.accessToken,
     refresh_token: paired.refreshToken,
   });
-  if (error) return null;
-  return paired;
+  if (error) {
+    await clearPairedSession();
+    return { session: null, expired: true };
+  }
+  return { session: paired, expired: false };
+}
+
+/**
+ * Fires when the stored pairing changes — i.e. the agent just clicked "Ligar
+ * extensão" in the CRM tab. Without this the panel would sit on the pairing
+ * prompt until the WhatsApp tab was manually reloaded.
+ */
+export function onPairingChanged(cb: () => void): () => void {
+  const listener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    area: string,
+  ) => {
+    if (area === 'local' && changes['senvia.session']) cb();
+  };
+  chrome.storage.onChanged.addListener(listener);
+  return () => chrome.storage.onChanged.removeListener(listener);
 }

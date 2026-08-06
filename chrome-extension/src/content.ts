@@ -10,6 +10,7 @@ import {
   type PanelToContent,
 } from './lib/protocol';
 import { resolvePhone } from './lib/wadb';
+import { mountCrmRail, RAIL_W } from './crm-rail';
 
 // One content script, two jobs, chosen by host:
 //   web.whatsapp.com -> detect the open chat and mount the Senvia panel
@@ -75,7 +76,18 @@ function injectStyles() {
   // WhatsApp React root — anything mounted inside their tree gets wiped on the
   // next re-render. The app is shrunk with CSS instead of being reparented.
   style.textContent = `
-    html.senvia-open #app { width: calc(100% - ${PANEL_WIDTH}px) !important; }
+    /* ONE place decides #app's box. WhatsApp's layout needs an explicit width —
+       switching it to \`width: auto\` with margins collapses their columns — so
+       every offset is expressed as a width calc plus a left margin, and both
+       the rail and the right panel are accounted for in the same rule. */
+    html.senvia-rail #app {
+      margin-left: ${RAIL_W}px !important;
+      width: calc(100% - ${RAIL_W}px) !important;
+    }
+    html.senvia-rail.senvia-open #app {
+      width: calc(100% - ${RAIL_W + PANEL_WIDTH}px) !important;
+    }
+    html.senvia-open:not(.senvia-rail) #app { width: calc(100% - ${PANEL_WIDTH}px) !important; }
     #senvia-panel-root {
       position: fixed; top: 0; right: 0; height: 100vh; width: ${PANEL_WIDTH}px;
       z-index: 2147483000; background: #fff; border-left: 1px solid #e4e6eb;
@@ -243,6 +255,7 @@ function readActiveContact(): { contact: ActiveContact | null; diag: DetectDiag 
 
 function bootWhatsApp() {
   injectStyles();
+  mountCrmRail();
   const iframe = mountPanel();
 
   let current: ActiveContact | null = null;

@@ -7,9 +7,11 @@ import { getCached, getCachedPhone, invalidate, setCached, setCachedPhone } from
 import { ConversationActions } from './ConversationActions';
 import { dropWarm, getWarm } from './warm';
 import {
+  acceptTask,
   addNote,
   addTask,
   createLead,
+  deleteTask,
   fetchDeals,
   fetchNotes,
   fetchTasks,
@@ -74,6 +76,9 @@ export function ContactPanel({
   const nameRef = useRef(contact.name);
   nameRef.current = contact.name;
 
+  /** Increments per load() call so a superseded run can bail before painting. */
+  const runRef = useRef(0);
+
   // A manual number, once set, outranks detection for this conversation.
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +94,15 @@ export function ContactPanel({
     // Wait for the override lookup — starting without it would query the CRM
     // with the wrong key and flash the wrong record.
     if (override === null) return;
+
+    // Runs overlap: the number can resolve mid-flight and retrigger this, and
+    // the agent can switch chats at any point. Without a token the slower run
+    // finishes last and wins — painting a previous contact's data over the
+    // current one AND writing it into the cache under the wrong key, which then
+    // survives as a wrong "instant" paint on the next visit.
+    const run = ++runRef.current;
+    const superseded = () => runRef.current !== run;
+
     // Only show the spinner on a cold contact — a revisit already has something
     // on screen and should refresh silently underneath.
     if (!getCached(contact.jid)) setLoading(true);
@@ -107,6 +121,8 @@ export function ContactPanel({
       // Paint from the bulk warm-up index before touching the network. This is
       // what makes a never-before-opened chat appear instantly instead of
       // waiting on its own round trip.
+      if (superseded()) return;
+
       if (known) {
         const warm = getWarm(known);
         if (warm) {
@@ -115,7 +131,9 @@ export function ContactPanel({
           setNotes(warm.notes);
           setTasks(warm.tasks);
           setLoading(false);
-          void findConversation(orgId, known).then(setConv);
+          void findConversation(orgId, known).then((c) => {
+            if (!superseded()) setConv(c);
+          });
         }
       }
 
@@ -137,8 +155,14 @@ export function ContactPanel({
         [n, t] = await Promise.all([fetchNotes(orgId, derived), fetchTasks(orgId, derived)]);
       }
 
+      if (superseded()) return;
+
       const resolved = known || m?.phone || '';
-      if (resolved) void findConversation(orgId, resolved).then(setConv);
+      if (resolved) {
+        void findConversation(orgId, resolved).then((c) => {
+          if (!superseded()) setConv(c);
+        });
+      }
       setMatch(m);
       setPhone(resolved);
       setNotes(n);
@@ -147,12 +171,13 @@ export function ContactPanel({
 
       // Deals are secondary — don't hold the first paint for them.
       const d = m?.kind === 'client' ? await fetchDeals(m.id) : { proposals: [], sales: [] };
+      if (superseded()) return;
       setDeals(d);
       setCached(contact.jid, { phone: resolved, match: m, notes: n, tasks: t, deals: d });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!superseded()) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (!superseded()) setLoading(false);
     }
   }, [orgId, contact.jid, contact.phone, override]);
 
@@ -190,6 +215,27 @@ export function ContactPanel({
       setTasks(await fetchTasks(orgId, phone));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decideSuggestion = async (t: InboxTask, accept: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    // Optimistic: the suggestion should leave the list on click either way.
+    setTasks((prev) =>
+      accept
+        ? prev.map((x) => (x.id === t.id ? { ...x, suggested: false } : x))
+        : prev.filter((x) => x.id !== t.id),
+    );
+    try {
+      await (accept ? acceptTask(t.id) : deleteTask(t.id));
+      invalidate(contact.jid);
+      dropWarm(phone);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setTasks(await fetchTasks(orgId, phone));
     } finally {
       setBusy(false);
     }
@@ -237,7 +283,11 @@ export function ContactPanel({
     }
   };
 
-  const openTasks = tasks.filter((t) => !t.done_at);
+  // `suggested: true` means the AI proposed it and nobody has decided yet — the
+  // CRM keeps those separate, behind Aceitar/Ignorar. Mixing them into the real
+  // list makes the panel show work that was never actually committed to.
+  const suggestions = tasks.filter((t) => t.suggested && !t.done_at);
+  const openTasks = tasks.filter((t) => !t.suggested && !t.done_at);
   const doneTasks = tasks.filter((t) => t.done_at);
   // Notes and tasks are filed under the phone number — without one there's
   // nothing to attach them to.
@@ -416,18 +466,39 @@ export function ContactPanel({
             +
           </button>
         </div>
-        {tasks.length === 0 ? (
-          <p className="small muted">Sem tarefas para este contacto.</p>
+        {/* Pending AI suggestions — proposals, not commitments. */}
+        {suggestions.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            {suggestions.map((t) => (
+              <div key={t.id} className="suggestion">
+                <div className="row" style={{ alignItems: 'flex-start', gap: 6 }}>
+                  <span className="sugg">IA</span>
+                  <span className="grow">{t.title}</span>
+                </div>
+                <div className="row" style={{ gap: 6, marginTop: 6 }}>
+                  <button className="primary" disabled={busy} onClick={() => void decideSuggestion(t, true)}>
+                    Aceitar
+                  </button>
+                  <button disabled={busy} onClick={() => void decideSuggestion(t, false)}>
+                    Ignorar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {openTasks.length === 0 && suggestions.length === 0 ? (
+          <p className="small muted">Sem tarefas — adiciona uma para não esqueceres o combinado.</p>
         ) : (
           <div>
-            {[...openTasks, ...doneTasks].map((t) => {
-              const overdue = !t.done_at && !!t.due_at && new Date(t.due_at).getTime() < Date.now();
+            {openTasks.map((t) => {
+              const overdue = !!t.due_at && new Date(t.due_at).getTime() < Date.now();
               return (
-                <label key={t.id} className={`task ${t.done_at ? 'done' : ''}`}>
-                  <input type="checkbox" checked={!!t.done_at} onChange={() => void flipTask(t)} />
+                <label key={t.id} className="task">
+                  <input type="checkbox" checked={false} onChange={() => void flipTask(t)} />
                   <span className="grow">
-                    <span className="title">{t.title}</span>{' '}
-                    {t.suggested && <span className="sugg">IA</span>}
+                    <span className="title">{t.title}</span>
                     {t.due_at && (
                       <span className={`due ${overdue ? 'overdue' : ''}`}>
                         {' · '}
@@ -439,6 +510,25 @@ export function ContactPanel({
               );
             })}
           </div>
+        )}
+
+        {/* Completed work is history — collapsed, like the CRM does. */}
+        {doneTasks.length > 0 && (
+          <details style={{ marginTop: 8 }}>
+            <summary className="small muted" style={{ cursor: 'pointer' }}>
+              Concluídas ({doneTasks.length})
+            </summary>
+            <div style={{ marginTop: 4 }}>
+              {doneTasks.map((t) => (
+                <label key={t.id} className="task done">
+                  <input type="checkbox" checked onChange={() => void flipTask(t)} />
+                  <span className="grow">
+                    <span className="title">{t.title}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
         )}
       </div>
 
