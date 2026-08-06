@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
+import { CompleteOrganizationSetup } from './CompleteOrganizationSetup';
 import { ChallengeMFA } from './ChallengeMFA';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
 import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
@@ -43,11 +44,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Show organization selector if user needs to choose
   if (needsOrgSelection && organizations.length > 1) {
     return (
-      <OrganizationSelector 
+      <OrganizationSelector
         organizations={organizations}
         onSelect={selectOrganization}
       />
     );
+  }
+
+  // Authenticated but belongs to no organization — signup created the account
+  // and stopped before creating the company. Mirrors ProtectedLayoutRoute.
+  if (organizations.length === 0) {
+    return <CompleteOrganizationSetup />;
   }
 
   // Onboarding wizard: show if admin, org exists, no pipeline stages, not already completed

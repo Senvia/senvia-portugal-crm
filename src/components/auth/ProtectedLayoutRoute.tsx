@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
+import { CompleteOrganizationSetup } from './CompleteOrganizationSetup';
 import { ChallengeMFA } from './ChallengeMFA';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
 import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
@@ -39,11 +40,19 @@ export function ProtectedLayoutRoute() {
 
   if (needsOrgSelection && organizations.length > 1) {
     return (
-      <OrganizationSelector 
+      <OrganizationSelector
         organizations={organizations}
         onSelect={selectOrganization}
       />
     );
+  }
+
+  // Authenticated but belongs to no organization — signup created the account
+  // and stopped before creating the company (the email-confirmation branch does
+  // exactly that). Without this the user got a fully rendered but empty CRM and
+  // no way to fix it. Ask for (or silently resume) the company setup instead.
+  if (organizations.length === 0) {
+    return <CompleteOrganizationSetup />;
   }
 
   if (

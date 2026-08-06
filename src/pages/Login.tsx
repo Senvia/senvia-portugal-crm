@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Check, X } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { PENDING_ORG_STORAGE_KEY } from '@/components/auth/CompleteOrganizationSetup';
 import senviaLogo from "@/assets/senvia-logo.png";
 
 const loginSchema = z.object({
@@ -171,8 +172,39 @@ export default function Login() {
         return;
       }
 
-      // No results = email or org doesn't exist
+      // No results = either the company code is wrong, OR this is an account
+      // whose organization was never created (signup interrupted at the
+      // email-confirmation step). Telling the second group that their own
+      // company code "does not exist" locked them out permanently, so
+      // authenticate and check: an account with no organization at all is let
+      // through to finish setup; anyone else gets the error and is signed out.
       if (!membershipCheck || membershipCheck.length === 0) {
+        const { error: preAuthError } = await signIn(loginEmail, loginPassword);
+        if (preAuthError) {
+          toast({
+            title: 'Dados inválidos',
+            description: 'O código da empresa, o email ou a palavra-passe não estão corretos.',
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        const { data: authUser } = await supabase.auth.getUser();
+        const { data: memberships } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', authUser.user?.id ?? '')
+          .eq('is_active', true)
+          .limit(1);
+
+        if (!memberships || memberships.length === 0) {
+          localStorage.removeItem('senvia_active_organization_id');
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        await supabase.auth.signOut();
         toast({
           title: 'Dados inválidos',
           description: 'O código da empresa ou email não existe.',
@@ -284,6 +316,19 @@ export default function Login() {
 
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
+        // No session means we cannot call create_organization_for_current_user
+        // yet, and this handler is about to return — so stash what the user
+        // typed. CompleteOrganizationSetup picks it up the moment they come
+        // back with a session and finishes the registration for them. Without
+        // this the company name and code were lost with the page, leaving an
+        // account that could never log in.
+        try {
+          localStorage.setItem(
+            PENDING_ORG_STORAGE_KEY,
+            JSON.stringify({ name: organizationName, slug: organizationSlug, contactPhone })
+          );
+        } catch { /* private mode / storage full — the setup screen will ask again */ }
+
         // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
         const capiEventId = `signup-${authData.user.id}`;
         if (typeof window.fbq === 'function') {
@@ -313,6 +358,7 @@ export default function Login() {
           title: 'Confirme o seu email',
           description: 'Enviámos um email de confirmação. Confirme o seu email e depois faça login.',
         });
+
         setActiveTab('login');
         setLoginEmail(signupEmail);
         setIsLoading(false);
