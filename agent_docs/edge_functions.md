@@ -7,6 +7,7 @@ All functions live in `supabase/functions/{name}/index.ts` (Deno runtime). Deplo
 | Function | Trigger | Purpose |
 |----------|---------|---------|
 | `stripe-webhook` | Stripe webhook | Handles `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated/deleted`. Creates commission records and sale_payments. |
+| `reconcile-stripe-payments` | Cron (daily) | Safety net: lists paid Stripe invoices from the last 10 days and records any missed by the webhook (sale_payments, commission, sale renewal fields). Idempotent — dedupes by Stripe invoice id. Mirrors `handleInvoicePaid` in stripe-webhook; keep in sync. |
 | `create-checkout` | Client call | Creates Stripe Checkout session for subscription. |
 | `customer-portal` | Client call | Creates Stripe Customer Portal session. |
 | `check-subscription` | Client call | Verifies org subscription status against Stripe. |

@@ -105,6 +105,9 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+[functions.reconcile-stripe-payments]
+verify_jwt = false
+
 [functions.backfill-stripe-net]
 verify_jwt = false
 

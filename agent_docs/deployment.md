@@ -63,8 +63,8 @@ VALUES (gen_random_uuid(), 'Title', 'Markdown content', 'vX.Y.Z', true, now());
 
 ### Supabase
 
-- Project ref: `zppcobirzgpfcrnxznwe`
-- URL: `https://zppcobirzgpfcrnxznwe.supabase.co`
+- Project ref: `chhmfwlimtbsyjmgtokn`
+- URL: `https://chhmfwlimtbsyjmgtokn.supabase.co`
 - Edge Functions secrets managed in Supabase Dashboard > Edge Functions > Secrets
 - Key secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BREVO_API_KEY`, `APIFY_API_TOKEN`
 
@@ -78,7 +78,7 @@ SELECT cron.schedule(
   '0 6 * * *',  -- cron expression
   $$
   SELECT net.http_post(
-    url := 'https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/function-name',
+    url := 'https://chhmfwlimtbsyjmgtokn.supabase.co/functions/v1/function-name',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || current_setting('supabase.service_role_key'),
       'Content-Type', 'application/json'
@@ -101,7 +101,7 @@ Requires `pg_net` and `pg_cron` extensions enabled.
 
 ## Stripe Webhook Setup
 
-The Stripe webhook endpoint is: `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/stripe-webhook`
+The Stripe webhook endpoint is: `https://chhmfwlimtbsyjmgtokn.supabase.co/functions/v1/stripe-webhook` (Stripe Dashboard endpoint name: `senvia-os`). An old endpoint pointing at the dead project `zppcobirzgpfcrnxznwe` may still exist in Stripe — it should be deleted, and the `STRIPE_WEBHOOK_SECRET` in Supabase must be the signing secret of the `senvia-os` endpoint.
 
 Events handled: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
 
