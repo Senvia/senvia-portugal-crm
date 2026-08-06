@@ -19,7 +19,7 @@ import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { useSaleItems } from "@/hooks/useSaleItems";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, billingPeriodLabel } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
@@ -228,6 +228,14 @@ export function SalePaymentsList({
                     <span>
                       {format(new Date(payment.payment_date), "d MMM yyyy", { locale: pt })}
                     </span>
+                    {/* Stripe bills in advance, so the charge date and the month
+                        the subscription actually covers frequently differ. */}
+                    {billingPeriodLabel(payment.billing_period_start, payment.billing_period_end) && (
+                      <>
+                        <span>•</span>
+                        <span>Cobre {billingPeriodLabel(payment.billing_period_start, payment.billing_period_end)}</span>
+                      </>
+                    )}
                     {payment.invoice_reference && (
                       <>
                         <span>•</span>

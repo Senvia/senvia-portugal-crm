@@ -121,7 +121,9 @@ serve(async (req) => {
     try {
       const body = await req.json();
       if (body?.lookback_days && Number(body.lookback_days) > 0) {
-        lookbackDays = Math.min(Number(body.lookback_days), 90);
+        // Capped well above the daily 10-day run so an occasional manual call
+        // can also backfill billing_period_start/end on older rows.
+        lookbackDays = Math.min(Number(body.lookback_days), 180);
       }
     } catch { /* empty body is fine */ }
 
@@ -186,11 +188,30 @@ serve(async (req) => {
       // match is kept for rows written before the column existed.
       const { data: existingPayment } = await supabase
         .from("sale_payments")
-        .select("id")
+        .select("id, billing_period_start, billing_period_end")
         .eq("organization_id", SENVIA_AGENCY_ORG_ID)
         .or(`stripe_invoice_id.eq.${invoice.id},notes.ilike.%${invoice.id}%`)
         .limit(1);
-      if (existingPayment && existingPayment.length > 0) { summary.already_recorded++; continue; }
+      if (existingPayment && existingPayment.length > 0) {
+        summary.already_recorded++;
+        // Backfill: rows written before billing_period_start/end existed (or by
+        // the pre-fix webhook) show only the charge date, not the month they pay
+        // for — the exact confusion that made a real August payment look missing
+        // when Finance was filtered to August. One-time repair, then skip.
+        const row = existingPayment[0];
+        if (!row.billing_period_start && !row.billing_period_end && invoice.period_start && invoice.period_end) {
+          const { error: backfillErr } = await supabase
+            .from("sale_payments")
+            .update({
+              billing_period_start: new Date(invoice.period_start * 1000).toISOString().split("T")[0],
+              billing_period_end: new Date(invoice.period_end * 1000).toISOString().split("T")[0],
+            })
+            .eq("id", row.id);
+          if (backfillErr) logError("billing period backfill error", { invoice: invoice.id, error: backfillErr.message });
+          else logStep("backfilled billing period on existing payment", { invoice: invoice.id, payment_id: row.id });
+        }
+        continue;
+      }
 
       const clientOrgId = findOrgByEmail(email);
       if (!clientOrgId) { logStep("no org for email", { email }); summary.no_org.push(invoice.id); continue; }
@@ -226,6 +247,12 @@ serve(async (req) => {
       const paymentDate = paidAtIso.split("T")[0];
       const periodEnd = invoice.period_end
         ? new Date(invoice.period_end * 1000).toISOString().split("T")[0]
+        : null;
+      // See the matching comment in stripe-webhook: the invoice is dated
+      // paymentDate but pays for periodStart→periodEnd, which is frequently a
+      // different calendar month.
+      const periodStart = invoice.period_start
+        ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
         : null;
 
       // Org bookkeeping (all idempotent): paying customer stamp, renewal date,
@@ -393,6 +420,8 @@ serve(async (req) => {
         status: "paid",
         payment_method: "card",
         stripe_invoice_id: invoice.id,
+        billing_period_start: periodStart,
+        billing_period_end: periodEnd,
         notes: `Stripe ${planLabel} · ${invoice.id}${feeNote} (reconciliado)`,
       });
       if (paymentErr) {

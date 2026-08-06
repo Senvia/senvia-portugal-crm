@@ -54,6 +54,8 @@ export function useAllPayments() {
         credit_note_reference: (payment as any).credit_note_reference || null,
         status: payment.status as PaymentRecordStatus,
         notes: payment.notes,
+        billing_period_start: (payment as any).billing_period_start ?? null,
+        billing_period_end: (payment as any).billing_period_end ?? null,
         created_at: payment.created_at,
         updated_at: payment.updated_at,
         sale: {

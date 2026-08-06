@@ -341,6 +341,15 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     const periodEnd = invoice.period_end
       ? new Date(invoice.period_end * 1000).toISOString().split("T")[0]
       : null;
+    // Stripe bills in advance: this invoice is dated `paymentDate` but pays for
+    // the cycle running periodStart→periodEnd. Recorded on the payment itself so
+    // the UI can show "covers September" instead of only the charge date — the
+    // two frequently land in different calendar months (a renewal on the 30th
+    // pays for the month starting that day), which reads as a missing payment
+    // when someone filters Finance by the month the subscription is FOR.
+    const periodStart = invoice.period_start
+      ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
+      : null;
 
     // Find sale in Senvia org linked to this client org
     // `pending` is included: a subscription can be paid before anyone moves the
@@ -413,10 +422,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
           .maybeSingle();
 
         const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
-
-        const periodStart = invoice.period_start
-          ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
-          : null;
 
         if (rate > 0) {
           const commissionAmount = amount * (rate / 100);
@@ -507,6 +512,8 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         status: "paid",
         payment_method: "card",
         stripe_invoice_id: stripeInvoiceId,
+        billing_period_start: periodStart,
+        billing_period_end: periodEnd,
         notes: `Stripe ${planLabel} · ${stripeInvoiceId}${feeNote}`,
       });
 

@@ -14,6 +14,11 @@ export interface PaymentWithSale {
   credit_note_reference: string | null;
   status: PaymentRecordStatus;
   notes: string | null;
+  /** Start of the subscription cycle this payment covers (Stripe invoices bill in advance,
+   *  so this is frequently a different calendar month than payment_date). Null for
+   *  non-Stripe / manual payments. */
+  billing_period_start?: string | null;
+  billing_period_end?: string | null;
   created_at: string;
   updated_at: string;
   sale: {
