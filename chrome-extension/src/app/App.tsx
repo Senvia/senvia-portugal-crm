@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PairedSession } from '../lib/protocol';
 import { onPairingChanged, restoreSession } from '../panel/supabase';
 import {
@@ -12,6 +12,8 @@ import {
   type LeadRow,
   type Totals,
 } from './data';
+import { useAsync } from './useAsync';
+import { Agenda, Emails, Financeiro } from './screens';
 import './styles.css';
 
 // The CRM rendered INSIDE the extension.
@@ -28,6 +30,9 @@ const SECTIONS = [
   { key: 'clients', label: 'Clientes' },
   { key: 'proposals', label: 'Propostas' },
   { key: 'sales', label: 'Vendas' },
+  { key: 'emails', label: 'Emails' },
+  { key: 'agenda', label: 'Agenda' },
+  { key: 'financeiro', label: 'Financeiro' },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]['key'];
@@ -113,36 +118,12 @@ export function App() {
         {section === 'clients' && <Clients orgId={session.organizationId} />}
         {section === 'proposals' && <Deals orgId={session.organizationId} kind="proposals" />}
         {section === 'sales' && <Deals orgId={session.organizationId} kind="sales" />}
+        {section === 'emails' && <Emails orgId={session.organizationId} />}
+        {section === 'agenda' && <Agenda orgId={session.organizationId} />}
+        {section === 'financeiro' && <Financeiro orgId={session.organizationId} />}
       </main>
     </div>
   );
-}
-
-/** Shared fetch-on-mount with loading and error, so screens stay declarative. */
-function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await fn());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-    // fn is recreated per render; deps are the real inputs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  useEffect(() => {
-    void run();
-  }, [run]);
-
-  return { data, loading, error, reload: run };
 }
 
 function Dashboard({ orgId }: { orgId: string }) {

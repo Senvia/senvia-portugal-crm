@@ -1,22 +1,20 @@
-// Navigation between WhatsApp Web and the CRM, in the SAME tab.
+// Rail down the left edge of WhatsApp Web, and the CRM screens it opens.
 //
-// On WhatsApp: a rail down the left edge with every CRM section. Clicking one
-// navigates the tab to it — the CRM takes over the screen.
-// On the CRM: a floating button that navigates back to WhatsApp.
+// Clicking a section covers WhatsApp with it, in place: no navigation, no new
+// tab, no reload. WhatsApp keeps running underneath, so closing lands back on
+// the same conversation exactly as it was.
 //
-// WHY NAVIGATION AND NOT AN OVERLAY: the CRM cannot be embedded here. WhatsApp
-// Web's CSP carries a `frame-src` allowlist (their own domains, YouTube,
-// Arkose, Trustly) and Chrome enforces it on NESTED frames too, so even loading
-// an extension page in between — which is itself exempt from the host page's
-// CSP — doesn't get the CRM through. Verified against the real violation
-// report. The only way to embed would be stripping WhatsApp's CSP with
-// declarativeNetRequest, which removes a real XSS mitigation from a page
-// holding the user's messages.
+// WHY OUR OWN SCREENS AND NOT THE REAL APP IN AN IFRAME: WhatsApp Web's CSP
+// carries a `frame-src` allowlist (their domains, YouTube, Arkose, Trustly) and
+// Chrome enforces it on NESTED frames too — so app.senvia.pt can't be embedded
+// even behind an extension page. Verified against the real violation report.
+// Stripping their CSP with declarativeNetRequest would work but removes an XSS
+// mitigation from a page holding the user's messages.
 //
-// The cost of navigating is that WhatsApp Web reloads on the way back. Its
-// session lives in IndexedDB so it reconnects rather than re-pairing, but it is
-// still a few seconds. Ctrl/Cmd-click opens the section in a new tab instead,
-// for when that matters.
+// Extension pages, however, ARE exempt — which is how the contact panel has
+// worked all along. So the sections in NAV are rendered by src/app, querying
+// the same Supabase tables directly under the agent's own JWT and RLS.
+// Anything still in EXTERNAL hasn't been rebuilt yet and opens the real app.
 
 const CRM_ORIGIN = 'https://app.senvia.pt';
 const WHATSAPP_URL = 'https://web.whatsapp.com/';
@@ -30,11 +28,14 @@ export { RAIL_W };
  * the screen without leaving WhatsApp Web.
  */
 const NAV: { section: string; label: string; icon: string }[] = [
-  { section: 'dashboard', label: 'Painel', icon: '▤' },
-  { section: 'leads', label: 'Leads', icon: '◎' },
-  { section: 'clients', label: 'Clientes', icon: '☺' },
-  { section: 'proposals', label: 'Propostas', icon: '◫' },
-  { section: 'sales', label: 'Vendas', icon: '★' },
+  { section: "dashboard", label: "Painel", icon: "▤" },
+  { section: "leads", label: "Leads", icon: "◎" },
+  { section: "emails", label: "Caixa de Entrada", icon: "✉" },
+  { section: "clients", label: "Clientes", icon: "☺" },
+  { section: "proposals", label: "Propostas", icon: "▫" },
+  { section: "sales", label: "Vendas", icon: "★" },
+  { section: "financeiro", label: "Financeiro", icon: "€" },
+  { section: "agenda", label: "Agenda", icon: "▦" },
 ];
 
 /**
@@ -42,10 +43,7 @@ const NAV: { section: string; label: string; icon: string }[] = [
  * they open in a tab rather than pretending to work here.
  */
 const EXTERNAL: { route: string; label: string; icon: string }[] = [
-  { route: '/inbox', label: 'Caixa de Entrada (abre o Senvia)', icon: '✉' },
-  { route: '/financeiro', label: 'Financeiro (abre o Senvia)', icon: '€' },
-  { route: '/calendar', label: 'Agenda (abre o Senvia)', icon: '▦' },
-  { route: '/marketing', label: 'Marketing (abre o Senvia)', icon: '✦' },
+  { route: "/marketing", label: "Marketing (abre o Senvia)", icon: "✦" },
 ];
 
 const RAIL_CSS = `

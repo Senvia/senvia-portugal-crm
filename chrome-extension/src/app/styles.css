@@ -100,3 +100,56 @@ button.primary {
 
 .muted { color: var(--muted); }
 .err { color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; padding: 8px 10px; }
+
+/* --- Agenda --- */
+.agenda section { margin-bottom: 18px; }
+.day {
+  margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 700;
+}
+.event {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); margin-bottom: 5px;
+}
+.event.cancelled { opacity: .5; text-decoration: line-through; }
+.event .when { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 62px; }
+
+.chip {
+  display: inline-block; background: var(--border); color: var(--fg);
+  border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 600;
+}
+
+/* --- Email --- */
+.mail { display: flex; gap: 14px; height: 100%; align-items: flex-start; }
+.mail-side {
+  flex: 0 0 180px; display: flex; flex-direction: column; gap: 3px;
+  position: sticky; top: 0;
+}
+.mail-side select { width: 100%; margin-bottom: 6px; }
+.folder {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  border: 0; background: transparent; color: var(--fg); cursor: pointer;
+  border-radius: 8px; padding: 6px 9px; font: inherit; text-align: left;
+}
+.folder:hover { background: var(--card); }
+.folder.active { background: var(--accent); color: var(--accent-fg); }
+.folder.active .chip { background: rgba(0,0,0,.18); color: inherit; }
+
+.mail-list { flex: 1 1 auto; min-width: 0; }
+.mail-row { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.mail-row:hover { background: var(--card); }
+.mail-row.unread strong { font-weight: 700; }
+.mail-row.unread .subject { font-weight: 600; }
+.mail-row .subject { margin-top: 2px; }
+.mail-row .snippet {
+  margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row { display: flex; align-items: baseline; gap: 8px; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.small { font-size: 11px; }
+
+select {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+}
