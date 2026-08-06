@@ -68,11 +68,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // sees the trial blocker again, regardless of trial_ends_at value.
   // Only `plan_expired` blocks: while still inside the grace window
   // (payment_overdue) the user keeps access and sees the warning banner instead.
+  // first_paid_at falls back to the organizations row (AuthContext) so a payer
+  // whose stamp is missing from the edge function response still gets blocked
+  // when plan_expired — without the fallback they'd never see any blocker.
+  const orgFirstPaidAt = (organization as { first_paid_at?: string | null } | null)?.first_paid_at;
   if (
     hasCheckedSub &&
     subscriptionStatus &&
     !subscriptionStatus.billing_exempt &&
-    subscriptionStatus.first_paid_at &&
+    (subscriptionStatus.first_paid_at || orgFirstPaidAt) &&
     subscriptionStatus.plan_expired === true &&
     !location.pathname.startsWith('/settings')
   ) {
@@ -93,7 +97,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   //   * Edge function errors (returns null subscriptionStatus that defaults
   //     to "trial" semantics elsewhere)
   //   * Stripe API failures during sub lookup
-  const orgFirstPaidAt = (organization as { first_paid_at?: string | null } | null)?.first_paid_at;
   if (
     hasCheckedSub &&
     subscriptionStatus &&
