@@ -305,6 +305,110 @@ export function replyReferences(original: EmailFull): string[] {
   return original.message_id ? [...prior, original.message_id] : prior;
 }
 
+// --- Criação de registos ------------------------------------------------------
+//
+// Every insert mirrors the CRM's own mutation so a record created here is
+// indistinguishable from one created there — same defaults, same required
+// columns. RLS decides whether it's allowed; the extension has no special
+// rights.
+
+export interface NewLead {
+  name: string;
+  phone: string;
+  email?: string;
+  value?: number | null;
+}
+
+/** Same shape as useCreateLeadFromContact in the CRM. */
+export async function createLead(orgId: string, input: NewLead): Promise<string | undefined> {
+  const { data, error } = await db
+    .from('leads')
+    .insert({
+      organization_id: orgId,
+      name: input.name.trim(),
+      phone: String(input.phone).replace(/\D/g, ''),
+      email: input.email?.trim() || '',
+      value: input.value ?? null,
+      source: 'whatsapp',
+      status: 'new',
+      gdpr_consent: true,
+    })
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id as string | undefined;
+}
+
+export interface NewClient {
+  name: string;
+  phone?: string;
+  email?: string;
+  nif?: string;
+}
+
+export async function createClient(orgId: string, input: NewClient): Promise<string | undefined> {
+  const { data, error } = await db
+    .from('crm_clients')
+    .insert({
+      organization_id: orgId,
+      name: input.name.trim(),
+      phone: input.phone?.replace(/\D/g, '') || null,
+      email: input.email?.trim() || null,
+      nif: input.nif?.trim() || null,
+      // The CRM defaults this in useCreateClient; without it the row lands
+      // outside every "active clients" filter.
+      status: 'active',
+    })
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id as string | undefined;
+}
+
+export interface NewExpense {
+  description: string;
+  amount: number;
+  expense_date: string;
+  is_recurring?: boolean;
+}
+
+export async function createExpense(orgId: string, input: NewExpense): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser();
+  const { error } = await db.from('expenses').insert({
+    organization_id: orgId,
+    description: input.description.trim(),
+    amount: input.amount,
+    expense_date: input.expense_date,
+    is_recurring: input.is_recurring ?? false,
+    category_id: null,
+    created_by: auth.user?.id ?? null,
+  });
+  if (error) throw error;
+}
+
+export interface NewEvent {
+  title: string;
+  start_time: string;
+  event_type: string;
+  description?: string;
+}
+
+export async function createEvent(orgId: string, input: NewEvent): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user?.id) throw new Error('Sessão expirada');
+  const { error } = await db.from('calendar_events').insert({
+    organization_id: orgId,
+    // NOT NULL in calendar_events, and the CRM sets it the same way.
+    user_id: auth.user.id,
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    event_type: input.event_type,
+    start_time: input.start_time,
+    all_day: false,
+  });
+  if (error) throw error;
+}
+
 export interface Totals {
   leads: number;
   clients: number;

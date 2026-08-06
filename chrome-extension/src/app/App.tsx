@@ -13,7 +13,8 @@ import {
   type Totals,
 } from './data';
 import { useAsync } from './useAsync';
-import { Agenda, Emails, Financeiro } from './screens';
+import { Agenda, Financeiro } from './screens';
+import { NewClientForm, NewLeadForm } from './NewRecord';
 import './styles.css';
 
 // The CRM rendered INSIDE the extension.
@@ -30,7 +31,6 @@ const SECTIONS = [
   { key: 'clients', label: 'Clientes' },
   { key: 'proposals', label: 'Propostas' },
   { key: 'sales', label: 'Vendas' },
-  { key: 'emails', label: 'Emails' },
   { key: 'agenda', label: 'Agenda' },
   { key: 'financeiro', label: 'Financeiro' },
 ] as const;
@@ -118,7 +118,6 @@ export function App() {
         {section === 'clients' && <Clients orgId={session.organizationId} />}
         {section === 'proposals' && <Deals orgId={session.organizationId} kind="proposals" />}
         {section === 'sales' && <Deals orgId={session.organizationId} kind="sales" />}
-        {section === 'emails' && <Emails orgId={session.organizationId} />}
         {section === 'agenda' && <Agenda orgId={session.organizationId} />}
         {section === 'financeiro' && <Financeiro orgId={session.organizationId} />}
       </main>
@@ -165,6 +164,7 @@ function Search({ value, onChange }: { value: string; onChange: (v: string) => v
 }
 
 function Leads({ orgId }: { orgId: string }) {
+  const [creating, setCreating] = useState(false);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   useEffect(() => {
@@ -172,11 +172,26 @@ function Leads({ orgId }: { orgId: string }) {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const { data, loading, error } = useAsync<LeadRow[]>(() => listLeads(orgId, debounced), [orgId, debounced]);
+  const { data, loading, error, reload } = useAsync<LeadRow[]>(() => listLeads(orgId, debounced), [orgId, debounced]);
 
   return (
     <>
-      <Search value={q} onChange={setQ} />
+      <div className="row" style={{ marginBottom: 12, gap: 10 }}>
+        <Search value={q} onChange={setQ} />
+        <button className="primary" onClick={() => setCreating(true)} disabled={creating}>
+          + Nova lead
+        </button>
+      </div>
+      {creating && (
+        <NewLeadForm
+          orgId={orgId}
+          onCancel={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            void reload();
+          }}
+        />
+      )}
       {error && <p className="err">{error}</p>}
       {loading ? (
         <p className="muted">A carregar…</p>
@@ -217,6 +232,7 @@ function Leads({ orgId }: { orgId: string }) {
 }
 
 function Clients({ orgId }: { orgId: string }) {
+  const [creating, setCreating] = useState(false);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   useEffect(() => {
@@ -224,11 +240,26 @@ function Clients({ orgId }: { orgId: string }) {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const { data, loading, error } = useAsync<ClientRow[]>(() => listClients(orgId, debounced), [orgId, debounced]);
+  const { data, loading, error, reload } = useAsync<ClientRow[]>(() => listClients(orgId, debounced), [orgId, debounced]);
 
   return (
     <>
-      <Search value={q} onChange={setQ} />
+      <div className="row" style={{ marginBottom: 12, gap: 10 }}>
+        <Search value={q} onChange={setQ} />
+        <button className="primary" onClick={() => setCreating(true)} disabled={creating}>
+          + Novo cliente
+        </button>
+      </div>
+      {creating && (
+        <NewClientForm
+          orgId={orgId}
+          onCancel={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            void reload();
+          }}
+        />
+      )}
       {error && <p className="err">{error}</p>}
       {loading ? (
         <p className="muted">A carregar…</p>

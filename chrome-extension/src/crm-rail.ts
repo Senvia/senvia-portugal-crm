@@ -30,7 +30,6 @@ export { RAIL_W };
 const NAV: { section: string; label: string; icon: string }[] = [
   { section: "dashboard", label: "Painel", icon: "▤" },
   { section: "leads", label: "Leads", icon: "◎" },
-  { section: "emails", label: "Caixa de Entrada", icon: "✉" },
   { section: "clients", label: "Clientes", icon: "☺" },
   { section: "proposals", label: "Propostas", icon: "▫" },
   { section: "sales", label: "Vendas", icon: "★" },
@@ -43,6 +42,7 @@ const NAV: { section: string; label: string; icon: string }[] = [
  * they open in a tab rather than pretending to work here.
  */
 const EXTERNAL: { route: string; label: string; icon: string }[] = [
+  { route: "/inbox", label: "Caixa de Entrada (abre o Senvia)", icon: "✉" },
   { route: "/marketing", label: "Marketing (abre o Senvia)", icon: "✦" },
 ];
 
