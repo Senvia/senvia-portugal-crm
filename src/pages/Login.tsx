@@ -172,13 +172,18 @@ export default function Login() {
         return;
       }
 
-      // No results = either the company code is wrong, OR this is an account
-      // whose organization was never created (signup interrupted at the
-      // email-confirmation step). Telling the second group that their own
-      // company code "does not exist" locked them out permanently, so
-      // authenticate and check: an account with no organization at all is let
-      // through to finish setup; anyone else gets the error and is signed out.
-      if (!membershipCheck || membershipCheck.length === 0) {
+      const membership = membershipCheck?.[0];
+      const codeRejected = !membership || !membership.is_member;
+
+      // The company code did not resolve to an organization this account
+      // belongs to. That is normally a wrong code — but it is also exactly what
+      // an account whose organization was never created looks like (signup
+      // interrupted at the email-confirmation step). Telling that second group
+      // their own company code "does not exist" locked them out permanently
+      // with no way back, so authenticate first and tell the two apart: an
+      // account belonging to NO organization is let through to finish setup;
+      // everyone else is signed out again and gets the error.
+      if (codeRejected) {
         const { error: preAuthError } = await signIn(loginEmail, loginPassword);
         if (preAuthError) {
           toast({
@@ -206,21 +211,10 @@ export default function Login() {
 
         await supabase.auth.signOut();
         toast({
-          title: 'Dados inválidos',
-          description: 'O código da empresa ou email não existe.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const membership = membershipCheck[0];
-      
-      // User exists but is not a member of this org
-      if (!membership.is_member) {
-        toast({
-          title: 'Acesso negado',
-          description: 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.',
+          title: membership ? 'Acesso negado' : 'Dados inválidos',
+          description: membership
+            ? 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.'
+            : 'O código da empresa ou email não existe.',
           variant: 'destructive',
         });
         setIsLoading(false);
