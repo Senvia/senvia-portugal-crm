@@ -118,7 +118,23 @@ serve(async (req) => {
         if (!item?.price) continue;
         const productId = item.price.product as string;
         const planId = PRODUCT_TO_PLAN[productId] || "unknown";
-        const amount = (item.price.unit_amount || 0) / 100;
+        // Sum EVERY recurring item × its quantity, normalised to a month.
+        // Reading only items[0].unit_amount left extra seats (a separate
+        // subscription item) out of MRR entirely, and counted a yearly price at
+        // its full annual value.
+        const amount = sub.items.data.reduce((sum: number, it: any) => {
+          const price = it.price;
+          if (!price?.recurring || price.unit_amount == null) return sum;
+          const line = (price.unit_amount / 100) * (it.quantity || 1);
+          const interval = price.recurring.interval;
+          const count = price.recurring.interval_count || 1;
+          const perMonth =
+            interval === "year" ? line / (12 * count)
+            : interval === "week" ? (line * 52) / (12 * count)
+            : interval === "day" ? (line * 365) / (12 * count)
+            : line / count;
+          return sum + perMonth;
+        }, 0);
 
         // Safely handle period end - try sub-level, then item-level
         let periodEndISO: string | null = null;
@@ -132,7 +148,9 @@ serve(async (req) => {
           plan: planId,
           amount,
           status: sub.status,
-          current_period_end: periodEndISO || new Date().toISOString(),
+          // Null when unknown. Substituting "now" fabricated a renewal date that
+          // looked like a subscription about to lapse.
+          current_period_end: periodEndISO,
           stripe_customer_id: customer,
         };
       } catch (subError) {

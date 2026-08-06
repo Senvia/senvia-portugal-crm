@@ -105,7 +105,13 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+# Both write/expose financial data. They authenticate on the x-cron-secret
+# header against a Vault-only secret (see isAuthorized in each function), so the
+# gateway JWT check is not the control here.
 [functions.reconcile-stripe-payments]
+verify_jwt = false
+
+[functions.stripe-health]
 verify_jwt = false
 
 [functions.backfill-stripe-net]

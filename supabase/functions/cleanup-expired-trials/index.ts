@@ -79,30 +79,48 @@ serve(async (req) => {
     let deletedCount = 0;
 
     for (const org of expiredOrgs) {
-      // Check if org has active Stripe subscription via members' emails
+      // Check for a Stripe subscription under ANY member's email. Checking only
+      // the first member meant an org whose subscription sits under a colleague's
+      // email looked like a dead trial and had all of its data deleted.
+      // The status set is deliberately broad: trialing/past_due/unpaid all mean
+      // "this is a customer", and none of them may be purged.
       const { data: members } = await supabaseClient
         .from('organization_members')
         .select('user_id')
         .eq('organization_id', org.id)
-        .eq('is_active', true)
-        .limit(1);
+        .eq('is_active', true);
 
-      if (members && members.length > 0) {
-        const { data: userData } = await supabaseClient.auth.admin.getUserById(members[0].user_id);
-        if (userData?.user?.email) {
-          const customers = await stripe.customers.list({ email: userData.user.email, limit: 1 });
-          if (customers.data.length > 0) {
-            const subs = await stripe.subscriptions.list({
-              customer: customers.data[0].id,
-              status: "active",
-              limit: 1,
-            });
-            if (subs.data.length > 0) {
-              logStep(`Org ${org.id} has active subscription, skipping`);
-              continue;
+      let hasSubscription = false;
+      let lookupFailed = false;
+      for (const member of members ?? []) {
+        try {
+          const { data: userData } = await supabaseClient.auth.admin.getUserById(member.user_id);
+          const email = userData?.user?.email;
+          if (!email) continue;
+          const customers = await stripe.customers.list({ email, limit: 10 });
+          for (const customer of customers.data) {
+            for (const status of ["active", "trialing", "past_due", "unpaid"] as const) {
+              const subs = await stripe.subscriptions.list({ customer: customer.id, status, limit: 1 });
+              if (subs.data.length > 0) { hasSubscription = true; break; }
             }
+            if (hasSubscription) break;
           }
+          if (hasSubscription) break;
+        } catch (e) {
+          // A Stripe error must never be read as "no subscription" — that would
+          // delete a paying customer's data. Treat it as unknown and skip.
+          logStep(`Stripe lookup failed for a member of org ${org.id}`, { error: (e as Error).message });
+          lookupFailed = true;
         }
+      }
+
+      if (hasSubscription) {
+        logStep(`Org ${org.id} has a Stripe subscription, skipping`);
+        continue;
+      }
+      if (lookupFailed) {
+        logStep(`Org ${org.id} skipped: could not verify subscription status (failing safe)`);
+        continue;
       }
 
       logStep(`Deleting data for org: ${org.id} (${org.name})`);
@@ -120,14 +138,25 @@ serve(async (req) => {
         'organization_invites', 'organization_members',
       ];
 
+      let purgeFailed = false;
       for (const table of tables) {
         const { error } = await supabaseClient
           .from(table)
           .delete()
           .eq('organization_id', org.id);
         if (error) {
-          logStep(`Warning: failed to delete from ${table}`, { error: error.message });
+          console.error(`[CLEANUP-EXPIRED-TRIALS] failed to delete from ${table} for org ${org.id}`, error.message);
+          purgeFailed = true;
         }
+      }
+
+      // There is no transaction here, so deleting the organization row after a
+      // partial purge leaves financial rows (sale_payments, invoices, credit
+      // notes) orphaned against a nonexistent org. Stop and leave the org intact
+      // for a human to look at instead.
+      if (purgeFailed) {
+        console.error(`[CLEANUP-EXPIRED-TRIALS] aborting deletion of org ${org.id}: child rows were not fully removed`);
+        continue;
       }
 
       // Delete the organization itself

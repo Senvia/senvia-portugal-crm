@@ -194,8 +194,16 @@ serve(async (req) => {
       return json(buildTrialResponse(orgData));
     }
 
-    const productId = subscription.items.data[0].price.product as string;
-    const planId = PRODUCT_TO_PLAN[productId] || "starter";
+    const productId = subscription.items?.data?.[0]?.price?.product as string | undefined;
+    // An unrecognised product must NOT silently rewrite the org down to
+    // 'starter' — that is how a paying Elite customer loses module access after
+    // a product is renamed or added in Stripe. Unknown → keep whatever the org
+    // already has and shout about it (reconcile-plans applies the same rule).
+    const mappedPlan = productId ? PRODUCT_TO_PLAN[productId] : undefined;
+    if (productId && !mappedPlan) {
+      console.error("[check-subscription] UNKNOWN Stripe product — plan left unchanged", { productId });
+    }
+    const planId = mappedPlan || orgData?.plan || "starter";
 
     const periodEnd = subscription.current_period_end ?? subscription.items.data[0]?.current_period_end;
     const subscriptionEnd = (periodEnd && typeof periodEnd === "number" && periodEnd > 0)
@@ -217,7 +225,10 @@ serve(async (req) => {
     // Persist the renewal date + first-paid stamp so the cleanup cron, the
     // protected route and the blocker components have a single source of truth.
     if (orgId) {
-      const orgUpdates: Record<string, any> = { plan: planId };
+      // Only write `plan` when Stripe gave us a product we recognise, so an
+      // unknown product never overwrites a good value.
+      const orgUpdates: Record<string, any> = {};
+      if (mappedPlan) orgUpdates.plan = mappedPlan;
       if (subscriptionEnd) orgUpdates.current_period_end = subscriptionEnd;
       if (!orgData?.first_paid_at && firstPaidAt) {
         // First time we see this org actually paying (active) — stamp now.
@@ -226,7 +237,12 @@ serve(async (req) => {
       // Sub healthy again → clear any lingering failure clock ONLY via webhook.
       // Do NOT clear here: Stripe keeps "active" during retry attempts, which
       // would reset the grace window and give the customer infinite free access.
-      await supabase.from('organizations').update(orgUpdates).eq('id', orgId);
+      if (Object.keys(orgUpdates).length > 0) {
+        const { error: updErr } = await supabase.from('organizations').update(orgUpdates).eq('id', orgId);
+        // Silently dropping this write is how plan/current_period_end/first_paid_at
+        // go stale, which then feeds the blocker logic with wrong data.
+        if (updErr) console.error("[check-subscription] org update FAILED", { orgId, error: updErr.message, orgUpdates });
+      }
     }
 
     // Always compute overdue state from payment_failed_at if it exists.
@@ -234,13 +250,18 @@ serve(async (req) => {
     // failed and the grace window has passed, the customer is blocked.
     let failedAt: string | null = orgData?.payment_failed_at ?? null;
     if (isOverdue && !failedAt) {
-      failedAt = subscriptionEnd ?? new Date().toISOString();
+      // Anchor on NOW, not on current_period_end. The period end is already in
+      // the past by the time Stripe reports past_due, so using it consumed the
+      // whole grace window instantly and hard-blocked a customer who was
+      // entitled to GRACE_DAYS to settle. First observation starts the clock.
+      failedAt = new Date().toISOString();
       if (orgId) {
-        await supabase
+        const { error: failErr } = await supabase
           .from('organizations')
           .update({ payment_failed_at: failedAt })
           .eq('id', orgId)
           .is('payment_failed_at', null);
+        if (failErr) console.error("[check-subscription] failed to record payment_failed_at", { orgId, error: failErr.message });
       }
     }
 

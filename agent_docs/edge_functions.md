@@ -7,7 +7,8 @@ All functions live in `supabase/functions/{name}/index.ts` (Deno runtime). Deplo
 | Function | Trigger | Purpose |
 |----------|---------|---------|
 | `stripe-webhook` | Stripe webhook | Handles `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated/deleted`. Creates commission records and sale_payments. |
-| `reconcile-stripe-payments` | Cron (daily) | Safety net: lists paid Stripe invoices from the last 10 days and records any missed by the webhook (sale_payments, commission, sale renewal fields). Idempotent — dedupes by Stripe invoice id. Mirrors `handleInvoicePaid` in stripe-webhook; keep in sync. |
+| `reconcile-stripe-payments` | Cron (daily 04:30) | Safety net: lists paid Stripe invoices from the last 10 days and records any missed by the webhook (sale_payments, commission, sale renewal fields). Idempotent — dedupes on `sale_payments.stripe_invoice_id` (unique index). Mirrors `handleInvoicePaid` in stripe-webhook; keep in sync. Auth: `x-cron-secret` header. |
+| `stripe-health` | Cron (daily 04:45) + on demand | Read-only audit of the whole Stripe ↔ CRM integration: webhook endpoint config and event delivery, paid invoices without a CRM payment row, live subscriptions vs organization rows. Writes nothing. Auth: `x-cron-secret` header. |
 | `create-checkout` | Client call | Creates Stripe Checkout session for subscription. |
 | `customer-portal` | Client call | Creates Stripe Customer Portal session. |
 | `check-subscription` | Client call | Verifies org subscription status against Stripe. |

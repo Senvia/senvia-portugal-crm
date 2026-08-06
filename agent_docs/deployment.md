@@ -91,6 +91,29 @@ SELECT cron.schedule(
 
 Requires `pg_net` and `pg_cron` extensions enabled.
 
+#### Cron jobs that require a secret
+
+`reconcile-stripe-payments` and `stripe-health` reject unauthenticated calls. Their
+shared secret lives **only in Supabase Vault** (`stripe_cron_secret`) and is compared
+by `public.verify_stripe_cron_secret(text)` (SECURITY DEFINER, `service_role` only),
+so it is never stored in an env var, a cron definition, or this repo. Cron jobs pass
+it like this:
+
+```sql
+headers := jsonb_build_object(
+  'Content-Type', 'application/json',
+  'x-cron-secret', trim(both from (
+    select decrypted_secret from vault.decrypted_secrets where name = 'stripe_cron_secret'
+  ))
+)
+```
+
+To run either function by hand, use the same `net.http_post` shape from the SQL Editor.
+
+> **Note:** `cleanup-expired-trials` requires a `CRON_SECRET` header that its cron job
+> does **not** send, so that destructive purge is currently dormant. Verify the safety
+> checks before re-arming it.
+
 ## Important Notes
 
 - **Never push to `master`** — Vercel deploys from `main` only. A `master` branch exists but is not used.
