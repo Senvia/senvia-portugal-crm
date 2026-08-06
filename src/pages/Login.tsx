@@ -294,6 +294,10 @@ export default function Login() {
     try {
       // 1. Create the user account
       const redirectUrl = `${window.location.origin}/`;
+      // The company details travel WITH the account: handle_new_user creates the
+      // organization in the same transaction as the auth user, so an account can
+      // never exist without its company — including when email confirmation is
+      // required and no session comes back here.
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: signupEmail,
         password: signupPassword,
@@ -301,6 +305,9 @@ export default function Login() {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: signupFullName,
+            organization_name: organizationName,
+            organization_slug: organizationSlug,
+            contact_phone: contactPhone,
           },
         },
       });
@@ -359,19 +366,21 @@ export default function Login() {
         return;
       }
 
-      // 2. Create the organization (this also assigns admin role)
+      // 2. The organization was already created by handle_new_user, atomically
+      // with the account. This call is only a fallback for accounts created
+      // before that trigger existed — "already belongs" means the trigger did
+      // its job and is the expected outcome, not an error.
       const { error: orgError } = await supabase.rpc('create_organization_for_current_user', {
         _name: organizationName,
         _slug: organizationSlug,
         _contact_phone: contactPhone,
       } as any);
 
-      if (orgError) {
-        // If org creation fails, we should handle it gracefully
+      if (orgError && !orgError.message.includes('already belongs to an organization')) {
         if (orgError.message.includes('Slug already exists')) {
           toast({
-            title: 'Slug indisponível',
-            description: 'Este slug já está em uso. Por favor, escolha outro.',
+            title: 'Código indisponível',
+            description: 'Este código de empresa já está em uso. Por favor, escolha outro.',
             variant: 'destructive',
           });
           setIsLoading(false);
@@ -417,6 +426,14 @@ export default function Login() {
       let message = error.message;
       if (error.message.includes('already registered')) {
         message = 'Este email já está registado';
+      } else if (
+        // The signup transaction now also creates the organization, so a slug
+        // taken between the availability check and submit aborts the whole
+        // signUp. Supabase reports that as a generic database error.
+        error.message.includes('Database error saving new user') ||
+        error.message.includes('Slug already exists')
+      ) {
+        message = 'Este código de empresa já está em uso. Escolha outro e tente novamente.';
       }
       toast({
         title: 'Erro ao criar conta',
