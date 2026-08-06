@@ -5,13 +5,16 @@ import {
   listEmailFolders,
   listEmailMessages,
   listEvents,
+  fetchEmailMessage,
   type EmailChannelRow,
   type EmailFolderRow,
   type EmailMessageRow,
+  type EmailFull,
   type EventRow,
   type FinanceSummary,
 } from './data';
 import { useAsync } from './useAsync';
+import { EmailReader } from './EmailReader';
 
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' });
 const dayFmt = new Intl.DateTimeFormat('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -128,6 +131,7 @@ export function Financeiro({ orgId }: { orgId: string }) {
 export function Emails({ orgId }: { orgId: string }) {
   const [channelId, setChannelId] = useState<string | null>(null);
   const [folderId, setFolderId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const channels = useAsync<EmailChannelRow[]>(() => listEmailChannels(orgId), [orgId]);
 
@@ -151,6 +155,13 @@ export function Emails({ orgId }: { orgId: string }) {
   const messages = useAsync<EmailMessageRow[]>(
     () => (folderId ? listEmailMessages(folderId) : Promise.resolve([])),
     [folderId],
+  );
+
+  // Full body and headers only when a message is actually opened — the list
+  // query deliberately skips them, they're large.
+  const opened = useAsync<EmailFull | null>(
+    () => (openId ? fetchEmailMessage(openId) : Promise.resolve(null)),
+    [openId],
   );
 
   if (channels.loading) return <p className="muted">A carregar…</p>;
@@ -197,7 +208,11 @@ export function Emails({ orgId }: { orgId: string }) {
           <p className="muted">Pasta vazia.</p>
         ) : (
           messages.data.map((m) => (
-            <div key={m.id} className={`mail-row ${m.seen ? '' : 'unread'}`}>
+            <button
+              key={m.id}
+              className={`mail-row ${m.seen ? '' : 'unread'} ${m.id === openId ? 'selected' : ''}`}
+              onClick={() => setOpenId(m.id === openId ? null : m.id)}
+            >
               <div className="row">
                 <strong className="grow">{m.from_name || m.from_address || '—'}</strong>
                 <span className="muted small">{m.date ? dateFmt.format(new Date(m.date)) : ''}</span>
@@ -207,10 +222,30 @@ export function Emails({ orgId }: { orgId: string }) {
                 {m.has_attachments && <span className="chip" style={{ marginLeft: 6 }}>anexo</span>}
               </div>
               {m.snippet && <div className="muted small snippet">{m.snippet}</div>}
-            </div>
+            </button>
           ))
         )}
       </div>
+
+      {openId && (
+        <div className="mail-reader">
+          {opened.loading ? (
+            <p className="muted">A abrir…</p>
+          ) : opened.error ? (
+            <p className="err">{opened.error}</p>
+          ) : opened.data ? (
+            <EmailReader
+              orgId={orgId}
+              message={opened.data}
+              onClose={() => setOpenId(null)}
+              onChanged={() => {
+                void messages.reload();
+                void opened.reload();
+              }}
+            />
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

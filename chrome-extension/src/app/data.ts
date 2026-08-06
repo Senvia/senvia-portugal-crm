@@ -224,6 +224,87 @@ export async function listEmailMessages(folderId: string): Promise<EmailMessageR
   return (data ?? []) as EmailMessageRow[];
 }
 
+export interface EmailAddress {
+  name: string;
+  address: string;
+}
+
+export interface EmailFull {
+  id: string;
+  channel_id: string;
+  message_id: string | null;
+  from_name: string | null;
+  from_address: string | null;
+  to_addresses: EmailAddress[] | null;
+  cc_addresses: EmailAddress[] | null;
+  subject: string | null;
+  snippet: string | null;
+  date: string | null;
+  seen: boolean | null;
+  body_fetched: boolean | null;
+  html_body: string | null;
+  text_body: string | null;
+  email_references: string[] | null;
+}
+
+export async function fetchEmailMessage(id: string): Promise<EmailFull | null> {
+  const { data, error } = await db.from('email_messages').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as EmailFull | null;
+}
+
+/**
+ * Every mailbox action is queued for the IMAP gateway rather than performed
+ * here — the extension has no IMAP connection, and neither does the CRM. The
+ * gateway drains `email_commands` and applies them against the real mailbox.
+ * Accepted types are defined in email-gateway/src/commands.js.
+ */
+async function queueEmailCommand(
+  orgId: string,
+  channelId: string,
+  type: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await db
+    .from('email_commands')
+    .insert({ organization_id: orgId, channel_id: channelId, type, payload });
+  if (error) throw error;
+}
+
+export function markEmailRead(orgId: string, channelId: string, messageId: string) {
+  return queueEmailCommand(orgId, channelId, 'mark_read', { messageId });
+}
+
+export interface SendEmailInput {
+  to: EmailAddress[];
+  subject: string;
+  html: string;
+  inReplyTo?: string | null;
+  references?: string[];
+}
+
+export function sendEmail(orgId: string, channelId: string, payload: SendEmailInput) {
+  return queueEmailCommand(orgId, channelId, 'send', payload as unknown as Record<string, unknown>);
+}
+
+/** `Re:` once, never `Re: Re: Re:`. */
+export function replySubject(subject: string | null): string {
+  const s = (subject ?? '').trim();
+  if (!s) return 'Re:';
+  return /^re\s*:/i.test(s) ? s : `Re: ${s}`;
+}
+
+/**
+ * Threading headers for a reply. Mail clients use References to build the
+ * thread, so the original's chain has to be carried forward with its own id
+ * appended — dropping it makes the reply start a new thread in the recipient's
+ * client.
+ */
+export function replyReferences(original: EmailFull): string[] {
+  const prior = original.email_references ?? [];
+  return original.message_id ? [...prior, original.message_id] : prior;
+}
+
 export interface Totals {
   leads: number;
   clients: number;
