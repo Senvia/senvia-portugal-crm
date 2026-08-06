@@ -74,9 +74,7 @@ export type RuntimeRequest =
   /** Panel bootstrapping: fetch the stored session. */
   | { type: 'GET_SESSION' }
   /** User signed out from the panel. */
-  | { type: 'CLEAR_SESSION' }
-  /** Rail click: open the CRM at a route, reusing a single dedicated tab. */
-  | { type: 'OPEN_CRM'; route: string };
+  | { type: 'CLEAR_SESSION' };
 
 export type RuntimeResponse =
   | { ok: true; session: PairedSession | null }

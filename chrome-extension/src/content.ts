@@ -10,7 +10,7 @@ import {
   type PanelToContent,
 } from './lib/protocol';
 import { resolvePhone } from './lib/wadb';
-import { mountCrmRail, RAIL_W } from './crm-rail';
+import { mountBackToWhatsApp, mountCrmRail, RAIL_W } from './crm-rail';
 
 // One content script, two jobs, chosen by host:
 //   web.whatsapp.com -> detect the open chat and mount the Senvia panel
@@ -350,4 +350,6 @@ if (window.location.hostname === 'web.whatsapp.com') {
   else window.addEventListener('DOMContentLoaded', bootWhatsApp, { once: true });
 } else {
   bootPairingBridge();
+  // Same tab, other side: give the agent a way back to the conversation.
+  mountBackToWhatsApp();
 }

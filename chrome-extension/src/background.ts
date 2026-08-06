@@ -5,38 +5,9 @@ import type { PairedSession, RuntimeRequest, RuntimeResponse } from './lib/proto
 // after ~30s idle. Anything long-lived lives in the panel iframe instead.
 
 const SESSION_KEY = 'senvia.session';
-const CRM_TAB_KEY = 'senvia.crmTabId';
+
+/** The only origin allowed to hand over a session. See the PAIR case below. */
 const CRM_ORIGIN = 'https://app.senvia.pt';
-
-/**
- * Opens the CRM at a route, reusing the same tab each time.
- *
- * The CRM can't be embedded inside WhatsApp Web: their CSP `frame-src` blocks
- * third-party frames, and Chrome enforces it on nested frames too — so even an
- * extension page in between doesn't help. A dedicated tab is the version that
- * works without stripping WhatsApp's security headers.
- */
-async function openCrm(route: string): Promise<void> {
-  const url = `${CRM_ORIGIN}${route.startsWith('/') ? route : `/${route}`}`;
-  const bag = await chrome.storage.local.get(CRM_TAB_KEY);
-  const known = bag?.[CRM_TAB_KEY] as number | undefined;
-
-  if (typeof known === 'number') {
-    try {
-      // Throws if the agent closed it since last time.
-      await chrome.tabs.get(known);
-      await chrome.tabs.update(known, { url, active: true });
-      const tab = await chrome.tabs.get(known);
-      if (tab.windowId != null) await chrome.windows.update(tab.windowId, { focused: true });
-      return;
-    } catch {
-      /* fall through and open a fresh one */
-    }
-  }
-
-  const created = await chrome.tabs.create({ url, active: true });
-  if (created.id != null) await chrome.storage.local.set({ [CRM_TAB_KEY]: created.id });
-}
 
 async function readSession(): Promise<PairedSession | null> {
   const bag = await chrome.storage.local.get(SESSION_KEY);
@@ -76,11 +47,6 @@ chrome.runtime.onMessage.addListener(
           }
           case 'GET_SESSION': {
             sendResponse({ ok: true, session: await readSession() });
-            return;
-          }
-          case 'OPEN_CRM': {
-            await openCrm(message.route || '/dashboard');
-            sendResponse({ ok: true, session: null });
             return;
           }
           case 'CLEAR_SESSION': {
