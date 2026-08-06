@@ -1,0 +1,153 @@
+/*
+ * Senvia OS design tokens — copied verbatim from the CRM's src/index.css so the
+ * extension and the app are visually the same product.
+ *
+ * Values are raw HSL triples, matching the CRM's shadcn convention, and used as
+ * `hsl(var(--primary))`. Keeping the same format means a token can be diffed
+ * against the CRM directly when the palette changes.
+ *
+ * The CRM switches themes with a `.dark` class; the extension has no theme
+ * toggle, so it follows the OS instead. The values inside are identical.
+ */
+
+:root {
+  --background: 0 0% 98%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  /* Senvia Blue — electric accent */
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 142 76% 36%;
+  --warning: 38 92% 50%;
+
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 217 91% 60%;
+
+  --radius: 0.625rem;
+
+  /* Sidebar — deep navy */
+  --sidebar-background: 222 47% 8%;
+  --sidebar-foreground: 220 14% 96%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-accent: 222 47% 14%;
+  --sidebar-border: 222 47% 16%;
+  --sidebar-muted: 220 9% 46%;
+
+  --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
+  --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.04), 0 1px 2px -1px hsl(222 47% 11% / 0.04);
+  --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.07), 0 2px 4px -2px hsl(222 47% 11% / 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 220 14% 96%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 220 14% 96%;
+
+    --secondary: 222 47% 14%;
+    --secondary-foreground: 220 14% 96%;
+
+    --muted: 222 47% 14%;
+    --muted-foreground: 220 9% 60%;
+
+    --destructive: 0 62% 50%;
+    --success: 142 70% 45%;
+
+    --border: 222 47% 16%;
+    --input: 222 47% 16%;
+
+    --sidebar-background: 222 47% 5%;
+    --sidebar-accent: 222 47% 10%;
+    --sidebar-border: 222 47% 12%;
+    --sidebar-muted: 220 9% 50%;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Controls, matching the CRM's shadcn Button/Input --- */
+
+button {
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  padding: 7px 12px;
+  transition: background-color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+button:hover:not(:disabled) { background: hsl(var(--secondary)); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+button.primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+button.primary:hover:not(:disabled) { background: hsl(var(--primary) / 0.9); }
+
+input[type="text"],
+input[type="date"],
+input[type="datetime-local"],
+textarea,
+select {
+  font: inherit;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--input));
+  border-radius: calc(var(--radius) - 2px);
+  padding: 7px 10px;
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.muted { color: hsl(var(--muted-foreground)); }
+.small { font-size: 11px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 6px; }
+
+.err {
+  border: 1px solid hsl(var(--destructive) / 0.4);
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+  border-radius: calc(var(--radius) - 2px);
+  padding: 7px 10px;
+  font-size: 11px;
+}

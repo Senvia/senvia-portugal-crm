@@ -46,25 +46,34 @@ const EXTERNAL: { route: string; label: string; icon: string }[] = [
   { route: "/marketing", label: "Marketing (abre o Senvia)", icon: "✦" },
 ];
 
+// Colours are the CRM's sidebar tokens from src/index.css, resolved to literals:
+// this stylesheet is injected into WhatsApp's page, which has none of our CSS
+// variables. Kept in sync with src/theme.css by hand.
+//   --sidebar-background 222 47% 8%   --sidebar-foreground 220 14% 96%
+//   --sidebar-accent     222 47% 14%  --sidebar-border     222 47% 16%
+//   --sidebar-muted      220 9% 46%   --primary            217 91% 60%
 const RAIL_CSS = `
   #senvia-rail {
     position: fixed; top: 0; left: 0; bottom: 0; width: ${RAIL_W}px;
-    z-index: 2147483004; background: #111b21; border-right: 1px solid #2a3942;
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 8px 0; overflow-y: auto;
+    z-index: 2147483004;
+    background: hsl(222 47% 8%); border-right: 1px solid hsl(222 47% 16%);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 10px 0; overflow-y: auto;
   }
   #senvia-rail .logo {
-    color: #00a884; font: 700 11px/1 system-ui, sans-serif;
-    margin-bottom: 6px; letter-spacing: .02em; flex: 0 0 auto;
+    color: hsl(217 91% 60%); letter-spacing: .02em; flex: 0 0 auto;
+    font: 700 11px/1 Inter, system-ui, sans-serif; margin-bottom: 8px;
   }
   #senvia-rail button {
-    width: 38px; height: 38px; flex: 0 0 auto; border: 0; border-radius: 9px;
-    cursor: pointer; background: transparent; color: #8696a0; font-size: 16px;
+    width: 38px; height: 38px; flex: 0 0 auto; border: 0; border-radius: 8px;
+    cursor: pointer; background: transparent; color: hsl(220 9% 60%); font-size: 16px;
     display: flex; align-items: center; justify-content: center;
-    transition: background .12s ease, color .12s ease;
+    transition: background-color .15s ease, color .15s ease;
   }
-  #senvia-rail button:hover { background: #202c33; color: #e9edef; }
-  #senvia-rail button:active { background: #00a884; color: #111b21; }
+  #senvia-rail button:hover { background: hsl(222 47% 14%); color: hsl(220 14% 96%); }
+  #senvia-rail button.active {
+    background: hsl(217 91% 60%); color: hsl(0 0% 100%);
+  }
 `;
 
 /** Rail on WhatsApp Web: swap the screen for a CRM section, in place. */
@@ -77,11 +86,10 @@ export function mountCrmRail() {
        so closing lands back on the same conversation with no reload. */
     #senvia-app {
       position: fixed; top: 0; left: ${RAIL_W}px; right: 0; bottom: 0;
-      z-index: 2147483003; background: #fff; display: none;
+      z-index: 2147483003; background: hsl(0 0% 98%); display: none;
     }
     html.senvia-app-open #senvia-app { display: block; }
     #senvia-app iframe { width: 100%; height: 100%; border: 0; display: block; }
-    #senvia-rail button.active { background: #00a884; color: #111b21; }
   `;
   document.head.appendChild(style);
 
@@ -143,7 +151,8 @@ export function mountCrmRail() {
   }
 
   const sep = document.createElement('div');
-  sep.style.cssText = 'width:24px;height:1px;background:#2a3942;margin:6px 0;flex:0 0 auto';
+  sep.style.cssText =
+    'width:24px;height:1px;background:hsl(222 47% 16%);margin:7px 0;flex:0 0 auto';
   rail.appendChild(sep);
 
   for (const item of EXTERNAL) {

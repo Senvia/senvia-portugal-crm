@@ -90,21 +90,21 @@ function injectStyles() {
     html.senvia-open:not(.senvia-rail) #app { width: calc(100% - ${PANEL_WIDTH}px) !important; }
     #senvia-panel-root {
       position: fixed; top: 0; right: 0; height: 100vh; width: ${PANEL_WIDTH}px;
-      z-index: 2147483000; background: #fff; border-left: 1px solid #e4e6eb;
+      z-index: 2147483000; background: hsl(0 0% 98%); border-left: 1px solid hsl(220 13% 91%);
       box-shadow: -2px 0 12px rgba(0,0,0,.06); display: none;
     }
     html.senvia-open #senvia-panel-root { display: block; }
     #senvia-panel-root iframe { width: 100%; height: 100%; border: 0; display: block; }
     #senvia-toggle {
       position: fixed; top: 12px; right: 12px; z-index: 2147483001;
-      height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #d1d7db;
-      background: #fff; color: #111b21; font: 600 12px/32px system-ui, sans-serif;
+      height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid hsl(220 13% 91%);
+      background: hsl(0 0% 100%); color: hsl(222 47% 11%); font: 600 12px/32px Inter, system-ui, sans-serif;
       cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.12);
     }
     html.senvia-open #senvia-toggle { right: ${PANEL_WIDTH + 12}px; }
     @media (prefers-color-scheme: dark) {
-      #senvia-panel-root { background: #111b21; border-left-color: #2a3942; }
-      #senvia-toggle { background: #202c33; color: #e9edef; border-color: #2a3942; }
+      #senvia-panel-root { background: hsl(222 47% 6%); border-left-color: hsl(222 47% 16%); }
+      #senvia-toggle { background: hsl(222 47% 8%); color: hsl(220 14% 96%); border-color: hsl(222 47% 16%); }
     }
   `;
   document.head.appendChild(style);
