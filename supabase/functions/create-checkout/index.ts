@@ -12,6 +12,16 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${d}`);
 };
 
+// Stripe only accepts http(s) return URLs. The Origin header is whatever the
+// caller sends, and the Chrome extension calls from `chrome-extension://<id>`,
+// which Stripe rejects outright — the checkout session never gets created and
+// the user is stuck with no way to pay. Fall back to the canonical app URL for
+// anything that is not http(s).
+function returnBase(req: Request): string {
+  const origin = req.headers.get("origin") ?? "";
+  return /^https?:\/\//.test(origin) ? origin : "https://app.senvia.pt";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -52,8 +62,8 @@ serve(async (req) => {
       customer_email: customerId ? undefined : user.email,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${req.headers.get("origin")}/settings?billing=success`,
-      cancel_url: `${req.headers.get("origin")}/settings?billing=cancel`,
+      success_url: `${returnBase(req)}/settings?billing=success`,
+      cancel_url: `${returnBase(req)}/settings?billing=cancel`,
       allow_promotion_codes: true,
     });
 

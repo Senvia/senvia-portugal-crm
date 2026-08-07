@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Senvia OS — painel de CRM dentro do WhatsApp Web",
   "scripts": {
-    "build": "vite build && vite build --config vite.content.config.ts",
+    "build": "vite build && vite build --config vite.content.config.ts && npm --prefix .. run build:extension",
     "dev": "npm run build -- --watch",
     "typecheck": "tsc --noEmit"
   },

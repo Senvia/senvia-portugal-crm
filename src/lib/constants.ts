@@ -7,10 +7,14 @@ export const APP_VERSION = '26.1.10';
 export const PRODUCTION_URL = 'https://app.senvia.pt';
 
 // Detecta o ambiente e retorna a URL base correcta.
-// Regra: usar SEMPRE o host actual quando existir `window`. Só caímos
-// no PRODUCTION_URL quando estamos em SSR/edge sem `window`.
+// Regra: usar o host actual quando existir `window` — mas SÓ se for http(s).
+// Dentro da extensão do Chrome a origem é `chrome-extension://<id>`, que não
+// abre em máquina nenhuma e ainda muda a cada recarregamento em modo unpacked.
+// Como esta função alimenta links de convite copiados e o URL de acesso ENVIADO
+// POR EMAIL (TeamTab), deixar passar essa origem produzia links mortos para
+// terceiros. Em SSR/edge continua a cair no PRODUCTION_URL.
 export const getBaseUrl = () => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)) {
     return window.location.origin;
   }
   return PRODUCTION_URL;

@@ -4,46 +4,33 @@
 // tab, no reload. WhatsApp keeps running underneath, so closing lands back on
 // the same conversation exactly as it was.
 //
-// WHY OUR OWN SCREENS AND NOT THE REAL APP IN AN IFRAME: WhatsApp Web's CSP
-// carries a `frame-src` allowlist (their domains, YouTube, Arkose, Trustly) and
-// Chrome enforces it on NESTED frames too — so app.senvia.pt can't be embedded
-// even behind an extension page. Verified against the real violation report.
-// Stripping their CSP with declarativeNetRequest would work but removes an XSS
-// mitigation from a page holding the user's messages.
+// It is the REAL Senvia OS: the app's own source compiled into the extension and
+// served from crm-app.html. Same components, same features as the website.
 //
-// Extension pages, however, ARE exempt — which is how the contact panel has
-// worked all along. So the sections in NAV are rendered by src/app, querying
-// the same Supabase tables directly under the agent's own JWT and RLS.
-// Anything still in EXTERNAL hasn't been rebuilt yet and opens the real app.
+// It could NOT be an iframe of app.senvia.pt — WhatsApp Web's CSP carries a
+// `frame-src` allowlist (their domains, YouTube, Arkose, Trustly) and Chrome
+// enforces it on nested frames too, so even an extension page in between
+// doesn't get an external site through. Verified against the real violation
+// report. Extension pages themselves ARE exempt, which is what makes bundling
+// the app work where embedding the site does not.
 
-const CRM_ORIGIN = 'https://app.senvia.pt';
 const WHATSAPP_URL = 'https://web.whatsapp.com/';
 const RAIL_W = 52;
 
 /** Exported so content.ts can subtract it from #app's width in ONE place. */
 export { RAIL_W };
 
-/**
- * Sections rendered natively inside the extension (src/app). These take over
- * the screen without leaving WhatsApp Web.
- */
+/** Routes of the bundled CRM. Mirrors allNavItems in AppSidebar.tsx. */
 const NAV: { section: string; label: string; icon: string }[] = [
-  { section: "dashboard", label: "Painel", icon: "▤" },
-  { section: "leads", label: "Leads", icon: "◎" },
-  { section: "clients", label: "Clientes", icon: "☺" },
-  { section: "proposals", label: "Propostas", icon: "▫" },
-  { section: "sales", label: "Vendas", icon: "★" },
-  { section: "financeiro", label: "Financeiro", icon: "€" },
-  { section: "agenda", label: "Agenda", icon: "▦" },
-];
-
-/**
- * Sections not rebuilt in the extension yet — these still need the real app, so
- * they open in a tab rather than pretending to work here.
- */
-const EXTERNAL: { route: string; label: string; icon: string }[] = [
-  { route: "/inbox", label: "Caixa de Entrada (abre o Senvia)", icon: "✉" },
-  { route: "/marketing", label: "Marketing (abre o Senvia)", icon: "✦" },
+  { section: "/dashboard", label: "Painel", icon: "▤" },
+  { section: "/leads", label: "Leads", icon: "◎" },
+  { section: "/inbox", label: "Caixa de Entrada", icon: "✉" },
+  { section: "/clients", label: "Clientes", icon: "☺" },
+  { section: "/proposals", label: "Propostas", icon: "▫" },
+  { section: "/sales", label: "Vendas", icon: "★" },
+  { section: "/financeiro", label: "Financeiro", icon: "€" },
+  { section: "/calendar", label: "Agenda", icon: "▦" },
+  { section: "/marketing", label: "Marketing", icon: "✦" },
 ];
 
 // Colours are the CRM's sidebar tokens from src/index.css, resolved to literals:
@@ -124,14 +111,23 @@ export function mountCrmRail() {
     paint();
   };
 
-  const show = (section: string) => {
+  /**
+   * Opens the REAL CRM at a route, in place over WhatsApp.
+   *
+   * `crm-app.html` is the Senvia OS app itself compiled into the extension —
+   * same components, same features as the website. It uses HashRouter, so a
+   * section change is just a hash change: no reload, and the app keeps its
+   * state and scroll position.
+   */
+  const show = (route: string) => {
+    const url = chrome.runtime.getURL(`crm-app.html#${route}`);
     if (!frame.src) {
-      frame.src = chrome.runtime.getURL(`app.html?s=${encodeURIComponent(section)}`);
-    } else {
-      // Already loaded: steer it by message so state and scroll survive.
-      frame.contentWindow?.postMessage({ source: 'senvia-content', type: 'APP_SECTION', section }, '*');
+      frame.src = url;
+    } else if (current !== route) {
+      // Same document, new hash — React Router navigates without a reload.
+      frame.contentWindow?.location.replace(url);
     }
-    current = section;
+    current = route;
     document.documentElement.classList.add('senvia-app-open');
     paint();
   };
@@ -150,19 +146,6 @@ export function mountCrmRail() {
     rail.appendChild(b);
   }
 
-  const sep = document.createElement('div');
-  sep.style.cssText =
-    'width:24px;height:1px;background:hsl(222 47% 16%);margin:7px 0;flex:0 0 auto';
-  rail.appendChild(sep);
-
-  for (const item of EXTERNAL) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = item.icon;
-    b.title = item.label;
-    b.addEventListener('click', () => window.open(`${CRM_ORIGIN}${item.route}`, '_blank', 'noopener'));
-    rail.appendChild(b);
-  }
 
   document.body.appendChild(rail);
   document.documentElement.classList.add('senvia-rail');

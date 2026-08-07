@@ -26,6 +26,7 @@ import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { getBaseUrl } from '@/lib/constants';
+import { hardGo } from '@/lib/nav';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -1237,7 +1238,7 @@ export function TeamTab() {
                   className="w-full gap-2"
                   onClick={() => {
                     setShowUpgradeDialog(false);
-                    window.location.href = '/settings?tab=billing';
+                    hardGo('/settings?tab=billing');
                   }}
                 >
                   <ArrowRight className="h-4 w-4" />

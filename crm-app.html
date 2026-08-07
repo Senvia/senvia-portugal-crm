@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  Entry point for the CRM bundled into the Chrome extension.
+
+  It lives at the repo root, not under chrome-extension/, because Vite mirrors
+  the input's path inside outDir — an entry under chrome-extension/ emits to
+  chrome-extension/dist/chrome-extension/crm-app.html. From the root it lands
+  where the manifest expects it.
+
+  Only vite.extension.config.ts builds this file. The website's build takes
+  index.html and ignores everything else at the root.
+-->
+<html lang="pt-PT">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Senvia OS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./chrome-extension/src/crm-app/main.tsx"></script>
+  </body>
+</html>

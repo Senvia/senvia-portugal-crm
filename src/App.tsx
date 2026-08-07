@@ -78,13 +78,21 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
+/**
+ * `Router` is injectable so the same app can run outside the website.
+ *
+ * The Chrome extension renders this very component from a `chrome-extension://`
+ * page, where the pathname is `/crm-app.html` and BrowserRouter would match no
+ * route at all. It passes HashRouter instead. Defaults to BrowserRouter, so the
+ * website is unchanged.
+ */
+const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future?: object; children?: React.ReactNode }> }) => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
           <AuthProvider>
             <Suspense fallback={null}><PWAInstallButton /></Suspense>
             <Suspense fallback={null}><PWAUpdateBanner /></Suspense>
@@ -189,7 +197,7 @@ const App = () => (
               </Routes>
             </Suspense>
           </AuthProvider>
-        </BrowserRouter>
+        </Router>
       </TooltipProvider>
     </QueryClientProvider>
   </HelmetProvider>
