@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { PENDING_ORG_STORAGE_KEY } from '@/components/auth/CompleteOrganizationSetup';
 import senviaLogo from "@/assets/senvia-logo.png";
+import { hardGo } from '@/lib/nav';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -205,7 +206,7 @@ export default function Login() {
 
         if (!memberships || memberships.length === 0) {
           localStorage.removeItem('senvia_active_organization_id');
-          window.location.href = '/dashboard';
+          hardGo('/dashboard');
           return;
         }
 
@@ -245,7 +246,7 @@ export default function Login() {
       });
       
       // Force reload to ensure AuthContext picks up the active org
-      window.location.href = '/dashboard';
+      hardGo('/dashboard');
       
     } catch (error: any) {
       console.error('Login error:', error);
@@ -420,7 +421,7 @@ export default function Login() {
       });
 
       // Force page reload to ensure AuthContext picks up all data
-      window.location.href = '/dashboard';
+      hardGo('/dashboard');
       
     } catch (error: any) {
       let message = error.message;

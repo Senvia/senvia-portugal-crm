@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2 } from 'lucide-react';
+import { hardGo } from '@/lib/nav';
 
 /**
  * Shown to an authenticated user who belongs to no organization.
@@ -77,7 +78,7 @@ export function CompleteOrganizationSetup() {
 
       localStorage.removeItem(PENDING_ORG_STORAGE_KEY);
       // Full reload so AuthContext re-reads memberships from scratch.
-      window.location.href = '/dashboard';
+      hardGo('/dashboard');
       return null;
     },
     []
