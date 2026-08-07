@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Check, X } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { PENDING_ORG_STORAGE_KEY } from '@/components/auth/CompleteOrganizationSetup';
 import senviaLogo from "@/assets/senvia-logo.png";
 
 const loginSchema = z.object({
@@ -171,24 +172,49 @@ export default function Login() {
         return;
       }
 
-      // No results = email or org doesn't exist
-      if (!membershipCheck || membershipCheck.length === 0) {
-        toast({
-          title: 'Dados inválidos',
-          description: 'O código da empresa ou email não existe.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
+      const membership = membershipCheck?.[0];
+      const codeRejected = !membership || !membership.is_member;
 
-      const membership = membershipCheck[0];
-      
-      // User exists but is not a member of this org
-      if (!membership.is_member) {
+      // The company code did not resolve to an organization this account
+      // belongs to. That is normally a wrong code — but it is also exactly what
+      // an account whose organization was never created looks like (signup
+      // interrupted at the email-confirmation step). Telling that second group
+      // their own company code "does not exist" locked them out permanently
+      // with no way back, so authenticate first and tell the two apart: an
+      // account belonging to NO organization is let through to finish setup;
+      // everyone else is signed out again and gets the error.
+      if (codeRejected) {
+        const { error: preAuthError } = await signIn(loginEmail, loginPassword);
+        if (preAuthError) {
+          toast({
+            title: 'Dados inválidos',
+            description: 'O código da empresa, o email ou a palavra-passe não estão corretos.',
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        const { data: authUser } = await supabase.auth.getUser();
+        const { data: memberships } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', authUser.user?.id ?? '')
+          .eq('is_active', true)
+          .limit(1);
+
+        if (!memberships || memberships.length === 0) {
+          localStorage.removeItem('senvia_active_organization_id');
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        await supabase.auth.signOut();
         toast({
-          title: 'Acesso negado',
-          description: 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.',
+          title: membership ? 'Acesso negado' : 'Dados inválidos',
+          description: membership
+            ? 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.'
+            : 'O código da empresa ou email não existe.',
           variant: 'destructive',
         });
         setIsLoading(false);
@@ -268,6 +294,10 @@ export default function Login() {
     try {
       // 1. Create the user account
       const redirectUrl = `${window.location.origin}/`;
+      // The company details travel WITH the account: handle_new_user creates the
+      // organization in the same transaction as the auth user, so an account can
+      // never exist without its company — including when email confirmation is
+      // required and no session comes back here.
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: signupEmail,
         password: signupPassword,
@@ -275,6 +305,9 @@ export default function Login() {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: signupFullName,
+            organization_name: organizationName,
+            organization_slug: organizationSlug,
+            contact_phone: contactPhone,
           },
         },
       });
@@ -284,6 +317,19 @@ export default function Login() {
 
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
+        // No session means we cannot call create_organization_for_current_user
+        // yet, and this handler is about to return — so stash what the user
+        // typed. CompleteOrganizationSetup picks it up the moment they come
+        // back with a session and finishes the registration for them. Without
+        // this the company name and code were lost with the page, leaving an
+        // account that could never log in.
+        try {
+          localStorage.setItem(
+            PENDING_ORG_STORAGE_KEY,
+            JSON.stringify({ name: organizationName, slug: organizationSlug, contactPhone })
+          );
+        } catch { /* private mode / storage full — the setup screen will ask again */ }
+
         // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
         const capiEventId = `signup-${authData.user.id}`;
         if (typeof window.fbq === 'function') {
@@ -313,25 +359,28 @@ export default function Login() {
           title: 'Confirme o seu email',
           description: 'Enviámos um email de confirmação. Confirme o seu email e depois faça login.',
         });
+
         setActiveTab('login');
         setLoginEmail(signupEmail);
         setIsLoading(false);
         return;
       }
 
-      // 2. Create the organization (this also assigns admin role)
+      // 2. The organization was already created by handle_new_user, atomically
+      // with the account. This call is only a fallback for accounts created
+      // before that trigger existed — "already belongs" means the trigger did
+      // its job and is the expected outcome, not an error.
       const { error: orgError } = await supabase.rpc('create_organization_for_current_user', {
         _name: organizationName,
         _slug: organizationSlug,
         _contact_phone: contactPhone,
       } as any);
 
-      if (orgError) {
-        // If org creation fails, we should handle it gracefully
+      if (orgError && !orgError.message.includes('already belongs to an organization')) {
         if (orgError.message.includes('Slug already exists')) {
           toast({
-            title: 'Slug indisponível',
-            description: 'Este slug já está em uso. Por favor, escolha outro.',
+            title: 'Código indisponível',
+            description: 'Este código de empresa já está em uso. Por favor, escolha outro.',
             variant: 'destructive',
           });
           setIsLoading(false);
@@ -377,6 +426,14 @@ export default function Login() {
       let message = error.message;
       if (error.message.includes('already registered')) {
         message = 'Este email já está registado';
+      } else if (
+        // The signup transaction now also creates the organization, so a slug
+        // taken between the availability check and submit aborts the whole
+        // signUp. Supabase reports that as a generic database error.
+        error.message.includes('Database error saving new user') ||
+        error.message.includes('Slug already exists')
+      ) {
+        message = 'Este código de empresa já está em uso. Escolha outro e tente novamente.';
       }
       toast({
         title: 'Erro ao criar conta',

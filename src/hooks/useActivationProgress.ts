@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -118,13 +119,44 @@ export function useActivationProgress(): ActivationProgress {
   };
 }
 
+// Dismissals are also mirrored in localStorage. The server write goes to
+// org_onboarding_state, whose RLS requires is_org_member — so a super admin
+// looking at an organization they do not belong to has the write silently
+// rejected, and the bubble used to come back forever. The local mirror means
+// "Agora não" always sticks for the person who clicked it, whatever the server
+// says.
+const LOCAL_DISMISS_KEY = 'senvia_module_dismissed';
+
+function readLocalDismissals(orgId?: string): Record<string, string> {
+  if (!orgId) return {};
+  try {
+    const raw = localStorage.getItem(`${LOCAL_DISMISS_KEY}:${orgId}`);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalDismissal(orgId: string | undefined, moduleKey: string) {
+  if (!orgId) return;
+  try {
+    const next = { ...readLocalDismissals(orgId), [moduleKey]: new Date().toISOString() };
+    localStorage.setItem(`${LOCAL_DISMISS_KEY}:${orgId}`, JSON.stringify(next));
+  } catch { /* private mode — the in-memory state below still hides it */ }
+}
+
 // Reads + writes the per-module dismissal map stored in org_onboarding_state.
 function useModuleDismissals() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const orgId = organization?.id;
+  // Applied immediately on click so the bubble never waits for the round-trip.
+  const [justDismissed, setJustDismissed] = useState<Record<string, string>>({});
 
-  const { data, isLoading, isError } = useQuery({
+  // A failed read (e.g. RLS rejecting a super admin viewing an org they are not
+  // a member of) must not block "ready" below — the local mirror is authoritative
+  // for whether the current user already dismissed something.
+  const { data, isLoading } = useQuery({
     queryKey: ["onboarding-module-dismissed", orgId],
     enabled: !!orgId,
     staleTime: 60_000,
@@ -141,7 +173,7 @@ function useModuleDismissals() {
     },
   });
 
-  const dismiss = useMutation({
+  const dismissMutation = useMutation({
     mutationFn: async (moduleKey: ActivationModuleKey) => {
       if (!orgId) return;
       const next = { ...(data ?? {}), [moduleKey]: new Date().toISOString() };
@@ -156,9 +188,28 @@ function useModuleDismissals() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["onboarding-module-dismissed", orgId] });
     },
+    onError: (error) => {
+      // Never silent: the local mirror already hid the bubble, but a failing
+      // write means it would return for this user on another device.
+      console.error("[onboarding] failed to persist module dismissal", error);
+    },
   });
 
-  return { dismissed: data ?? {}, ready: !!orgId && !isLoading && !isError, dismiss: dismiss.mutate };
+  const dismiss = (moduleKey: ActivationModuleKey) => {
+    setJustDismissed((prev) => ({ ...prev, [moduleKey]: new Date().toISOString() }));
+    writeLocalDismissal(orgId, moduleKey);
+    dismissMutation.mutate(moduleKey);
+  };
+
+  const dismissed = { ...readLocalDismissals(orgId), ...(data ?? {}), ...justDismissed };
+
+  return {
+    dismissed,
+    // The local mirror is enough to decide; a failed server read must not keep
+    // the peek dormant forever.
+    ready: !!orgId && !isLoading,
+    dismiss,
+  };
 }
 
 export interface OnboardingPeek {

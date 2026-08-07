@@ -31,10 +31,39 @@ const logStep = (step: string, details?: any) => {
   console.log(`[RECONCILE-STRIPE-PAYMENTS] ${step}${d}`);
 };
 
+// Money-path failures go to console.error so log-level alerting can see them.
+const logError = (step: string, details?: any) => {
+  const d = details ? ` - ${JSON.stringify(details)}` : "";
+  console.error(`[RECONCILE-STRIPE-PAYMENTS] ERROR ${step}${d}`);
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
+
+/**
+ * Authorises the caller against `stripe_cron_secret`, which lives only in
+ * Supabase Vault. The pg_cron job reads it from Vault to build the request
+ * header, and `public.verify_stripe_cron_secret` (SECURITY DEFINER, executable
+ * by service_role only) compares it here — the secret itself is never returned
+ * to anyone, never stored in an env var, and never appears in the cron
+ * definition. CRON_SECRET remains as a manual escape hatch. Fails closed.
+ */
+async function isAuthorized(req: Request, supabase: any): Promise<boolean> {
+  const provided = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("key");
+  if (!provided) return false;
+
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (cronSecret && provided === cronSecret) return true;
+
+  const { data, error } = await supabase.rpc("verify_stripe_cron_secret", { p_secret: provided });
+  if (error) {
+    logError("authorization check failed", { error: error.message });
+    return false;
+  }
+  return data === true;
+}
 
 // Lightweight Stripe API calls without the heavy SDK
 async function stripeGet(path: string, key: string, params?: Record<string, string>) {
@@ -75,6 +104,15 @@ serve(async (req) => {
     { auth: { persistSession: false } }
   );
 
+  // Guard: this function writes sale_payments, stripe_commission_records and
+  // organizations with the service-role key, and its response lists customer
+  // emails and amounts — it must never be publicly invokable. Fails closed.
+  if (!(await isAuthorized(req, supabase))) {
+    return new Response(JSON.stringify({ error: "Não autorizado" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not set");
@@ -83,7 +121,9 @@ serve(async (req) => {
     try {
       const body = await req.json();
       if (body?.lookback_days && Number(body.lookback_days) > 0) {
-        lookbackDays = Math.min(Number(body.lookback_days), 90);
+        // Capped well above the daily 10-day run so an occasional manual call
+        // can also backfill billing_period_start/end on older rows.
+        lookbackDays = Math.min(Number(body.lookback_days), 180);
       }
     } catch { /* empty body is fine */ }
 
@@ -128,29 +168,53 @@ serve(async (req) => {
       scanned: invoices.length,
       recorded: [] as Array<Record<string, unknown>>,
       already_recorded: 0,
-      no_org: 0,
-      no_sale: 0,
+      no_org: [] as string[],
+      no_sale: [] as string[],
       zero_amount: 0,
-      no_email: 0,
+      no_email: [] as string[],
+      /** Invoices skipped because a manually-entered payment appears to be the same money. */
+      skipped_possible_manual: [] as Array<Record<string, unknown>>,
+      /** Invoices this run tried and failed to record. Non-empty means action is needed. */
+      failed: [] as Array<Record<string, unknown>>,
     };
 
     for (const invoice of invoices) {
       const email = invoice.customer_email;
-      if (!email) { summary.no_email++; continue; }
+      if (!email) { summary.no_email.push(invoice.id); continue; }
       const amount = (invoice.amount_paid || 0) / 100;
       if (amount <= 0) { summary.zero_amount++; continue; }
 
-      // Dedupe: webhook writes the invoice id into the payment notes
+      // Dedupe on the dedicated column (backed by a unique index). The notes
+      // match is kept for rows written before the column existed.
       const { data: existingPayment } = await supabase
         .from("sale_payments")
-        .select("id")
+        .select("id, billing_period_start, billing_period_end")
         .eq("organization_id", SENVIA_AGENCY_ORG_ID)
-        .ilike("notes", `%${invoice.id}%`)
+        .or(`stripe_invoice_id.eq.${invoice.id},notes.ilike.%${invoice.id}%`)
         .limit(1);
-      if (existingPayment && existingPayment.length > 0) { summary.already_recorded++; continue; }
+      if (existingPayment && existingPayment.length > 0) {
+        summary.already_recorded++;
+        // Backfill: rows written before billing_period_start/end existed (or by
+        // the pre-fix webhook) show only the charge date, not the month they pay
+        // for — the exact confusion that made a real August payment look missing
+        // when Finance was filtered to August. One-time repair, then skip.
+        const row = existingPayment[0];
+        if (!row.billing_period_start && !row.billing_period_end && invoice.period_start && invoice.period_end) {
+          const { error: backfillErr } = await supabase
+            .from("sale_payments")
+            .update({
+              billing_period_start: new Date(invoice.period_start * 1000).toISOString().split("T")[0],
+              billing_period_end: new Date(invoice.period_end * 1000).toISOString().split("T")[0],
+            })
+            .eq("id", row.id);
+          if (backfillErr) logError("billing period backfill error", { invoice: invoice.id, error: backfillErr.message });
+          else logStep("backfilled billing period on existing payment", { invoice: invoice.id, payment_id: row.id });
+        }
+        continue;
+      }
 
       const clientOrgId = findOrgByEmail(email);
-      if (!clientOrgId) { logStep("no org for email", { email }); summary.no_org++; continue; }
+      if (!clientOrgId) { logStep("no org for email", { email }); summary.no_org.push(invoice.id); continue; }
 
       // Plan + real recurring total from the live subscription
       let plan: string | null = null;
@@ -184,6 +248,12 @@ serve(async (req) => {
       const periodEnd = invoice.period_end
         ? new Date(invoice.period_end * 1000).toISOString().split("T")[0]
         : null;
+      // See the matching comment in stripe-webhook: the invoice is dated
+      // paymentDate but pays for periodStart→periodEnd, which is frequently a
+      // different calendar month.
+      const periodStart = invoice.period_start
+        ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
+        : null;
 
       // Org bookkeeping (all idempotent): paying customer stamp, renewal date,
       // and clear a failure clock that predates this payment (never a newer one).
@@ -205,16 +275,56 @@ serve(async (req) => {
         .lt("payment_failed_at", paidAtIso);
 
       // Linked sale in the agency org
+      // Mirrors the webhook: `pending` included (a sale can be paid before it is
+      // moved out of pending) and ordering fixed so multi-sale client orgs always
+      // resolve to the same sale.
       const { data: sales, error: salesErr } = await supabase
         .from("sales")
         .select("id, created_by, total_value, has_recurring, status")
         .eq("organization_id", SENVIA_AGENCY_ORG_ID)
         .eq("client_org_id", clientOrgId)
-        .in("status", ["in_progress", "fulfilled", "delivered"])
+        .in("status", ["pending", "in_progress", "fulfilled", "delivered"])
+        .order("created_at", { ascending: true })
         .limit(1);
-      if (salesErr) { logStep("sales query error", { error: salesErr.message }); continue; }
-      if (!sales || sales.length === 0) { logStep("no linked sale", { clientOrgId }); summary.no_sale++; continue; }
+      if (salesErr) {
+        logError("sales query error", { error: salesErr.message });
+        summary.failed.push({ invoice_id: invoice.id, reason: `sales query: ${salesErr.message}` });
+        continue;
+      }
+      if (!sales || sales.length === 0) { logStep("no linked sale", { clientOrgId }); summary.no_sale.push(invoice.id); continue; }
       const sale = sales[0];
+
+      // Legacy safety net: payments entered by hand carry no invoice id, so the
+      // dedupe above cannot see them. If this sale already has a manual payment
+      // of the same amount within a few days, assume it is the same money and
+      // report it for review instead of recording it twice.
+      const windowDays = 7;
+      const from = new Date(paidAtUnix * 1000 - windowDays * 86400_000).toISOString().split("T")[0];
+      const to = new Date(paidAtUnix * 1000 + windowDays * 86400_000).toISOString().split("T")[0];
+      const { data: manualNearby } = await supabase
+        .from("sale_payments")
+        .select("id, amount, payment_date, notes")
+        .eq("sale_id", sale.id)
+        .is("stripe_invoice_id", null)
+        .gte("payment_date", from)
+        .lte("payment_date", to);
+      const manualMatch = (manualNearby ?? []).find(
+        (p: any) => Math.abs(Number(p.amount) - amount) < 0.5
+      );
+      if (manualMatch) {
+        logStep("skipping invoice: a manual payment of the same amount already exists", {
+          invoice: invoice.id, manual_payment_id: manualMatch.id,
+        });
+        summary.skipped_possible_manual.push({
+          invoice_id: invoice.id,
+          amount,
+          invoice_paid_at: paymentDate,
+          existing_payment_id: manualMatch.id,
+          existing_payment_date: manualMatch.payment_date,
+          existing_notes: manualMatch.notes,
+        });
+        continue;
+      }
 
       const updatePayload: Record<string, any> = {
         recurring_status: "active",
@@ -309,10 +419,21 @@ serve(async (req) => {
         payment_date: paymentDate,
         status: "paid",
         payment_method: "card",
+        stripe_invoice_id: invoice.id,
+        billing_period_start: periodStart,
+        billing_period_end: periodEnd,
         notes: `Stripe ${planLabel} · ${invoice.id}${feeNote} (reconciliado)`,
       });
       if (paymentErr) {
-        logStep("payment insert error", { error: paymentErr.message });
+        // 23505 = the webhook recorded it between our dedupe check and this
+        // insert. That is the unique index doing its job, not a failure.
+        if ((paymentErr as any).code === "23505") {
+          logStep("payment already recorded concurrently", { invoice: invoice.id });
+          summary.already_recorded++;
+          continue;
+        }
+        logError("payment insert error", { invoice: invoice.id, error: paymentErr.message });
+        summary.failed.push({ invoice_id: invoice.id, reason: paymentErr.message });
         continue;
       }
 
@@ -328,10 +449,17 @@ serve(async (req) => {
       });
     }
 
+    if (summary.failed.length > 0) {
+      logError("run finished WITH FAILURES — these invoices are still unrecorded", { failed: summary.failed });
+    }
+    if (summary.no_sale.length > 0) {
+      logError("invoices with no linked sale — payment not recorded", { invoices: summary.no_sale });
+    }
     logStep("Done", {
       scanned: summary.scanned,
       recorded: summary.recorded.length,
       already_recorded: summary.already_recorded,
+      failed: summary.failed.length,
     });
 
     return new Response(JSON.stringify(summary), {

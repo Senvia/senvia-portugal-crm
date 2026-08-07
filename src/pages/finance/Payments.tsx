@@ -14,7 +14,7 @@ import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
 import { useSaleItems } from "@/hooks/useSaleItems";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, billingPeriodLabel } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
@@ -424,6 +424,15 @@ export default function FinancePayments() {
                       <TableRow key={payment.id}>
                         <TableCell className="whitespace-nowrap">
                           {formatDate(payment.payment_date)}
+                          {/* Stripe bills in advance, so a payment charged on e.g. 30 Jul
+                              can cover the June→July cycle, not August — without this the
+                              charge date alone reads as "wrong month" when filtering by
+                              the period the subscription is actually for. */}
+                          {billingPeriodLabel(payment.billing_period_start, payment.billing_period_end) && (
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Cobre {billingPeriodLabel(payment.billing_period_start, payment.billing_period_end)}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">#{payment.sale.code}</span>

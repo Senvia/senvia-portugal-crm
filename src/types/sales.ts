@@ -60,6 +60,11 @@ export interface SalePayment {
   qr_code_url?: string | null;
   status: PaymentRecordStatus;
   notes: string | null;
+  /** Subscription cycle this payment covers (Stripe bills in advance, so this is
+   *  frequently a different calendar month than payment_date). Null for
+   *  non-Stripe / manual payments. */
+  billing_period_start?: string | null;
+  billing_period_end?: string | null;
   created_at: string;
   updated_at: string;
 }

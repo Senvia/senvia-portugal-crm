@@ -35,6 +35,29 @@ export function formatDate(date: Date | string): string {
 }
 
 /**
+ * Human label for the subscription cycle a Stripe payment covers ("Jul 2026" or
+ * "Jun 2026 – Jul 2026"), independent of the day it was actually charged.
+ * Stripe bills in advance, so a charge dated at the end of one month often pays
+ * for the next cycle (or, when recovered late, the cycle that just ended) — the
+ * charge date alone reads as "wrong month" without this. Returns null when
+ * Stripe did not supply a billing period (manual/non-Stripe payments).
+ */
+export function billingPeriodLabel(start?: string | null, end?: string | null): string | null {
+  if (!start || !end) return null;
+  // `new Date("YYYY-MM-DD")` parses as UTC midnight; formatting that back in a
+  // negative-offset local timezone can roll it back to the previous day and
+  // silently misreport the month for dates near a month boundary. Parsing the
+  // date-only string as LOCAL midnight (matching how the date picker/DB column
+  // is meant to be read) avoids that.
+  const [sY, sM, sD] = start.split('-').map(Number);
+  const [eY, eM, eD] = end.split('-').map(Number);
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', year: 'numeric' };
+  const sLabel = new Date(sY, sM - 1, sD).toLocaleDateString('pt-PT', opts);
+  const eLabel = new Date(eY, eM - 1, eD).toLocaleDateString('pt-PT', opts);
+  return sLabel === eLabel ? sLabel : `${sLabel} – ${eLabel}`;
+}
+
+/**
  * Format date with time to PT-PT format
  */
 export function formatDateTime(date: Date | string): string {

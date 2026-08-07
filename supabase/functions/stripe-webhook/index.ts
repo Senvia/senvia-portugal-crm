@@ -22,6 +22,42 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${d}`);
 };
 
+// Failures in the money path must be greppable and must trip log-level alerts —
+// logStep is console.log, which alerting filters ignore.
+const logError = (step: string, details?: any) => {
+  const d = details ? ` - ${JSON.stringify(details)}` : '';
+  console.error(`[STRIPE-WEBHOOK] ERROR ${step}${d}`);
+};
+
+// --- Stripe API-version shims -------------------------------------------------
+// The event body arrives in whatever API version the webhook ENDPOINT is
+// configured with in the Stripe Dashboard — constructEventAsync only verifies
+// the signature, it does not re-render the payload to the SDK's pinned version.
+// The Basil versions (2025-06-30 onward) moved these fields, so every read must
+// accept both shapes or it silently yields undefined.
+
+/** Basil moved Invoice.subscription → Invoice.parent.subscription_details.subscription. */
+function invoiceSubscriptionId(inv: any): string | null {
+  const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
+  return idOf(inv?.subscription) ?? idOf(inv?.parent?.subscription_details?.subscription);
+}
+
+/** Basil moved Subscription.current_period_end → items.data[].current_period_end. */
+function subPeriodEnd(sub: any): number | null {
+  return sub?.current_period_end ?? sub?.items?.data?.[0]?.current_period_end ?? null;
+}
+
+/** Basil removed Invoice.charge / Invoice.payment_intent in favour of Invoice.payments. */
+function invoicePaymentIds(inv: any): { chargeId: string | null; piId: string | null } {
+  const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
+  const chargeId = idOf(inv?.charge);
+  let piId = idOf(inv?.payment_intent);
+  if (!chargeId && !piId && inv?.payments?.data?.length) {
+    piId = idOf(inv.payments.data[0]?.payment?.payment_intent);
+  }
+  return { chargeId, piId };
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -91,7 +127,7 @@ serve(async (req) => {
         if (plan) await updateOrgPlan(supabase, email, plan);
         await clearPaymentFailed(supabase, email);
         await markFirstPaid(supabase, email);
-        await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
+        await setCurrentPeriodEnd(supabase, email, subPeriodEnd(sub));
         await clearTempBillingExempt(supabase, email);
 
         const orgName = await getOrgNameByEmail(supabase, email);
@@ -127,7 +163,7 @@ serve(async (req) => {
           if (sub.status === "active") {
             await clearPaymentFailed(supabase, email);
             await markFirstPaid(supabase, email);
-            await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
+            await setCurrentPeriodEnd(supabase, email, subPeriodEnd(sub));
             await clearTempBillingExempt(supabase, email);
             await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
             await syncStripeAutoLists(supabase, email, orgName, "renewed", plan || null);
@@ -163,11 +199,19 @@ serve(async (req) => {
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        const productId = sub.items.data[0].price.product as string;
-        const plan = PRODUCT_TO_PLAN[productId];
+        const productId = sub.items?.data?.[0]?.price?.product as string | undefined;
+        const plan = productId ? PRODUCT_TO_PLAN[productId] : undefined;
         const customerId = sub.customer as string;
         const customer = await stripe.customers.retrieve(customerId);
         const email = (customer as Stripe.Customer).email;
+        // A deleted Stripe customer carries no email. Without one we cannot find
+        // the org, so its plan would silently stay active forever — make that
+        // loud instead of dropping the event.
+        if (!email) {
+          logError("subscription.deleted: no email on customer — org plan NOT cleared", {
+            customerId, subscription: sub.id,
+          });
+        }
         if (email) {
           await updateOrgPlan(supabase, email, null);
           await clearPaymentFailed(supabase, email);
@@ -209,24 +253,61 @@ serve(async (req) => {
 
 // --- Invoice Paid → Recurring Commission + Sale Update ---
 
+// Throws on failure. The caller returns 500 so Stripe retries the delivery —
+// previously every error here was swallowed and the webhook answered 200, which
+// told Stripe the payment had been processed and permanently dropped it.
 async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.Invoice) {
-  try {
-    const email = invoice.customer_email;
-    if (!email) { logStep("invoice.paid: no email"); return; }
+  {
+    let email = invoice.customer_email;
+    // customer_email can be absent; fall back to the customer object rather than
+    // dropping the payment.
+    if (!email && invoice.customer) {
+      try {
+        const cust = await stripe.customers.retrieve(invoice.customer as string);
+        if (!(cust as any).deleted) email = (cust as Stripe.Customer).email ?? null;
+      } catch (e) {
+        logError("invoice.paid: customer lookup failed", { error: (e as Error).message });
+      }
+    }
+    if (!email) {
+      logError("invoice.paid: no email — cannot link payment to an organization", { invoice: invoice.id });
+      return;
+    }
 
     const amount = (invoice.amount_paid || 0) / 100;
     if (amount <= 0) { logStep("invoice.paid: zero amount"); return; }
+
+    // At-least-once delivery: Stripe redelivers on timeout/5xx. Without this the
+    // same invoice inserts a second sale_payments row — double-recorded revenue.
+    // The unique index on sale_payments.stripe_invoice_id is the hard guarantee;
+    // this check just avoids the noisy conflict on the common path.
+    const { data: alreadyPaid } = await supabase
+      .from("sale_payments")
+      .select("id")
+      .eq("stripe_invoice_id", invoice.id)
+      .limit(1);
+    if (alreadyPaid && alreadyPaid.length > 0) {
+      logStep("invoice.paid: already recorded — skipping", { invoice: invoice.id });
+      return;
+    }
 
     // Determine plan + compute real recurring total from subscription items
     let plan: string | null = null;
     let recurringTotal = 0;
     let subscriptionRenewalDate: string | null = null;
-    const subId = invoice.subscription as string | null;
+    const subId = invoiceSubscriptionId(invoice);
+    if (!subId) {
+      // One-off invoices legitimately have no subscription, but on a renewal it
+      // means the payload shape changed again — plan, recurring value and the
+      // renewal date all degrade silently, so say so loudly.
+      logStep("invoice.paid: no subscription on invoice — plan/renewal data incomplete", { invoice: invoice.id });
+    }
     if (subId) {
       try {
         const sub = await stripe.subscriptions.retrieve(subId);
         const productId = sub.items.data[0]?.price?.product as string;
         plan = PRODUCT_TO_PLAN[productId] || null;
+        if (!plan) logError("invoice.paid: unknown Stripe product, plan not mapped", { productId, invoice: invoice.id });
 
         recurringTotal = sub.items.data.reduce((sum: number, item: any) => {
           if (item.price?.recurring && item.price.unit_amount != null) {
@@ -235,12 +316,13 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
           return sum;
         }, 0);
 
-        await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
-        if (sub.current_period_end) {
-          subscriptionRenewalDate = new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
+        const periodEndUnix = subPeriodEnd(sub);
+        await setCurrentPeriodEnd(supabase, email, periodEndUnix);
+        if (periodEndUnix) {
+          subscriptionRenewalDate = new Date(periodEndUnix * 1000).toISOString().split("T")[0];
         }
       } catch (e) {
-        logStep("invoice.paid: failed to fetch sub details", { error: (e as Error).message });
+        logError("invoice.paid: failed to fetch sub details", { error: (e as Error).message });
       }
     }
 
@@ -259,21 +341,37 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     const periodEnd = invoice.period_end
       ? new Date(invoice.period_end * 1000).toISOString().split("T")[0]
       : null;
+    // Stripe bills in advance: this invoice is dated `paymentDate` but pays for
+    // the cycle running periodStart→periodEnd. Recorded on the payment itself so
+    // the UI can show "covers September" instead of only the charge date — the
+    // two frequently land in different calendar months (a renewal on the 30th
+    // pays for the month starting that day), which reads as a missing payment
+    // when someone filters Finance by the month the subscription is FOR.
+    const periodStart = invoice.period_start
+      ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
+      : null;
 
     // Find sale in Senvia org linked to this client org
+    // `pending` is included: a subscription can be paid before anyone moves the
+    // sale out of pending, and excluding it dropped the payment silently (the
+    // pending → in_progress promotion below was unreachable). Ordering is
+    // explicit so a client org with several sales always resolves to the same
+    // one instead of an arbitrary row that can change between runs.
     const { data: sales, error: salesErr } = await supabase
       .from("sales")
       .select("id, created_by, total_value, has_recurring, status")
       .eq("organization_id", SENVIA_AGENCY_ORG_ID)
       .eq("client_org_id", clientOrgId)
-      .in("status", ["in_progress", "fulfilled", "delivered"])
+      .in("status", ["pending", "in_progress", "fulfilled", "delivered"])
+      .order("created_at", { ascending: true })
       .limit(1);
 
     let sale: any = null;
     if (salesErr) {
-      logStep("invoice.paid: sales query error", { error: salesErr.message });
+      logError("invoice.paid: sales query error", { error: salesErr.message });
+      throw new Error(`sales query failed: ${salesErr.message}`);
     } else if (!sales || sales.length === 0) {
-      logStep("invoice.paid: no linked sale found", { clientOrgId });
+      logError("invoice.paid: no linked sale for this client org — payment NOT recorded", { clientOrgId, invoice: invoice.id });
     } else {
       sale = sales[0];
       // Update sale immediately — always, even if no salesperson assigned.
@@ -293,7 +391,7 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         .eq("id", sale.id);
 
       if (saleUpdateErr) {
-        logStep("invoice.paid: sale update error", { error: saleUpdateErr.message });
+        logError("invoice.paid: sale update error", { error: saleUpdateErr.message });
       } else {
         logStep("invoice.paid: sale updated to active", { saleId: sale.id, recurringTotal, plan });
       }
@@ -325,10 +423,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
 
         const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
 
-        const periodStart = invoice.period_start
-          ? new Date(invoice.period_start * 1000).toISOString().split("T")[0]
-          : null;
-
         if (rate > 0) {
           const commissionAmount = amount * (rate / 100);
           const { error: insertErr } = await supabase
@@ -342,14 +436,14 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
               commission_rate: rate,
               commission_amount: commissionAmount,
               stripe_invoice_id: stripeInvoiceId,
-              period_start,
+              period_start: periodStart,
               period_end: periodEnd,
               plan,
               status: "pending",
             });
 
           if (insertErr) {
-            logStep("invoice.paid: commission insert error", { error: insertErr.message });
+            logError("invoice.paid: commission insert error", { error: insertErr.message });
           } else {
             logStep("invoice.paid: commission recorded", {
               userId: sale.created_by, amount, rate, commissionAmount, plan
@@ -374,12 +468,15 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     let netAmount = amount;
     let stripeFee = 0;
     try {
-      const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
       const inv = invoice as any;
-      let chargeId = idOf(inv.charge);
-      let piId = idOf(inv.payment_intent);
-      if (!chargeId && !piId && inv.payments?.data?.length) {
-        piId = idOf(inv.payments.data[0]?.payment?.payment_intent);
+      let { chargeId, piId } = invoicePaymentIds(inv);
+      if (!chargeId && !piId) {
+        // `payments` is an expandable sub-list that Stripe does NOT include in
+        // the webhook event body, and Basil removed the old charge /
+        // payment_intent fields. Without this refetch the fee is unknown and
+        // every payment gets recorded at GROSS, overstating cash received.
+        const full: any = await stripe.invoices.retrieve(inv.id, { expand: ["payments"] });
+        ({ chargeId, piId } = invoicePaymentIds(full));
       }
       let charge: any = null;
       if (chargeId) {
@@ -396,10 +493,10 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         stripeFee = round2(cardFee + billingFee);
         netAmount = round2(amount - stripeFee);
       } else {
-        logStep("invoice.paid: net unavailable, using gross", { invoice: inv.id });
+        logError("invoice.paid: net unavailable, recording GROSS amount", { invoice: inv.id });
       }
     } catch (e) {
-      logStep("invoice.paid: could not fetch balance_transaction for net amount", { error: (e as Error).message });
+      logError("invoice.paid: could not fetch balance_transaction, recording GROSS", { error: (e as Error).message });
     }
 
     const stripeInvoiceId = invoice.id;
@@ -414,16 +511,24 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         payment_date: paymentDate,
         status: "paid",
         payment_method: "card",
+        stripe_invoice_id: stripeInvoiceId,
+        billing_period_start: periodStart,
+        billing_period_end: periodEnd,
         notes: `Stripe ${planLabel} · ${stripeInvoiceId}${feeNote}`,
       });
 
     if (paymentErr) {
-      logStep("invoice.paid: payment insert error", { error: paymentErr.message });
-    } else {
-      logStep("invoice.paid: payment recorded in sale_payments", { saleId: sale.id, amount });
+      // 23505 = unique violation on stripe_invoice_id: a concurrent redelivery
+      // (or the daily reconciler) already recorded this invoice. That is the
+      // guard doing its job, not a failure — do not make Stripe retry.
+      if ((paymentErr as any).code === "23505") {
+        logStep("invoice.paid: payment already recorded by a concurrent run", { invoice: stripeInvoiceId });
+        return;
+      }
+      logError("invoice.paid: payment insert error", { error: paymentErr.message });
+      throw new Error(`payment insert failed: ${paymentErr.message}`);
     }
-  } catch (err) {
-    logStep("invoice.paid: error", { error: (err as Error).message });
+    logStep("invoice.paid: payment recorded in sale_payments", { saleId: sale.id, amount, netAmount });
   }
 }
 
