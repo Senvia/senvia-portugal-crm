@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare, PanelLeftClose, PanelLeftOpen, Percent } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare, PanelLeftClose, PanelLeftOpen, Percent, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOttoStore } from "@/stores/useOttoStore";
@@ -34,6 +34,7 @@ const allNavItems: NavItem[] = [
   { to: "/financeiro", icon: Wallet, label: "Financeiro", moduleKey: 'finance' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/automacoes", icon: Workflow, label: "Automações" },
   { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições", ottoTarget: "sidebar-settings" },

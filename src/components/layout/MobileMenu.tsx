@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, Settings, LogOut, Shield, X, Building2,
-  Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Search, MessageSquare,
+  Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Search, MessageSquare, Workflow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +24,7 @@ const allNavItems: { to: string; icon: React.ElementType; label: string; moduleK
   { to: "/financeiro", icon: Wallet, label: "Financeiro", moduleKey: 'finance' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/automacoes", icon: Workflow, label: "Automações" },
   { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições" },

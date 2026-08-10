@@ -45,6 +45,8 @@ const MarketingCampaigns = lazy(() => import("./pages/marketing/Campaigns"));
 const MarketingReports = lazy(() => import("./pages/marketing/Reports"));
 
 const MarketingLists = lazy(() => import("./pages/marketing/Lists"));
+const Automations = lazy(() => import("./pages/Automations"));
+const AutomationEditor = lazy(() => import("./pages/AutomationEditor"));
 const EcommerceProducts = lazy(() => import("./pages/ecommerce/Products"));
 const EcommerceOrders = lazy(() => import("./pages/ecommerce/Orders"));
 const EcommerceCustomers = lazy(() => import("./pages/ecommerce/Customers"));
@@ -152,7 +154,9 @@ const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future
                   <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
                   <Route path="/marketing/reports" element={<MarketingReports />} />
                   <Route path="/marketing/lists" element={<MarketingLists />} />
-                  
+                  <Route path="/automacoes" element={<Automations />} />
+                  <Route path="/automacoes/:id" element={<AutomationEditor />} />
+
                 </Route>
 
                 {/* Super Admin Routes */}

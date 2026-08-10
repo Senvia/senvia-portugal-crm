@@ -546,6 +546,52 @@
   }
 }
 
+/* ─── React Flow (Automações canvas) ────────────────────────────────────────── */
+/* The library ships light-only chrome; re-point it at our tokens so the canvas
+   works in both themes. */
+.react-flow__controls {
+  box-shadow: var(--shadow-card);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+.react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  width: 26px;
+  height: 26px;
+}
+
+.react-flow__controls-button:hover {
+  background: hsl(var(--muted));
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__attribution {
+  background: transparent;
+  opacity: 0.4;
+}
+
+.react-flow__attribution a {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Node wrappers must not clip the label that sits under each circle. */
+.react-flow__node {
+  overflow: visible;
+}
+
+.react-flow__handle {
+  min-width: 0;
+  min-height: 0;
+  border: none;
+}
+
 /* ─── Otto spotlight / tour effects ─────────────────────────────────────────── */
 /* The "hole": a transparent box whose huge box-shadow dims everything around it.
    pointer-events stay none (set on the container) so the target stays clickable. */
