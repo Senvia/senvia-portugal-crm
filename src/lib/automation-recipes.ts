@@ -56,29 +56,26 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
   {
     id: 'qualificar-conversa',
     name: 'Qualificar lead por conversa',
-    summary: 'Pergunta ao lead o que procura e encaminha-o conforme a resposta.',
-    editHint: 'Ajusta a pergunta e as palavras que identificam cada resposta.',
+    summary: 'Pergunta ao lead o que procura — com botões de resposta — e encaminha-o conforme a escolha.',
+    editHint: 'Ajusta a pergunta, os botões e as palavras que identificam cada resposta.',
     trigger_type: 'lead_created',
     entry_node_id: 'trigger',
     conversational: true,
-    outline: ['Novo lead', 'Pergunta', 'Espera resposta', '2 caminhos'],
+    outline: ['Novo lead', 'Pergunta com botões', '2 caminhos'],
     graph: {
       nodes: [
         { id: 'trigger', type: 'lead_created', config: {}, position: { x: 0, y: 0 } },
         {
-          id: 'ask', type: 'send_whatsapp',
-          config: {
-            message: 'Olá {{nome}}! Para o ajudar melhor: procura uma solução para JÁ ou está só a comparar? Responda AGORA ou COMPARAR.',
-          },
-          position: { x: 0, y: 0 },
-        },
-        {
+          // The question lives IN the wait_reply node: the engine sends it
+          // (as interactive buttons) when the run reaches this step.
           id: 'wait', type: 'wait_reply',
           config: {
+            question: 'Olá {{nome}}! Para o ajudar melhor: procura uma solução para já ou está só a comparar?',
+            use_buttons: true,
             timeout_amount: 24, timeout_unit: 'hours',
             rules: [
-              { id: 'quente', keywords: ['agora', 'urgente', 'já', 'ja'], label: 'Quer já' },
-              { id: 'frio', keywords: ['comparar', 'ver', 'depois', 'talvez'], label: 'A comparar' },
+              { id: 'quente', keywords: ['agora', 'urgente', 'já', 'ja'], label: 'Quero já' },
+              { id: 'frio', keywords: ['comparar', 'ver', 'depois', 'talvez'], label: 'Estou a comparar' },
             ],
           },
           position: { x: 0, y: 0 },
@@ -96,8 +93,7 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger', target: 'ask', branch: null },
-        { id: 'e2', source: 'ask', target: 'wait', branch: null },
+        { id: 'e1', source: 'trigger', target: 'wait', branch: null },
         { id: 'e3', source: 'wait', target: 'hot', branch: 'quente' },
         { id: 'e4', source: 'wait', target: 'warm', branch: 'frio' },
         { id: 'e5', source: 'wait', target: 'silent', branch: 'timeout' },
@@ -145,13 +141,13 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
   {
     id: 'palavra-chave-campanha',
     name: 'Palavra-chave da campanha',
-    summary: 'Quem escrever a palavra do anúncio entra automaticamente e recebe a oferta.',
+    summary: 'Quem escrever a palavra do anúncio recebe a oferta e responde com um botão.',
     editHint: 'Define a palavra-chave no gatilho e escreve a mensagem da oferta.',
     trigger_type: 'whatsapp_keyword',
     trigger_config: { keywords: ['PROMO'] },
     entry_node_id: 'trigger',
     conversational: true,
-    outline: ['Palavra-chave', 'WhatsApp', 'Espera resposta'],
+    outline: ['Palavra-chave', 'Oferta', 'Pergunta com botões'],
     graph: {
       nodes: [
         {
@@ -160,14 +156,18 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
         },
         {
           id: 'offer', type: 'send_whatsapp',
-          config: { message: 'Boa! Aqui está a sua oferta. Quer que lhe ligue para explicar? Responda SIM.' },
+          config: { message: 'Boa! Aqui está a sua oferta, {{nome}}.' },
           position: { x: 0, y: 0 },
         },
         {
+          // The follow-up question lives in the wait_reply node, sent with
+          // interactive buttons.
           id: 'wait', type: 'wait_reply',
           config: {
+            question: 'Quer que lhe ligue para explicar os detalhes?',
+            use_buttons: true,
             timeout_amount: 48, timeout_unit: 'hours',
-            rules: [{ id: 'sim', keywords: ['sim', 'quero', 'ligue'], label: 'Quer contacto' }],
+            rules: [{ id: 'sim', keywords: ['sim', 'quero', 'ligue'], label: 'Sim, quero' }],
           },
           position: { x: 0, y: 0 },
         },
@@ -179,6 +179,29 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
         { id: 'e2', source: 'offer', target: 'wait', branch: null },
         { id: 'e3', source: 'wait', target: 'task', branch: 'sim' },
         { id: 'e4', source: 'wait', target: 'done', branch: 'timeout' },
+      ],
+    },
+  },
+
+  {
+    id: 'lembrete-renovacao',
+    name: 'Lembrete de renovação',
+    summary: 'Avisa o cliente antes da renovação, para não haver surpresas na fatura.',
+    editHint: 'Ajusta o texto do aviso às tuas palavras.',
+    trigger_type: 'sale_renewal_due_in_2_days',
+    entry_node_id: 'trigger',
+    outline: ['Renovação em 2 dias', 'WhatsApp'],
+    graph: {
+      nodes: [
+        { id: 'trigger', type: 'sale_renewal_due_in_2_days', config: {}, position: { x: 0, y: 0 } },
+        {
+          id: 'notice', type: 'send_whatsapp',
+          config: { message: 'Olá {{nome}}, a sua subscrição renova dentro de 2 dias. Qualquer questão, é só dizer.' },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'trigger', target: 'notice', branch: null },
       ],
     },
   },

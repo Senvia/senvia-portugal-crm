@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import type { Json } from '@/integrations/supabase/types';
 import { createInitialGraph, normalizeGraph } from '@/lib/automation-graph';
 import type {
   AutomationFlow, AutomationFlowRunCounts, AutomationFlowStatus, AutomationGraph,
@@ -121,8 +122,11 @@ export function useCreateAutomationFlow() {
           description: data.description ?? null,
           status: 'draft',
           trigger_type: data.trigger_type,
-          trigger_config: data.trigger_config ?? {},
-          graph,
+          // The graph document is richer than the generated Json type can
+          // express structurally — cast at the boundary, as the rest of the
+          // file does for table names.
+          trigger_config: (data.trigger_config ?? {}) as unknown as Json,
+          graph: graph as unknown as Json,
           entry_node_id: entryNodeId,
           version: 1,
           reentry_policy: 'once',
@@ -282,7 +286,7 @@ export function useDuplicateAutomationFlow() {
 
       if (fetchError) throw fetchError;
 
-      const source = original as unknown as Record<string, unknown>;
+      const source = hydrateFlow(original as unknown as Record<string, unknown>);
 
       const { data: duplicate, error: createError } = await supabase
         .from(FLOWS)
@@ -293,12 +297,12 @@ export function useDuplicateAutomationFlow() {
           // A copy is never live.
           status: 'draft',
           trigger_type: source.trigger_type,
-          trigger_config: source.trigger_config ?? {},
-          graph: source.graph ?? { nodes: [], edges: [] },
+          trigger_config: source.trigger_config as unknown as Json,
+          graph: source.graph as unknown as Json,
           entry_node_id: source.entry_node_id ?? null,
           version: 1,
           reentry_policy: source.reentry_policy ?? 'once',
-          quiet_hours: source.quiet_hours ?? null,
+          quiet_hours: (source.quiet_hours ?? null) as unknown as Json,
           max_steps_per_run: source.max_steps_per_run ?? null,
           created_by: user?.id,
         })

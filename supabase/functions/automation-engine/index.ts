@@ -156,6 +156,62 @@ class Engine {
   // deno-lint-ignore no-explicit-any
   constructor(private db: any) {}
 
+  /** Canal de WhatsApp ligado da organização, ou null. */
+  private async whatsappInstance(orgId: string): Promise<string | null> {
+    const { data } = await this.db
+      .from("messaging_channels")
+      .select("evolution_instance")
+      .eq("organization_id", orgId)
+      .eq("channel_type", "whatsapp")
+      .eq("status", "connected")
+      .not("evolution_instance", "is", null)
+      .limit(1)
+      .maybeSingle();
+    return data?.evolution_instance ?? null;
+  }
+
+  /**
+   * Envia texto (e opcionalmente um anexo) pelo canal da organização.
+   * Devolve null em sucesso, ou a mensagem de erro.
+   */
+  private async sendWhatsappText(
+    run: Run,
+    text: string,
+    media?: { url: string; mimetype?: string; filename?: string; kind?: string } | null,
+  ): Promise<string | null> {
+    const instance = await this.whatsappInstance(run.organization_id);
+    if (!instance) return "Nenhum canal de WhatsApp ligado nesta organização";
+    const number = normalizePhone(run.contact_phone!);
+
+    try {
+      let res: Response;
+      if (media?.url) {
+        const kind = media.kind
+          ?? (media.mimetype?.startsWith("image/") ? "image"
+            : media.mimetype?.startsWith("video/") ? "video" : "document");
+        res = await evolutionFetch(getConfig(), `/message/sendMedia/${instance}`, "POST", {
+          number,
+          mediatype: kind,
+          mimetype: media.mimetype || "application/octet-stream",
+          media: media.url,
+          fileName: media.filename || "anexo",
+          ...(text.trim() ? { caption: text } : {}),
+        });
+      } else {
+        res = await evolutionFetch(getConfig(), `/message/sendText/${instance}`, "POST", {
+          number, text,
+        });
+      }
+      if (!res.ok) {
+        const body = (await res.text()).slice(0, 240);
+        return `Evolution ${res.status}: ${body}`;
+      }
+      return null;
+    } catch (e) {
+      return `Envio falhou: ${(e as Error).message}`;
+    }
+  }
+
   private async recordStep(
     run: Run, node: FlowNode, status: string, detail: Record<string, unknown>
   ): Promise<boolean> {
@@ -222,7 +278,14 @@ class Engine {
       const outcome = await this.execute(run, flow, node);
 
       if (outcome.kind === "park") {
-        await this.recordStep(run, node, "waiting", outcome.detail ?? {});
+        if (outcome.resumeSelf) {
+          // Ainda não executou nada — não regista passo (a re-execução vai
+          // registá-lo) e deixa a marca para o tick voltar a ESTE nó.
+          const context = { ...run.context, __resume_node: node.id };
+          await this.db.from("automation_runs").update({ context }).eq("id", run.id);
+        } else {
+          await this.recordStep(run, node, "waiting", outcome.detail ?? {});
+        }
         await this.park(run, node.id, outcome.status!, outcome.wakeAt ?? null);
         await this.db.from("automation_runs").update({ steps_taken: steps }).eq("id", run.id);
         return;
@@ -265,6 +328,13 @@ class Engine {
     detail?: Record<string, unknown>;
     context?: Record<string, unknown>;
     error?: string;
+    /**
+     * Park ANTES de executar o efeito (adiamento por horário de silêncio): não
+     * regista passo e marca o percurso para RE-EXECUTAR este nó ao acordar.
+     * Sem isto, o tick seguia para o nó seguinte e a mensagem adiada nunca
+     * chegava a ser enviada.
+     */
+    resumeSelf?: boolean;
   }> {
     const cfg = node.config ?? {};
     const vars = { ...run.context, nome: run.contact_name, email: run.contact_email, telefone: run.contact_phone };
@@ -291,15 +361,71 @@ class Engine {
       }
 
       case "wait_reply": {
-        // O nó conversacional: fica à espera do que a pessoa escrever.
-        const timeoutMs = durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" });
-        const wake = new Date(Date.now() + timeoutMs);
-        if (!run.contact_phone_key) {
+        // O nó conversacional: pergunta (opcionalmente com botões) e fica à
+        // espera do que a pessoa responder.
+        if (!run.contact_phone_key || !run.contact_phone) {
           return { kind: "fail", error: "Contacto sem telefone — não é possível esperar resposta" };
         }
+
+        const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
+        const question = cfg.question ? render(String(cfg.question), vars) : "";
+        let buttonsSent = false;
+
+        if (question) {
+          const quiet = quietUntil(flow.quiet_hours);
+          if (quiet) {
+            return {
+              kind: "park", status: "waiting", wakeAt: quiet, resumeSelf: true,
+              detail: { adiado_por_horario_de_silencio_ate: quiet.toISOString() },
+            };
+          }
+
+          const instance = await this.whatsappInstance(run.organization_id);
+          if (!instance) return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
+          const number = normalizePhone(run.contact_phone);
+
+          // Botões interativos primeiro; o WhatsApp não-oficial nem sempre os
+          // entrega, por isso qualquer falha degrada para opções numeradas —
+          // e a resposta por número também é aceite no handleReply.
+          if (cfg.use_buttons && rules.length) {
+            try {
+              const res = await evolutionFetch(getConfig(), `/message/sendButtons/${instance}`, "POST", {
+                number,
+                title: "",
+                description: question,
+                footer: "",
+                buttons: rules.map((r) => ({
+                  type: "reply",
+                  displayText: (r.label ?? r.keywords?.[0] ?? "Opção").slice(0, 20),
+                  id: r.id,
+                })),
+              });
+              buttonsSent = res.ok;
+              if (!res.ok) log("sendButtons falhou — a degradar para texto", { status: res.status });
+            } catch (e) {
+              log("sendButtons indisponível — a degradar para texto", { error: (e as Error).message });
+            }
+          }
+
+          if (!buttonsSent) {
+            const options = cfg.use_buttons && rules.length
+              ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
+              : "";
+            const sendErr = await this.sendWhatsappText(run, `${question}${options}`);
+            if (sendErr) return { kind: "fail", error: sendErr };
+          }
+        }
+
+        const timeoutMs = durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" });
+        const wake = new Date(Date.now() + timeoutMs);
         return {
           kind: "park", status: "awaiting_reply", wakeAt: wake,
-          detail: { espera_resposta_ate: wake.toISOString(), regras: (cfg.rules as unknown[])?.length ?? 0 },
+          detail: {
+            espera_resposta_ate: wake.toISOString(),
+            regras: rules.length,
+            pergunta_enviada: !!question,
+            botoes: buttonsSent,
+          },
         };
       }
 
@@ -309,42 +435,30 @@ class Engine {
         const quiet = quietUntil(flow.quiet_hours);
         if (quiet) {
           return {
-            kind: "park", status: "waiting", wakeAt: quiet,
+            kind: "park", status: "waiting", wakeAt: quiet, resumeSelf: true,
             detail: { adiado_por_horario_de_silencio_ate: quiet.toISOString() },
           };
         }
 
-        const { data: channel } = await this.db
-          .from("messaging_channels")
-          .select("evolution_instance")
-          .eq("organization_id", run.organization_id)
-          .eq("channel_type", "whatsapp")
-          .eq("status", "connected")
-          .not("evolution_instance", "is", null)
-          .limit(1)
-          .maybeSingle();
-
-        if (!channel?.evolution_instance) {
-          return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
-        }
-
         const text = render(String(cfg.message ?? ""), vars);
-        if (!text.trim()) return { kind: "fail", error: "Mensagem vazia" };
+        const media = (cfg.media ?? null) as
+          | { url?: string; mimetype?: string; filename?: string; kind?: string }
+          | null;
+        const mediaUrl = media?.url ?? (cfg.media_url ? String(cfg.media_url) : null);
+        if (!text.trim() && !mediaUrl) return { kind: "fail", error: "Mensagem vazia" };
 
-        try {
-          const res = await evolutionFetch(
-            getConfig(), `/message/sendText/${channel.evolution_instance}`, "POST",
-            { number: normalizePhone(run.contact_phone), text },
-          );
-          if (!res.ok) {
-            const body = (await res.text()).slice(0, 240);
-            return { kind: "fail", error: `Evolution ${res.status}: ${body}` };
-          }
-        } catch (e) {
-          return { kind: "fail", error: `Envio falhou: ${(e as Error).message}` };
-        }
+        const sendErr = await this.sendWhatsappText(run, text, mediaUrl ? {
+          url: mediaUrl,
+          mimetype: media?.mimetype,
+          filename: media?.filename,
+          kind: media?.kind,
+        } : null);
+        if (sendErr) return { kind: "fail", error: sendErr };
 
-        return { kind: "next", detail: { canal: "whatsapp", para: run.contact_phone, texto: text.slice(0, 300) } };
+        return {
+          kind: "next",
+          detail: { canal: "whatsapp", para: run.contact_phone, texto: text.slice(0, 300), ...(mediaUrl ? { anexo: media?.filename ?? mediaUrl } : {}) },
+        };
       }
 
       case "send_email": {
@@ -379,7 +493,9 @@ class Engine {
           case "not_exists":   yes = actual === undefined || actual === null || actual === ""; break;
           case "contains":     yes = String(actual ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase()); break;
           case "not_equals":   yes = String(actual ?? "") !== String(expected ?? ""); break;
-          default:             yes = String(actual ?? "") === String(expected ?? "");
+          case "greater_than": yes = Number(actual) > Number(expected); break;
+          case "less_than":    yes = Number(actual) < Number(expected); break;
+          default:             yes = String(actual ?? "").toLowerCase() === String(expected ?? "").toLowerCase();
         }
         return { kind: "next", branch: yes ? "yes" : "no", detail: { campo: field, operador: op, resultado: yes } };
       }
@@ -612,6 +728,14 @@ async function handleTick(db: any) {
         const next = nextNodeId(flow.graph, node.id, "timeout");
         if (!next) { await db.from("automation_runs").update({ status: "completed", completed_at: new Date().toISOString(), current_node_id: null, wake_at: null }).eq("id", run.id); woken++; continue; }
         await engine.advance({ ...run, status: "running" }, flow, next);
+      } else if (node && (run.context as Record<string, unknown>)?.__resume_node === node.id) {
+        // Parou ANTES de executar (adiado pelo horário de silêncio): re-executa
+        // o próprio nó, agora fora da janela. Limpa a marca primeiro para não
+        // voltar a entrar aqui em ciclo.
+        const context = { ...run.context };
+        delete (context as Record<string, unknown>).__resume_node;
+        await db.from("automation_runs").update({ context }).eq("id", run.id);
+        await engine.advance({ ...run, status: "running", context }, flow, node.id);
       } else {
         const next = node ? nextNodeId(flow.graph, node.id) : run.current_node_id;
         await engine.advance({ ...run, status: "running" }, flow, next);
@@ -724,11 +848,17 @@ async function handleReply(db: any, body: Record<string, unknown>) {
       continue;
     }
 
-    // Qual das regras de palavra-chave corresponde ao que a pessoa escreveu?
-    const rules = (node.config?.rules ?? []) as Array<{ id: string; keywords: string[]; label?: string }>;
+    // Qual das regras corresponde ao que a pessoa escreveu? Aceita, por regra:
+    // palavras-chave no texto, o rótulo do botão tal e qual (clique num botão
+    // interativo devolve o displayText), ou o número da opção ("1", "2"…) do
+    // modo degradado sem botões.
+    const rules = (node.config?.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
     const lower = text.toLowerCase();
-    const matched = rules.find((r) =>
-      (r.keywords ?? []).some((k) => lower.includes(String(k).toLowerCase()))
+    const exact = lower.trim();
+    const matched = rules.find((r, i) =>
+      (r.keywords ?? []).some((k) => lower.includes(String(k).toLowerCase())) ||
+      (r.label && exact === r.label.toLowerCase()) ||
+      exact === String(i + 1)
     );
     const branch = matched?.id ?? "fallback";
 

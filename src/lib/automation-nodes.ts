@@ -6,6 +6,9 @@ import {
   UserPlus, Move, FileInput, MessageSquareText, ShoppingBag, ListChecks,
   MessageCircle, Mail, Clock, MessagesSquare, GitBranch, Columns3,
   UserCheck, ListPlus, CheckSquare, Webhook, CircleStop,
+  Users, UserCog, FileText, FileCheck, ShoppingCart, Rocket, CalendarDays,
+  CalendarRange, Hourglass, AlarmClock, TimerOff, UserX, CreditCard,
+  RefreshCw, AlertCircle, XCircle, BellRing, CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 import type {
@@ -167,6 +170,192 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
     defaultConfig: {},
   },
 
+  // ── Renewal triggers (offered for new flows) ──
+  sale_renewal_due_today: {
+    type: 'sale_renewal_due_today',
+    label: 'Renovação é hoje',
+    description: 'Quando uma venda renova hoje',
+    icon: BellRing,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  sale_renewal_due_in_2_days: {
+    type: 'sale_renewal_due_in_2_days',
+    label: 'Renovação em 2 dias',
+    description: 'Quando faltam 2 dias para uma venda renovar',
+    icon: CalendarClock,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+
+  // ── Legacy triggers ──
+  // Migrated from the old automation system. Not offered for new flows, but
+  // existing flows still fire on them and must render properly on the canvas.
+  client_created: {
+    type: 'client_created',
+    label: 'Cliente criado',
+    description: 'Quando um novo cliente é criado no CRM',
+    icon: Users,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  client_status_changed: {
+    type: 'client_status_changed',
+    label: 'Estado do cliente mudou',
+    description: 'Quando um cliente muda de estado',
+    icon: UserCog,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  proposal_created: {
+    type: 'proposal_created',
+    label: 'Proposta criada',
+    description: 'Quando uma nova proposta é criada',
+    icon: FileText,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  proposal_status_changed: {
+    type: 'proposal_status_changed',
+    label: 'Estado da proposta mudou',
+    description: 'Quando uma proposta muda de estado',
+    icon: FileCheck,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  sale_created: {
+    type: 'sale_created',
+    label: 'Venda criada',
+    description: 'Quando uma nova venda é registada',
+    icon: ShoppingCart,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_started: {
+    type: 'trial_started',
+    label: 'Trial começou',
+    description: 'Quando um cliente inicia o período de teste',
+    icon: Rocket,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_day_3: {
+    type: 'trial_day_3',
+    label: 'Trial — dia 3',
+    description: 'No 3.º dia do período de teste',
+    icon: CalendarDays,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_day_7: {
+    type: 'trial_day_7',
+    label: 'Trial — dia 7',
+    description: 'No 7.º dia do período de teste',
+    icon: CalendarRange,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_expiring_3d: {
+    type: 'trial_expiring_3d',
+    label: 'Trial expira em 3 dias',
+    description: 'Quando faltam 3 dias para o teste terminar',
+    icon: Hourglass,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_expiring_1d: {
+    type: 'trial_expiring_1d',
+    label: 'Trial expira amanhã',
+    description: 'Quando falta 1 dia para o teste terminar',
+    icon: AlarmClock,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_expired: {
+    type: 'trial_expired',
+    label: 'Trial expirou',
+    description: 'Quando o período de teste chega ao fim',
+    icon: TimerOff,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  trial_inactive_48h: {
+    type: 'trial_inactive_48h',
+    label: 'Trial inativo há 48h',
+    description: 'Quando um cliente em teste está 48h sem atividade',
+    icon: UserX,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  stripe_subscription_created: {
+    type: 'stripe_subscription_created',
+    label: 'Subscrição criada',
+    description: 'Quando uma subscrição Stripe é criada',
+    icon: CreditCard,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  stripe_subscription_renewed: {
+    type: 'stripe_subscription_renewed',
+    label: 'Subscrição renovada',
+    description: 'Quando uma subscrição Stripe renova com sucesso',
+    icon: RefreshCw,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  stripe_subscription_past_due: {
+    type: 'stripe_subscription_past_due',
+    label: 'Pagamento em atraso',
+    description: 'Quando uma subscrição Stripe fica com pagamento em atraso',
+    icon: AlertCircle,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  stripe_subscription_canceled: {
+    type: 'stripe_subscription_canceled',
+    label: 'Subscrição cancelada',
+    description: 'Quando uma subscrição Stripe é cancelada',
+    icon: XCircle,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+
   // ── Actions ──
   send_whatsapp: {
     type: 'send_whatsapp',
@@ -201,13 +390,16 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
   wait_reply: {
     type: 'wait_reply',
     label: 'Esperar resposta',
-    description: 'Aguarda a resposta do contacto e ramifica por palavras-chave',
+    description: 'Faz uma pergunta (com botões, se quiser) e ramifica pela resposta',
     icon: MessagesSquare,
     category: 'logic',
     isTrigger: false,
     branching: true,
     defaultConfig: {
-      timeout: { value: 24, unit: 'hours' },
+      question: '',
+      use_buttons: true,
+      timeout_amount: 24,
+      timeout_unit: 'hours',
       rules: [],
     },
   },
@@ -283,6 +475,10 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
   },
 };
 
+/**
+ * Curated triggers offered when creating a NEW flow. Legacy trigger types
+ * render fine on the canvas but are deliberately not offered here.
+ */
 export const TRIGGER_TYPES: AutomationTriggerType[] = [
   'lead_created',
   'lead_status_changed',
@@ -290,6 +486,8 @@ export const TRIGGER_TYPES: AutomationTriggerType[] = [
   'whatsapp_keyword',
   'sale_status_changed',
   'list_joined',
+  'sale_renewal_due_today',
+  'sale_renewal_due_in_2_days',
 ];
 
 /** Action types offered by the picker, in the order they are shown. */
@@ -316,8 +514,14 @@ export function getNodeStyle(type: string): NodeCategoryStyle {
   return NODE_CATEGORY_STYLES[def?.category ?? 'crm'];
 }
 
+/** "trial_expired" → "Trial expired" — last-resort label for unknown types. */
+export function humanizeNodeType(type: string): string {
+  const clean = type.replace(/_/g, ' ').trim();
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : type;
+}
+
 export function getNodeLabel(type: string): string {
-  return getNodeDefinition(type)?.label ?? type;
+  return getNodeDefinition(type)?.label ?? humanizeNodeType(type);
 }
 
 /** Branch keys a node emits, derived from its config. */
@@ -369,29 +573,48 @@ export const WAIT_UNIT_OPTIONS = [
   { value: 'days', label: 'Dias' },
 ];
 
+/**
+ * Contact fields offered by the condition inspector. Values match the keys the
+ * engine resolves in the run context ({{nome}}, {{email}}, …).
+ */
 export const CONDITION_FIELD_OPTIONS = [
-  { value: 'status', label: 'Estado / Etapa' },
-  { value: 'source', label: 'Origem' },
+  { value: 'nome', label: 'Nome' },
   { value: 'email', label: 'Email' },
-  { value: 'phone', label: 'Telefone' },
-  { value: 'name', label: 'Nome' },
+  { value: 'telefone', label: 'Telefone' },
+  { value: 'empresa', label: 'Empresa' },
+  { value: 'status', label: 'Etapa' },
+  { value: 'temperature', label: 'Temperatura' },
+  { value: 'source', label: 'Origem' },
   { value: 'value', label: 'Valor' },
-  { value: 'assigned_to', label: 'Responsável' },
-  { value: 'tags', label: 'Etiquetas' },
+  { value: 'ultima_resposta', label: 'Última resposta' },
 ];
 
+/** Operators the engine evaluates, in pt-PT. */
 export const CONDITION_OPERATOR_OPTIONS = [
   { value: 'equals', label: 'É igual a' },
   { value: 'not_equals', label: 'É diferente de' },
   { value: 'contains', label: 'Contém' },
-  { value: 'is_empty', label: 'Está vazio' },
-  { value: 'is_not_empty', label: 'Não está vazio' },
-  { value: 'greater_than', label: 'Maior que' },
-  { value: 'less_than', label: 'Menor que' },
+  { value: 'exists', label: 'Está preenchido' },
+  { value: 'not_exists', label: 'Está vazio' },
+  { value: 'greater_than', label: 'É maior que' },
+  { value: 'less_than', label: 'É menor que' },
 ];
 
 /** Operators that take no value input. */
-export const VALUELESS_OPERATORS = ['is_empty', 'is_not_empty'];
+export const VALUELESS_OPERATORS = ['exists', 'not_exists'];
+
+/** Operators whose value is a number. */
+export const NUMERIC_OPERATORS = ['greater_than', 'less_than'];
+
+/**
+ * Graphs saved by older editors may carry `is_empty` / `is_not_empty`, which
+ * the engine never supported — map them to the real operators for display.
+ */
+export function normalizeConditionOperator(operator: string | undefined): string {
+  if (operator === 'is_empty') return 'not_exists';
+  if (operator === 'is_not_empty') return 'exists';
+  return operator ?? 'equals';
+}
 
 export const SALE_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendente' },
@@ -413,33 +636,37 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
   const config = node.config ?? {};
 
   switch (node.type) {
-    case 'send_whatsapp':
-      return config.message ? truncate(String(config.message)) : 'Sem mensagem definida';
+    case 'send_whatsapp': {
+      if (config.message) return truncate(String(config.message));
+      const attachment = config.media?.filename ?? config.media_url;
+      return attachment ? truncate(`Anexo: ${attachment}`) : 'Sem mensagem definida';
+    }
 
     case 'send_email':
       if (config.template_id) return 'Template de email';
       return config.subject ? truncate(String(config.subject)) : 'Sem assunto definido';
 
     case 'wait': {
-      const value = config.duration ?? 0;
+      const value = config.amount ?? config.duration ?? 0;
       return `Espera ${value} ${WAIT_UNIT_LABELS[config.unit ?? 'hours'] ?? ''}`.trim();
     }
 
     case 'wait_reply': {
+      if (config.question) return truncate(String(config.question));
       const count = config.rules?.length ?? 0;
-      const timeout = config.timeout;
-      const timeoutText = timeout
-        ? ` · ${timeout.value} ${WAIT_UNIT_LABELS[timeout.unit] ?? ''}`.trimEnd()
-        : '';
-      return `${count} ${count === 1 ? 'regra' : 'regras'}${timeoutText}`;
+      const amount = config.timeout_amount ?? config.timeout?.value ?? 24;
+      const unit = config.timeout_unit ?? config.timeout?.unit ?? 'hours';
+      const mode = config.use_buttons ? 'botões' : count === 1 ? 'regra' : 'regras';
+      return `${count} ${mode} · ${amount} ${WAIT_UNIT_LABELS[unit] ?? ''}`.trimEnd();
     }
 
     case 'condition': {
       const field = CONDITION_FIELD_OPTIONS.find((o) => o.value === config.field)?.label ?? config.field;
-      const op = CONDITION_OPERATOR_OPTIONS.find((o) => o.value === config.operator)?.label ?? '';
+      const operator = normalizeConditionOperator(config.operator);
+      const op = CONDITION_OPERATOR_OPTIONS.find((o) => o.value === operator)?.label ?? '';
       if (!field) return 'Condição por definir';
-      if (VALUELESS_OPERATORS.includes(config.operator ?? '')) return truncate(`${field} ${op}`);
-      return truncate(`${field} ${op} ${config.value ?? ''}`);
+      if (VALUELESS_OPERATORS.includes(operator)) return truncate(`${field} ${op.toLowerCase()}`);
+      return truncate(`${field} ${op.toLowerCase()} ${config.value ?? ''}`);
     }
 
     case 'webhook':
@@ -457,6 +684,6 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
       return config.form_slug ? truncate(String(config.form_slug)) : 'Qualquer formulário';
 
     default:
-      return getNodeDefinition(node.type)?.description ?? '';
+      return getNodeDefinition(node.type)?.description ?? 'Tipo de passo desconhecido';
   }
 }

@@ -68,6 +68,35 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // Forward non-CRUD triggers (trial_*, stripe_*, renewals) to the flow
+    // engine. The CRUD ones are NOT forwarded — the DB trigger already
+    // dispatches those to both systems, and doubling them here would enrol the
+    // same contact twice. Fire-and-forget: the legacy path below must never
+    // wait on (or fail with) the engine.
+    const CRUD_TRIGGERS = new Set([
+      "lead_created", "lead_status_changed",
+      "client_created", "client_status_changed",
+      "sale_created", "sale_status_changed",
+      "proposal_created", "proposal_status_changed",
+    ]);
+    if (!CRUD_TRIGGERS.has(trigger_type)) {
+      fetch(`${supabaseUrl}/functions/v1/automation-engine`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          action: "enroll",
+          trigger_type,
+          organization_id,
+          subject_type: "contact",
+          record,
+          old_record,
+        }),
+      }).catch((e) => console.error("[process-automation] forward to engine failed:", e));
+    }
+
     console.log(`Processing automation: ${trigger_type} for org ${organization_id}`);
 
     // Check if organization has Brevo configured - automations only work with Brevo

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, ArrowLeft, Loader2, Pause, Play, Save, SlidersHorizontal, Workflow,
+  Activity, AlertTriangle, ArrowLeft, LayoutGrid, Loader2, Pause, Play, Save,
+  SlidersHorizontal, Workflow,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,8 +20,8 @@ import { FlowStatusPill } from '@/components/automations/FlowStatusPill';
 import { FlowSettings } from '@/components/automations/FlowSettings';
 
 import {
-  appendNode, findNode, insertNodeOnEdge, pruneOrphanBranches, removeNode,
-  updateNodeConfig, validateGraph,
+  appendNode, applyAutoLayout, findNode, insertNodeOnEdge, pruneOrphanBranches,
+  removeNode, updateNodeConfig, updateNodePositions, validateGraph,
 } from '@/lib/automation-graph';
 import {
   useAutomationFlow, useSetAutomationFlowStatus, useUpdateAutomationFlow,
@@ -77,6 +78,19 @@ export default function AutomationEditor() {
 
   const handleInsertOnEdge = useCallback((edgeId: string) => {
     setPickerTarget({ kind: 'insert', edgeId });
+  }, []);
+
+  // Drag-stop on the canvas: persist the positions and mark the flow dirty so
+  // "Guardar" stores the hand-made layout.
+  const handleMoveNodes = useCallback((positions: Record<string, { x: number; y: number }>) => {
+    setGraph((current) => updateNodePositions(current, positions));
+    setDirty(true);
+  }, []);
+
+  // Re-runs dagre and writes the tidy positions into the graph.
+  const handleAutoLayout = useCallback(() => {
+    setGraph((current) => applyAutoLayout(current));
+    setDirty(true);
   }, []);
 
   const handlePickNodeType = (type: AutomationNodeType) => {
@@ -194,6 +208,18 @@ export default function AutomationEditor() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {tab === 'canvas' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleAutoLayout}
+              title="Reorganizar os passos automaticamente"
+            >
+              <LayoutGrid className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Auto-organizar</span>
+            </Button>
+          )}
+
           <Button variant="outline" size="sm" onClick={handleSave} disabled={!dirty || isBusy}>
             {updateFlow.isPending
               ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -241,10 +267,14 @@ export default function AutomationEditor() {
               onSelectNode={setSelectedNodeId}
               onAddAfter={handleAddAfter}
               onInsertOnEdge={handleInsertOnEdge}
+              onMoveNodes={handleMoveNodes}
             />
 
             {selectedNode && (
               <NodeInspector
+                // Keyed so per-node form state (tag drafts, custom-field mode)
+                // never leaks between different nodes.
+                key={selectedNode.id}
                 node={selectedNode}
                 isEntry={selectedNode.id === flow.entry_node_id}
                 onChange={handleConfigChange}

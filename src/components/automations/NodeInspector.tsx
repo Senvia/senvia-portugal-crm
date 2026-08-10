@@ -1,7 +1,12 @@
-import { Plus, Trash2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import {
+  FileText, Film, HelpCircle, Image as ImageIcon, Loader2, Plus, Trash2, Upload, X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -9,16 +14,21 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
-  CONDITION_FIELD_OPTIONS, CONDITION_OPERATOR_OPTIONS, SALE_STATUS_OPTIONS,
-  VALUELESS_OPERATORS, WAIT_UNIT_OPTIONS, getNodeDefinition, getNodeStyle,
+  CONDITION_FIELD_OPTIONS, CONDITION_OPERATOR_OPTIONS, NUMERIC_OPERATORS,
+  SALE_STATUS_OPTIONS, VALUELESS_OPERATORS, WAIT_UNIT_OPTIONS, getNodeDefinition,
+  getNodeStyle, humanizeNodeType, normalizeConditionOperator,
 } from '@/lib/automation-nodes';
 import { createId } from '@/lib/automation-graph';
-import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { VariableChips } from '@/components/automations/VariableChips';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePipelineStages, type PipelineStage } from '@/hooks/usePipelineStages';
 import { useContactLists } from '@/hooks/useContactLists';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { useTeamMembers } from '@/hooks/useTeam';
 import type {
-  AutomationGraphNode, AutomationNodeConfig, AutomationWaitUnit, WaitReplyRule,
+  AutomationGraphNode, AutomationMediaAttachment, AutomationNodeConfig,
+  AutomationWaitUnit, ConditionOperator, WaitReplyRule,
 } from '@/types/automations';
 
 interface NodeInspectorProps {
@@ -33,7 +43,7 @@ interface NodeInspectorProps {
 export function NodeInspector({ node, isEntry, onChange, onDelete, onClose }: NodeInspectorProps) {
   const definition = getNodeDefinition(node.type);
   const style = getNodeStyle(node.type);
-  const Icon = definition?.icon;
+  const Icon = definition?.icon ?? HelpCircle;
   const config = node.config ?? {};
 
   const set = (patch: Partial<AutomationNodeConfig>) => onChange({ ...config, ...patch });
@@ -53,10 +63,12 @@ export function NodeInspector({ node, isEntry, onChange, onDelete, onClose }: No
             style.ring,
           )}
         >
-          {Icon && <Icon className={cn('h-5 w-5', style.icon)} />}
+          <Icon className={cn('h-5 w-5', style.icon)} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{definition?.label ?? node.type}</p>
+          <p className="truncate text-sm font-semibold text-foreground">
+            {definition?.label ?? humanizeNodeType(node.type)}
+          </p>
           <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{definition?.description}</p>
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
@@ -95,6 +107,13 @@ function NodeConfigForm({ node, config, set }: FormProps) {
   const { data: lists } = useContactLists();
   const { data: templates } = useEmailTemplates();
   const { data: members } = useTeamMembers();
+
+  // Refs for the variable chips — they insert at the field's caret position.
+  const whatsappMessageRef = useRef<HTMLTextAreaElement>(null);
+  const emailSubjectRef = useRef<HTMLInputElement>(null);
+  const emailHtmlRef = useRef<HTMLTextAreaElement>(null);
+  const taskTitleRef = useRef<HTMLInputElement>(null);
+  const taskDescriptionRef = useRef<HTMLTextAreaElement>(null);
 
   switch (node.type) {
     // ── Triggers ──
@@ -154,7 +173,7 @@ function NodeConfigForm({ node, config, set }: FormProps) {
             value={config.keywords ?? []}
             onChange={(keywords) => set({ keywords })}
           />
-          <Helper>Separe por vírgulas. A mensagem recebida só precisa de conter uma delas.</Helper>
+          <Helper>Escreva e prima Enter (ou vírgula) para adicionar. A mensagem recebida só precisa de conter uma delas.</Helper>
         </Field>
       );
 
@@ -186,26 +205,32 @@ function NodeConfigForm({ node, config, set }: FormProps) {
         </Field>
       );
 
+    case 'sale_renewal_due_today':
+      return <Hint>Este fluxo arranca no dia em que uma venda com renovação chega à data de renovar.</Hint>;
+
+    case 'sale_renewal_due_in_2_days':
+      return <Hint>Este fluxo arranca 2 dias antes da data de renovação de uma venda.</Hint>;
+
     // ── Actions ──
     case 'send_whatsapp':
       return (
         <>
           <Field label="Mensagem">
             <Textarea
+              ref={whatsappMessageRef}
               value={config.message ?? ''}
               onChange={(e) => set({ message: e.target.value })}
               placeholder="Olá {{nome}}, obrigado pelo seu contacto!"
               rows={6}
             />
-            <Helper>Use variáveis como {'{{nome}}'}, {'{{email}}'} ou {'{{telefone}}'}.</Helper>
-          </Field>
-          <Field label="Media (opcional)">
-            <Input
-              value={config.media_url ?? ''}
-              onChange={(e) => set({ media_url: e.target.value })}
-              placeholder="https://…"
+            <VariableChips
+              targetRef={whatsappMessageRef}
+              value={config.message ?? ''}
+              onChange={(message) => set({ message })}
             />
-            <Helper>URL de imagem, PDF ou vídeo a anexar à mensagem.</Helper>
+          </Field>
+          <Field label="Anexo (opcional)">
+            <WhatsappMediaField config={config} set={set} />
           </Field>
         </>
       );
@@ -234,18 +259,30 @@ function NodeConfigForm({ node, config, set }: FormProps) {
             <>
               <Field label="Assunto">
                 <Input
+                  ref={emailSubjectRef}
                   value={config.subject ?? ''}
                   onChange={(e) => set({ subject: e.target.value })}
                   placeholder="Ex.: A sua proposta está pronta"
                 />
+                <VariableChips
+                  targetRef={emailSubjectRef}
+                  value={config.subject ?? ''}
+                  onChange={(subject) => set({ subject })}
+                />
               </Field>
               <Field label="Conteúdo HTML">
                 <Textarea
+                  ref={emailHtmlRef}
                   value={config.html ?? ''}
                   onChange={(e) => set({ html: e.target.value })}
                   placeholder="<p>Olá {{nome}},</p>"
                   rows={8}
                   className="font-mono text-xs"
+                />
+                <VariableChips
+                  targetRef={emailHtmlRef}
+                  value={config.html ?? ''}
+                  onChange={(html) => set({ html })}
                 />
               </Field>
             </>
@@ -283,52 +320,19 @@ function NodeConfigForm({ node, config, set }: FormProps) {
       return <WaitReplyForm config={config} set={set} />;
 
     case 'condition':
-      return (
-        <>
-          <Field label="Campo">
-            <Select value={config.field ?? ''} onValueChange={(value) => set({ field: value })}>
-              <SelectTrigger><SelectValue placeholder="Escolher campo" /></SelectTrigger>
-              <SelectContent>
-                {CONDITION_FIELD_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Operador">
-            <Select
-              value={config.operator ?? 'equals'}
-              onValueChange={(value) => set({ operator: value as AutomationNodeConfig['operator'] })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CONDITION_OPERATOR_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {!VALUELESS_OPERATORS.includes(config.operator ?? 'equals') && (
-            <Field label="Valor">
-              <Input
-                value={config.value ?? ''}
-                onChange={(e) => set({ value: e.target.value })}
-                placeholder="Valor a comparar"
-              />
-            </Field>
-          )}
-          <Hint>O fluxo segue pelo ramo <strong>Sim</strong> quando a condição se verifica e por <strong>Não</strong> caso contrário.</Hint>
-        </>
-      );
+      return <ConditionForm config={config} set={set} stages={stages} />;
 
     case 'move_stage':
       return (
         <Field label="Mover para a etapa">
           <StageSelect
-            value={config.stage_id ?? ''}
+            // The engine reads `stage` (the stage KEY). Legacy configs stored
+            // the stage id — resolve it so the select still shows the choice.
+            value={config.stage ?? stages?.find((s) => s.id === config.stage_id)?.key ?? ''}
             stages={stages}
+            by="key"
             placeholder="Escolher etapa"
-            onChange={(value) => set({ stage_id: value })}
+            onChange={(value) => set({ stage: value })}
           />
         </Field>
       );
@@ -368,9 +372,29 @@ function NodeConfigForm({ node, config, set }: FormProps) {
         <>
           <Field label="Título da tarefa">
             <Input
+              ref={taskTitleRef}
               value={config.title ?? ''}
               onChange={(e) => set({ title: e.target.value })}
               placeholder="Ex.: Ligar à lead"
+            />
+            <VariableChips
+              targetRef={taskTitleRef}
+              value={config.title ?? ''}
+              onChange={(title) => set({ title })}
+            />
+          </Field>
+          <Field label="Descrição (opcional)">
+            <Textarea
+              ref={taskDescriptionRef}
+              value={config.description ?? ''}
+              onChange={(e) => set({ description: e.target.value })}
+              placeholder="Contexto para quem vai tratar da tarefa"
+              rows={3}
+            />
+            <VariableChips
+              targetRef={taskDescriptionRef}
+              value={config.description ?? ''}
+              onChange={(description) => set({ description })}
             />
           </Field>
           <Field label="Prazo (dias)">
@@ -382,7 +406,11 @@ function NodeConfigForm({ node, config, set }: FormProps) {
             />
           </Field>
           <Field label="Responsável (opcional)">
-            <Select value={config.assigned_to ?? ''} onValueChange={(value) => set({ assigned_to: value })}>
+            <Select
+              // The engine reads `user_id`; `assigned_to` is the legacy key.
+              value={config.user_id ?? config.assigned_to ?? ''}
+              onValueChange={(value) => set({ user_id: value })}
+            >
               <SelectTrigger><SelectValue placeholder="Responsável da lead" /></SelectTrigger>
               <SelectContent>
                 {(members ?? []).map((member) => (
@@ -448,11 +476,171 @@ function NodeConfigForm({ node, config, set }: FormProps) {
   }
 }
 
+// ── send_whatsapp: media upload ─────────────────────────────────────────────
+
+const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+
+const MEDIA_KIND_ICONS = { image: ImageIcon, video: Film, document: FileText } as const;
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+}
+
+function mediaKindFromMime(mimetype: string): AutomationMediaAttachment['kind'] {
+  if (mimetype.startsWith('image/')) return 'image';
+  if (mimetype.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+/**
+ * Real file upload to the `automation-media` bucket (public read; RLS requires
+ * the path to start with the organization id). Replaces the old URL input —
+ * the legacy `media_url` is still shown as an attachment if present.
+ */
+function WhatsappMediaField({ config, set }: { config: AutomationNodeConfig; set: FormProps['set'] }) {
+  const { organization } = useAuth();
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const media = config.media?.url ? config.media : undefined;
+  const legacyUrl = !media && config.media_url ? String(config.media_url) : null;
+
+  const handleFile = async (file: File) => {
+    if (!organization?.id) {
+      toast.error('Sem organização ativa');
+      return;
+    }
+    if (file.size > MAX_MEDIA_BYTES) {
+      toast.error('Ficheiro demasiado grande', { description: 'O limite do WhatsApp é 16 MB.' });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // RLS requires the org id as the first path segment. Strip accents and
+      // anything storage keys dislike from the file name.
+      const sanitized = file.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w.-]/g, '_');
+      const path = `${organization.id}/${crypto.randomUUID()}-${sanitized}`;
+
+      const { error } = await supabase.storage
+        .from('automation-media')
+        .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+      if (error) throw error;
+
+      const { data } = supabase.storage.from('automation-media').getPublicUrl(path);
+      const mimetype = file.type || 'application/octet-stream';
+
+      set({
+        media: {
+          url: data.publicUrl,
+          path,
+          mimetype,
+          filename: file.name,
+          kind: mediaKindFromMime(mimetype),
+          size: file.size,
+        },
+        // The upload replaces any legacy URL.
+        media_url: undefined,
+      });
+    } catch (error) {
+      console.error('Error uploading automation media:', error);
+      toast.error('Erro ao carregar o ficheiro');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemove = () => {
+    // Best-effort cleanup — the message config no longer references the file
+    // either way, and RLS lets org members delete their own uploads.
+    if (media?.path) {
+      void supabase.storage.from('automation-media').remove([media.path]);
+    }
+    set({ media: undefined, media_url: undefined });
+  };
+
+  if (media || legacyUrl) {
+    const kind = media?.kind ?? 'document';
+    const KindIcon = MEDIA_KIND_ICONS[kind] ?? FileText;
+    const filename = media?.filename ?? legacyUrl?.split('/').pop() ?? 'anexo';
+
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
+        <KindIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground" title={filename}>
+          {filename}
+        </span>
+        {media?.size !== undefined && (
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            {formatFileSize(media.size)}
+          </span>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={handleRemove}
+          title="Remover anexo"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleFile(file);
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={isUploading}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {isUploading ? (
+          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A carregar…</>
+        ) : (
+          <><Upload className="mr-2 h-4 w-4" /> Carregar ficheiro</>
+        )}
+      </Button>
+      <Helper>Imagem, vídeo ou PDF enviado junto com a mensagem. Máximo 16 MB.</Helper>
+    </>
+  );
+}
+
 // ── wait_reply: the conversational node ─────────────────────────────────────
 
 function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: FormProps['set'] }) {
+  const questionRef = useRef<HTMLTextAreaElement>(null);
   const rules = config.rules ?? [];
-  const timeout = config.timeout ?? { value: 24, unit: 'hours' as AutomationWaitUnit };
+  // Engine contract: timeout_amount / timeout_unit. The nested `timeout`
+  // object is a legacy shape older editors saved — read it as a fallback and
+  // clear it on the first write.
+  const timeoutAmount = config.timeout_amount ?? config.timeout?.value ?? 24;
+  const timeoutUnit = (config.timeout_unit ?? config.timeout?.unit ?? 'hours') as AutomationWaitUnit;
+
+  const updateTimeout = (patch: { amount?: number; unit?: AutomationWaitUnit }) => {
+    set({
+      timeout_amount: patch.amount ?? timeoutAmount,
+      timeout_unit: patch.unit ?? timeoutUnit,
+      timeout: undefined,
+    });
+  };
 
   const updateRule = (id: string, patch: Partial<WaitReplyRule>) => {
     set({ rules: rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)) });
@@ -473,48 +661,57 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
 
   return (
     <>
-      <Hint>
-        O fluxo fica à espera da resposta do contacto. Cada regra abaixo cria um ramo próprio no
-        canvas; se ninguém responder dentro do tempo limite, segue pelo ramo <strong>Sem resposta</strong>.
-      </Hint>
-
-      <Field label="Tempo limite">
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            min={1}
-            className="w-24"
-            value={timeout.value}
-            onChange={(e) => set({ timeout: { ...timeout, value: Number(e.target.value) } })}
-          />
-          <Select
-            value={timeout.unit}
-            onValueChange={(value) => set({ timeout: { ...timeout, unit: value as AutomationWaitUnit } })}
-          >
-            <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {WAIT_UNIT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <Field label="Pergunta">
+        <Textarea
+          ref={questionRef}
+          value={config.question ?? ''}
+          onChange={(e) => set({ question: e.target.value })}
+          placeholder="Ex.: Quer que lhe ligue para explicar?"
+          rows={4}
+        />
+        <VariableChips
+          targetRef={questionRef}
+          value={config.question ?? ''}
+          onChange={(question) => set({ question })}
+        />
+        <Helper>
+          Enviada quando o fluxo chega a este passo. Deixa vazio se a pergunta já foi feita num
+          passo anterior.
+        </Helper>
       </Field>
+
+      <div className="space-y-1.5 rounded-lg border border-border bg-background p-3">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="wait-reply-buttons" className="text-sm font-medium">
+            Enviar como botões
+          </Label>
+          <Switch
+            id="wait-reply-buttons"
+            checked={!!config.use_buttons}
+            onCheckedChange={(checked) => set({ use_buttons: checked })}
+          />
+        </div>
+        <Helper>
+          O contacto toca no botão e a resposta escolhe o caminho. Se o WhatsApp dele não mostrar
+          botões, saem opções numeradas — responder «1», «2»… também funciona.
+        </Helper>
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Regras de resposta
+            Respostas possíveis
           </Label>
           <Button variant="outline" size="sm" className="h-7" onClick={addRule}>
             <Plus className="mr-1 h-3.5 w-3.5" />
-            Regra
+            Opção
           </Button>
         </div>
 
         {!rules.length && (
           <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-            Sem regras. Adicione uma para ramificar consoante o que o contacto responder.
+            Sem opções. Adicione uma para ramificar consoante o que o contacto responder — cada
+            opção cria um caminho próprio no fluxo.
           </p>
         )}
 
@@ -527,7 +724,8 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
               <Input
                 value={rule.label}
                 onChange={(e) => updateRule(rule.id, { label: e.target.value })}
-                placeholder="Nome do ramo"
+                placeholder="Texto do botão"
+                maxLength={20}
                 className="h-8 flex-1"
               />
               <Button
@@ -535,19 +733,142 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
                 size="icon"
                 className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => removeRule(rule.id)}
-                title="Remover regra"
+                title="Remover opção"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <KeywordsInput
-              value={rule.keywords ?? []}
-              onChange={(keywords) => updateRule(rule.id, { keywords })}
-              className="h-8"
-            />
+            <Helper>É o texto do botão (máx. 20 caracteres) e o rótulo do caminho no fluxo.</Helper>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Palavras-chave</Label>
+              <KeywordsInput
+                value={rule.keywords ?? []}
+                onChange={(keywords) => updateRule(rule.id, { keywords })}
+              />
+            </div>
           </div>
         ))}
       </div>
+
+      <Field label="Se não responder em">
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            min={1}
+            className="w-24"
+            value={timeoutAmount}
+            onChange={(e) => updateTimeout({ amount: Number(e.target.value) })}
+          />
+          <Select
+            value={timeoutUnit}
+            onValueChange={(value) => updateTimeout({ unit: value as AutomationWaitUnit })}
+          >
+            <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {WAIT_UNIT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Helper>Passado este tempo sem resposta, o fluxo segue pelo caminho «Sem resposta».</Helper>
+      </Field>
+    </>
+  );
+}
+
+// ── condition ───────────────────────────────────────────────────────────────
+
+const CUSTOM_FIELD_SENTINEL = '__custom__';
+
+function ConditionForm({
+  config, set, stages,
+}: {
+  config: AutomationNodeConfig;
+  set: FormProps['set'];
+  stages: PipelineStage[] | undefined;
+}) {
+  const field = config.field ?? '';
+  const isKnownField = CONDITION_FIELD_OPTIONS.some((option) => option.value === field);
+  // "Outro campo…" stays revealed while the free-text input is empty.
+  const [customFieldMode, setCustomFieldMode] = useState(() => !!field && !isKnownField);
+  const showCustomInput = customFieldMode || (!!field && !isKnownField);
+
+  const operator = normalizeConditionOperator(config.operator);
+  const isValueless = VALUELESS_OPERATORS.includes(operator);
+  const isNumeric = NUMERIC_OPERATORS.includes(operator);
+
+  return (
+    <>
+      <Field label="Campo">
+        <Select
+          value={showCustomInput ? CUSTOM_FIELD_SENTINEL : field}
+          onValueChange={(value) => {
+            if (value === CUSTOM_FIELD_SENTINEL) {
+              setCustomFieldMode(true);
+              set({ field: '' });
+            } else {
+              setCustomFieldMode(false);
+              set({ field: value });
+            }
+          }}
+        >
+          <SelectTrigger><SelectValue placeholder="Escolher campo" /></SelectTrigger>
+          <SelectContent>
+            {CONDITION_FIELD_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+            <SelectItem value={CUSTOM_FIELD_SENTINEL}>Outro campo…</SelectItem>
+          </SelectContent>
+        </Select>
+        {showCustomInput && (
+          <Input
+            value={field}
+            onChange={(e) => set({ field: e.target.value })}
+            placeholder="Nome do campo (ex.: nif)"
+          />
+        )}
+      </Field>
+
+      <Field label="Condição">
+        <Select
+          value={operator}
+          onValueChange={(value) => set({ operator: value as ConditionOperator })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CONDITION_OPERATOR_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {!isValueless && (
+        <Field label="Valor">
+          {field === 'status' && !isNumeric ? (
+            <StageSelect
+              value={config.value ?? ''}
+              stages={stages}
+              by="key"
+              placeholder="Escolher etapa"
+              onChange={(value) => set({ value })}
+            />
+          ) : (
+            <Input
+              type={isNumeric ? 'number' : 'text'}
+              value={config.value ?? ''}
+              onChange={(e) => set({ value: e.target.value })}
+              placeholder={isNumeric ? '0' : 'Valor a comparar'}
+            />
+          )}
+        </Field>
+      )}
+
+      <Hint>
+        O fluxo segue pelo ramo <strong>Sim</strong> quando a condição se verifica e por{' '}
+        <strong>Não</strong> caso contrário.
+      </Hint>
     </>
   );
 }
@@ -578,26 +899,33 @@ function Hint({ children }: { children: React.ReactNode }) {
 }
 
 function StageSelect({
-  value, stages, placeholder, onChange,
+  value, stages, placeholder, onChange, by = 'id',
 }: {
   value: string;
-  stages: { id: string; name: string }[] | undefined;
+  stages: PipelineStage[] | undefined;
   placeholder: string;
   onChange: (value: string) => void;
+  /** Which stage property backs the option value — ids for trigger configs, keys for the engine. */
+  by?: 'id' | 'key';
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
       <SelectContent>
         {(stages ?? []).map((stage) => (
-          <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+          <SelectItem key={stage.id} value={by === 'key' ? stage.key : stage.id}>
+            {stage.name}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
 }
 
-/** Comma-separated keyword editor backed by a string[]. */
+/**
+ * Tag-style keyword editor: Enter or comma adds a chip, Backspace on an empty
+ * input removes the last one.
+ */
 function KeywordsInput({
   value, onChange, className,
 }: {
@@ -605,19 +933,57 @@ function KeywordsInput({
   onChange: (value: string[]) => void;
   className?: string;
 }) {
+  const [draft, setDraft] = useState('');
+
+  const commitDraft = (raw: string) => {
+    const parts = raw
+      .split(',')
+      .map((keyword) => keyword.trim())
+      .filter(Boolean)
+      .filter((keyword) => !value.includes(keyword));
+    if (parts.length) onChange([...value, ...parts]);
+    setDraft('');
+  };
+
   return (
-    <Input
-      className={className}
-      value={value.join(', ')}
-      onChange={(e) =>
-        onChange(
-          e.target.value
-            .split(',')
-            .map((keyword) => keyword.trim())
-            .filter(Boolean),
-        )
-      }
-      placeholder="sim, quero, interessado"
-    />
+    <div
+      className={cn(
+        'flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5',
+        'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+        className,
+      )}
+    >
+      {value.map((keyword) => (
+        <span
+          key={keyword}
+          className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
+        >
+          {keyword}
+          <button
+            type="button"
+            className="text-muted-foreground transition-colors hover:text-destructive"
+            onClick={() => onChange(value.filter((k) => k !== keyword))}
+            title={`Remover ${keyword}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            commitDraft(draft);
+          } else if (e.key === 'Backspace' && !draft && value.length) {
+            onChange(value.slice(0, -1));
+          }
+        }}
+        onBlur={() => draft.trim() && commitDraft(draft)}
+        placeholder={value.length ? '' : 'sim, quero, interessado'}
+        className="min-w-[80px] flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+      />
+    </div>
   );
 }

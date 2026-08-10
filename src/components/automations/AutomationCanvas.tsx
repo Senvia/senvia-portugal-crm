@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background, BackgroundVariant, Controls, ReactFlow, ReactFlowProvider,
-  useReactFlow, type Edge, type Node,
+  useReactFlow, type Edge, type Node, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { AutomationFlowNode, GhostFlowNode } from './AutomationFlowNode';
 import { AutomationFlowEdge } from './AutomationFlowEdge';
 import {
-  computeStepNumbers, findNode, getGhostSlots, layoutGraph, validateGraph,
+  computeCanvasLayout, computeStepNumbers, findNode, getGhostSlots, validateGraph,
 } from '@/lib/automation-graph';
 import { getBranchLabel, getNodeStyle } from '@/lib/automation-nodes';
 import type { AutomationGraph } from '@/types/automations';
@@ -26,16 +26,22 @@ interface AutomationCanvasProps {
   onAddAfter: (sourceId: string, branch: string | null) => void;
   /** Splice a step into an existing edge. */
   onInsertOnEdge: (edgeId: string) => void;
+  /** Persist node positions after a drag (marks the flow dirty). */
+  onMoveNodes: (positions: Record<string, { x: number; y: number }>) => void;
 }
 
 function CanvasInner({
-  graph, entryNodeId, selectedNodeId, onSelectNode, onAddAfter, onInsertOnEdge,
+  graph, entryNodeId, selectedNodeId, onSelectNode, onAddAfter, onInsertOnEdge, onMoveNodes,
 }: AutomationCanvasProps) {
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes } = useReactFlow();
+
+  // Live positions while a drag is in flight. React Flow is controlled here, so
+  // without feeding these back the circles would not follow the pointer.
+  const [dragPositions, setDragPositions] = useState<Record<string, { x: number; y: number }>>({});
 
   const { nodes, edges } = useMemo(() => {
     const ghosts = getGhostSlots(graph);
-    const { positions } = layoutGraph(graph, ghosts);
+    const { positions } = computeCanvasLayout(graph, ghosts);
     const steps = computeStepNumbers(graph, entryNodeId);
 
     // Nodes flagged by validation get a warning badge on the circle.
@@ -49,8 +55,8 @@ function CanvasInner({
       ...graph.nodes.map((node) => ({
         id: node.id,
         type: 'automation',
-        position: positions[node.id] ?? { x: 0, y: 0 },
-        draggable: false,
+        position: dragPositions[node.id] ?? positions[node.id] ?? { x: 0, y: 0 },
+        draggable: true,
         selected: node.id === selectedNodeId,
         data: {
           graphNode: node,
@@ -105,9 +111,9 @@ function CanvasInner({
     ];
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [graph, entryNodeId, selectedNodeId, onAddAfter, onInsertOnEdge]);
+  }, [graph, entryNodeId, selectedNodeId, onAddAfter, onInsertOnEdge, dragPositions]);
 
-  // Re-fit when the shape of the graph changes (not on mere config edits).
+  // Re-fit when the shape of the graph changes (not on mere config edits or drags).
   const shapeKey = `${graph.nodes.length}:${graph.edges.length}`;
   const lastShape = useRef<string>('');
   useEffect(() => {
@@ -125,6 +131,31 @@ function CanvasInner({
     [onSelectNode],
   );
 
+  // Track drag movement only; selection is driven by our own click handler.
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const moved: Record<string, { x: number; y: number }> = {};
+    for (const change of changes) {
+      if (change.type === 'position' && change.position) moved[change.id] = change.position;
+    }
+    if (Object.keys(moved).length) {
+      setDragPositions((prev) => ({ ...prev, ...moved }));
+    }
+  }, []);
+
+  // On drop, persist EVERY real node's rendered position — the first drag
+  // converts a dagre layout into a manual one without anything jumping.
+  const handleNodeDragStop = useCallback(() => {
+    const positions: Record<string, { x: number; y: number }> = {};
+    for (const node of getNodes()) {
+      if (node.type === 'automation') {
+        positions[node.id] = { x: node.position.x, y: node.position.y };
+      }
+    }
+    // Both state updates land in the same render, so nothing flickers.
+    onMoveNodes(positions);
+    setDragPositions({});
+  }, [getNodes, onMoveNodes]);
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -133,8 +164,10 @@ function CanvasInner({
       edgeTypes={edgeTypes}
       onNodeClick={handleNodeClick}
       onPaneClick={() => onSelectNode(null)}
-      // Layout is computed by dagre; the user organises nothing by hand.
-      nodesDraggable={false}
+      onNodesChange={handleNodesChange}
+      onNodeDragStop={handleNodeDragStop}
+      // Steps can be rearranged by hand; "Auto-organizar" restores a tidy layout.
+      nodesDraggable
       nodesConnectable={false}
       elementsSelectable
       panOnScroll

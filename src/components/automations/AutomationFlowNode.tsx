@@ -1,10 +1,26 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import { AlertTriangle, Plus } from 'lucide-react';
+import { AlertTriangle, HelpCircle, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getNodeDefinition, getNodeStyle, getNodeSubtitle } from '@/lib/automation-nodes';
+import {
+  getNodeDefinition, getNodeStyle, getNodeSubtitle, humanizeNodeType,
+  type NodeCategoryStyle,
+} from '@/lib/automation-nodes';
 import { GHOST_BOX_HEIGHT, NODE_BOX_HEIGHT, NODE_BOX_WIDTH } from '@/lib/automation-graph';
 import type { AutomationGraphNode } from '@/types/automations';
+
+/**
+ * Unknown node types (e.g. written by a newer engine) must still render as a
+ * proper circle — a distinct slate ring with a help icon, never an empty disc.
+ * Slate is theme-neutral, matching how the email category uses sky directly.
+ */
+const UNKNOWN_NODE_STYLE: NodeCategoryStyle = {
+  ring: 'ring-slate-400',
+  bg: 'bg-slate-400/10',
+  icon: 'text-slate-500 dark:text-slate-400',
+  chip: 'bg-slate-400/10 text-slate-500 dark:text-slate-400',
+  stroke: 'hsl(var(--muted-foreground) / 0.5)',
+};
 
 // Circle geometry — handles are pinned to the circle's edge rather than the
 // bounding box, so edges meet the node exactly where it is drawn. The explicit
@@ -38,8 +54,10 @@ export type AutomationFlowNodeType = Node<AutomationNodeData, 'automation'>;
 export const AutomationFlowNode = memo(({ data, selected }: NodeProps<AutomationFlowNodeType>) => {
   const { graphNode, step, hasIssue } = data;
   const definition = getNodeDefinition(graphNode.type);
-  const style = getNodeStyle(graphNode.type);
-  const Icon = definition?.icon;
+  // Defensive: an unknown type still gets a styled circle, an icon and a
+  // readable label — never an empty grey disc labelled "trial_expired".
+  const style = definition ? getNodeStyle(graphNode.type) : UNKNOWN_NODE_STYLE;
+  const Icon = definition?.icon ?? HelpCircle;
   const subtitle = getNodeSubtitle(graphNode);
   const isTrigger = definition?.isTrigger;
 
@@ -71,7 +89,7 @@ export const AutomationFlowNode = memo(({ data, selected }: NodeProps<Automation
           )}
         >
           <div className={cn('flex h-full w-full items-center justify-center rounded-full', style.bg)}>
-            {Icon && <Icon className={cn('h-7 w-7', style.icon)} />}
+            <Icon className={cn('h-7 w-7', style.icon)} />
           </div>
         </div>
 
@@ -98,7 +116,7 @@ export const AutomationFlowNode = memo(({ data, selected }: NodeProps<Automation
 
       <div className="mt-2 w-full px-2 text-center">
         <p className="truncate text-[13px] font-semibold leading-tight text-foreground">
-          {definition?.label ?? graphNode.type}
+          {definition?.label ?? humanizeNodeType(graphNode.type)}
         </p>
         <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-muted-foreground">
           {subtitle}

@@ -1,9 +1,11 @@
 // Graph helpers for the automation canvas.
 //
-// The user never drags nodes: positions are always recomputed with dagre in a
-// left-to-right rank layout. All mutations here are pure — they take a graph
-// and return a new one — so the editor can keep the whole document in state and
-// mark it dirty.
+// Layout has two modes. While no node has been placed by hand, positions are
+// recomputed with dagre in a left-to-right rank layout. Once the user drags a
+// node, every node's position is persisted into the graph and used as-is —
+// "Auto-organizar" runs dagre again and writes the tidy positions back. All
+// mutations here are pure — they take a graph and return a new one — so the
+// editor can keep the whole document in state and mark it dirty.
 
 import dagre from 'dagre';
 import type {
@@ -20,6 +22,13 @@ export const NODE_BOX_HEIGHT = 118;
  */
 export const GHOST_BOX_WIDTH = 44;
 export const GHOST_BOX_HEIGHT = 44;
+/** Vertical centre of the node circle inside its box (see AutomationFlowNode). */
+const NODE_CIRCLE_CENTER_Y = 33;
+/** Manual-layout ghost placement relative to its anchor node. */
+const MANUAL_GHOST_GAP_X = 96;
+const MANUAL_GHOST_STEP_Y = GHOST_BOX_HEIGHT + 16;
+/** Horizontal gap used when appending a node in manual-layout mode. */
+const MANUAL_APPEND_GAP_X = 110;
 
 export function createId(prefix: string): string {
   const random = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -73,6 +82,18 @@ export function getEntryNode(
   return findNode(graph, entryNodeId) ?? graph.nodes.find((n) => getNodeDefinition(n.type)?.isTrigger);
 }
 
+/**
+ * True when EVERY real node holds a stored, non-default position — meaning the
+ * user (or "Auto-organizar") placed things by hand and the canvas must respect
+ * it. Any node still at the (0,0) default sends the whole graph back to dagre.
+ */
+export function hasManualLayout(graph: AutomationGraph): boolean {
+  if (!graph.nodes.length) return false;
+  return graph.nodes.every(
+    (node) => node.position && (node.position.x !== 0 || node.position.y !== 0),
+  );
+}
+
 // ── Mutations ───────────────────────────────────────────────────────────────
 
 export function updateNodeConfig(
@@ -88,6 +109,8 @@ export function updateNodeConfig(
 
 /**
  * Appends a node after `sourceId` on `branch` (which must currently be free).
+ * In manual-layout mode the new node lands to the right of its source, so one
+ * append does not throw the whole hand-made layout back to dagre.
  */
 export function appendNode(
   graph: AutomationGraph,
@@ -96,6 +119,19 @@ export function appendNode(
   type: AutomationNodeType,
 ): { graph: AutomationGraph; node: AutomationGraphNode } {
   const node = createNode(type);
+
+  if (hasManualLayout(graph)) {
+    const source = findNode(graph, sourceId);
+    if (source?.position) {
+      // Branches from the same source stack downwards so they don't overlap.
+      const siblingCount = graph.edges.filter((edge) => edge.source === sourceId).length;
+      node.position = {
+        x: source.position.x + NODE_BOX_WIDTH + MANUAL_APPEND_GAP_X,
+        y: source.position.y + siblingCount * NODE_BOX_HEIGHT,
+      };
+    }
+  }
+
   const edge: AutomationGraphEdge = {
     id: createId('e'),
     source: sourceId,
@@ -111,6 +147,7 @@ export function appendNode(
 /**
  * Splices a node into an existing edge: A→B becomes A→N→B. The original
  * edge's branch stays on the upstream half, so branch semantics are preserved.
+ * In manual-layout mode the new node lands midway between the two.
  */
 export function insertNodeOnEdge(
   graph: AutomationGraph,
@@ -121,6 +158,15 @@ export function insertNodeOnEdge(
   if (!target) return { graph, node: null as unknown as AutomationGraphNode };
 
   const node = createNode(type);
+
+  if (hasManualLayout(graph)) {
+    const from = findNode(graph, target.source)?.position;
+    const to = findNode(graph, target.target)?.position;
+    if (from && to) {
+      node.position = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    }
+  }
+
   const upstream: AutomationGraphEdge = {
     id: createId('e'),
     source: target.source,
@@ -140,6 +186,22 @@ export function insertNodeOnEdge(
       edges: [...graph.edges.filter((edge) => edge.id !== edgeId), upstream, downstream],
     },
     node,
+  };
+}
+
+/**
+ * Writes canvas positions into the graph (drag-stop or "Auto-organizar").
+ * Ghost ids may be present in `positions`; only real nodes are touched.
+ */
+export function updateNodePositions(
+  graph: AutomationGraph,
+  positions: Record<string, { x: number; y: number }>,
+): AutomationGraph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) =>
+      positions[node.id] ? { ...node, position: { ...positions[node.id] } } : node,
+    ),
   };
 }
 
@@ -292,6 +354,49 @@ export function layoutGraph(graph: AutomationGraph, ghosts: GhostSlot[]): Layout
   return { positions };
 }
 
+/**
+ * Positions for everything the canvas draws. Stored positions win when the
+ * whole graph has them (manual mode); dagre otherwise. Ghost "+" slots always
+ * hang off their anchor node, whichever mode is active.
+ */
+export function computeCanvasLayout(graph: AutomationGraph, ghosts: GhostSlot[]): LayoutResult {
+  if (!hasManualLayout(graph)) return layoutGraph(graph, ghosts);
+
+  const positions: Record<string, { x: number; y: number }> = {};
+  for (const node of graph.nodes) {
+    positions[node.id] = { x: node.position?.x ?? 0, y: node.position?.y ?? 0 };
+  }
+
+  // Ghosts sit to the right of their anchor, stacked when a branching node has
+  // several free branches.
+  const byAnchor = new Map<string, GhostSlot[]>();
+  for (const ghost of ghosts) {
+    byAnchor.set(ghost.sourceId, [...(byAnchor.get(ghost.sourceId) ?? []), ghost]);
+  }
+  for (const [sourceId, slots] of byAnchor) {
+    const anchor = positions[sourceId];
+    if (!anchor) continue;
+    slots.forEach((slot, index) => {
+      positions[slot.id] = {
+        x: anchor.x + NODE_BOX_WIDTH + MANUAL_GHOST_GAP_X,
+        y: anchor.y + NODE_CIRCLE_CENTER_Y - GHOST_BOX_HEIGHT / 2 + index * MANUAL_GHOST_STEP_Y,
+      };
+    });
+  }
+
+  return { positions };
+}
+
+/**
+ * Re-runs dagre over the current graph and writes the tidy positions into the
+ * nodes — the "Auto-organizar" action. The result is a manual layout (every
+ * node positioned), so it survives refreshes once saved.
+ */
+export function applyAutoLayout(graph: AutomationGraph): AutomationGraph {
+  const { positions } = layoutGraph(graph, getGhostSlots(graph));
+  return updateNodePositions(graph, positions);
+}
+
 /** Step numbers shown in the badge — BFS from the entry node. */
 export function computeStepNumbers(graph: AutomationGraph, entryNodeId: string | null): Record<string, number> {
   const entry = getEntryNode(graph, entryNodeId);
@@ -346,7 +451,8 @@ export function validateGraph(graph: AutomationGraph, entryNodeId: string | null
   for (const node of graph.nodes) {
     switch (node.type) {
       case 'send_whatsapp':
-        if (!node.config?.message?.trim()) {
+        // The engine sends media-only messages happily; only an empty node fails.
+        if (!node.config?.message?.trim() && !node.config?.media?.url && !node.config?.media_url) {
           issues.push({ nodeId: node.id, message: 'Mensagem de WhatsApp por preencher.' });
         }
         break;
