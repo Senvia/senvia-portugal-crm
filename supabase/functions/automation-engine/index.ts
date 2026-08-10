@@ -516,7 +516,7 @@ class Engine {
 
       case "send_email": {
         if (!run.contact_email) return { kind: "fail", error: "Contacto sem email" };
-        const { error } = await this.db.functions.invoke("send-template-email", {
+        const { data, error } = await this.db.functions.invoke("send-template-email", {
           body: {
             organizationId: run.organization_id,
             templateId: cfg.template_id ?? undefined,
@@ -531,6 +531,15 @@ class Engine {
           },
         });
         if (error) return { kind: "fail", error: `Email falhou: ${error.message}` };
+        // send-template-email always answers HTTP 200 (per-recipient outcome
+        // lives in the body, not the status code) — a real Brevo rejection
+        // never sets `error` above and was silently reported as success. Read
+        // the actual per-recipient result instead of trusting the envelope.
+        const outcome = (data as { results?: Array<{ status: string; error?: string }> } | null)
+          ?.results?.[0];
+        if (!outcome || outcome.status !== "sent") {
+          return { kind: "fail", error: `Email rejeitado: ${outcome?.error ?? "resposta inesperada de send-template-email"}` };
+        }
         return { kind: "next", detail: { canal: "email", para: run.contact_email, template: cfg.template_id ?? null } };
       }
 
