@@ -589,6 +589,62 @@ async function handleTick(db: any) {
   return { woken, failed };
 }
 
+/**
+ * Nenhum percurso à espera desta pessoa — mas a mensagem pode ser a palavra-
+ * chave que inicia um fluxo. Procura fluxos com gatilho `whatsapp_keyword`
+ * cujas palavras apareçam no texto.
+ */
+// deno-lint-ignore no-explicit-any
+async function handleKeywordStart(
+  db: any, orgId: string, key: string, text: string, body: Record<string, unknown>,
+) {
+  const { data: flows } = await db
+    .from("automation_flows")
+    .select("*")
+    .eq("organization_id", orgId)
+    .eq("trigger_type", "whatsapp_keyword")
+    .eq("status", "active");
+
+  if (!flows?.length) return { resumed: 0, started: 0 };
+
+  const lower = text.toLowerCase();
+  const engine = new Engine(db);
+  let started = 0;
+
+  for (const flow of flows as Flow[]) {
+    const keywords = ((flow as unknown as { trigger_config?: { keywords?: string[] } })
+      .trigger_config?.keywords ?? []) as string[];
+    // Sem palavras configuradas o fluxo responderia a QUALQUER mensagem — o que
+    // seria um disparo em massa acidental. Exige configuração explícita.
+    if (!keywords.length) continue;
+    if (!keywords.some((k) => lower.includes(String(k).toLowerCase()))) continue;
+
+    const phone = String(body.phone ?? "");
+    const { data: run, error } = await db.from("automation_runs").insert({
+      organization_id: orgId,
+      flow_id: flow.id,
+      flow_version: flow.version,
+      subject_type: "contact",
+      subject_id: null,
+      contact_name: (body.name ?? null) as string | null,
+      contact_phone: phone,
+      contact_phone_key: key,
+      context: { telefone: phone, mensagem_inicial: text },
+      current_node_id: flow.entry_node_id,
+    }).select("*").single();
+
+    if (error) {
+      logError("falha a iniciar fluxo por palavra-chave", { flow: flow.id, error: error.message });
+      continue;
+    }
+
+    await engine.advance(run as Run, flow, flow.entry_node_id);
+    started++;
+  }
+
+  return { resumed: 0, started };
+}
+
 /** Chegou uma mensagem do contacto: retoma quem estava à espera dela. */
 // deno-lint-ignore no-explicit-any
 async function handleReply(db: any, body: Record<string, unknown>) {
@@ -605,7 +661,10 @@ async function handleReply(db: any, body: Record<string, unknown>) {
     .eq("status", "awaiting_reply")
     .limit(10);
 
-  if (!runs?.length) return { resumed: 0 };
+  // Ninguém estava à espera desta pessoa: a mensagem pode, ainda assim, ser a
+  // palavra-chave que ARRANCA um fluxo ("escreva PROMO para receber…"). É o
+  // outro metade do modelo conversacional.
+  if (!runs?.length) return await handleKeywordStart(db, orgId, key, text, body);
 
   const engine = new Engine(db);
   let resumed = 0;
