@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-automation-secret",
 };
 
 interface AutomationEvent {
@@ -30,8 +30,30 @@ serve(async (req: Request): Promise<Response> => {
     // every legitimate caller (stripe-webhook, trial-inactivity-check,
     // check-trial-status, and the DB triggers dispatching automations) is a
     // trusted backend process, never an end user.
+    //
+    // Two accepted credentials:
+    //   * the service-role bearer, used by the edge functions that dispatch
+    //     automations (stripe-webhook, check-trial-status, …);
+    //   * x-automation-secret, used by the database triggers. Postgres cannot
+    //     read the service-role key, so it sends a shared secret that lives
+    //     only in Supabase Vault and is compared by verify_automation_secret
+    //     without ever being returned. Before this existed the triggers sent
+    //     the anon key, every dispatch 401'd, and the trigger swallowed the
+    //     error — every CRM-event automation was silently dead.
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    if (!bearer || bearer !== supabaseServiceKey) {
+    let authorized = !!bearer && bearer === supabaseServiceKey;
+
+    if (!authorized) {
+      const provided = req.headers.get("x-automation-secret");
+      if (provided) {
+        const { data, error } = await supabase.rpc("verify_automation_secret", { p_secret: provided });
+        if (error) console.error("[process-automation] verificação do segredo falhou:", error.message);
+        authorized = data === true;
+      }
+    }
+
+    if (!authorized) {
+      console.error("[process-automation] pedido rejeitado: sem credencial válida");
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
