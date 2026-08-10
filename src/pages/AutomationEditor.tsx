@@ -21,15 +21,15 @@ import { FlowSettings } from '@/components/automations/FlowSettings';
 import { TestFlowDialog } from '@/components/automations/TestFlowDialog';
 
 import {
-  appendNode, applyAutoLayout, findNode, insertNodeOnEdge, pruneOrphanBranches,
-  removeNode, updateNodeConfig, updateNodePositions, validateGraph,
+  appendNode, applyAutoLayout, changeTriggerType, findNode, insertNodeOnEdge,
+  pruneOrphanBranches, removeNode, updateNodeConfig, updateNodePositions, validateGraph,
 } from '@/lib/automation-graph';
 import {
   useAutomationFlow, useAutomationFlowNodeStats, useSetAutomationFlowStatus,
   useUpdateAutomationFlow,
 } from '@/hooks/useAutomationFlows';
 import type {
-  AutomationGraph, AutomationNodeConfig, AutomationNodeType,
+  AutomationGraph, AutomationNodeConfig, AutomationNodeType, AutomationTriggerType,
 } from '@/types/automations';
 
 type PickerTarget =
@@ -120,6 +120,14 @@ export default function AutomationEditor() {
     mutateGraph(pruneOrphanBranches(updateNodeConfig(graph, selectedNodeId, config)));
   };
 
+  // Swaps the entry node's type (and resets its config — the old trigger's
+  // fields don't apply to a different one). trigger_type is derived from the
+  // graph at save time, so this alone is enough to make the switch stick.
+  const handleChangeTrigger = (type: AutomationTriggerType) => {
+    if (!flow) return;
+    mutateGraph(changeTriggerType(graph, flow.entry_node_id, type));
+  };
+
   const handleDeleteNode = () => {
     if (!selectedNodeId) return;
     mutateGraph(removeNode(graph, selectedNodeId));
@@ -128,11 +136,30 @@ export default function AutomationEditor() {
 
   const handleSave = async () => {
     if (!flow) return;
+
+    // trigger_type is the flow-level column the engine matches on — it must
+    // track whatever the entry node's type CURRENTLY is, not what the flow was
+    // created with, or switching the trigger in the inspector would change the
+    // canvas without the engine ever finding out.
+    const entryNode = findNode(graph, flow.entry_node_id);
+    const triggerType = (entryNode?.type as AutomationTriggerType | undefined) ?? flow.trigger_type;
+
+    // trigger_config is the OTHER column the engine reads (keyword matching for
+    // whatsapp_keyword, in handleKeywordStart) — separate from the entry node's
+    // own `config`, which only drives what the inspector shows. Editing
+    // keywords in the inspector silently did nothing at the engine level before
+    // this, because nothing ever copied node.config into this column.
+    const triggerConfig = triggerType === 'whatsapp_keyword'
+      ? { keywords: entryNode?.config?.keywords ?? [] }
+      : {};
+
     await updateFlow.mutateAsync({
       id: flow.id,
       name: name.trim() || flow.name,
       graph,
       entry_node_id: flow.entry_node_id,
+      trigger_type: triggerType,
+      trigger_config: triggerConfig,
     });
     setDirty(false);
     toast.success('Automação guardada');
@@ -308,6 +335,7 @@ export default function AutomationEditor() {
                 node={selectedNode}
                 isEntry={selectedNode.id === flow.entry_node_id}
                 onChange={handleConfigChange}
+                onChangeTrigger={handleChangeTrigger}
                 onDelete={handleDeleteNode}
                 onClose={() => setSelectedNodeId(null)}
               />

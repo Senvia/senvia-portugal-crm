@@ -10,6 +10,7 @@
 import dagre from 'dagre';
 import type {
   AutomationGraph, AutomationGraphEdge, AutomationGraphNode, AutomationNodeType,
+  AutomationTriggerType,
 } from '@/types/automations';
 import { getNodeBranches, getNodeDefinition } from '@/lib/automation-nodes';
 
@@ -45,6 +46,25 @@ export function createNode(type: AutomationNodeType): AutomationGraphNode {
     // Deep-ish clone so two nodes never share a config object (rules arrays!).
     config: JSON.parse(JSON.stringify(definition?.defaultConfig ?? {})),
     position: { x: 0, y: 0 },
+  };
+}
+
+/**
+ * Swaps the entry (trigger) node's type. Keeps its `id` (so any outgoing edge
+ * survives) and its `position`, but resets `config` to the new trigger's
+ * default — the old trigger's fields (e.g. a stage filter) have no meaning for
+ * a different trigger and would otherwise linger as dead data.
+ */
+export function changeTriggerType(
+  graph: AutomationGraph, entryNodeId: string, newType: AutomationTriggerType,
+): AutomationGraph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id !== entryNodeId ? node : {
+      ...node,
+      type: newType,
+      config: JSON.parse(JSON.stringify(getNodeDefinition(newType)?.defaultConfig ?? {})),
+    })),
   };
 }
 

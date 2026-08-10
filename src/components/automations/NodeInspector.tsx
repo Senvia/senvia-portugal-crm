@@ -15,8 +15,8 @@ import {
 import { cn } from '@/lib/utils';
 import {
   CONDITION_FIELD_OPTIONS, CONDITION_OPERATOR_OPTIONS, NUMERIC_OPERATORS,
-  SALE_STATUS_OPTIONS, VALUELESS_OPERATORS, WAIT_UNIT_OPTIONS, getNodeDefinition,
-  getNodeStyle, humanizeNodeType, normalizeConditionOperator,
+  SALE_STATUS_OPTIONS, TRIGGER_TYPES, VALUELESS_OPERATORS, WAIT_UNIT_OPTIONS,
+  getNodeDefinition, getNodeStyle, humanizeNodeType, normalizeConditionOperator,
 } from '@/lib/automation-nodes';
 import { createId, isJsonConfigValid, isWebhookUrlValid } from '@/lib/automation-graph';
 import { VariableChips } from '@/components/automations/VariableChips';
@@ -28,25 +28,35 @@ import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { useTeamMembers } from '@/hooks/useTeam';
 import type {
   AutomationGraphNode, AutomationMediaAttachment, AutomationNodeConfig,
-  AutomationWaitUnit, ConditionOperator, WaitReplyRule,
+  AutomationTriggerType, AutomationWaitUnit, ConditionOperator, WaitReplyRule,
 } from '@/types/automations';
 
 interface NodeInspectorProps {
   node: AutomationGraphNode;
   isEntry: boolean;
   onChange: (config: AutomationNodeConfig) => void;
+  onChangeTrigger?: (type: AutomationTriggerType) => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
 /** Right-hand configuration panel for the selected node. */
-export function NodeInspector({ node, isEntry, onChange, onDelete, onClose }: NodeInspectorProps) {
+export function NodeInspector({
+  node, isEntry, onChange, onChangeTrigger, onDelete, onClose,
+}: NodeInspectorProps) {
   const definition = getNodeDefinition(node.type);
   const style = getNodeStyle(node.type);
   const Icon = definition?.icon ?? HelpCircle;
   const config = node.config ?? {};
 
   const set = (patch: Partial<AutomationNodeConfig>) => onChange({ ...config, ...patch });
+
+  // The entry node's own type IS the flow's trigger — offer the same curated
+  // list CreateFlowDialog uses. A legacy/system trigger (trial_*, stripe_*…)
+  // outside that list is kept as the current selection instead of vanishing.
+  const triggerOptions = TRIGGER_TYPES.includes(node.type as AutomationTriggerType)
+    ? TRIGGER_TYPES
+    : [node.type as AutomationTriggerType, ...TRIGGER_TYPES];
 
   return (
     <aside
@@ -78,6 +88,27 @@ export function NodeInspector({ node, isEntry, onChange, onDelete, onClose }: No
 
       <ScrollArea className="flex-1">
         <div className="space-y-4 p-4">
+          {isEntry && onChangeTrigger && (
+            <Field label="Gatilho">
+              <Select
+                value={node.type}
+                onValueChange={(value) => onChangeTrigger(value as AutomationTriggerType)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {triggerOptions.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {getNodeDefinition(type)?.label ?? humanizeNodeType(type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Helper>
+                Trocar o gatilho substitui a ligação com o resto do sistema — o fluxo deixa de
+                responder ao anterior assim que guardar.
+              </Helper>
+            </Field>
+          )}
           <NodeConfigForm node={node} config={config} set={set} />
         </div>
       </ScrollArea>

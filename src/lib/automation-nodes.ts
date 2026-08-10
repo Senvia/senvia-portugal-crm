@@ -501,11 +501,15 @@ export const TRIGGER_TYPES: AutomationTriggerType[] = [
 ];
 
 /** Action types offered by the picker, in the order they are shown. */
+// `wait_reply` is deliberately NOT offered here: `send_whatsapp` now covers
+// send+wait in one node, which is what every new flow needs. The standalone
+// node stays fully supported (definition, branches, validation, engine) purely
+// so an already-built flow that uses it — the question was asked by something
+// outside this flow — keeps rendering and editing correctly.
 export const ACTION_TYPES: AutomationNodeType[] = [
   'send_whatsapp',
   'send_email',
   'wait',
-  'wait_reply',
   'condition',
   'move_stage',
   'assign_user',
