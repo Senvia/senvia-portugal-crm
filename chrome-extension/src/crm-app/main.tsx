@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import App from '@/App';
 import { supabase } from '@/integrations/supabase/client';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ExtensionErrorBoundary } from './ExtensionErrorBoundary';
 import { PaidTrafficFilterProvider } from '@/contexts/PaidTrafficFilterContext';
 import '@/index.css';
 
@@ -97,6 +97,46 @@ function renderUnpaired() {
     </div>`;
 }
 
+/**
+ * Surfaces runtime errors inside the overlay itself.
+ *
+ * The CRM runs in an iframe, so its console is separate from WhatsApp's — the
+ * error is invisible unless you know to right-click the panel and inspect. A
+ * banner in the page means a screenshot carries the actual message, instead of
+ * the minified bundle it points at.
+ *
+ * Deliberately catches `unhandledrejection` too: ErrorBoundary only sees errors
+ * thrown during render, and the failures here have all been async.
+ */
+function showError(label: string, err: unknown) {
+  const msg =
+    err instanceof Error ? `${err.name}: ${err.message}` : typeof err === 'string' ? err : JSON.stringify(err);
+
+  let box = document.getElementById('senvia-error');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'senvia-error';
+    box.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;max-height:40vh;overflow:auto;' +
+      'background:#7f1d1d;color:#fff;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
+      'padding:10px 40px 10px 12px;white-space:pre-wrap;word-break:break-word';
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.style.cssText =
+      'position:absolute;top:6px;right:8px;background:transparent;border:0;color:#fff;' +
+      'font-size:14px;cursor:pointer';
+    close.onclick = () => box?.remove();
+    box.appendChild(close);
+    document.body.appendChild(box);
+  }
+  const line = document.createElement('div');
+  line.textContent = `[${label}] ${msg}`;
+  box.appendChild(line);
+}
+
+window.addEventListener('error', (e) => showError('erro', e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => showError('promessa', e.reason));
+
 void (async () => {
   const ok = await bootstrapSession();
   if (!ok) {
@@ -111,10 +151,10 @@ void (async () => {
   }
 
   createRoot(document.getElementById('root')!).render(
-    <ErrorBoundary>
+    <ExtensionErrorBoundary>
       <PaidTrafficFilterProvider>
         <App Router={HashRouter} />
       </PaidTrafficFilterProvider>
-    </ErrorBoundary>,
+    </ExtensionErrorBoundary>,
   );
 })();

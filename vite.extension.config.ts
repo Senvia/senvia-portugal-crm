@@ -21,6 +21,20 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
+    /**
+     * Force a single copy of every library that keeps module-level state.
+     *
+     * The entry file lives under chrome-extension/, which has its own
+     * node_modules (the panel and content script are built from there). Node
+     * resolution walks UP from the importing file, so `main.tsx` was getting
+     * chrome-extension/node_modules/react while `@/App` — resolved from the CRM
+     * root — got the root copy. Two Reacts means one instance's hook dispatcher
+     * is null while the other renders, which surfaces as the misleading
+     * "Cannot read properties of null (reading 'useState')".
+     *
+     * dedupe pins these to the root project, where the app's own tree lives.
+     */
+    dedupe: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
   },
   base: './',
   build: {

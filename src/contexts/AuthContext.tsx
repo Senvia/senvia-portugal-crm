@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppRole } from '@/types';
+import { safeStorage } from '@/lib/safeStorage';
 
 const ACTIVE_ORG_KEY = 'senvia_active_organization_id';
 
@@ -117,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (orgData) {
       setOrganization(orgData);
-      localStorage.setItem(ACTIVE_ORG_KEY, orgId);
+      safeStorage.set(ACTIVE_ORG_KEY, orgId);
       setNeedsOrgSelection(false);
     }
     
@@ -163,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setOrganizations(userOrgs);
 
         // Determine which organization to load
-        const storedOrgId = localStorage.getItem(ACTIVE_ORG_KEY);
+        const storedOrgId = safeStorage.get(ACTIVE_ORG_KEY);
         
         if (userOrgs.length === 0) {
           // No organizations - might be new user
@@ -286,7 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsOrgSelection(false);
     
     // Limpar localStorage
-    localStorage.removeItem(ACTIVE_ORG_KEY);
+    safeStorage.remove(ACTIVE_ORG_KEY);
     
     // Agora sim, chamar o Supabase
     await supabase.auth.signOut();
@@ -306,7 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(profileData);
 
       // Re-fetch current organization
-      const storedOrgId = localStorage.getItem(ACTIVE_ORG_KEY);
+      const storedOrgId = safeStorage.get(ACTIVE_ORG_KEY);
       if (storedOrgId) {
         await loadOrganization(storedOrgId);
       } else if (profileData?.organization_id) {

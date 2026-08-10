@@ -1703,7 +1703,16 @@ export default function Inbox() {
         (c) => c.id === selectedId || (c.alt_ids ?? []).includes(selectedId),
       );
       markRead({ conversationId: selectedId, altIds: conv?.alt_ids ?? [] });
-      navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_NOTIFICATIONS" });
+      // `?.` doesn't help here: reading `navigator.serviceWorker` itself raises
+      // SecurityError where the browser disables service workers — a
+      // third-party frame with partitioned storage, which is what this page is
+      // when the Chrome extension renders it inside WhatsApp Web. Without the
+      // try/catch the throw escapes the effect and takes the whole app down.
+      try {
+        navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_NOTIFICATIONS" });
+      } catch {
+        /* service workers unavailable in this context */
+      }
     }
     setReplyTo(null);
     setOutAttachments([]);
