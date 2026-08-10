@@ -415,6 +415,36 @@ Deno.serve(async (req) => {
     // Everything below (auto-reply + push notification) is for INCOMING only.
     if (event.message_type !== 'incoming') return ok();
 
+    // ---- Resume automation flows parked on "esperar resposta" ----
+    // This is what makes the conversational model work: a flow that sent a
+    // question is sitting in status='awaiting_reply' keyed on this phone
+    // number, and the reply decides which branch it takes. Fire-and-forget so
+    // a slow engine never delays the webhook (Chatwoot retries on timeout).
+    try {
+      const replyPhone = String(
+        event.conversation?.meta?.sender?.phone_number ?? event.sender?.phone_number ?? '',
+      ).replace(/\D/g, '');
+      const replyText = String(event.content ?? '').trim();
+
+      if (replyPhone && replyText) {
+        const { data: secret } = await admin.rpc('automation_internal_secret');
+        if (secret) {
+          fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-automation-secret': String(secret) },
+            body: JSON.stringify({
+              action: 'reply',
+              organization_id: org.id,
+              phone: replyPhone,
+              text: replyText,
+            }),
+          }).catch((e) => console.error('[chatwoot-webhook] automation reply dispatch failed:', e));
+        }
+      }
+    } catch (e) {
+      console.error('[chatwoot-webhook] automation reply dispatch error:', e);
+    }
+
     // ---- Out-of-hours auto-reply (configured in messaging_channels.metadata) ----
     try {
       const ar = (channel?.metadata as any)?.auto_reply;

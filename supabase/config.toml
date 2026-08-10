@@ -114,6 +114,11 @@ verify_jwt = false
 [functions.stripe-health]
 verify_jwt = false
 
+# Motor dos fluxos de automação. Autentica com service-role bearer ou
+# x-automation-secret (Vault) dentro da própria função — ver isAuthorized.
+[functions.automation-engine]
+verify_jwt = false
+
 [functions.backfill-stripe-net]
 verify_jwt = false
 
