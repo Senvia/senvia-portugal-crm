@@ -108,7 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Load organization by ID — only safe fields, never API keys/secrets.
-  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config';
+  // trial_ends_at / first_paid_at / billing_exempt são indispensáveis: isOrgOnTrial()
+  // decide com eles se a organização está em trial, e um trial vale acesso Elite.
+  // Sem estes campos a função vê `undefined`, conclui "não há trial", e o plano
+  // efetivo passa a ser organizations.plan — que nas contas novas é 'basic', um id
+  // que nem sequer existe em subscription_plans. A app cai então no plano por
+  // omissão (Starter) e tranca Financeiro, Marketing, E-commerce e Prospects a
+  // quem devia estar a ver o sistema todo.
+  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,trial_ends_at,first_paid_at,billing_exempt,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config';
   const loadOrganization = useCallback(async (orgId: string) => {
     const { data: orgData } = await supabase
       .from('organizations')
