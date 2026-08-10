@@ -290,6 +290,29 @@ export default function Login() {
       return;
     }
 
+    // Um registo repetido do mesmo número dentro de 24h é quase sempre a mesma
+    // pessoa a tentar outra vez — tipicamente por ter errado o email na
+    // primeira. Sem este aviso ficam duas contas e duas empresas, e a primeira
+    // nunca mais é usada. O trigger handle_new_user recusa na mesma; isto existe
+    // para dar uma mensagem clara, porque o GoTrue devolve "Database error
+    // saving new user" quando um trigger falha.
+    try {
+      const { data: repetido } = await supabase.rpc('recent_signup_exists' as never, {
+        _phone: contactPhone,
+      } as never);
+      if (repetido === true) {
+        toast({
+          title: 'Já existe um registo com este número',
+          description:
+            'Foi criada uma conta com este WhatsApp nas últimas 24 horas. Entra com essa conta ou usa "Esqueci-me da palavra-passe". Se precisares de ajuda, fala connosco.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } catch {
+      // Verificação indisponível — deixa seguir; o trigger continua a proteger.
+    }
+
     setIsLoading(true);
 
     try {
@@ -427,6 +450,14 @@ export default function Login() {
       let message = error.message;
       if (error.message.includes('already registered')) {
         message = 'Este email já está registado';
+      } else if (
+        // The signup transaction now also creates the organization, so a slug
+        // taken between the availability check and submit aborts the whole
+        // signUp. Supabase reports that as a generic database error.
+        error.message.includes('Recent signup exists for this phone')
+      ) {
+        message =
+          'Já foi criada uma conta com este WhatsApp nas últimas 24 horas. Entra com essa conta em vez de criar outra.';
       } else if (
         // The signup transaction now also creates the organization, so a slug
         // taken between the availability check and submit aborts the whole
