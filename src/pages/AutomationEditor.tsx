@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, ArrowLeft, Loader2, Pause, Play, Save, Workflow,
+  Activity, AlertTriangle, ArrowLeft, Loader2, Pause, Play, Save, SlidersHorizontal, Workflow,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ import { NodeInspector } from '@/components/automations/NodeInspector';
 import { NodePickerDialog } from '@/components/automations/NodePickerDialog';
 import { FlowActivity } from '@/components/automations/FlowActivity';
 import { FlowStatusPill } from '@/components/automations/FlowStatusPill';
+import { FlowSettings } from '@/components/automations/FlowSettings';
 
 import {
   appendNode, findNode, insertNodeOnEdge, pruneOrphanBranches, removeNode,
@@ -44,7 +45,7 @@ export default function AutomationEditor() {
   const [dirty, setDirty] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
-  const [tab, setTab] = useState<'canvas' | 'activity'>('canvas');
+  const [tab, setTab] = useState<'canvas' | 'activity' | 'settings'>('canvas');
 
   // Hydrate local editing state once per flow. The ref guard means a background
   // refetch can never clobber edits the user has not saved yet.
@@ -224,6 +225,9 @@ export default function AutomationEditor() {
         <TabButton active={tab === 'activity'} onClick={() => setTab('activity')} icon={Activity}>
           Atividade
         </TabButton>
+        <TabButton active={tab === 'settings'} onClick={() => setTab('settings')} icon={SlidersHorizontal}>
+          Definições
+        </TabButton>
       </div>
 
       {/* Body */}
@@ -249,9 +253,17 @@ export default function AutomationEditor() {
               />
             )}
           </>
-        ) : (
+        ) : tab === 'activity' ? (
           <div className="h-full overflow-y-auto">
             <FlowActivity flowId={flow.id} graph={graph} />
+          </div>
+        ) : (
+          <div className="h-full overflow-y-auto">
+            <FlowSettings
+              flow={flow}
+              isSaving={isBusy}
+              onSave={(patch) => updateFlow.mutate({ id: flow.id, ...patch })}
+            />
           </div>
         )}
       </div>

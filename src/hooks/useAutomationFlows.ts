@@ -11,15 +11,21 @@ import type {
 
 // The automation tables post-date the generated Supabase types, so table names
 // are cast — same pattern as `useLeadIntakeWebhooks` / `useContactLists`.
-const FLOWS = 'automation_flows' as never;
-const RUNS = 'automation_runs' as never;
-const RUN_STEPS = 'automation_run_steps' as never;
+const FLOWS = 'automation_flows';
+const RUNS = 'automation_runs';
+const RUN_STEPS = 'automation_run_steps';
 
 interface CreateAutomationFlowData {
   name: string;
   description?: string;
   trigger_type: AutomationTriggerType;
   trigger_config?: AutomationNodeConfig;
+  /**
+   * Pre-built graph, used when starting from a recipe. Omitted for a blank
+   * flow, which starts as its trigger node alone.
+   */
+  graph?: AutomationGraph;
+  entry_node_id?: string;
 }
 
 interface UpdateAutomationFlowData {
@@ -101,8 +107,11 @@ export function useCreateAutomationFlow() {
     mutationFn: async (data: CreateAutomationFlowData) => {
       if (!organization?.id) throw new Error('Sem organização');
 
-      // A new flow starts as its trigger node alone.
-      const { graph, entryNodeId } = createInitialGraph(data.trigger_type);
+      // A blank flow starts as its trigger node alone; a recipe arrives with
+      // its whole graph already built.
+      const initial = createInitialGraph(data.trigger_type);
+      const graph = data.graph ?? initial.graph;
+      const entryNodeId = data.entry_node_id ?? initial.entryNodeId;
 
       const { data: flow, error } = await supabase
         .from(FLOWS)
@@ -118,7 +127,7 @@ export function useCreateAutomationFlow() {
           version: 1,
           reentry_policy: 'once',
           created_by: user?.id,
-        } as never)
+        })
         .select()
         .single();
 
@@ -158,7 +167,7 @@ export function useUpdateAutomationFlow() {
 
       const { data: flow, error } = await supabase
         .from(FLOWS)
-        .update(updateData as never)
+        .update(updateData)
         .eq('id', id)
         .eq('organization_id', organization.id)
         .select()
@@ -208,7 +217,7 @@ export function useSetAutomationFlowStatus() {
 
       const { error } = await supabase
         .from(FLOWS)
-        .update(updateData as never)
+        .update(updateData)
         .eq('id', id)
         .eq('organization_id', organization.id);
 
@@ -292,7 +301,7 @@ export function useDuplicateAutomationFlow() {
           quiet_hours: source.quiet_hours ?? null,
           max_steps_per_run: source.max_steps_per_run ?? null,
           created_by: user?.id,
-        } as never)
+        })
         .select()
         .single();
 
@@ -414,7 +423,7 @@ export function useCancelAutomationRun() {
           wake_at: null,
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        } as never)
+        })
         .eq('id', runId)
         .eq('organization_id', organization.id)
         .in('status', ACTIVE_RUN_STATUSES);

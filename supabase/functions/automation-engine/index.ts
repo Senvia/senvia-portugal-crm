@@ -429,6 +429,45 @@ class Engine {
         return { kind: "next", detail: { lista: cfg.list_id } };
       }
 
+      case "create_task": {
+        const title = render(String(cfg.title ?? ""), vars).trim();
+        if (!title) return { kind: "fail", error: "Tarefa sem título" };
+
+        const dueDays = Number(cfg.due_in_days ?? 1);
+        const dueAt = new Date(Date.now() + Math.max(0, dueDays) * 86_400_000).toISOString();
+
+        const base = {
+          organization_id: run.organization_id,
+          title,
+          description: cfg.description ? render(String(cfg.description), vars) : null,
+          due_at: dueAt,
+          contact_name: run.contact_name,
+          // phone_key é coluna gerada a partir de contact_phone — escrever nela
+          // é rejeitado pelo Postgres.
+          contact_phone: run.contact_phone,
+          assigned_to: (cfg.user_id as string) ?? null,
+        };
+
+        const { error } = await this.db.from("inbox_tasks").insert({
+          ...base,
+          lead_id: run.subject_type === "lead" ? run.subject_id : null,
+          client_id: run.subject_type === "client" ? run.subject_id : null,
+        });
+
+        if (error) {
+          // 23503 = a lead/cliente de origem foi apagada entretanto. A tarefa
+          // continua a ser útil (tem nome e telefone) — vale mais criá-la sem a
+          // ligação do que deitar o percurso inteiro fora.
+          if ((error as { code?: string }).code === "23503") {
+            const { error: retryErr } = await this.db.from("inbox_tasks").insert(base);
+            if (retryErr) return { kind: "fail", error: `Criar tarefa falhou: ${retryErr.message}` };
+            return { kind: "next", detail: { tarefa: title, prazo: dueAt, sem_ligacao: "origem apagada" } };
+          }
+          return { kind: "fail", error: `Criar tarefa falhou: ${error.message}` };
+        }
+        return { kind: "next", detail: { tarefa: title, prazo: dueAt } };
+      }
+
       case "webhook": {
         const url = String(cfg.url ?? "");
         if (!url) return { kind: "fail", error: "Webhook sem URL" };

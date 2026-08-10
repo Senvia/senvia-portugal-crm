@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -59,6 +84,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "activation_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "activation_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       app_announcements: {
@@ -96,6 +135,88 @@ export type Database = {
           version?: string | null
         }
         Relationships: []
+      }
+      automation_flows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          entry_node_id: string | null
+          graph: Json
+          id: string
+          last_enrolled_at: string | null
+          max_steps_per_run: number
+          name: string
+          organization_id: string
+          quiet_hours: Json | null
+          reentry_policy: string
+          status: string
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entry_node_id?: string | null
+          graph?: Json
+          id?: string
+          last_enrolled_at?: string | null
+          max_steps_per_run?: number
+          name: string
+          organization_id: string
+          quiet_hours?: Json | null
+          reentry_policy?: string
+          status?: string
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entry_node_id?: string | null
+          graph?: Json
+          id?: string
+          last_enrolled_at?: string | null
+          max_steps_per_run?: number
+          name?: string
+          organization_id?: string
+          quiet_hours?: Json | null
+          reentry_policy?: string
+          status?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "automation_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
       }
       automation_queue: {
         Row: {
@@ -150,11 +271,182 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "automation_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "automation_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
             foreignKeyName: "automation_queue_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "email_templates"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_run_steps: {
+        Row: {
+          created_at: string
+          detail: Json
+          id: number
+          node_id: string
+          node_type: string
+          organization_id: string
+          run_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          id?: number
+          node_id: string
+          node_type: string
+          organization_id: string
+          run_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          id?: number
+          node_id?: string
+          node_type?: string
+          organization_id?: string
+          run_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_run_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_run_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "automation_run_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "automation_run_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_runs: {
+        Row: {
+          completed_at: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contact_phone_key: string | null
+          context: Json
+          current_node_id: string | null
+          flow_id: string
+          flow_version: number
+          id: string
+          last_error: string | null
+          organization_id: string
+          started_at: string
+          status: string
+          steps_taken: number
+          subject_id: string | null
+          subject_type: string
+          updated_at: string
+          wake_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_phone_key?: string | null
+          context?: Json
+          current_node_id?: string | null
+          flow_id: string
+          flow_version?: number
+          id?: string
+          last_error?: string | null
+          organization_id: string
+          started_at?: string
+          status?: string
+          steps_taken?: number
+          subject_id?: string | null
+          subject_type?: string
+          updated_at?: string
+          wake_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_phone_key?: string | null
+          context?: Json
+          current_node_id?: string | null
+          flow_id?: string
+          flow_version?: number
+          id?: string
+          last_error?: string | null
+          organization_id?: string
+          started_at?: string
+          status?: string
+          steps_taken?: number
+          subject_id?: string | null
+          subject_type?: string
+          updated_at?: string
+          wake_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -216,6 +508,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bank_account_transactions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "bank_account_transactions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       bank_accounts: {
@@ -265,6 +571,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "bank_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -342,6 +662,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      chatwoot_processed_messages: {
+        Row: {
+          account_id: number
+          created_at: string
+          message_id: number
+        }
+        Insert: {
+          account_id: number
+          created_at?: string
+          message_id: number
+        }
+        Update: {
+          account_id?: number
+          created_at?: string
+          message_id?: number
+        }
+        Relationships: []
       }
       client_communications: {
         Row: {
@@ -469,6 +807,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "client_lists_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "client_lists_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       commission_chargeback_imports: {
@@ -521,6 +873,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_chargeback_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "commission_chargeback_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -591,6 +957,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "commission_chargeback_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "commission_chargeback_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       commission_closing_items: {
@@ -600,6 +980,7 @@ export type Database = {
           id: string
           items_detail: Json
           organization_id: string
+          total_chargeback: number
           total_commission: number
           total_consumo_mwh: number
           user_id: string
@@ -611,6 +992,7 @@ export type Database = {
           id?: string
           items_detail?: Json
           organization_id: string
+          total_chargeback?: number
           total_commission?: number
           total_consumo_mwh?: number
           user_id: string
@@ -622,6 +1004,7 @@ export type Database = {
           id?: string
           items_detail?: Json
           organization_id?: string
+          total_chargeback?: number
           total_commission?: number
           total_consumo_mwh?: number
           user_id?: string
@@ -642,6 +1025,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "commission_closing_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "commission_closing_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       commission_closings: {
@@ -653,6 +1050,7 @@ export type Database = {
           month: string
           notes: string | null
           organization_id: string
+          total_chargeback: number
           total_commission: number
         }
         Insert: {
@@ -663,6 +1061,7 @@ export type Database = {
           month: string
           notes?: string | null
           organization_id: string
+          total_chargeback?: number
           total_commission?: number
         }
         Update: {
@@ -673,6 +1072,7 @@ export type Database = {
           month?: string
           notes?: string | null
           organization_id?: string
+          total_chargeback?: number
           total_commission?: number
         }
         Relationships: [
@@ -682,6 +1082,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_closings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "commission_closings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -733,6 +1147,67 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "proposals"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_notes: {
+        Row: {
+          author_name: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          phone: string
+          phone_key: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          author_name?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          phone: string
+          phone_key: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          phone?: string
+          phone_key?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "contact_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -809,6 +1284,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cpes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "cpes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       credit_notes: {
@@ -870,6 +1359,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "credit_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "credit_notes_payment_id_fkey"
@@ -1005,6 +1508,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "crm_clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "crm_clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       customer_addresses: {
@@ -1108,6 +1625,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       dashboard_widgets: {
@@ -1148,6 +1679,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_widgets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "dashboard_widgets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -1201,6 +1746,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_codes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "discount_codes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -1286,6 +1845,94 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ecommerce_products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "ecommerce_products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      email_attachments: {
+        Row: {
+          content_id: string | null
+          content_type: string | null
+          created_at: string
+          data_b64: string | null
+          filename: string | null
+          id: string
+          inline: boolean
+          message_id: string
+          organization_id: string
+          part_id: string | null
+          size: number | null
+          storage_path: string | null
+        }
+        Insert: {
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string
+          data_b64?: string | null
+          filename?: string | null
+          id?: string
+          inline?: boolean
+          message_id: string
+          organization_id: string
+          part_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+        }
+        Update: {
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string
+          data_b64?: string | null
+          filename?: string | null
+          id?: string
+          inline?: boolean
+          message_id?: string
+          organization_id?: string
+          part_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       email_automations: {
@@ -1354,6 +2001,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_automations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_automations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "email_automations_template_id_fkey"
@@ -1431,11 +2092,404 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "email_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
             foreignKeyName: "email_campaigns_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "email_templates"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_commands: {
+        Row: {
+          channel_id: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          organization_id: string
+          payload: Json
+          processed_at: string | null
+          status: string
+          type: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          organization_id: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          type: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          organization_id?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_commands_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      email_drafts: {
+        Row: {
+          attachments: Json
+          author_id: string | null
+          bcc_addresses: Json
+          body_html: string | null
+          cc_addresses: Json
+          channel_id: string
+          created_at: string
+          id: string
+          imap_uid: number | null
+          in_reply_to: string | null
+          organization_id: string
+          reply_message_id: string | null
+          subject: string | null
+          to_addresses: Json
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          author_id?: string | null
+          bcc_addresses?: Json
+          body_html?: string | null
+          cc_addresses?: Json
+          channel_id: string
+          created_at?: string
+          id?: string
+          imap_uid?: number | null
+          in_reply_to?: string | null
+          organization_id: string
+          reply_message_id?: string | null
+          subject?: string | null
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          author_id?: string | null
+          bcc_addresses?: Json
+          body_html?: string | null
+          cc_addresses?: Json
+          channel_id?: string
+          created_at?: string
+          id?: string
+          imap_uid?: number | null
+          in_reply_to?: string | null
+          organization_id?: string
+          reply_message_id?: string | null
+          subject?: string | null
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_drafts_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_drafts_reply_message_id_fkey"
+            columns: ["reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_folders: {
+        Row: {
+          channel_id: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          name: string
+          organization_id: string
+          parent_path: string | null
+          path: string
+          role: string
+          sort: number
+          special_use: string | null
+          subscribed: boolean
+          total_count: number
+          uidnext: number | null
+          uidvalidity: number | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name: string
+          organization_id: string
+          parent_path?: string | null
+          path: string
+          role?: string
+          sort?: number
+          special_use?: string | null
+          subscribed?: boolean
+          total_count?: number
+          uidnext?: number | null
+          uidvalidity?: number | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          organization_id?: string
+          parent_path?: string | null
+          path?: string
+          role?: string
+          sort?: number
+          special_use?: string | null
+          subscribed?: boolean
+          total_count?: number
+          uidnext?: number | null
+          uidvalidity?: number | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_folders_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      email_messages: {
+        Row: {
+          answered: boolean
+          bcc_addresses: Json
+          body_fetched: boolean
+          cc_addresses: Json
+          channel_id: string
+          created_at: string
+          date: string | null
+          draft: boolean
+          email_references: string[] | null
+          flagged: boolean
+          folder_id: string
+          from_address: string | null
+          from_name: string | null
+          has_attachments: boolean
+          html_body: string | null
+          id: string
+          in_reply_to: string | null
+          message_id: string | null
+          organization_id: string
+          reply_to: Json | null
+          seen: boolean
+          size: number | null
+          snippet: string | null
+          subject: string | null
+          text_body: string | null
+          thread_id: string | null
+          to_addresses: Json
+          uid: number
+          updated_at: string
+        }
+        Insert: {
+          answered?: boolean
+          bcc_addresses?: Json
+          body_fetched?: boolean
+          cc_addresses?: Json
+          channel_id: string
+          created_at?: string
+          date?: string | null
+          draft?: boolean
+          email_references?: string[] | null
+          flagged?: boolean
+          folder_id: string
+          from_address?: string | null
+          from_name?: string | null
+          has_attachments?: boolean
+          html_body?: string | null
+          id?: string
+          in_reply_to?: string | null
+          message_id?: string | null
+          organization_id: string
+          reply_to?: Json | null
+          seen?: boolean
+          size?: number | null
+          snippet?: string | null
+          subject?: string | null
+          text_body?: string | null
+          thread_id?: string | null
+          to_addresses?: Json
+          uid: number
+          updated_at?: string
+        }
+        Update: {
+          answered?: boolean
+          bcc_addresses?: Json
+          body_fetched?: boolean
+          cc_addresses?: Json
+          channel_id?: string
+          created_at?: string
+          date?: string | null
+          draft?: boolean
+          email_references?: string[] | null
+          flagged?: boolean
+          folder_id?: string
+          from_address?: string | null
+          from_name?: string | null
+          has_attachments?: boolean
+          html_body?: string | null
+          id?: string
+          in_reply_to?: string | null
+          message_id?: string | null
+          organization_id?: string
+          reply_to?: Json | null
+          seen?: boolean
+          size?: number | null
+          snippet?: string | null
+          subject?: string | null
+          text_body?: string | null
+          thread_id?: string | null
+          to_addresses?: Json
+          uid?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "email_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -1527,6 +2581,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "email_sends_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_sends_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
             foreignKeyName: "email_sends_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
@@ -1602,6 +2670,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       email_unsubscribe_tokens: {
@@ -1654,6 +2736,49 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_unsubscribe_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "email_unsubscribe_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      email_vacation_log: {
+        Row: {
+          channel_id: string
+          id: string
+          sent_at: string
+          to_address: string
+        }
+        Insert: {
+          channel_id: string
+          id?: string
+          sent_at?: string
+          to_address: string
+        }
+        Update: {
+          channel_id?: string
+          id?: string
+          sent_at?: string
+          to_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_vacation_log_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
         ]
       }
       expense_categories: {
@@ -1694,6 +2819,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "expense_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -1768,12 +2907,27 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "expenses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "expenses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       forms: {
         Row: {
           ai_qualification_rules: string | null
           assigned_to: string | null
+          assigned_user_ids: string[]
           created_at: string | null
           form_settings: Json | null
           id: string
@@ -1784,7 +2938,10 @@ export type Database = {
           msg_template_hot: string | null
           msg_template_warm: string | null
           name: string
+          notify_all_admins: boolean
           organization_id: string
+          rotate_enabled: boolean
+          round_robin_index: number
           slug: string
           target_stage: string | null
           updated_at: string | null
@@ -1792,6 +2949,7 @@ export type Database = {
         Insert: {
           ai_qualification_rules?: string | null
           assigned_to?: string | null
+          assigned_user_ids?: string[]
           created_at?: string | null
           form_settings?: Json | null
           id?: string
@@ -1802,7 +2960,10 @@ export type Database = {
           msg_template_hot?: string | null
           msg_template_warm?: string | null
           name: string
+          notify_all_admins?: boolean
           organization_id: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
           slug: string
           target_stage?: string | null
           updated_at?: string | null
@@ -1810,6 +2971,7 @@ export type Database = {
         Update: {
           ai_qualification_rules?: string | null
           assigned_to?: string | null
+          assigned_user_ids?: string[]
           created_at?: string | null
           form_settings?: Json | null
           id?: string
@@ -1820,7 +2982,10 @@ export type Database = {
           msg_template_hot?: string | null
           msg_template_warm?: string | null
           name?: string
+          notify_all_admins?: boolean
           organization_id?: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
           slug?: string
           target_stage?: string | null
           updated_at?: string | null
@@ -1832,6 +2997,186 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      inbox_messages: {
+        Row: {
+          attachments: Json | null
+          chatwoot_account_id: number | null
+          contact_name: string | null
+          conversation_id: number | null
+          created_at: string
+          direction: string
+          evolution_message_id: string | null
+          id: string
+          message: string
+          message_type: string | null
+          organization_id: string | null
+          phone: string
+        }
+        Insert: {
+          attachments?: Json | null
+          chatwoot_account_id?: number | null
+          contact_name?: string | null
+          conversation_id?: number | null
+          created_at?: string
+          direction?: string
+          evolution_message_id?: string | null
+          id?: string
+          message: string
+          message_type?: string | null
+          organization_id?: string | null
+          phone: string
+        }
+        Update: {
+          attachments?: Json | null
+          chatwoot_account_id?: number | null
+          contact_name?: string | null
+          conversation_id?: number | null
+          created_at?: string
+          direction?: string
+          evolution_message_id?: string | null
+          id?: string
+          message?: string
+          message_type?: string | null
+          organization_id?: string | null
+          phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "inbox_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      inbox_tasks: {
+        Row: {
+          assigned_to: string | null
+          client_id: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          done_at: string | null
+          due_at: string | null
+          id: string
+          lead_id: string | null
+          organization_id: string
+          phone_key: string | null
+          reminder_sent: boolean
+          source_message: string | null
+          suggested: boolean
+          title: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          done_at?: string | null
+          due_at?: string | null
+          id?: string
+          lead_id?: string | null
+          organization_id: string
+          phone_key?: string | null
+          reminder_sent?: boolean
+          source_message?: string | null
+          suggested?: boolean
+          title: string
+        }
+        Update: {
+          assigned_to?: string | null
+          client_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          done_at?: string | null
+          due_at?: string | null
+          id?: string
+          lead_id?: string | null
+          organization_id?: string
+          phone_key?: string | null
+          reminder_sent?: boolean
+          source_message?: string | null
+          suggested?: boolean
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "inbox_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -1910,6 +3255,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "internal_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "internal_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       inventory_movements: {
@@ -1963,6 +3322,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "inventory_movements_product_id_fkey"
@@ -2044,6 +3417,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
             foreignKeyName: "invoices_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
@@ -2108,6 +3495,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lead_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "lead_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       lead_imports: {
@@ -2119,6 +3520,7 @@ export type Database = {
           id: string
           import_code: string
           imported_by: string
+          name: string | null
           organization_id: string
           stage_key: string
           total_failed: number
@@ -2132,6 +3534,7 @@ export type Database = {
           id?: string
           import_code: string
           imported_by: string
+          name?: string | null
           organization_id: string
           stage_key: string
           total_failed?: number
@@ -2145,6 +3548,7 @@ export type Database = {
           id?: string
           import_code?: string
           imported_by?: string
+          name?: string | null
           organization_id?: string
           stage_key?: string
           total_failed?: number
@@ -2165,10 +3569,92 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lead_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "lead_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      lead_intake_webhooks: {
+        Row: {
+          assigned_user_ids: string[]
+          created_at: string
+          id: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+          notify_all_admins: boolean
+          organization_id: string
+          rotate_enabled: boolean
+          round_robin_index: number
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_ids?: string[]
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+          notify_all_admins?: boolean
+          organization_id: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_ids?: string[]
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+          notify_all_admins?: boolean
+          organization_id?: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_intake_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_intake_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "lead_intake_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       leads: {
         Row: {
+          archived_at: string | null
           assigned_to: string | null
           automation_enabled: boolean
           company_name: string | null
@@ -2193,6 +3679,7 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          archived_at?: string | null
           assigned_to?: string | null
           automation_enabled?: boolean
           company_name?: string | null
@@ -2217,6 +3704,7 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          archived_at?: string | null
           assigned_to?: string | null
           automation_enabled?: boolean
           company_name?: string | null
@@ -2261,6 +3749,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -2465,6 +3967,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "marketing_contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "marketing_contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       marketing_list_members: {
@@ -2500,6 +4016,94 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_lists"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      messaging_channels: {
+        Row: {
+          assigned_user_ids: string[]
+          channel_type: string
+          chatwoot_inbox_id: number | null
+          color: string | null
+          created_at: string | null
+          evolution_instance: string | null
+          flap_count: number
+          flap_window_start: string | null
+          id: string
+          label: string | null
+          metadata: Json | null
+          needs_repair: boolean
+          organization_id: string
+          phone_number: string | null
+          provider: string
+          rotate_enabled: boolean
+          round_robin_index: number
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_user_ids?: string[]
+          channel_type: string
+          chatwoot_inbox_id?: number | null
+          color?: string | null
+          created_at?: string | null
+          evolution_instance?: string | null
+          flap_count?: number
+          flap_window_start?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          needs_repair?: boolean
+          organization_id: string
+          phone_number?: string | null
+          provider: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_user_ids?: string[]
+          channel_type?: string
+          chatwoot_inbox_id?: number | null
+          color?: string | null
+          created_at?: string | null
+          evolution_instance?: string | null
+          flap_count?: number
+          flap_window_start?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          needs_repair?: boolean
+          organization_id?: string
+          phone_number?: string | null
+          provider?: string
+          rotate_enabled?: boolean
+          round_robin_index?: number
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "messaging_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -2547,6 +4151,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_commitments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "monthly_commitments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "monthly_commitments_user_id_fkey"
@@ -2611,6 +4229,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "monthly_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "monthly_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       monthly_objectives: {
@@ -2660,6 +4292,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "monthly_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -2822,6 +4468,75 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      org_onboarding_state: {
+        Row: {
+          completed_at: string | null
+          current_stage: string
+          dismissed: boolean
+          module_dismissed: Json
+          organization_id: string
+          stages_completed: string[]
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          current_stage?: string
+          dismissed?: boolean
+          module_dismissed?: Json
+          organization_id: string
+          stages_completed?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          current_stage?: string
+          dismissed?: boolean
+          module_dismissed?: Json
+          organization_id?: string
+          stages_completed?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_onboarding_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_onboarding_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "org_onboarding_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       organization_invites: {
@@ -2866,6 +4581,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "organization_invites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "organization_invites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       organization_members: {
@@ -2909,6 +4638,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "organization_members_profile_id_fkey"
@@ -2961,6 +4704,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "organization_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "organization_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       organization_webhooks: {
@@ -3002,68 +4759,34 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      messaging_channels: {
-        Row: {
-          channel_type: string
-          chatwoot_inbox_id: number | null
-          created_at: string | null
-          evolution_instance: string | null
-          id: string
-          metadata: Json | null
-          organization_id: string
-          phone_number: string | null
-          provider: string
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          channel_type: string
-          chatwoot_inbox_id?: number | null
-          created_at?: string | null
-          evolution_instance?: string | null
-          id?: string
-          metadata?: Json | null
-          organization_id: string
-          phone_number?: string | null
-          provider: string
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          channel_type?: string
-          chatwoot_inbox_id?: number | null
-          created_at?: string | null
-          evolution_instance?: string | null
-          id?: string
-          metadata?: Json | null
-          organization_id?: string
-          phone_number?: string | null
-          provider?: string
-          status?: string
-          updated_at?: string | null
-        }
-        Relationships: [
           {
-            foreignKeyName: "messaging_channels_organization_id_fkey"
+            foreignKeyName: "organization_webhooks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "organization_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
       organizations: {
         Row: {
           ai_qualification_rules: string | null
+          ai_response_mode: string
           billing_exempt: boolean | null
-          billing_provider: string
+          billing_provider: string | null
           brevo_api_key: string | null
           brevo_sender_email: string | null
           calendar_alert_settings: Json | null
           chatwoot_account_id: number | null
           chatwoot_account_token: string | null
+          chatwoot_webhook_secret: string | null
           client_fields_settings: Json | null
           code: string | null
           commission_matrix: Json | null
@@ -3071,13 +4794,20 @@ export type Database = {
           created_at: string | null
           current_period_end: string | null
           enabled_modules: Json | null
+          extra_seats: number | null
+          extra_seats_stripe_price_id: string | null
           fidelization_alert_days: Json | null
           fidelization_create_event: boolean | null
           fidelization_email: string | null
           fidelization_email_enabled: boolean | null
           fidelization_event_time: string | null
           finance_email: string | null
+          first_client_at: string | null
+          first_inbox_reply_at: string | null
+          first_lead_at: string | null
           first_paid_at: string | null
+          first_proposal_at: string | null
+          first_sale_at: string | null
           form_settings: Json | null
           id: string
           integrations_enabled: Json | null
@@ -3091,8 +4821,12 @@ export type Database = {
           keyinvoice_token: string | null
           keyinvoice_token_expires_at: string | null
           keyinvoice_username: string | null
+          last_active_at: string | null
           lead_fields_settings: Json | null
           logo_url: string | null
+          max_inboxes_override: number | null
+          max_users_override: number | null
+          meta_conversions_api_token: string | null
           meta_pixels: Json | null
           msg_template_cold: string | null
           msg_template_hot: string | null
@@ -3109,6 +4843,11 @@ export type Database = {
           slug: string
           tax_config: Json | null
           trial_ends_at: string | null
+          trial_notified_at: string | null
+          trial_reminders_sent: Json
+          wa_nudge_count: number
+          wa_nudge_last_sent_at: string | null
+          wa_nudge_optout: boolean
           webhook_dedicated_user_id: string | null
           webhook_token: string
           webhook_token_dedicated: string | null
@@ -3119,13 +4858,15 @@ export type Database = {
         }
         Insert: {
           ai_qualification_rules?: string | null
+          ai_response_mode?: string
           billing_exempt?: boolean | null
-          billing_provider?: string
+          billing_provider?: string | null
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
           calendar_alert_settings?: Json | null
           chatwoot_account_id?: number | null
           chatwoot_account_token?: string | null
+          chatwoot_webhook_secret?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
@@ -3133,13 +4874,20 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           enabled_modules?: Json | null
+          extra_seats?: number | null
+          extra_seats_stripe_price_id?: string | null
           fidelization_alert_days?: Json | null
           fidelization_create_event?: boolean | null
           fidelization_email?: string | null
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
           finance_email?: string | null
+          first_client_at?: string | null
+          first_inbox_reply_at?: string | null
+          first_lead_at?: string | null
           first_paid_at?: string | null
+          first_proposal_at?: string | null
+          first_sale_at?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -3153,8 +4901,12 @@ export type Database = {
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null
+          last_active_at?: string | null
           lead_fields_settings?: Json | null
           logo_url?: string | null
+          max_inboxes_override?: number | null
+          max_users_override?: number | null
+          meta_conversions_api_token?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
@@ -3171,6 +4923,11 @@ export type Database = {
           slug: string
           tax_config?: Json | null
           trial_ends_at?: string | null
+          trial_notified_at?: string | null
+          trial_reminders_sent?: Json
+          wa_nudge_count?: number
+          wa_nudge_last_sent_at?: string | null
+          wa_nudge_optout?: boolean
           webhook_dedicated_user_id?: string | null
           webhook_token?: string
           webhook_token_dedicated?: string | null
@@ -3181,13 +4938,15 @@ export type Database = {
         }
         Update: {
           ai_qualification_rules?: string | null
+          ai_response_mode?: string
           billing_exempt?: boolean | null
-          billing_provider?: string
+          billing_provider?: string | null
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
           calendar_alert_settings?: Json | null
           chatwoot_account_id?: number | null
           chatwoot_account_token?: string | null
+          chatwoot_webhook_secret?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
@@ -3195,13 +4954,20 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           enabled_modules?: Json | null
+          extra_seats?: number | null
+          extra_seats_stripe_price_id?: string | null
           fidelization_alert_days?: Json | null
           fidelization_create_event?: boolean | null
           fidelization_email?: string | null
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
           finance_email?: string | null
+          first_client_at?: string | null
+          first_inbox_reply_at?: string | null
+          first_lead_at?: string | null
           first_paid_at?: string | null
+          first_proposal_at?: string | null
+          first_sale_at?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -3215,8 +4981,12 @@ export type Database = {
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null
+          last_active_at?: string | null
           lead_fields_settings?: Json | null
           logo_url?: string | null
+          max_inboxes_override?: number | null
+          max_users_override?: number | null
+          meta_conversions_api_token?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
@@ -3233,6 +5003,11 @@ export type Database = {
           slug?: string
           tax_config?: Json | null
           trial_ends_at?: string | null
+          trial_notified_at?: string | null
+          trial_reminders_sent?: Json
+          wa_nudge_count?: number
+          wa_nudge_last_sent_at?: string | null
+          wa_nudge_optout?: boolean
           webhook_dedicated_user_id?: string | null
           webhook_token?: string
           webhook_token_dedicated?: string | null
@@ -3242,6 +5017,61 @@ export type Database = {
           whatsapp_instance?: string | null
         }
         Relationships: []
+      }
+      otto_action_log: {
+        Row: {
+          args: Json | null
+          created_at: string
+          id: string
+          organization_id: string
+          result: Json | null
+          success: boolean
+          tool: string
+          user_id: string | null
+        }
+        Insert: {
+          args?: Json | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          result?: Json | null
+          success?: boolean
+          tool: string
+          user_id?: string | null
+        }
+        Update: {
+          args?: Json | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          result?: Json | null
+          success?: boolean
+          tool?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "otto_action_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "otto_action_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "otto_action_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
       }
       pipeline_stages: {
         Row: {
@@ -3287,6 +5117,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -3337,6 +5181,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "product_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "product_categories_parent_id_fkey"
@@ -3583,6 +5441,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -3840,6 +5712,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "prospect_generation_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "prospect_generation_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       prospects: {
@@ -3929,6 +5815,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "prospects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "prospects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       push_subscriptions: {
@@ -3937,6 +5837,7 @@ export type Database = {
           created_at: string | null
           endpoint: string
           id: string
+          muted_conversation_ids: number[]
           organization_id: string
           p256dh: string
           user_id: string
@@ -3946,6 +5847,7 @@ export type Database = {
           created_at?: string | null
           endpoint: string
           id?: string
+          muted_conversation_ids?: number[]
           organization_id: string
           p256dh: string
           user_id: string
@@ -3955,6 +5857,7 @@ export type Database = {
           created_at?: string | null
           endpoint?: string
           id?: string
+          muted_conversation_ids?: number[]
           organization_id?: string
           p256dh?: string
           user_id?: string
@@ -3966,6 +5869,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -4022,6 +5939,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "renewal_automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "renewal_automation_runs_renewal_payment_id_fkey"
@@ -4147,6 +6078,20 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rh_absences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "rh_absences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       rh_holidays: {
@@ -4184,6 +6129,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_holidays_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "rh_holidays_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -4225,6 +6184,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_vacation_balances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "rh_vacation_balances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -4270,6 +6243,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_activation_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "sale_activation_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "sale_activation_history_sale_id_fkey"
@@ -4335,6 +6322,8 @@ export type Database = {
         Row: {
           amount: number
           bank_account_id: string | null
+          billing_period_end: string | null
+          billing_period_start: string | null
           created_at: string | null
           credit_note_id: number | null
           credit_note_reference: string | null
@@ -4349,11 +6338,14 @@ export type Database = {
           qr_code_url: string | null
           sale_id: string
           status: string
+          stripe_invoice_id: string | null
           updated_at: string | null
         }
         Insert: {
           amount: number
           bank_account_id?: string | null
+          billing_period_end?: string | null
+          billing_period_start?: string | null
           created_at?: string | null
           credit_note_id?: number | null
           credit_note_reference?: string | null
@@ -4368,11 +6360,14 @@ export type Database = {
           qr_code_url?: string | null
           sale_id: string
           status?: string
+          stripe_invoice_id?: string | null
           updated_at?: string | null
         }
         Update: {
           amount?: number
           bank_account_id?: string | null
+          billing_period_end?: string | null
+          billing_period_start?: string | null
           created_at?: string | null
           credit_note_id?: number | null
           credit_note_reference?: string | null
@@ -4387,6 +6382,7 @@ export type Database = {
           qr_code_url?: string | null
           sale_id?: string
           status?: string
+          stripe_invoice_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -4403,6 +6399,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "sale_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "sale_payments_sale_id_fkey"
@@ -4423,6 +6433,8 @@ export type Database = {
           client_org_id: string | null
           code: string | null
           comissao: number | null
+          commission_bank_account_id: string | null
+          commission_paid_at: string | null
           consumo_anual: number | null
           created_at: string | null
           created_by: string | null
@@ -4442,6 +6454,7 @@ export type Database = {
           last_renewal_date: string | null
           lead_id: string | null
           margem: number | null
+          meta_capi_purchase_sent_at: string | null
           modelo_servico: string | null
           negotiation_type: string | null
           next_renewal_date: string | null
@@ -4472,6 +6485,8 @@ export type Database = {
           client_org_id?: string | null
           code?: string | null
           comissao?: number | null
+          commission_bank_account_id?: string | null
+          commission_paid_at?: string | null
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -4491,6 +6506,7 @@ export type Database = {
           last_renewal_date?: string | null
           lead_id?: string | null
           margem?: number | null
+          meta_capi_purchase_sent_at?: string | null
           modelo_servico?: string | null
           negotiation_type?: string | null
           next_renewal_date?: string | null
@@ -4521,6 +6537,8 @@ export type Database = {
           client_org_id?: string | null
           code?: string | null
           comissao?: number | null
+          commission_bank_account_id?: string | null
+          commission_paid_at?: string | null
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -4540,6 +6558,7 @@ export type Database = {
           last_renewal_date?: string | null
           lead_id?: string | null
           margem?: number | null
+          meta_capi_purchase_sent_at?: string | null
           modelo_servico?: string | null
           negotiation_type?: string | null
           next_renewal_date?: string | null
@@ -4577,6 +6596,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sales_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "sales_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "sales_commission_bank_account_id_fkey"
+            columns: ["commission_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sales_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -4591,11 +6631,89 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sales_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "sales_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
             foreignKeyName: "sales_proposal_id_fkey"
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string
+          error: string | null
+          id: string
+          organization_id: string
+          phone: string
+          phone_key: string | null
+          send_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by: string
+          error?: string | null
+          id?: string
+          organization_id: string
+          phone: string
+          phone_key?: string | null
+          send_at: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          error?: string | null
+          id?: string
+          organization_id?: string
+          phone?: string
+          phone_key?: string | null
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -4657,17 +6775,33 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       stripe_commission_records: {
         Row: {
           amount: number
+          bank_account_id: string | null
           client_org_id: string
           commission_amount: number
           commission_rate: number
           created_at: string
           id: string
           organization_id: string
+          paid_at: string | null
           period_end: string | null
           period_start: string | null
           plan: string | null
@@ -4678,12 +6812,14 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          bank_account_id?: string | null
           client_org_id: string
           commission_amount?: number
           commission_rate?: number
           created_at?: string
           id?: string
           organization_id: string
+          paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
           plan?: string | null
@@ -4694,12 +6830,14 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_account_id?: string | null
           client_org_id?: string
           commission_amount?: number
           commission_rate?: number
           created_at?: string
           id?: string
           organization_id?: string
+          paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
           plan?: string | null
@@ -4710,8 +6848,36 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "stripe_commission_records_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "stripe_commission_records_client_org_id_fkey"
             columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_organization_id_fkey"
+            columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -4720,8 +6886,15 @@ export type Database = {
             foreignKeyName: "stripe_commission_records_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
           {
             foreignKeyName: "stripe_commission_records_sale_id_fkey"
@@ -4738,6 +6911,7 @@ export type Database = {
           features: Json
           id: string
           max_forms: number | null
+          max_inboxes: number | null
           max_users: number | null
           name: string
           price_monthly: number
@@ -4747,6 +6921,7 @@ export type Database = {
           features?: Json
           id: string
           max_forms?: number | null
+          max_inboxes?: number | null
           max_users?: number | null
           name: string
           price_monthly?: number
@@ -4756,6 +6931,7 @@ export type Database = {
           features?: Json
           id?: string
           max_forms?: number | null
+          max_inboxes?: number | null
           max_users?: number | null
           name?: string
           price_monthly?: number
@@ -4806,6 +6982,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "support_tickets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -4871,6 +7061,72 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      trial_whatsapp_config: {
+        Row: {
+          cooldown_days: number
+          enabled: boolean
+          max_count: number
+          messages: Json
+          organization_id: string
+          threshold_days: number
+          updated_at: string
+        }
+        Insert: {
+          cooldown_days?: number
+          enabled?: boolean
+          max_count?: number
+          messages?: Json
+          organization_id: string
+          threshold_days?: number
+          updated_at?: string
+        }
+        Update: {
+          cooldown_days?: number
+          enabled?: boolean
+          max_count?: number
+          messages?: Json
+          organization_id?: string
+          threshold_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_whatsapp_config_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_whatsapp_config_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "trial_whatsapp_config_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
         ]
       }
       user_roles: {
@@ -4893,7 +7149,90 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      trial_activation_counts: {
+        Row: {
+          days_since_registration: number | null
+          last_active_at: string | null
+          name: string | null
+          onboarding_module_count: number | null
+          organization_id: string | null
+          total_clients: number | null
+          total_leads: number | null
+          total_proposals: number | null
+          total_sales: number | null
+          trial_reminders_sent: number | null
+        }
+        Relationships: []
+      }
+      trial_activation_overview: {
+        Row: {
+          activated_adv: boolean | null
+          activated_med: boolean | null
+          activated_min: boolean | null
+          activation_level: string | null
+          created_at: string | null
+          current_period_end: string | null
+          first_client_at: string | null
+          first_lead_at: string | null
+          first_paid_at: string | null
+          first_proposal_at: string | null
+          first_sale_at: string | null
+          hours_since_active: number | null
+          is_paying: boolean | null
+          last_active_at: string | null
+          name: string | null
+          organization_id: string | null
+          plan: string | null
+          trial_days_left: number | null
+          trial_ends_at: string | null
+          trial_status: string | null
+        }
+        Insert: {
+          activated_adv?: never
+          activated_med?: never
+          activated_min?: never
+          activation_level?: never
+          created_at?: string | null
+          current_period_end?: string | null
+          first_client_at?: string | null
+          first_lead_at?: string | null
+          first_paid_at?: string | null
+          first_proposal_at?: string | null
+          first_sale_at?: string | null
+          hours_since_active?: never
+          is_paying?: never
+          last_active_at?: string | null
+          name?: string | null
+          organization_id?: string | null
+          plan?: string | null
+          trial_days_left?: never
+          trial_ends_at?: string | null
+          trial_status?: never
+        }
+        Update: {
+          activated_adv?: never
+          activated_med?: never
+          activated_min?: never
+          activation_level?: never
+          created_at?: string | null
+          current_period_end?: string | null
+          first_client_at?: string | null
+          first_lead_at?: string | null
+          first_paid_at?: string | null
+          first_proposal_at?: string | null
+          first_sale_at?: string | null
+          hours_since_active?: never
+          is_paying?: never
+          last_active_at?: string | null
+          name?: string | null
+          organization_id?: string | null
+          plan?: string | null
+          trial_days_left?: never
+          trial_ends_at?: string | null
+          trial_status?: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_invite: {
@@ -4910,6 +7249,23 @@ export type Database = {
           p_trigger_type: string
         }
         Returns: string
+      }
+      admin_org_last_sign_in: {
+        Args: never
+        Returns: {
+          last_login: string
+          org_id: string
+        }[]
+      }
+      automation_internal_secret: { Args: never; Returns: string }
+      automation_phone_key: { Args: { p_phone: string }; Returns: string }
+      bump_channel_flap: {
+        Args: {
+          p_channel_id: string
+          p_threshold: number
+          p_window_seconds: number
+        }
+        Returns: boolean
       }
       calc_bank_running_balance: {
         Args: { _bank_account_id: string; _transaction_date: string }
@@ -4957,6 +7313,7 @@ export type Database = {
               distributed_count: number
             }[]
           }
+      enqueue_trial_whatsapp_nudges: { Args: never; Returns: number }
       ensure_newsletter_removed_list: {
         Args: { p_org_id: string }
         Returns: string
@@ -4994,14 +7351,56 @@ export type Database = {
           public_key: string
         }[]
       }
+      get_next_channel_assignee: {
+        Args: { p_channel_id: string }
+        Returns: string
+      }
+      get_next_form_assignee: { Args: { p_form_id: string }; Returns: string }
       get_next_round_robin_assignee: {
         Args: { p_exclude_admins?: boolean; p_org_id: string }
+        Returns: string
+      }
+      get_next_webhook_assignee: {
+        Args: { p_webhook_id: string }
         Returns: string
       }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_org_name_by_invite_token: {
         Args: { _token: string }
         Returns: string
+      }
+      get_org_public_by_slug: {
+        Args: { _slug: string }
+        Returns: {
+          id: string
+          name: string
+          slug: string
+        }[]
+      }
+      get_org_public_data: {
+        Args: { _org_id: string }
+        Returns: {
+          ai_qualification_rules: string
+          ai_response_mode: string
+          code: string
+          created_at: string
+          enabled_modules: Json
+          form_settings: Json
+          id: string
+          integrations_enabled: Json
+          logo_url: string
+          msg_template_cold: string
+          msg_template_hot: string
+          msg_template_warm: string
+          name: string
+          niche: string
+          plan: string
+          public_key: string
+          sales_settings: Json
+          servicos_products_config: Json
+          slug: string
+          tax_config: Json
+        }[]
       }
       get_org_salespeople: {
         Args: { p_org_id: string }
@@ -5029,6 +7428,25 @@ export type Database = {
         }[]
       }
       get_slug_by_public_key: { Args: { _public_key: string }; Returns: string }
+      get_subscription_plan: {
+        Args: { _plan_id: string }
+        Returns: {
+          created_at: string
+          features: Json
+          id: string
+          max_forms: number | null
+          max_inboxes: number | null
+          max_users: number | null
+          name: string
+          price_monthly: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "subscription_plans"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_team_member_ids: { Args: { p_user_id: string }; Returns: string[] }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       get_user_organizations: {
@@ -5096,6 +7514,7 @@ export type Database = {
             }[]
           }
       import_leads_bulk: { Args: { p_leads: Json }; Returns: Json }
+      internal_service_key: { Args: never; Returns: string }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
@@ -5109,7 +7528,33 @@ export type Database = {
         Args: { p_last_error?: string; p_run_id: string; p_status: string }
         Returns: undefined
       }
+      merge_messaging_channel_metadata: {
+        Args: { p_channel_type: string; p_org_id: string; p_patch: Json }
+        Returns: undefined
+      }
+      merge_messaging_channel_metadata_by_id: {
+        Args: { p_channel_id: string; p_patch: Json }
+        Returns: undefined
+      }
       normalize_chargeback_cpe: { Args: { p_cpe: string }; Returns: string }
+      org_max_users:
+        | {
+            Args: { o: Database["public"]["Tables"]["organizations"]["Row"] }
+            Returns: number
+          }
+        | { Args: { p_org_id: string }; Returns: number }
+      org_plan_base_users:
+        | {
+            Args: { o: Database["public"]["Tables"]["organizations"]["Row"] }
+            Returns: number
+          }
+        | { Args: { p_plan: string }; Returns: number }
+      org_required_extra_seats:
+        | {
+            Args: { o: Database["public"]["Tables"]["organizations"]["Row"] }
+            Returns: number
+          }
+        | { Args: { p_org_id: string }; Returns: number }
       parse_chargeback_amount: { Args: { p_value: string }; Returns: number }
       search_clients_unaccent: {
         Args: { max_results?: number; org_id: string; search_term: string }
@@ -5225,6 +7670,7 @@ export type Database = {
           search_term: string
         }
         Returns: {
+          archived_at: string | null
           assigned_to: string | null
           automation_enabled: boolean
           company_name: string | null
@@ -5319,6 +7765,8 @@ export type Database = {
           client_org_id: string | null
           code: string | null
           comissao: number | null
+          commission_bank_account_id: string | null
+          commission_paid_at: string | null
           consumo_anual: number | null
           created_at: string | null
           created_by: string | null
@@ -5338,6 +7786,7 @@ export type Database = {
           last_renewal_date: string | null
           lead_id: string | null
           margem: number | null
+          meta_capi_purchase_sent_at: string | null
           modelo_servico: string | null
           negotiation_type: string | null
           next_renewal_date: string | null
@@ -5366,7 +7815,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
+      verify_automation_secret: { Args: { p_secret: string }; Returns: boolean }
+      verify_stripe_cron_secret: {
+        Args: { p_secret: string }
+        Returns: boolean
+      }
       verify_user_org_membership: {
         Args: { p_email: string; p_org_slug: string }
         Returns: {
@@ -5516,6 +7972,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["super_admin", "admin", "viewer", "salesperson"],
