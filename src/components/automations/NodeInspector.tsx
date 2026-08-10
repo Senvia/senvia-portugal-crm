@@ -18,7 +18,7 @@ import {
   SALE_STATUS_OPTIONS, VALUELESS_OPERATORS, WAIT_UNIT_OPTIONS, getNodeDefinition,
   getNodeStyle, humanizeNodeType, normalizeConditionOperator,
 } from '@/lib/automation-nodes';
-import { createId } from '@/lib/automation-graph';
+import { createId, isJsonConfigValid, isWebhookUrlValid } from '@/lib/automation-graph';
 import { VariableChips } from '@/components/automations/VariableChips';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -425,48 +425,7 @@ function NodeConfigForm({ node, config, set }: FormProps) {
       );
 
     case 'webhook':
-      return (
-        <>
-          <Field label="URL">
-            <Input
-              value={config.url ?? ''}
-              onChange={(e) => set({ url: e.target.value })}
-              placeholder="https://exemplo.com/hook"
-            />
-          </Field>
-          <Field label="Método">
-            <Select
-              value={config.method ?? 'POST'}
-              onValueChange={(value) => set({ method: value as AutomationNodeConfig['method'] })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {['POST', 'GET', 'PUT', 'PATCH'].map((method) => (
-                  <SelectItem key={method} value={method}>{method}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Cabeçalhos (JSON)">
-            <Textarea
-              value={config.headers ?? ''}
-              onChange={(e) => set({ headers: e.target.value })}
-              placeholder='{"Authorization": "Bearer …"}'
-              rows={3}
-              className="font-mono text-xs"
-            />
-          </Field>
-          <Field label="Corpo (JSON)">
-            <Textarea
-              value={config.body ?? ''}
-              onChange={(e) => set({ body: e.target.value })}
-              placeholder='{"nome": "{{nome}}"}'
-              rows={4}
-              className="font-mono text-xs"
-            />
-          </Field>
-        </>
-      );
+      return <WebhookForm config={config} set={set} />;
 
     case 'end':
       return <Hint>O fluxo termina aqui para este contacto. Não são executados mais passos.</Hint>;
@@ -474,6 +433,71 @@ function NodeConfigForm({ node, config, set }: FormProps) {
     default:
       return <Hint>Este passo não tem opções configuráveis.</Hint>;
   }
+}
+
+// ── webhook ─────────────────────────────────────────────────────────────────
+
+/**
+ * Headers and body are free text but must end up as JSON, so both are parsed on
+ * every keystroke and flagged inline. Typing is never blocked — the same checks
+ * run in `validateGraph`, which is what actually holds back "Ativar".
+ */
+function WebhookForm({ config, set }: { config: AutomationNodeConfig; set: FormProps['set'] }) {
+  const url = config.url ?? '';
+  const urlInvalid = !!url.trim() && !isWebhookUrlValid(url);
+  const headersInvalid = !isJsonConfigValid(config.headers);
+  const bodyInvalid = !isJsonConfigValid(config.body);
+
+  return (
+    <>
+      <Field label="URL">
+        <Input
+          value={url}
+          onChange={(e) => set({ url: e.target.value })}
+          placeholder="https://exemplo.com/hook"
+          className={cn(urlInvalid && INVALID_FIELD_CLASS)}
+          aria-invalid={urlInvalid}
+        />
+        {urlInvalid && <FieldError>Endereço inválido — comece por https://</FieldError>}
+      </Field>
+      <Field label="Método">
+        <Select
+          value={config.method ?? 'POST'}
+          onValueChange={(value) => set({ method: value as AutomationNodeConfig['method'] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {['POST', 'GET', 'PUT', 'PATCH'].map((method) => (
+              <SelectItem key={method} value={method}>{method}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Cabeçalhos (JSON)">
+        <Textarea
+          value={config.headers ?? ''}
+          onChange={(e) => set({ headers: e.target.value })}
+          placeholder='{"Authorization": "Bearer …"}'
+          rows={3}
+          className={cn('font-mono text-xs', headersInvalid && INVALID_FIELD_CLASS)}
+          aria-invalid={headersInvalid}
+        />
+        {headersInvalid && <FieldError>JSON inválido</FieldError>}
+      </Field>
+      <Field label="Corpo (JSON)">
+        <Textarea
+          value={config.body ?? ''}
+          onChange={(e) => set({ body: e.target.value })}
+          placeholder='{"nome": "{{nome}}"}'
+          rows={4}
+          className={cn('font-mono text-xs', bodyInvalid && INVALID_FIELD_CLASS)}
+          aria-invalid={bodyInvalid}
+        />
+        {bodyInvalid && <FieldError>JSON inválido</FieldError>}
+      </Field>
+      <Helper>Pode usar variáveis como {'{{nome}}'} dentro dos valores.</Helper>
+    </>
+  );
 }
 
 // ── send_whatsapp: media upload ─────────────────────────────────────────────
@@ -888,6 +912,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Helper({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] leading-snug text-muted-foreground">{children}</p>;
+}
+
+/** Red outline paired with `FieldError` for inline validation. */
+const INVALID_FIELD_CLASS = 'border-destructive focus-visible:ring-destructive';
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] font-medium leading-snug text-destructive">{children}</p>;
 }
 
 function Hint({ children }: { children: React.ReactNode }) {

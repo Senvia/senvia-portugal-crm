@@ -7,7 +7,7 @@ import {
   type NodeCategoryStyle,
 } from '@/lib/automation-nodes';
 import { GHOST_BOX_HEIGHT, NODE_BOX_HEIGHT, NODE_BOX_WIDTH } from '@/lib/automation-graph';
-import type { AutomationGraphNode } from '@/types/automations';
+import type { AutomationGraphNode, AutomationNodeStats } from '@/types/automations';
 
 /**
  * Unknown node types (e.g. written by a newer engine) must still render as a
@@ -43,6 +43,10 @@ export interface AutomationNodeData extends Record<string, unknown> {
   graphNode: AutomationGraphNode;
   step: number;
   hasIssue: boolean;
+  /** Run counters for this step. Only drawn when `showStats` is set. */
+  stats?: AutomationNodeStats;
+  /** False for a flow that has never run — the canvas stays clean. */
+  showStats?: boolean;
 }
 
 export type AutomationFlowNodeType = Node<AutomationNodeData, 'automation'>;
@@ -52,7 +56,7 @@ export type AutomationFlowNodeType = Node<AutomationNodeData, 'automation'>;
  * badge, and the title + one-line summary underneath.
  */
 export const AutomationFlowNode = memo(({ data, selected }: NodeProps<AutomationFlowNodeType>) => {
-  const { graphNode, step, hasIssue } = data;
+  const { graphNode, step, hasIssue, stats, showStats } = data;
   const definition = getNodeDefinition(graphNode.type);
   // Defensive: an unknown type still gets a styled circle, an icon and a
   // readable label — never an empty grey disc labelled "trial_expired".
@@ -112,6 +116,8 @@ export const AutomationFlowNode = memo(({ data, selected }: NodeProps<Automation
             <AlertTriangle className="h-3 w-3" />
           </span>
         )}
+
+        {showStats && stats && <NodeStatsBadges stats={stats} />}
       </div>
 
       <div className="mt-2 w-full px-2 text-center">
@@ -137,6 +143,53 @@ export const AutomationFlowNode = memo(({ data, selected }: NodeProps<Automation
 });
 
 AutomationFlowNode.displayName = 'AutomationFlowNode';
+
+/**
+ * Run counters hanging off the bottom-right of the disc: how many contacts
+ * cleared this step, how many are parked on it, how many failed. Absolutely
+ * positioned inside the circle wrapper, so the node's box and hit area are
+ * untouched.
+ */
+function NodeStatsBadges({ stats }: { stats: AutomationNodeStats }) {
+  const parts = [`${stats.passed} ${stats.passed === 1 ? 'passou' : 'passaram'}`];
+  if (stats.waiting > 0) parts.push(`${stats.waiting} à espera`);
+  if (stats.failed > 0) parts.push(`${stats.failed} ${stats.failed === 1 ? 'falhou' : 'falharam'}`);
+  const summary = parts.join(' · ');
+
+  return (
+    <span
+      className="absolute -bottom-1 -right-1 flex items-center gap-0.5"
+      title={summary}
+      aria-label={summary}
+    >
+      <StatChip className="border-border bg-card text-muted-foreground">{stats.passed}</StatChip>
+      {stats.waiting > 0 && (
+        <StatChip className="border-background bg-warning text-warning-foreground">
+          {stats.waiting}
+        </StatChip>
+      )}
+      {stats.failed > 0 && (
+        <StatChip className="border-background bg-destructive text-destructive-foreground">
+          {stats.failed}
+        </StatChip>
+      )}
+    </span>
+  );
+}
+
+function StatChip({ className, children }: { className: string; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'flex h-4 min-w-4 items-center justify-center rounded-full border px-1',
+        'text-[10px] font-bold leading-none tabular-nums shadow-sm',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
 
 // ── Ghost "add step" node ───────────────────────────────────────────────────
 

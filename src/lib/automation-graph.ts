@@ -436,6 +436,57 @@ export interface GraphIssue {
   message: string;
 }
 
+const VARIABLE_PATTERN = /\{\{[^{}]*\}\}/g;
+/**
+ * Stand-in for a `{{variable}}` in the fallback parse. A bare number is the one
+ * literal that is valid both inside a string ("olá 0") and as a whole value
+ * ("total": 0), so one substitution covers both ways of templating.
+ */
+const VARIABLE_STUB = '0';
+
+/**
+ * True when a free-text JSON field (webhook headers/body) is usable. Empty text
+ * passes — both fields are optional. The text is parsed as-is first; if that
+ * fails, `{{variables}}` are stubbed out and it is parsed again, so a body like
+ * `{"total": {{valor}}}` — which the engine fills in before sending — is not
+ * flagged as broken.
+ */
+export function isJsonConfigValid(text: string | undefined | null): boolean {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return true;
+
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    // Fall through — it may still be valid once variables are substituted.
+  }
+
+  try {
+    JSON.parse(trimmed.replace(VARIABLE_PATTERN, VARIABLE_STUB));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Webhook URLs must be absolute http(s). A URL built from `{{variables}}` is
+ * only resolved at run time, so it is accepted as-is.
+ */
+export function isWebhookUrlValid(url: string | undefined | null): boolean {
+  const trimmed = (url ?? '').trim();
+  if (!trimmed) return false;
+  if (trimmed.includes('{{')) return true;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** Blocking problems that should stop a flow from being activated. */
 export function validateGraph(graph: AutomationGraph, entryNodeId: string | null): GraphIssue[] {
   const issues: GraphIssue[] = [];
@@ -461,11 +512,25 @@ export function validateGraph(graph: AutomationGraph, entryNodeId: string | null
           issues.push({ nodeId: node.id, message: 'Email sem template nem assunto.' });
         }
         break;
-      case 'webhook':
-        if (!node.config?.url?.trim()) {
+      case 'webhook': {
+        const url = node.config?.url?.trim();
+        if (!url) {
           issues.push({ nodeId: node.id, message: 'Webhook sem URL.' });
+        } else if (!isWebhookUrlValid(url)) {
+          issues.push({
+            nodeId: node.id,
+            message: 'URL do webhook inválido — indique um endereço https:// completo.',
+          });
+        }
+        // A malformed body would be sent verbatim and rejected by the endpoint.
+        if (!isJsonConfigValid(node.config?.headers)) {
+          issues.push({ nodeId: node.id, message: 'Cabeçalhos do webhook não são JSON válido.' });
+        }
+        if (!isJsonConfigValid(node.config?.body)) {
+          issues.push({ nodeId: node.id, message: 'Corpo do webhook não é JSON válido.' });
         }
         break;
+      }
       case 'wait_reply':
         if (!node.config?.rules?.length) {
           issues.push({ nodeId: node.id, message: 'Esperar resposta sem regras de palavras-chave.' });

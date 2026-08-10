@@ -6,8 +6,8 @@ import type { Json } from '@/integrations/supabase/types';
 import { createInitialGraph, normalizeGraph } from '@/lib/automation-graph';
 import type {
   AutomationFlow, AutomationFlowRunCounts, AutomationFlowStatus, AutomationGraph,
-  AutomationNodeConfig, AutomationReentryPolicy, AutomationRun, AutomationRunStep,
-  AutomationTriggerType, QuietHours,
+  AutomationNodeConfig, AutomationNodeStats, AutomationReentryPolicy, AutomationRun,
+  AutomationRunStep, AutomationTriggerType, QuietHours,
 } from '@/types/automations';
 
 // The automation tables post-date the generated Supabase types, so table names
@@ -323,6 +323,77 @@ export function useDuplicateAutomationFlow() {
   });
 }
 
+// ── Test run ────────────────────────────────────────────────────────────────
+
+export interface TestAutomationFlowData {
+  flow_id: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface AutomationTestResponse {
+  run_id?: string | null;
+  status?: string | null;
+  error?: string | null;
+}
+
+/**
+ * A non-2xx reply arrives as a FunctionsHttpError whose `context` is the raw
+ * Response — the engine's `{ error }` body lives there, not on `error.message`.
+ */
+async function readFunctionError(error: unknown): Promise<string | null> {
+  const context = (error as { context?: unknown } | null)?.context as Response | undefined;
+  if (!context || typeof context.json !== 'function') return null;
+
+  try {
+    const body = await context.json();
+    const message = (body as { error?: unknown })?.error;
+    return typeof message === 'string' && message ? message : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fires a real run of the flow against contact details typed by the user. The
+ * engine authorises an admin of the flow's organization for this action alone:
+ * it runs even on a draft, ignores the reentry policy, leaves `subject_id` null
+ * and stamps `context.__test`. Messages really are sent.
+ */
+export function useTestAutomationFlow() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: TestAutomationFlowData) => {
+      const { data, error } = await supabase.functions.invoke('automation-engine', {
+        body: { action: 'test', ...input },
+      });
+
+      if (error) throw new Error((await readFunctionError(error)) ?? error.message);
+
+      const result = (data ?? {}) as AutomationTestResponse;
+      // Refusals also come back as a 200 carrying `{ error }`.
+      if (result.error) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automation-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-run-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-flow-node-stats'] });
+      toast.success('Teste iniciado', {
+        description: 'Acompanhe o resultado no separador Atividade.',
+      });
+    },
+    onError: (error) => {
+      console.error('Error testing automation flow:', error);
+      toast.error('Erro ao testar a automação', {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    },
+  });
+}
+
 // ── Runs (read-only: the engine owns these tables) ──────────────────────────
 
 const ACTIVE_RUN_STATUSES = ['running', 'waiting', 'awaiting_reply'];
@@ -405,6 +476,78 @@ export function useAutomationRunSteps(runId: string | null) {
       return (data || []) as unknown as AutomationRunStep[];
     },
     enabled: !!runId && !!organizationId,
+  });
+}
+
+/** Runs parked on a node, i.e. contacts sitting there right now. */
+const PARKED_RUN_STATUSES = ['waiting', 'awaiting_reply'];
+/** `.in()` list size — keeps the request URL well under any gateway limit. */
+const RUN_ID_CHUNK = 300;
+
+/**
+ * Per-node counters for the canvas badges: contacts that cleared each step,
+ * failed on it, or are parked on it. Test runs (`context.__test`) are excluded
+ * so trying a flow out never inflates the real numbers.
+ */
+export function useAutomationFlowNodeStats(flowId: string | null) {
+  const { organization } = useAuth();
+  const organizationId = organization?.id;
+
+  return useQuery({
+    queryKey: ['automation-flow-node-stats', flowId, organizationId],
+    queryFn: async () => {
+      const stats: Record<string, AutomationNodeStats> = {};
+      if (!flowId || !organizationId) return stats;
+
+      const bump = (nodeId: string, key: keyof AutomationNodeStats) => {
+        const entry = stats[nodeId] ?? { passed: 0, failed: 0, waiting: 0 };
+        entry[key] += 1;
+        stats[nodeId] = entry;
+      };
+
+      // One pass over the flow's runs gives both the ids the step query needs
+      // and the "parked right now" counter.
+      const { data: runRows, error: runsError } = await supabase
+        .from(RUNS)
+        .select('id, status, current_node_id, context')
+        .eq('flow_id', flowId)
+        .eq('organization_id', organizationId);
+
+      if (runsError) throw runsError;
+
+      const runs = ((runRows || []) as unknown as Pick<
+        AutomationRun, 'id' | 'status' | 'current_node_id' | 'context'
+      >[]).filter((run) => !run.context?.__test);
+
+      for (const run of runs) {
+        if (run.current_node_id && PARKED_RUN_STATUSES.includes(run.status)) {
+          bump(run.current_node_id, 'waiting');
+        }
+      }
+
+      const runIds = runs.map((run) => run.id);
+      for (let index = 0; index < runIds.length; index += RUN_ID_CHUNK) {
+        const { data: stepRows, error: stepsError } = await supabase
+          .from(RUN_STEPS)
+          .select('node_id, status')
+          .eq('organization_id', organizationId)
+          .in('run_id', runIds.slice(index, index + RUN_ID_CHUNK));
+
+        if (stepsError) throw stepsError;
+
+        for (const step of (stepRows || []) as unknown as Pick<AutomationRunStep, 'node_id' | 'status'>[]) {
+          if (!step.node_id) continue;
+          if (step.status === 'ok') bump(step.node_id, 'passed');
+          else if (step.status === 'failed') bump(step.node_id, 'failed');
+        }
+      }
+
+      return stats;
+    },
+    enabled: !!flowId && !!organizationId,
+    // Fresh enough to feel live while a test run advances, without hammering.
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 }
 

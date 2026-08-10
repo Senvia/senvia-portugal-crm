@@ -271,4 +271,14 @@ export interface AutomationFlowRunCounts {
   total: number;
 }
 
+/**
+ * Per-node counters drawn on the canvas: how many contacts cleared the step,
+ * how many failed on it, and how many are parked there right now.
+ */
+export interface AutomationNodeStats {
+  passed: number;
+  failed: number;
+  waiting: number;
+}
+
 export const EMPTY_GRAPH: AutomationGraph = { nodes: [], edges: [] };

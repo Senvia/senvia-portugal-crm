@@ -11,7 +11,7 @@ import {
   computeCanvasLayout, computeStepNumbers, findNode, getGhostSlots, validateGraph,
 } from '@/lib/automation-graph';
 import { getBranchLabel, getNodeStyle } from '@/lib/automation-nodes';
-import type { AutomationGraph } from '@/types/automations';
+import type { AutomationGraph, AutomationNodeStats } from '@/types/automations';
 
 // Defined once — React Flow warns (and re-renders hard) on new object identities.
 const nodeTypes = { automation: AutomationFlowNode, ghost: GhostFlowNode };
@@ -28,10 +28,16 @@ interface AutomationCanvasProps {
   onInsertOnEdge: (edgeId: string) => void;
   /** Persist node positions after a drag (marks the flow dirty). */
   onMoveNodes: (positions: Record<string, { x: number; y: number }>) => void;
+  /**
+   * Per-node run counters. Omitted for a flow that has never run, which keeps a
+   * brand-new canvas free of zero badges.
+   */
+  nodeStats?: Record<string, AutomationNodeStats>;
 }
 
 function CanvasInner({
   graph, entryNodeId, selectedNodeId, onSelectNode, onAddAfter, onInsertOnEdge, onMoveNodes,
+  nodeStats,
 }: AutomationCanvasProps) {
   const { fitView, getNodes } = useReactFlow();
 
@@ -62,6 +68,9 @@ function CanvasInner({
           graphNode: node,
           step: steps[node.id] ?? 0,
           hasIssue: issues.has(node.id),
+          // A node nobody reached still shows a zero — that is the signal.
+          stats: nodeStats?.[node.id] ?? { passed: 0, failed: 0, waiting: 0 },
+          showStats: !!nodeStats,
         },
       })),
       ...ghosts.map((ghost) => ({
@@ -111,7 +120,7 @@ function CanvasInner({
     ];
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [graph, entryNodeId, selectedNodeId, onAddAfter, onInsertOnEdge, dragPositions]);
+  }, [graph, entryNodeId, selectedNodeId, onAddAfter, onInsertOnEdge, dragPositions, nodeStats]);
 
   // Re-fit when the shape of the graph changes (not on mere config edits or drags).
   const shapeKey = `${graph.nodes.length}:${graph.edges.length}`;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, ArrowLeft, LayoutGrid, Loader2, Pause, Play, Save,
+  Activity, AlertTriangle, ArrowLeft, FlaskConical, LayoutGrid, Loader2, Pause, Play, Save,
   SlidersHorizontal, Workflow,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,13 +18,15 @@ import { NodePickerDialog } from '@/components/automations/NodePickerDialog';
 import { FlowActivity } from '@/components/automations/FlowActivity';
 import { FlowStatusPill } from '@/components/automations/FlowStatusPill';
 import { FlowSettings } from '@/components/automations/FlowSettings';
+import { TestFlowDialog } from '@/components/automations/TestFlowDialog';
 
 import {
   appendNode, applyAutoLayout, findNode, insertNodeOnEdge, pruneOrphanBranches,
   removeNode, updateNodeConfig, updateNodePositions, validateGraph,
 } from '@/lib/automation-graph';
 import {
-  useAutomationFlow, useSetAutomationFlowStatus, useUpdateAutomationFlow,
+  useAutomationFlow, useAutomationFlowNodeStats, useSetAutomationFlowStatus,
+  useUpdateAutomationFlow,
 } from '@/hooks/useAutomationFlows';
 import type {
   AutomationGraph, AutomationNodeConfig, AutomationNodeType,
@@ -47,6 +49,12 @@ export default function AutomationEditor() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [tab, setTab] = useState<'canvas' | 'activity' | 'settings'>('canvas');
+  const [testOpen, setTestOpen] = useState(false);
+
+  // Only polled while the canvas is on screen — the badges live on the circles.
+  const { data: nodeStats } = useAutomationFlowNodeStats(tab === 'canvas' ? id ?? null : null);
+  // A flow that never ran gets no badges at all, so a new canvas stays clean.
+  const hasRunStats = !!nodeStats && Object.keys(nodeStats).length > 0;
 
   // Hydrate local editing state once per flow. The ref guard means a background
   // refetch can never clobber edits the user has not saved yet.
@@ -128,6 +136,16 @@ export default function AutomationEditor() {
     });
     setDirty(false);
     toast.success('Automação guardada');
+  };
+
+  /**
+   * The engine reads the stored row, so a test of unsaved edits would be a lie —
+   * save first, then ask for the contact details.
+   */
+  const handleOpenTest = async () => {
+    if (!flow) return;
+    if (dirty) await handleSave();
+    setTestOpen(true);
   };
 
   const handleToggleStatus = async () => {
@@ -220,6 +238,17 @@ export default function AutomationEditor() {
             </Button>
           )}
 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenTest}
+            disabled={isBusy}
+            title="Correr o fluxo com os seus contactos"
+          >
+            <FlaskConical className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Testar</span>
+          </Button>
+
           <Button variant="outline" size="sm" onClick={handleSave} disabled={!dirty || isBusy}>
             {updateFlow.isPending
               ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -268,6 +297,7 @@ export default function AutomationEditor() {
               onAddAfter={handleAddAfter}
               onInsertOnEdge={handleInsertOnEdge}
               onMoveNodes={handleMoveNodes}
+              nodeStats={hasRunStats ? nodeStats : undefined}
             />
 
             {selectedNode && (
@@ -302,6 +332,14 @@ export default function AutomationEditor() {
         open={!!pickerTarget}
         onOpenChange={(open) => !open && setPickerTarget(null)}
         onSelect={handlePickNodeType}
+      />
+
+      <TestFlowDialog
+        open={testOpen}
+        onOpenChange={setTestOpen}
+        flowId={flow.id}
+        // Land straight on the run the user just started.
+        onStarted={() => setTab('activity')}
       />
     </div>
   );
