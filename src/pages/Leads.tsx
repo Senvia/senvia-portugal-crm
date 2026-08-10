@@ -78,6 +78,9 @@ export default function Leads() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImportsHistoryOpen, setIsImportsHistoryOpen] = useState(false);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  // Etapa para onde a lead vai QUANDO o evento for mesmo criado. Guardada aqui
+  // porque a confirmacao acontece no modal, noutro momento do que o arrasto.
+  const [pendingScheduleStatus, setPendingScheduleStatus] = useState<string | null>(null);
   const [isCreateProposalModalOpen, setIsCreateProposalModalOpen] = useState(false);
   const [isProposalDetailsModalOpen, setIsProposalDetailsModalOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
@@ -278,8 +281,11 @@ export default function Leads() {
         setSelectedEvent(existingEvent);
         setIsEventDetailsModalOpen(true);
       } else {
-        // Open create event modal
+        // Open create event modal. The status only moves once the event really
+        // exists — see handleEventCreated. Moving it here would leave the lead
+        // in "Agendado" without a meeting if the agent closes the modal.
         setPendingLead(lead || null);
+        setPendingScheduleStatus(newStatus);
         setIsCreateEventModalOpen(true);
       }
       return;
@@ -432,8 +438,15 @@ export default function Leads() {
   };
 
   const handleEventCreated = () => {
-    // Status já é atualizado automaticamente pelo useCreateEvent hook
-    // Apenas limpar os estados locais
+    // O estado NÃO é atualizado por ninguém automaticamente: useCreateEvent só
+    // insere o evento e invalida a query das leads, o que apenas volta a buscar
+    // o mesmo estado. Também não existe trigger em calendar_events que mexa nas
+    // leads (confirmado na base de dados). Sem esta linha, arrastar para
+    // "Agendado" criava a reunião e deixava a lead na coluna anterior.
+    if (pendingScheduleStatus && pendingLead) {
+      updateStatus.mutate({ leadId: pendingLead.id, status: pendingScheduleStatus });
+    }
+    setPendingScheduleStatus(null);
     setPendingLead(null);
     setSelectedEvent(null);
     setIsCreateEventModalOpen(false);
@@ -927,6 +940,8 @@ export default function Leads() {
           onOpenChange={(open) => {
             setIsCreateEventModalOpen(open);
             if (!open) {
+              // Fechar sem criar não deve mover a lead: fica onde estava.
+              setPendingScheduleStatus(null);
               setPendingLead(null);
               setSelectedEvent(null);
             }
