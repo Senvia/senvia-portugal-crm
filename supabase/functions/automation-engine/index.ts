@@ -71,6 +71,7 @@ interface Flow {
   reentry_policy: string;
   quiet_hours: { start?: string; end?: string } | null;
   max_steps_per_run: number;
+  trigger_config?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +640,19 @@ async function handleEnroll(db: any, body: Record<string, unknown>) {
   const results: Array<Record<string, unknown>> = [];
 
   for (const flow of flows as Flow[]) {
+    // Trigger-level filters: a flow scoped to one form (or one pipeline stage)
+    // must ignore events from the others, otherwise activating it would blast
+    // every lead in the organization.
+    const tcfg = (flow.trigger_config ?? {}) as Record<string, unknown>;
+    if (triggerType === "form_submitted" && tcfg.form_id && record.form_id !== tcfg.form_id) {
+      results.push({ flow: flow.id, skipped: "outro formulário" });
+      continue;
+    }
+    if (triggerType.endsWith("_status_changed") && tcfg.to_stage && record.status !== tcfg.to_stage) {
+      results.push({ flow: flow.id, skipped: "outra etapa" });
+      continue;
+    }
+
     const subjectId = (record.id as string) ?? null;
 
     // Reinscrição: 'once' impede para sempre; 'after_completion' só permite
@@ -750,6 +764,61 @@ async function handleTick(db: any) {
 
   if (failed > 0) logError("tick terminou com falhas", { failed });
   return { woken, failed };
+}
+
+/**
+ * Corre um fluxo contra um contacto à escolha, sem esperar pelo gatilho.
+ *
+ * Serve para o utilizador se enviar as mensagens a si próprio antes de expor o
+ * fluxo a clientes — sem isto, a primeira execução a sério é sempre com um
+ * cliente real. Funciona com o fluxo em rascunho de propósito (é esse o ponto),
+ * ignora a política de reentrada, e marca o percurso no contexto para o
+ * separador Atividade o poder distinguir de tráfego verdadeiro.
+ */
+// deno-lint-ignore no-explicit-any
+async function handleTest(db: any, body: Record<string, unknown>) {
+  const flowId = String(body.flow_id ?? "");
+  if (!flowId) return { error: "flow_id é obrigatório" };
+
+  const flow = await loadFlow(db, flowId);
+  if (!flow) return { error: "Fluxo não encontrado" };
+
+  const phone = body.phone ? String(body.phone) : null;
+  const email = body.email ? String(body.email) : null;
+  if (!phone && !email) return { error: "Indique um telefone ou email para o teste" };
+
+  const { data: run, error } = await db.from("automation_runs").insert({
+    organization_id: flow.organization_id,
+    flow_id: flow.id,
+    flow_version: flow.version,
+    subject_type: "contact",
+    // subject_id fica nulo: o índice único de percurso ativo por contacto só se
+    // aplica quando há sujeito, por isso um teste nunca colide com o percurso
+    // real da mesma pessoa nem o bloqueia.
+    subject_id: null,
+    contact_name: body.name ? String(body.name) : "Contacto de teste",
+    contact_email: email,
+    contact_phone: phone,
+    contact_phone_key: phoneKey(phone),
+    context: {
+      __test: true,
+      nome: body.name ? String(body.name) : "Contacto de teste",
+      email, telefone: phone,
+    },
+    current_node_id: flow.entry_node_id,
+  }).select("*").single();
+
+  if (error) {
+    logError("falha a iniciar teste", { flow: flowId, error: error.message });
+    return { error: error.message };
+  }
+
+  await new Engine(db).advance(run as Run, flow, flow.entry_node_id);
+
+  const { data: fresh } = await db
+    .from("automation_runs").select("status, last_error").eq("id", run.id).maybeSingle();
+
+  return { run_id: run.id, status: fresh?.status ?? "running", error: fresh?.last_error ?? null };
 }
 
 /**
@@ -913,6 +982,34 @@ serve(async (req) => {
       authorized = data === true;
     }
   }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = await req.json();
+  } catch { /* corpo vazio é tratado abaixo */ }
+  const action = String(body.action ?? "tick");
+
+  // Exceção estreita: um administrador autenticado pode disparar um TESTE do
+  // seu próprio fluxo a partir do browser. Só esta ação, só o fluxo da sua
+  // organização — enroll/tick/reply continuam a exigir credencial interna,
+  // senão qualquer utilizador podia inscrever contactos à sua escolha.
+  if (!authorized && action === "test" && bearer) {
+    const { data: userData } = await db.auth.getUser(bearer);
+    const userId = userData?.user?.id;
+    if (userId && body.flow_id) {
+      const { data: flowRow } = await db
+        .from("automation_flows").select("organization_id").eq("id", String(body.flow_id)).maybeSingle();
+      if (flowRow?.organization_id) {
+        const { data: isMember } = await db.rpc("is_org_member", {
+          _user_id: userId, _org_id: flowRow.organization_id,
+        });
+        const { data: isAdmin } = await db.rpc("has_role", { _user_id: userId, _role: "admin" });
+        authorized = isMember === true && isAdmin === true;
+      }
+    }
+    if (!authorized) logError("teste rejeitado: utilizador sem permissão no fluxo", { flow: body.flow_id });
+  }
+
   if (!authorized) {
     return new Response(JSON.stringify({ error: "Não autorizado" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -920,13 +1017,12 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const action = String(body.action ?? "tick");
 
     let result: unknown;
     if (action === "enroll")      result = await handleEnroll(db, body);
     else if (action === "reply")  result = await handleReply(db, body);
     else if (action === "tick")   result = await handleTick(db);
+    else if (action === "test")   result = await handleTest(db, body);
     else result = { error: `Ação desconhecida: ${action}` };
 
     log("concluído", { action, result });

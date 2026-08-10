@@ -984,6 +984,36 @@ Deno.serve(async (req) => {
       sendWelcomeMessage(supabase, org, lead, formSettings);
     }
 
+    // Automation flows with the `form_submitted` trigger. Nothing dispatched
+    // this event before, so such a flow could be built and activated and would
+    // simply never fire. The `lead_created` DB trigger is NOT a substitute: it
+    // carries no form identity, so a flow scoped to one form could not tell
+    // which form was submitted. Fire-and-forget — the submitter must never wait
+    // on (or fail because of) automations.
+    if (wasInserted) {
+      try {
+        const { data: automationSecret } = await supabase.rpc('automation_internal_secret');
+        if (automationSecret) {
+          fetch(`${supabaseUrl}/functions/v1/automation-engine`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-automation-secret': String(automationSecret),
+            },
+            body: JSON.stringify({
+              action: 'enroll',
+              trigger_type: 'form_submitted',
+              organization_id: org.id,
+              subject_type: 'lead',
+              record: { ...lead, form_id: body.form_id || null },
+            }),
+          }).catch((e) => console.error('form_submitted dispatch failed:', e));
+        }
+      } catch (e) {
+        console.error('form_submitted dispatch error:', e);
+      }
+    }
+
     // Fetch active webhooks from organization_webhooks table
     const { data: activeWebhooks } = await supabase
       .from('organization_webhooks')
