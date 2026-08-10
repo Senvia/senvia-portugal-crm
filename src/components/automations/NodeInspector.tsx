@@ -162,6 +162,19 @@ function NodeConfigForm({ node, config, set }: FormProps) {
         </>
       );
 
+    case 'lead_created_hot':
+    case 'lead_created_warm':
+    case 'lead_created_cold':
+      return (
+        <Hint>
+          Arranca quando uma nova lead é classificada como {' '}
+          {node.type === 'lead_created_hot' ? 'quente' : node.type === 'lead_created_cold' ? 'fria' : 'morna'}
+          {' '}pela IA. A classificação usa as &ldquo;Regras de Qualificação por IA&rdquo; do formulário (ou da
+          organização, consoante o modo escolhido nas definições). Sem regras configuradas, toda a lead entra
+          como morna — os gatilhos quente/fria nunca disparam nesse caso.
+        </Hint>
+      );
+
     case 'lead_status_changed':
       return (
         <>

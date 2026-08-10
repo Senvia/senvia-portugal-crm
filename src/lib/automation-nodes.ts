@@ -9,6 +9,7 @@ import {
   Users, UserCog, FileText, FileCheck, ShoppingCart, Rocket, CalendarDays,
   CalendarRange, Hourglass, AlarmClock, TimerOff, UserX, CreditCard,
   RefreshCw, AlertCircle, XCircle, BellRing, CalendarClock,
+  Flame, Thermometer, Snowflake,
   type LucideIcon,
 } from 'lucide-react';
 import type {
@@ -118,6 +119,39 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
     label: 'Lead criada',
     description: 'Quando uma nova lead entra no CRM',
     icon: UserPlus,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  // Same event as lead_created, filtered to one AI-classified temperature.
+  // Only fires for organizations with "Regras de Qualificação por IA"
+  // configuradas — sem isso, toda a lead classifica como "morna".
+  lead_created_hot: {
+    type: 'lead_created_hot',
+    label: 'Lead criada · quente',
+    description: 'Quando uma nova lead é classificada como quente pela IA',
+    icon: Flame,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  lead_created_warm: {
+    type: 'lead_created_warm',
+    label: 'Lead criada · morna',
+    description: 'Quando uma nova lead é classificada como morna pela IA (ou quando não há regras de qualificação configuradas)',
+    icon: Thermometer,
+    category: 'trigger',
+    isTrigger: true,
+    branching: false,
+    defaultConfig: {},
+  },
+  lead_created_cold: {
+    type: 'lead_created_cold',
+    label: 'Lead criada · fria',
+    description: 'Quando uma nova lead é classificada como fria pela IA',
+    icon: Snowflake,
     category: 'trigger',
     isTrigger: true,
     branching: false,
@@ -491,6 +525,9 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
  */
 export const TRIGGER_TYPES: AutomationTriggerType[] = [
   'lead_created',
+  'lead_created_hot',
+  'lead_created_warm',
+  'lead_created_cold',
   'lead_status_changed',
   'form_submitted',
   'whatsapp_keyword',

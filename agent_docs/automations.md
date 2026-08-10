@@ -44,13 +44,14 @@ off `automation_enabled` on the matching template.
 
 ## Engine
 
-`supabase/functions/automation-engine`, three actions:
+`supabase/functions/automation-engine`, four actions:
 
 | Action | Called by | Does |
 |---|---|---|
-| `enroll` | `notify_automation_trigger` (DB trigger) | Finds active flows for `(org, trigger_type)`, creates a run, walks the graph until it parks. |
+| `enroll` | `notify_automation_trigger` (DB trigger) for CRUD events; `submit-lead` directly for `form_submitted` and the temperature triggers; `automation-engine`'s own `handleKeywordStart` for `whatsapp_keyword` | Finds active flows for `(org, trigger_type)`, applies any trigger-level filter (`trigger_config.form_id`, `.to_stage`, `.keywords`), creates a run, walks the graph until it parks. |
 | `tick` | cron `automation-engine-tick`, every minute | Wakes runs whose `wake_at` passed. For `awaiting_reply` that means the reply never came → takes the `timeout` branch. |
 | `reply` | `chatwoot-webhook` on every inbound message | Resumes the run parked on this phone number and branches by keyword; if none is parked, tries to **start** a `whatsapp_keyword` flow. |
+| `test` | the editor's "Testar" button | Runs a flow against a chosen contact, ignoring `status`/reentry — for trying a flow before activating it. Authorised per-request (admin of the flow's org), not by the shared secret. |
 
 Both `tick` and `reply` claim a run with a conditional `UPDATE … WHERE status = …`
 before touching it, so two concurrent runs of the cron cannot double-execute a
@@ -58,12 +59,38 @@ path. (`process-automation-queue`, the legacy drain, does *not* do this.)
 
 ### Node types
 
-`wait`, `wait_reply`, `send_whatsapp`, `send_email`, `condition`, `move_stage`,
-`assign_user`, `add_to_list`, `webhook`, `end`.
+`send_whatsapp` (optionally waits for a reply itself — see below), `send_email`,
+`wait`, `wait_reply`, `condition`, `move_stage`, `assign_user`, `add_to_list`,
+`create_task`, `webhook`, `end`.
 
-`wait_reply` is the conversational node: `config.rules` is a list of
-`{id, keywords[], label}`, each one an outgoing branch, plus a `timeout` branch
-and an optional `fallback` for a reply that matched nothing.
+The conversational shape lives on **`send_whatsapp`**: `config.wait_reply: true`
++ `config.rules` (`{id, label, keywords[]}[]`) sends the message (as WhatsApp
+buttons when `use_buttons`, degrading to numbered text options if the API
+rejects buttons) and parks the run on the reply — one node for "ask and wait",
+matching how ManyChat-style builders model it. The standalone **`wait_reply`**
+node (not offered when creating a new flow, but fully supported) covers the
+narrower case where the question was already asked by something outside this
+flow — it only waits, never sends.
+
+### Trigger types worth a note
+
+- **`lead_created_hot` / `_warm` / `_cold`** — same event as `lead_created`,
+  filtered to one AI-classified temperature. Dispatched **directly by
+  `submit-lead`** (`dispatchLeadTemperature`), not by the generic DB trigger —
+  temperature isn't known at INSERT time (classification is an async Gemini
+  call). Classification only runs for leads submitted through the **public
+  form** path (not `mode=webhook`, not leads inserted directly by other
+  functions like `notify-new-trials`) and only calls the AI when the org (or
+  form, in `per_form` mode) has "Regras de Qualificação por IA" configured —
+  otherwise every lead defaults to `warm`, same as before this existed.
+  Classification is decoupled from the legacy per-form WhatsApp welcome
+  message on purpose: these triggers fire whether or not that old feature is
+  even configured for the org.
+- **`form_submitted`** — dispatched directly by `submit-lead` for the same
+  reason `form_submitted` needs the form's identity, which the generic
+  `lead_created` DB trigger payload doesn't carry.
+- **`whatsapp_keyword`** — has no DB trigger at all; only fires when a message
+  arrives that doesn't match any parked run (see `reply` above).
 
 ### Safety rails
 
@@ -95,3 +122,28 @@ SELECT net.http_post(
   )
 );
 ```
+
+## Other automated behaviour NOT (yet) in this module
+
+Found while auditing what already runs for an org (2026-08-10). None of these
+are `automation_flows` — each is its own hardcoded mechanism, config-driven but
+not user-buildable. Listed so nobody rediscovers them from scratch, and as
+candidates for future migration.
+
+| Where | What it does | Config |
+|---|---|---|
+| `submit-lead` → `sendWelcomeMessage` | Legacy per-form/org WhatsApp welcome by temperature (hot/warm/cold template). The reason `lead_created_hot/warm/cold` exist as flow triggers — recreate the same behaviour there, then delete the org's `msg_template_*`. | `organizations.msg_template_hot/warm/cold` (or per-form, in `ai_response_mode='per_form'`) |
+| `chatwoot-webhook` | Out-of-hours WhatsApp auto-reply (one per conversation per 6h) | `messaging_channels.metadata.auto_reply` — currently unset for every org checked |
+| `chatwoot-webhook` | Round-robin auto-assign of new conversations | `messaging_channels.assigned_user_ids` — currently unset for every org checked |
+| `chatwoot-webhook` → `suggestTaskFromMessage` | AI-suggested tasks from promises/requests detected in a message | `messaging_channels.metadata.ai_tasks_enabled` |
+| `notify-new-trials` (cron, */15 min) | Creates the Senvia-CRM lead for every new trial signup, with `temperature: 'hot'` and **`automation_enabled: false`** hardcoded | not configurable |
+| `enqueue_trial_whatsapp_nudges()` (cron, hourly) | Drip of up to 4 WhatsApp nudges to trial orgs inactive 24h+ | `organizations.wa_nudge_*`, hardcoded message bodies in the SQL function |
+| `check-renewal-automations` / `check-trial-status` / `stripe-webhook` | Already dispatch into the **same** trigger_type space this module reads (`sale_renewal_due_*`, `trial_*`, `stripe_subscription_*`) — not a separate system, just other trigger *sources* for flows/legacy templates | — |
+
+**Known bug, not yet fixed:** `leads.automation_enabled` (set to `false` by
+`notify-new-trials`, intending "don't run normal lead automations on this
+internal/trial-signup contact") is **not checked anywhere** —
+`notify_automation_trigger` dispatches `lead_created` regardless. In practice
+this means a trial signup can receive the agency's ordinary "novo lead"
+automations (e.g. a client-facing welcome email) despite the flag saying it
+shouldn't.

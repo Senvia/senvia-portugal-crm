@@ -22,6 +22,13 @@ export type AutomationRunStepStatus = 'ok' | 'skipped' | 'failed' | 'waiting';
 
 export type AutomationTriggerType =
   | 'lead_created'
+  // Same event as lead_created, filtered to one AI-classified temperature.
+  // Dispatched directly by submit-lead once classification completes — see
+  // dispatchLeadTemperature — not by the generic DB trigger, because
+  // temperature isn't known yet at INSERT time.
+  | 'lead_created_hot'
+  | 'lead_created_warm'
+  | 'lead_created_cold'
   | 'lead_status_changed'
   | 'form_submitted'
   | 'whatsapp_keyword'

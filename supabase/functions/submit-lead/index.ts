@@ -120,10 +120,49 @@ async function classifyTemperature(rules: string | null, lead: any): Promise<'ho
   }
 }
 
+/**
+ * Dispatches lead_created_hot/warm/cold to the automation engine.
+ *
+ * Not the DB trigger's job: `notify_automation_trigger` fires synchronously on
+ * INSERT, before temperature is known (classification is an async AI call
+ * that only completes here, in the background). Called unconditionally once
+ * `temp` is known — independent of whether the legacy per-form WhatsApp
+ * welcome below is even configured, so "novo lead quente/morno/fria" flows
+ * work for every organization, not just the ones still using the old feature.
+ */
+async function dispatchLeadTemperature(
+  supabase: any, orgId: string, lead: any, temp: 'hot' | 'warm' | 'cold',
+): Promise<void> {
+  try {
+    const { data: secret } = await supabase.rpc('automation_internal_secret');
+    if (!secret) return;
+    const triggerType = temp === 'hot' ? 'lead_created_hot' : temp === 'cold' ? 'lead_created_cold' : 'lead_created_warm';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    await fetch(`${supabaseUrl}/functions/v1/automation-engine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-automation-secret': String(secret) },
+      body: JSON.stringify({
+        action: 'enroll',
+        trigger_type: triggerType,
+        organization_id: orgId,
+        subject_type: 'lead',
+        record: { ...lead, temperature: temp },
+      }),
+    });
+  } catch (e) {
+    console.error('[automation] lead temperature dispatch failed:', (e as Error).message);
+  }
+}
+
 // Proactive first-contact WhatsApp (replaces the retired n8n flow). Picks the
 // form's temperature template, renders it, and sends via the org's CONNECTED
 // Evolution instance — which mirrors the message into the Chatwoot inbox thread.
 // Background-only; never blocks or fails the lead submission.
+//
+// Also classifies the lead's temperature and dispatches it to the automation
+// engine — done HERE, first, before any of the legacy-send gates below, so
+// classification/dispatch never depends on the old WhatsApp welcome being
+// configured (see dispatchLeadTemperature).
 function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: any): void {
   runInBackground((async () => {
     try {
@@ -132,10 +171,17 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
       //   'per_form' -> each form supplies its own rules + templates, no fallback
       const mode = org?.ai_response_mode === 'per_form' ? 'per_form' : 'global';
       const src = mode === 'per_form' ? formSettings : org;
+      const aiRules = src?.ai_qualification_rules || null;
+
+      const temp = await classifyTemperature(aiRules, lead);
+      // Best-effort: stamp the classified temperature on the lead.
+      supabase.from('leads').update({ temperature: temp }).eq('id', lead.id).then(() => {}, () => {});
+      await dispatchLeadTemperature(supabase, org.id, lead, temp);
+
+      // ---- everything below is the LEGACY per-form/org WhatsApp welcome ----
       const tplHot = src?.msg_template_hot || null;
       const tplWarm = src?.msg_template_warm || null;
       const tplCold = src?.msg_template_cold || null;
-      const aiRules = src?.ai_qualification_rules || null;
       if (!tplHot && !tplWarm && !tplCold) return; // no templates for the active mode
 
       const digits = String(lead.phone || '').replace(/\D/g, '');
@@ -161,7 +207,6 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
         return;
       }
 
-      const temp = await classifyTemperature(aiRules, lead);
       const byTemp: Record<string, string | null> = { hot: tplHot, warm: tplWarm, cold: tplCold };
       const tpl = byTemp[temp] || tplWarm || tplHot || tplCold;
       if (!tpl) return;
@@ -179,9 +224,6 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
 
       const text = renderTemplate(tpl, lead, { orgName: org?.name, assigneeName });
       if (!text) return;
-
-      // Best-effort: stamp the classified temperature on the lead.
-      supabase.from('leads').update({ temperature: temp }).eq('id', lead.id).then(() => {}, () => {});
 
       const evoUrl = (Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '');
       const evoKey = Deno.env.get('EVOLUTION_API_KEY') || '';
