@@ -144,6 +144,7 @@ See [agent_docs/edge_functions.md](agent_docs/edge_functions.md) for the full Ed
 | [database_schema.md](agent_docs/database_schema.md) | Main tables, relationships, and RLS patterns |
 | [edge_functions.md](agent_docs/edge_functions.md) | All 45 Edge Functions categorized by domain |
 | [deployment.md](agent_docs/deployment.md) | Deploy flow, environment setup, and cron jobs |
+| [automations.md](agent_docs/automations.md) | Automation flow engine: graph schema, run state, conversational nodes |
 
 ## TODO (fill manually)
 

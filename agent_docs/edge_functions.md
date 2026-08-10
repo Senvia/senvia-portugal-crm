@@ -47,8 +47,9 @@ All functions live in `supabase/functions/{name}/index.ts` (Deno runtime). Deplo
 
 | Function | Purpose |
 |----------|---------|
-| `process-automation` | Executes a single automation action. |
-| `process-automation-queue` | Processes queued automations where `scheduled_for <= now()`. |
+| `automation-engine` | **Flow engine.** Interprets the node graph of `automation_flows`. Three actions: `enroll` (a trigger fired — enrol the contact and run until it parks), `tick` (cron each minute — wake runs whose `wake_at` passed), `reply` (an inbound WhatsApp message — resume the run parked on `wait_reply` and branch by keyword, or start a `whatsapp_keyword` flow). Auth: service-role bearer or `x-automation-secret`. |
+| `process-automation` | **Legacy** single-step automations (one email template + a stamped trigger). Runs alongside the engine until every org has migrated its flows. |
+| `process-automation-queue` | Processes queued legacy automations where `scheduled_for <= now()`. |
 | `check-renewal-automations` | Finds sales due for renewal today/in 2 days, triggers email automations. |
 | `check-reminders` | Processes due reminders and sends notifications. |
 | `check-fidelization-alerts` | Checks client fidelization period expiry. |
