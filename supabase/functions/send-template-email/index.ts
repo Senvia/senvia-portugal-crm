@@ -315,15 +315,19 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const authHeader = req.headers.get("authorization");
+    // Reuses `bearer` (parsed once, above) instead of re-reading the header —
+    // a second `const authHeader` here was a duplicate declaration in the same
+    // scope, a SyntaxError that kept this ENTIRE function from booting
+    // (BOOT_ERROR/503 on every single call) since 2026-07-05. Behaviour is
+    // unchanged: for an internal service-role caller `bearer` doesn't resolve
+    // to a user, so userId/senderSignature stay null exactly as before.
     let userId: string | null = null;
     let senderSignature: string | null = null;
     let senderEmailOverride: string | null = null;
     let senderNameOverride: string | null = null;
 
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
+    if (bearer) {
+      const { data: { user } } = await supabase.auth.getUser(bearer);
       userId = user?.id || null;
 
       if (userId) {
