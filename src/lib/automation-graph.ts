@@ -237,7 +237,10 @@ export function removeNode(graph: AutomationGraph, nodeId: string): AutomationGr
 
 /**
  * Drops edges whose branch key no longer exists on the source node. Called
- * after editing `wait_reply` rules so deleting a rule also unhooks its branch.
+ * after every config edit, so deleting a reply rule unhooks its branch — and
+ * turning "Aguardar resposta" off on a `send_whatsapp` (or emptying its rules)
+ * unhooks all of them, since `getNodeBranches` then reports none. The nodes
+ * downstream survive as unreachable roots the user can see and reconnect.
  */
 export function pruneOrphanBranches(graph: AutomationGraph): AutomationGraph {
   return {
@@ -247,7 +250,7 @@ export function pruneOrphanBranches(graph: AutomationGraph): AutomationGraph {
       const source = findNode(graph, edge.source);
       if (!source) return false;
       const branches = getNodeBranches(source);
-      // Non-branching sources shouldn't carry branch keys at all.
+      // Sources that aren't branching right now shouldn't carry branch keys.
       if (!branches.length) return false;
       return branches.some((branch) => branch.key === edge.branch);
     }),
@@ -505,6 +508,11 @@ export function validateGraph(graph: AutomationGraph, entryNodeId: string | null
         // The engine sends media-only messages happily; only an empty node fails.
         if (!node.config?.message?.trim() && !node.config?.media?.url && !node.config?.media_url) {
           issues.push({ nodeId: node.id, message: 'Mensagem de WhatsApp por preencher.' });
+        }
+        // Waiting with no rules never branches — the engine would send the
+        // message and walk straight on, silently ignoring the wait.
+        if (node.config?.wait_reply && !node.config?.rules?.length) {
+          issues.push({ nodeId: node.id, message: 'Defina pelo menos uma opção de resposta.' });
         }
         break;
       case 'send_email':

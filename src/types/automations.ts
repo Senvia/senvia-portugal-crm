@@ -79,7 +79,11 @@ export type AutomationNodeCategory =
 
 export type AutomationWaitUnit = 'minutes' | 'hours' | 'days';
 
-/** One outgoing branch of a `wait_reply` node, matched by keyword. */
+/**
+ * One outgoing branch of a node that waits for a reply — either a
+ * `send_whatsapp` with `wait_reply` on, or the standalone `wait_reply` node.
+ * `label` is the button text (max 20 chars) and the branch label on the canvas.
+ */
 export interface WaitReplyRule {
   id: string;
   label: string;
@@ -126,6 +130,12 @@ export interface AutomationNodeConfig {
   /** Uploaded attachment. `media_url` is the legacy URL-only field. */
   media?: AutomationMediaAttachment;
   media_url?: string;
+  /**
+   * send_whatsapp only: after sending, park the run and branch on the answer.
+   * Needs a non-empty `rules` — it shares use_buttons/rules/timeout_* with the
+   * standalone `wait_reply` node below.
+   */
+  wait_reply?: boolean;
   // send_email
   template_id?: string;
   subject?: string;
@@ -134,7 +144,9 @@ export interface AutomationNodeConfig {
   duration?: number;
   amount?: number;
   unit?: AutomationWaitUnit;
-  // wait_reply — engine contract: question/use_buttons/timeout_amount/timeout_unit/rules
+  // wait_reply (and send_whatsapp with `wait_reply` on) — engine contract:
+  // question/use_buttons/timeout_amount/timeout_unit/rules. `question` is only
+  // read by the standalone node; send_whatsapp asks with `message`.
   question?: string;
   use_buttons?: boolean;
   timeout_amount?: number;
@@ -192,7 +204,8 @@ export interface AutomationGraphEdge {
   target: string;
   /**
    * `null` for a plain edge. For branching nodes it is the branch key:
-   * `condition` → "yes" | "no"; `wait_reply` → a rule id, or "timeout".
+   * `condition` → "yes" | "no"; `wait_reply` (and a `send_whatsapp` that waits
+   * for the reply) → a rule id, or "timeout".
    */
   branch: string | null;
 }

@@ -102,7 +102,11 @@ export interface NodeDefinition {
   icon: LucideIcon;
   category: AutomationNodeCategory;
   isTrigger: boolean;
-  /** Branching nodes resolve their branches from config at runtime. */
+  /**
+   * Branching nodes resolve their branches from config at runtime — for some
+   * (send_whatsapp) that means no branches at all until the user turns the
+   * wait on. `getNodeBranches` is the authority; this flag is documentation.
+   */
   branching: boolean;
   defaultConfig: AutomationNodeConfig;
 }
@@ -360,11 +364,14 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
   send_whatsapp: {
     type: 'send_whatsapp',
     label: 'Enviar WhatsApp',
-    description: 'Envia uma mensagem de WhatsApp ao contacto',
+    description: 'Envia uma mensagem e, se quiser, espera a resposta com botões',
     icon: MessageCircle,
     category: 'whatsapp',
     isTrigger: false,
-    branching: false,
+    // Only branches once `wait_reply` is turned on and rules exist — a plain
+    // message stays linear. See `getNodeBranches`.
+    branching: true,
+    // A plain message is the default: waiting is opt-in in the inspector.
     defaultConfig: { message: '' },
   },
   send_email: {
@@ -387,10 +394,13 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
     branching: false,
     defaultConfig: { duration: 1, unit: 'hours' },
   },
+  // The everyday case (pergunta + espera) now lives inside `send_whatsapp`.
+  // This node stays for flows that already use it and for the rarer case of
+  // waiting on a question asked somewhere else.
   wait_reply: {
     type: 'wait_reply',
     label: 'Esperar resposta',
-    description: 'Faz uma pergunta (com botões, se quiser) e ramifica pela resposta',
+    description: 'Espera a resposta do contacto sem enviar nada (a pergunta já foi feita antes)',
     icon: MessagesSquare,
     category: 'logic',
     isTrigger: false,
@@ -530,6 +540,25 @@ export interface NodeBranch {
   label: string;
 }
 
+/** One branch per reply rule, plus the timeout path. */
+function replyBranches(node: AutomationGraphNode): NodeBranch[] {
+  const rules = node.config?.rules ?? [];
+  return [
+    ...rules.map((rule, index) => ({
+      key: rule.id,
+      label: rule.label?.trim() || `Regra ${index + 1}`,
+    })),
+    { key: 'timeout', label: 'Sem resposta' },
+  ];
+}
+
+/** True when this WhatsApp message parks the run and branches on the answer. */
+export function isWaitingWhatsapp(node: AutomationGraphNode | undefined): boolean {
+  return node?.type === 'send_whatsapp'
+    && node.config?.wait_reply === true
+    && !!node.config?.rules?.length;
+}
+
 export function getNodeBranches(node: AutomationGraphNode | undefined): NodeBranch[] {
   if (!node) return [];
 
@@ -540,16 +569,11 @@ export function getNodeBranches(node: AutomationGraphNode | undefined): NodeBran
     ];
   }
 
-  if (node.type === 'wait_reply') {
-    const rules = node.config?.rules ?? [];
-    return [
-      ...rules.map((rule, index) => ({
-        key: rule.id,
-        label: rule.label?.trim() || `Regra ${index + 1}`,
-      })),
-      { key: 'timeout', label: 'Sem resposta' },
-    ];
-  }
+  if (node.type === 'wait_reply') return replyBranches(node);
+
+  // A WhatsApp message that waits for the reply branches exactly like the
+  // standalone wait node; a plain message stays linear.
+  if (isWaitingWhatsapp(node)) return replyBranches(node);
 
   return [];
 }
@@ -637,9 +661,12 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
 
   switch (node.type) {
     case 'send_whatsapp': {
-      if (config.message) return truncate(String(config.message));
+      // The wait is part of this node now, so the canvas has to say so.
+      const suffix = isWaitingWhatsapp(node) ? ' · espera resposta' : '';
+      if (config.message) return `${truncate(String(config.message), 46 - suffix.length)}${suffix}`;
       const attachment = config.media?.filename ?? config.media_url;
-      return attachment ? truncate(`Anexo: ${attachment}`) : 'Sem mensagem definida';
+      if (attachment) return `${truncate(`Anexo: ${attachment}`, 46 - suffix.length)}${suffix}`;
+      return `Sem mensagem definida${suffix}`;
     }
 
     case 'send_email':

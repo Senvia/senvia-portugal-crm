@@ -448,17 +448,69 @@ class Engine {
         const mediaUrl = media?.url ?? (cfg.media_url ? String(cfg.media_url) : null);
         if (!text.trim() && !mediaUrl) return { kind: "fail", error: "Mensagem vazia" };
 
-        const sendErr = await this.sendWhatsappText(run, text, mediaUrl ? {
-          url: mediaUrl,
-          mimetype: media?.mimetype,
-          filename: media?.filename,
-          kind: media?.kind,
-        } : null);
-        if (sendErr) return { kind: "fail", error: sendErr };
+        // A mensagem pode esperar a resposta ela própria: é o modelo pedido —
+        // enviar com botões e ramificar pelo que a pessoa toca, sem um segundo
+        // nó de espera. rules vazio = mensagem simples que segue em frente.
+        const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
+        const waitsForReply = !!cfg.wait_reply && rules.length > 0;
+        let buttonsSent = false;
 
+        if (waitsForReply && cfg.use_buttons !== false) {
+          const instance = await this.whatsappInstance(run.organization_id);
+          if (!instance) return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
+          try {
+            const res = await evolutionFetch(getConfig(), `/message/sendButtons/${instance}`, "POST", {
+              number: normalizePhone(run.contact_phone),
+              title: "",
+              description: text,
+              footer: "",
+              buttons: rules.map((r) => ({
+                type: "reply",
+                displayText: (r.label ?? r.keywords?.[0] ?? "Opção").slice(0, 20),
+                id: r.id,
+              })),
+            });
+            buttonsSent = res.ok;
+            if (!res.ok) log("sendButtons falhou — a degradar para texto", { status: res.status });
+          } catch (e) {
+            log("sendButtons indisponível — a degradar para texto", { error: (e as Error).message });
+          }
+        }
+
+        if (!buttonsSent) {
+          // Sem botões (ou porque falharam): as opções vão como texto numerado
+          // e responder "1"/"2" também escolhe o ramo.
+          const options = waitsForReply
+            ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
+            : "";
+          const sendErr = await this.sendWhatsappText(run, `${text}${options}`, mediaUrl ? {
+            url: mediaUrl,
+            mimetype: media?.mimetype,
+            filename: media?.filename,
+            kind: media?.kind,
+          } : null);
+          if (sendErr) return { kind: "fail", error: sendErr };
+        }
+
+        const sentDetail = {
+          canal: "whatsapp",
+          para: run.contact_phone,
+          texto: text.slice(0, 300),
+          ...(mediaUrl ? { anexo: media?.filename ?? mediaUrl } : {}),
+          ...(waitsForReply ? { botoes: buttonsSent, opcoes: rules.length } : {}),
+        };
+
+        if (!waitsForReply) return { kind: "next", detail: sentDetail };
+
+        if (!run.contact_phone_key) {
+          return { kind: "fail", error: "Contacto sem telefone válido — não é possível esperar resposta" };
+        }
+        const replyWake = new Date(
+          Date.now() + durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" }),
+        );
         return {
-          kind: "next",
-          detail: { canal: "whatsapp", para: run.contact_phone, texto: text.slice(0, 300), ...(mediaUrl ? { anexo: media?.filename ?? mediaUrl } : {}) },
+          kind: "park", status: "awaiting_reply", wakeAt: replyWake,
+          detail: { ...sentDetail, espera_resposta_ate: replyWake.toISOString() },
         };
       }
 
@@ -614,6 +666,38 @@ class Engine {
 // Handlers
 // ---------------------------------------------------------------------------
 
+/**
+ * Fecha o passo de um nó que estava à espera.
+ *
+ * O passo já foi registado com status `waiting` quando o percurso parou, e o
+ * índice único (run_id, node_id) impede um segundo registo — por isso o
+ * desfecho (que ramo, que resposta) tem de ATUALIZAR a linha existente. Antes
+ * disto o insert falhava em silêncio e a resposta do contacto desaparecia do
+ * histórico, embora o percurso seguisse pelo ramo certo.
+ */
+// deno-lint-ignore no-explicit-any
+async function settleWaitingStep(
+  db: any, run: Run, node: FlowNode, detail: Record<string, unknown>,
+) {
+  const { data: updated, error } = await db
+    .from("automation_run_steps")
+    .update({ status: "ok", detail })
+    .eq("run_id", run.id)
+    .eq("node_id", node.id)
+    .eq("status", "waiting")
+    .select("id");
+
+  if (error) logError("falha a fechar passo de espera", { run: run.id, node: node.id, error: error.message });
+  if (!error && (!updated || updated.length === 0)) {
+    // Sem linha em espera (percurso antigo, ou retomado por outra via): grava.
+    const { error: insErr } = await db.from("automation_run_steps").insert({
+      run_id: run.id, organization_id: run.organization_id,
+      node_id: node.id, node_type: node.type, status: "ok", detail,
+    });
+    if (insErr) logError("falha a registar desfecho da espera", { run: run.id, node: node.id, error: insErr.message });
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function loadFlow(db: any, flowId: string): Promise<Flow | null> {
   const { data } = await db.from("automation_flows").select("*").eq("id", flowId).maybeSingle();
@@ -734,10 +818,8 @@ async function handleTick(db: any) {
     try {
       if (wasAwaitingReply && node) {
         // Esgotou o tempo de espera: segue pelo ramo "timeout".
-        await db.from("automation_run_steps").insert({
-          run_id: run.id, organization_id: run.organization_id,
-          node_id: node.id, node_type: node.type, status: "ok",
-          detail: { ramo: "timeout", motivo: "sem resposta dentro do prazo" },
+        await settleWaitingStep(db, run, node, {
+          ramo: "timeout", motivo: "sem resposta dentro do prazo",
         });
         const next = nextNodeId(flow.graph, node.id, "timeout");
         if (!next) { await db.from("automation_runs").update({ status: "completed", completed_at: new Date().toISOString(), current_node_id: null, wake_at: null }).eq("id", run.id); woken++; continue; }
@@ -931,10 +1013,10 @@ async function handleReply(db: any, body: Record<string, unknown>) {
     );
     const branch = matched?.id ?? "fallback";
 
-    await db.from("automation_run_steps").insert({
-      run_id: run.id, organization_id: run.organization_id,
-      node_id: node.id, node_type: node.type, status: "ok",
-      detail: { ramo: branch, resposta: text.slice(0, 300), regra: matched?.label ?? "nenhuma correspondência" },
+    await settleWaitingStep(db, run, node, {
+      ramo: branch,
+      resposta: text.slice(0, 300),
+      regra: matched?.label ?? "nenhuma correspondência",
     });
 
     const context = { ...run.context, ultima_resposta: text };

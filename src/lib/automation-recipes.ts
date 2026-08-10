@@ -61,22 +61,23 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
     trigger_type: 'lead_created',
     entry_node_id: 'trigger',
     conversational: true,
-    outline: ['Novo lead', 'Pergunta com botões', '2 caminhos'],
+    outline: ['Novo lead', 'WhatsApp com botões', '3 caminhos'],
     graph: {
       nodes: [
         { id: 'trigger', type: 'lead_created', config: {}, position: { x: 0, y: 0 } },
         {
-          // The question lives IN the wait_reply node: the engine sends it
-          // (as interactive buttons) when the run reaches this step.
-          id: 'wait', type: 'wait_reply',
+          // A single node does the asking AND the waiting: the message goes out
+          // with interactive buttons and the run parks until the lead answers.
+          id: 'ask', type: 'send_whatsapp',
           config: {
-            question: 'Olá {{nome}}! Para o ajudar melhor: procura uma solução para já ou está só a comparar?',
+            message: 'Olá {{nome}}! Para o ajudar melhor: procura uma solução para já ou está só a comparar?',
+            wait_reply: true,
             use_buttons: true,
-            timeout_amount: 24, timeout_unit: 'hours',
             rules: [
-              { id: 'quente', keywords: ['agora', 'urgente', 'já', 'ja'], label: 'Quero já' },
-              { id: 'frio', keywords: ['comparar', 'ver', 'depois', 'talvez'], label: 'Estou a comparar' },
+              { id: 'quente', label: 'Quero já', keywords: ['agora', 'urgente', 'já', 'ja'] },
+              { id: 'frio', label: 'Só a comparar', keywords: ['comparar', 'ver', 'depois', 'talvez'] },
             ],
+            timeout_amount: 24, timeout_unit: 'hours',
           },
           position: { x: 0, y: 0 },
         },
@@ -93,10 +94,10 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger', target: 'wait', branch: null },
-        { id: 'e3', source: 'wait', target: 'hot', branch: 'quente' },
-        { id: 'e4', source: 'wait', target: 'warm', branch: 'frio' },
-        { id: 'e5', source: 'wait', target: 'silent', branch: 'timeout' },
+        { id: 'e1', source: 'trigger', target: 'ask', branch: null },
+        { id: 'e2', source: 'ask', target: 'hot', branch: 'quente' },
+        { id: 'e3', source: 'ask', target: 'warm', branch: 'frio' },
+        { id: 'e4', source: 'ask', target: 'silent', branch: 'timeout' },
       ],
     },
   },
@@ -147,7 +148,7 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
     trigger_config: { keywords: ['PROMO'] },
     entry_node_id: 'trigger',
     conversational: true,
-    outline: ['Palavra-chave', 'Oferta', 'Pergunta com botões'],
+    outline: ['Palavra-chave', 'Oferta com botão', 'Tarefa ou fim'],
     graph: {
       nodes: [
         {
@@ -155,19 +156,15 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
           config: { keywords: ['PROMO'] }, position: { x: 0, y: 0 },
         },
         {
+          // Oferta e pergunta na mesma mensagem — sai com botão e o fluxo fica
+          // à espera da resposta neste mesmo passo.
           id: 'offer', type: 'send_whatsapp',
-          config: { message: 'Boa! Aqui está a sua oferta, {{nome}}.' },
-          position: { x: 0, y: 0 },
-        },
-        {
-          // The follow-up question lives in the wait_reply node, sent with
-          // interactive buttons.
-          id: 'wait', type: 'wait_reply',
           config: {
-            question: 'Quer que lhe ligue para explicar os detalhes?',
+            message: 'Boa! Aqui está a sua oferta. Quer que lhe ligue para explicar?',
+            wait_reply: true,
             use_buttons: true,
+            rules: [{ id: 'sim', label: 'Sim, ligue', keywords: ['sim', 'quero', 'ligue'] }],
             timeout_amount: 48, timeout_unit: 'hours',
-            rules: [{ id: 'sim', keywords: ['sim', 'quero', 'ligue'], label: 'Sim, quero' }],
           },
           position: { x: 0, y: 0 },
         },
@@ -176,9 +173,8 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
       ],
       edges: [
         { id: 'e1', source: 'trigger', target: 'offer', branch: null },
-        { id: 'e2', source: 'offer', target: 'wait', branch: null },
-        { id: 'e3', source: 'wait', target: 'task', branch: 'sim' },
-        { id: 'e4', source: 'wait', target: 'done', branch: 'timeout' },
+        { id: 'e2', source: 'offer', target: 'task', branch: 'sim' },
+        { id: 'e3', source: 'offer', target: 'done', branch: 'timeout' },
       ],
     },
   },

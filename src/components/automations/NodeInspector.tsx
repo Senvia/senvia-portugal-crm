@@ -109,7 +109,6 @@ function NodeConfigForm({ node, config, set }: FormProps) {
   const { data: members } = useTeamMembers();
 
   // Refs for the variable chips — they insert at the field's caret position.
-  const whatsappMessageRef = useRef<HTMLTextAreaElement>(null);
   const emailSubjectRef = useRef<HTMLInputElement>(null);
   const emailHtmlRef = useRef<HTMLTextAreaElement>(null);
   const taskTitleRef = useRef<HTMLInputElement>(null);
@@ -213,27 +212,7 @@ function NodeConfigForm({ node, config, set }: FormProps) {
 
     // ── Actions ──
     case 'send_whatsapp':
-      return (
-        <>
-          <Field label="Mensagem">
-            <Textarea
-              ref={whatsappMessageRef}
-              value={config.message ?? ''}
-              onChange={(e) => set({ message: e.target.value })}
-              placeholder="Olá {{nome}}, obrigado pelo seu contacto!"
-              rows={6}
-            />
-            <VariableChips
-              targetRef={whatsappMessageRef}
-              value={config.message ?? ''}
-              onChange={(message) => set({ message })}
-            />
-          </Field>
-          <Field label="Anexo (opcional)">
-            <WhatsappMediaField config={config} set={set} />
-          </Field>
-        </>
-      );
+      return <WhatsappForm config={config} set={set} />;
 
     case 'send_email':
       return (
@@ -500,6 +479,88 @@ function WebhookForm({ config, set }: { config: AutomationNodeConfig; set: FormP
   );
 }
 
+// ── send_whatsapp ───────────────────────────────────────────────────────────
+
+/**
+ * One node carries the whole conversation: the message goes out and, when the
+ * wait is on, the run parks until the contact answers — then takes the branch
+ * matching what they said (button, keyword or option number). Splitting that
+ * across two nodes is what people kept getting wrong, so it lives here.
+ */
+function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: FormProps['set'] }) {
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const waitsForReply = config.wait_reply === true;
+
+  const toggleWait = (checked: boolean) => {
+    if (!checked) {
+      // Everything the wait owns goes with it — a leftover `rules` array would
+      // keep phantom branches alive in the saved graph. The now-orphaned branch
+      // edges are pruned by the editor in the same pass.
+      set({
+        wait_reply: undefined,
+        use_buttons: undefined,
+        rules: undefined,
+        timeout_amount: undefined,
+        timeout_unit: undefined,
+        timeout: undefined,
+      });
+      return;
+    }
+    set({
+      wait_reply: true,
+      use_buttons: config.use_buttons ?? true,
+      timeout_amount: config.timeout_amount ?? config.timeout?.value ?? 24,
+      timeout_unit: config.timeout_unit ?? config.timeout?.unit ?? 'hours',
+      timeout: undefined,
+      // Seed one option so the node branches — and validates — straight away.
+      rules: config.rules?.length
+        ? config.rules
+        : [{ id: createId('r'), label: 'Opção 1', keywords: [] }],
+    });
+  };
+
+  return (
+    <>
+      <Field label="Mensagem">
+        <Textarea
+          ref={messageRef}
+          value={config.message ?? ''}
+          onChange={(e) => set({ message: e.target.value })}
+          placeholder="Olá {{nome}}, obrigado pelo seu contacto!"
+          rows={6}
+        />
+        <VariableChips
+          targetRef={messageRef}
+          value={config.message ?? ''}
+          onChange={(message) => set({ message })}
+        />
+      </Field>
+
+      <Field label="Anexo (opcional)">
+        <WhatsappMediaField config={config} set={set} />
+      </Field>
+
+      <div className="space-y-1.5 rounded-lg border border-border bg-background p-3">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="whatsapp-wait-reply" className="text-sm font-medium">
+            Aguardar resposta
+          </Label>
+          <Switch
+            id="whatsapp-wait-reply"
+            checked={waitsForReply}
+            onCheckedChange={toggleWait}
+          />
+        </div>
+        <Helper>
+          O contacto responde e o fluxo segue por caminhos diferentes conforme a resposta.
+        </Helper>
+      </div>
+
+      {waitsForReply && <ReplyRulesEditor config={config} set={set} buttonsDefault />}
+    </>
+  );
+}
+
 // ── send_whatsapp: media upload ─────────────────────────────────────────────
 
 const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
@@ -647,11 +708,63 @@ function WhatsappMediaField({ config, set }: { config: AutomationNodeConfig; set
   );
 }
 
-// ── wait_reply: the conversational node ─────────────────────────────────────
+// ── Waiting for the reply ───────────────────────────────────────────────────
 
+/**
+ * The standalone wait. Since `send_whatsapp` can now ask and wait by itself,
+ * this node is for the leftover case: the question went out somewhere else
+ * (an earlier step, a person, another tool) and the flow only needs to listen.
+ */
 function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: FormProps['set'] }) {
   const questionRef = useRef<HTMLTextAreaElement>(null);
+
+  return (
+    <>
+      <Hint>
+        Este passo não envia mensagem nenhuma por si só. Para perguntar <em>e</em> esperar, use um
+        passo «Enviar WhatsApp» com «Aguardar resposta» ligado.
+      </Hint>
+
+      <Field label="Pergunta (opcional)">
+        <Textarea
+          ref={questionRef}
+          value={config.question ?? ''}
+          onChange={(e) => set({ question: e.target.value })}
+          placeholder="Ex.: Quer que lhe ligue para explicar?"
+          rows={4}
+        />
+        <VariableChips
+          targetRef={questionRef}
+          value={config.question ?? ''}
+          onChange={(question) => set({ question })}
+        />
+        <Helper>
+          Se preencher, é enviada quando o fluxo chega aqui. Deixe vazio se a pergunta já foi feita
+          num passo anterior.
+        </Helper>
+      </Field>
+
+      {/* This node's engine branch treats a missing `use_buttons` as "no buttons". */}
+      <ReplyRulesEditor config={config} set={set} buttonsDefault={false} />
+    </>
+  );
+}
+
+/**
+ * Buttons, branches and timeout — the part shared by the standalone
+ * `wait_reply` node and by a `send_whatsapp` that waits for the answer. Both
+ * write the same engine keys: use_buttons / rules / timeout_amount+unit.
+ */
+function ReplyRulesEditor({
+  config, set, buttonsDefault,
+}: {
+  config: AutomationNodeConfig;
+  set: FormProps['set'];
+  /** What the engine assumes when `use_buttons` is absent — it differs per node. */
+  buttonsDefault: boolean;
+}) {
   const rules = config.rules ?? [];
+  const useButtons = config.use_buttons ?? buttonsDefault;
   // Engine contract: timeout_amount / timeout_unit. The nested `timeout`
   // object is a legacy shape older editors saved — read it as a fallback and
   // clear it on the first write.
@@ -685,33 +798,14 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
 
   return (
     <>
-      <Field label="Pergunta">
-        <Textarea
-          ref={questionRef}
-          value={config.question ?? ''}
-          onChange={(e) => set({ question: e.target.value })}
-          placeholder="Ex.: Quer que lhe ligue para explicar?"
-          rows={4}
-        />
-        <VariableChips
-          targetRef={questionRef}
-          value={config.question ?? ''}
-          onChange={(question) => set({ question })}
-        />
-        <Helper>
-          Enviada quando o fluxo chega a este passo. Deixa vazio se a pergunta já foi feita num
-          passo anterior.
-        </Helper>
-      </Field>
-
       <div className="space-y-1.5 rounded-lg border border-border bg-background p-3">
         <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="wait-reply-buttons" className="text-sm font-medium">
+          <Label htmlFor="reply-use-buttons" className="text-sm font-medium">
             Enviar como botões
           </Label>
           <Switch
-            id="wait-reply-buttons"
-            checked={!!config.use_buttons}
+            id="reply-use-buttons"
+            checked={useButtons}
             onCheckedChange={(checked) => set({ use_buttons: checked })}
           />
         </div>
