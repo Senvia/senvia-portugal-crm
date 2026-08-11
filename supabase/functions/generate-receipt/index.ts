@@ -374,9 +374,13 @@ Deno.serve(async (req) => {
         console.warn('KeyInvoice receipt PDF failed (non-blocking):', e)
       }
 
-      // Insert receipt record into invoices table
-      const clientData = sale.client as any
-      const clientName = clientData?.company || clientData?.name || 'Cliente'
+      // Insert receipt record into invoices table.
+      // `clientData`/`clientName` já foram declarados no topo deste mesmo bloco
+      // (ver acima, junto ao payload do KeyInvoice) e são reutilizados aqui.
+      // Redeclará-los era um SyntaxError no mesmo scope, e isso impedia a função
+      // INTEIRA de arrancar — BOOT_ERROR/503 em todas as chamadas desde
+      // 05/06/2026, ou seja, nenhum recibo foi emitido durante mais de dois
+      // meses. O cálculo é idêntico, por isso o comportamento não muda.
       const today = new Date().toISOString().split('T')[0]
 
       const { data: receiptInvoiceRecord, error: insertError } = await supabase

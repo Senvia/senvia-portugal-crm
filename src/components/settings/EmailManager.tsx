@@ -10,7 +10,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
 import {
   useEmailChannels, useCreateEmailChannel, useUpdateEmailChannel, useDeleteEmailChannel,
   type EmailChannel, type EmailChannelInput, type EmailChannelUpdate,
