@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo, lazy, Suspense } from "react";
-import { useWhatsappChannel, useMessagingChannels, MessagingChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, MessagingChannel } from "@/hooks/useMessagingChannels";
 import {
   useInboxConversations,
   useInboxMessages,
@@ -77,7 +77,6 @@ const EditClientModal = lazy(() => import("@/components/clients/EditClientModal"
 const AddLeadModal = lazy(() => import("@/components/leads/AddLeadModal").then(m => ({ default: m.AddLeadModal })));
 const LeadDetailsModal = lazy(() => import("@/components/leads/LeadDetailsModal").then(m => ({ default: m.LeadDetailsModal })));
 // Lazy: only needed the rare times the WhatsApp session needs (re)connecting.
-const ConnectWhatsAppModal = lazy(() => import("@/components/settings/ConnectWhatsAppModal").then(m => ({ default: m.ConnectWhatsAppModal })));
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -735,8 +734,6 @@ const MEM_DEBUG = import.meta.env.DEV
   || (typeof window !== "undefined" && (() => { try { return window.localStorage.getItem("inbox-debug") === "1"; } catch { return false; } })());
 
 export default function Inbox() {
-  const { channel } = useWhatsappChannel();
-  const connected = channel?.status === "connected";
   const { data: channels = [] } = useMessagingChannels();
   // Caixas that map to a known Chatwoot inbox (so we can filter conversations by them).
   const channelByInbox = useMemo(() => {
@@ -761,7 +758,6 @@ export default function Inbox() {
     ),
     [channelByInbox, isAdmin, user?.id],
   );
-  const [connectOpen, setConnectOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ListTab>("all");
@@ -933,7 +929,7 @@ export default function Inbox() {
   // ligado entrava e encontrava uma lista de conversas vazia, sem perceber
   // porquê — em vez do ecrã que a convida a ligar o email.
   const channelConfigured = MESSAGING_CHANNELS_ENABLED
-    ? (channels.some((c) => c.status === "connected") || !!channel)
+    ? channels.some((c) => c.status === "connected")
     : channels.some((c) => c.channel_type === "email" && c.status === "connected");
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
@@ -3170,21 +3166,6 @@ export default function Inbox() {
       // fixed overlay sized to the visual viewport.)
       isMobile ? "h-[calc(100dvh-3.5rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px))]" : "h-dvh",
     )}>
-      {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
-      {!connected && (
-        <div className="flex items-center gap-2 border-b bg-red-500/10 px-4 py-2 text-sm text-red-700">
-          <WifiOff className="h-4 w-4 shrink-0" />
-          <span className="flex-1">
-            O WhatsApp está desconectado — os envios vão falhar até reconectares.
-          </span>
-          <Button size="sm" variant="destructive" onClick={() => setConnectOpen(true)}>
-            Reconectar
-          </Button>
-          <Suspense fallback={null}>
-            <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
-          </Suspense>
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <InboxCaixaRail
         caixas={visibleCaixas}

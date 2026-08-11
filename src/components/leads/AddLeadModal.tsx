@@ -130,21 +130,12 @@ export function AddLeadModal({ open, onOpenChange, initialData, onCreated }: Add
   const isP2G = isPerfect2GetherOrg(organization?.id);
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
-  const hasActiveWhatsappAutomation = useMemo(() => {
-    const integrationsEnabled = organization?.integrations_enabled as Record<string, boolean> | null | undefined;
-
-    return (
-      integrationsEnabled?.whatsapp !== false &&
-      Boolean(organization?.whatsapp_base_url?.trim()) &&
-      Boolean(organization?.whatsapp_instance?.trim()) &&
-      Boolean(organization?.whatsapp_api_key?.trim())
-    );
-  }, [
-    organization?.integrations_enabled,
-    organization?.whatsapp_base_url,
-    organization?.whatsapp_instance,
-    organization?.whatsapp_api_key,
-  ]);
+  // Isto lia a configuração de WhatsApp da organização para decidir se mostrava
+  // o interruptor de automação da lead. Deixou de haver envio por WhatsApp, por
+  // isso é sempre falso: o interruptor não aparece e a lead entra sem automação
+  // de WhatsApp associada. (Também eliminava seis erros de tipo que estavam
+  // escondidos — as colunas whatsapp_* nem sequer constam do tipo Organization.)
+  const hasActiveWhatsappAutomation = false;
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),

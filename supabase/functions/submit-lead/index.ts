@@ -153,93 +153,29 @@ async function dispatchLeadTemperature(
     console.error('[automation] lead temperature dispatch failed:', (e as Error).message);
   }
 }
-
-// Proactive first-contact WhatsApp (replaces the retired n8n flow). Picks the
-// form's temperature template, renders it, and sends via the org's CONNECTED
-// Evolution instance — which mirrors the message into the Chatwoot inbox thread.
-// Background-only; never blocks or fails the lead submission.
+// Classifica a temperatura da lead e avisa o motor de automações.
 //
-// Also classifies the lead's temperature and dispatches it to the automation
-// engine — done HERE, first, before any of the legacy-send gates below, so
-// classification/dispatch never depends on the old WhatsApp welcome being
-// configured (see dispatchLeadTemperature).
+// Isto ENVIAVA também uma mensagem de boas-vindas por WhatsApp, com os
+// templates por temperatura da página de Configuração de IA. Esse envio foi
+// removido com o resto da integração da Evolution: o WhatsApp por ligação
+// não-oficial viola os Termos da Meta e arrisca o ban do número.
+//
+// Consequência assumida: uma lead que entra pelo formulário deixa de receber
+// qualquer mensagem automática de WhatsApp. A classificação FICA — continua a
+// carimbar leads.temperature e a disparar os gatilhos lead_created_hot/warm/
+// cold, que é por onde uma automação de email pode responder.
 function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: any): void {
   runInBackground((async () => {
     try {
-      // Two mutually-exclusive modes (org.ai_response_mode, default 'global'):
-      //   'global'   -> one org-level config applies to every form
-      //   'per_form' -> each form supplies its own rules + templates, no fallback
       const mode = org?.ai_response_mode === 'per_form' ? 'per_form' : 'global';
       const src = mode === 'per_form' ? formSettings : org;
       const aiRules = src?.ai_qualification_rules || null;
 
       const temp = await classifyTemperature(aiRules, lead);
-      // Best-effort: stamp the classified temperature on the lead.
       supabase.from('leads').update({ temperature: temp }).eq('id', lead.id).then(() => {}, () => {});
       await dispatchLeadTemperature(supabase, org.id, lead, temp);
-
-      // ---- everything below is the LEGACY per-form/org WhatsApp welcome ----
-      const tplHot = src?.msg_template_hot || null;
-      const tplWarm = src?.msg_template_warm || null;
-      const tplCold = src?.msg_template_cold || null;
-      if (!tplHot && !tplWarm && !tplCold) return; // no templates for the active mode
-
-      const digits = String(lead.phone || '').replace(/\D/g, '');
-      if (!digits || digits === '000000000' || digits.length < 9) return; // no real phone
-
-      // Only send through a connected WhatsApp channel (the new Chatwoot/Evolution
-      // instance), so the welcome lands in the inbox.
-      // Pick a connected WhatsApp channel. Orgs can have several (the multi-account
-      // migration dropped the 1-per-type constraint), so .maybeSingle() would throw
-      // on 2+ rows — select the connected ones and take the oldest deterministically.
-      const { data: channels, error: channelErr } = await supabase
-        .from('messaging_channels')
-        .select('evolution_instance, status')
-        .eq('organization_id', org.id)
-        .eq('channel_type', 'whatsapp')
-        .eq('status', 'connected')
-        .order('created_at', { ascending: true })
-        .limit(1);
-      if (channelErr) console.error('[welcome] channel lookup failed:', channelErr.message);
-      const channel = channels?.[0];
-      if (!channel?.evolution_instance) {
-        console.log('[welcome] skip — WhatsApp channel not connected for org', org.id);
-        return;
-      }
-
-      const byTemp: Record<string, string | null> = { hot: tplHot, warm: tplWarm, cold: tplCold };
-      const tpl = byTemp[temp] || tplWarm || tplHot || tplCold;
-      if (!tpl) return;
-
-      // Resolve the assignee's name only if the template references {{responsavel}}.
-      let assigneeName = '';
-      if (/\{\{\s*responsavel\s*\}\}/i.test(tpl) && lead.assigned_to) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', lead.assigned_to)
-          .maybeSingle();
-        assigneeName = prof?.full_name || '';
-      }
-
-      const text = renderTemplate(tpl, lead, { orgName: org?.name, assigneeName });
-      if (!text) return;
-
-      const evoUrl = (Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '');
-      const evoKey = Deno.env.get('EVOLUTION_API_KEY') || '';
-      // E.164 numbers (stored with a leading +) already carry their country code;
-      // legacy national numbers (9 digits, no +) are PT, so prepend 351.
-      const isIntl = String(lead.phone || '').trim().startsWith('+');
-      const number = isIntl ? digits : (digits.startsWith('351') ? digits : `351${digits}`);
-      const res = await fetch(`${evoUrl}/message/sendText/${channel.evolution_instance}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: evoKey },
-        body: JSON.stringify({ number, text }),
-      });
-      if (!res.ok) console.error('[welcome] Evolution send failed:', res.status, (await res.text()).slice(0, 200));
-      else console.log('[welcome] sent', temp, 'template to', number, 'for lead', lead.id);
     } catch (e) {
-      console.error('[welcome] failed:', (e as Error).message);
+      console.error('[welcome] classificação falhou:', (e as Error).message);
     }
   })());
 }

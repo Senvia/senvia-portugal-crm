@@ -19,10 +19,9 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups, useAutoRepairWiring, useInstagramConnect } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
-import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
 import { AssignmentSelector, deriveAssignmentMode, assignmentToFields, type AssignmentMode } from "./AssignmentSelector";
@@ -798,7 +797,7 @@ const CHANNEL_STATUS_LABEL: Record<string, string> = {
 // Edit modal for a single caixa (replaces the old inline expand panel).
 function EditCaixaModal({
   ch, members, open, onOpenChange,
-  updateAssign, updateGroups, logoutChannel,
+  updateAssign, updateGroups,
   onReconnect, onDisconnect,
 }: {
   ch: ReturnType<typeof useMessagingChannels>['data'] extends (infer T)[] ? T : never;
@@ -807,7 +806,6 @@ function EditCaixaModal({
   onOpenChange: (o: boolean) => void;
   updateAssign: ReturnType<typeof useUpdateChannelAssignment>;
   updateGroups: ReturnType<typeof useUpdateChannelGroups>;
-  logoutChannel: ReturnType<typeof useLogoutChannel>;
   onReconnect: () => void;
   onDisconnect: () => void;
 }) {
@@ -896,7 +894,7 @@ function EditCaixaModal({
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ligação</Label>
               {connected ? (
-                <Button variant="outline" size="sm" onClick={onDisconnect} disabled={logoutChannel.isPending}
+                <Button variant="outline" size="sm" onClick={onDisconnect} 
                   className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5">
                   <PowerOff className="h-4 w-4 mr-1.5" /> Desconectar WhatsApp
                 </Button>
@@ -972,7 +970,6 @@ function EditCaixaModal({
 // new one. Phase 1 supports WhatsApp (Evolution + Chatwoot); other channels are
 // surfaced as "em breve" until their providers are wired.
 function InboxesManager() {
-  useAutoRepairWiring(); // silent one-time repair of broken Evolution→Chatwoot wiring
   const { data: allChannels = [] } = useMessagingChannels();
   // Com os canais de mensagens desligados, só as caixas de email aparecem. As
   // linhas dos outros canais continuam na base de dados intactas — voltam a
@@ -986,12 +983,9 @@ function InboxesManager() {
   const { limits, planName } = useSubscription();
   const { organization } = useAuth();
   const { toast } = useToast();
-  const deleteChannel = useDeleteChannel();
   const deleteEmailChannel = useDeleteEmailChannel();
-  const cleanupOrphans = useCleanupOrphanChannels();
   const updateAssign = useUpdateChannelAssignment();
   const updateGroups = useUpdateChannelGroups();
-  const logoutChannel = useLogoutChannel();
 
   const [editCh, setEditCh] = useState<typeof channels[0] | null>(null);
   const [editEmailCh, setEditEmailCh] = useState<EmailChannel | null>(null);
@@ -1041,34 +1035,9 @@ function InboxesManager() {
     return true;
   };
 
-  const startNewWhatsApp = () => {
-    if (blockIfAtLimit()) return;
-    setConnectModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
-    setNewOpen(false);
-    setNewLabel('');
-  };
-
-  const igConnect = useInstagramConnect();
-  const startNewInstagram = () => {
-    if (blockIfAtLimit()) return;
-    setIgOpen(true);
-    setNewOpen(false);
-    setNewLabel('');
-  };
-  const handleInstagramConnect = () => {
-    if (!igLabel.trim()) return;
-    igConnect.mutate(
-      { label: igLabel.trim() },
-      {
-        onSuccess: (data) => {
-          toast({ title: 'Instagram ligado', description: data.ig_username ? `@${data.ig_username} conectado` : 'Caixa pronta.' });
-          setIgOpen(false);
-          setIgLabel('');
-        },
-        onError: (err) => toast({ title: 'Falha ao ligar Instagram', description: (err as Error).message, variant: 'destructive' }),
-      },
-    );
-  };
+  // Aqui viviam o arranque da ligação de WhatsApp (modal do QR) e todo o fluxo
+  // de OAuth do Instagram. Saíram com as edge functions respetivas — o produto
+  // deixou de ligar canais de mensagens; só restam as caixas de email.
 
   return (
     <div className="space-y-4">
@@ -1209,14 +1178,6 @@ function InboxesManager() {
         </div>
       )}
 
-      {orphanCount > 0 && (
-        <Button variant="ghost" size="sm" onClick={() => cleanupOrphans.mutate()} disabled={cleanupOrphans.isPending}
-          className="w-full text-muted-foreground hover:text-destructive">
-          {cleanupOrphans.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-          Limpar {orphanCount} {orphanCount === 1 ? 'caixa por ligar' : 'caixas por ligar'}
-        </Button>
-      )}
-
       {/* Edit modal — social channels */}
       {editCh && (
         <EditCaixaModal
@@ -1226,7 +1187,6 @@ function InboxesManager() {
           onOpenChange={(o) => { if (!o) setEditCh(null); }}
           updateAssign={updateAssign}
           updateGroups={updateGroups}
-          logoutChannel={logoutChannel}
           onReconnect={() => { setConnectModal({ open: true, channelId: editCh.id }); setEditCh(null); }}
           onDisconnect={() => { setToDisconnect(editCh.id); setEditCh(null); }}
         />
@@ -1262,8 +1222,6 @@ function InboxesManager() {
                     if (!c.available) return;
                     if (blockIfAtLimit()) { setNewOpen(false); return; }
                     if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
-                    if (c.type === 'instagram') { startNewInstagram(); return; }
-                    // WhatsApp: stay open so user enters a label
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',
@@ -1285,71 +1243,12 @@ function InboxesManager() {
           </div>
           {/* Este bloco ligava o WhatsApp diretamente, sem passar pelo catálogo
               acima — deixá-lo aqui tornaria o "Brevemente" decorativo. */}
-          {MESSAGING_CHANNELS_ENABLED ? (
-            <div className="space-y-2 border-t pt-4">
-              <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
-              <Input
-                id="new-inbox-label"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="Ex: Vendas, Suporte"
-                onKeyDown={(e) => e.key === 'Enter' && startNewWhatsApp()}
-              />
-              <Button onClick={startNewWhatsApp} className="w-full gap-2">
-                <MessageCircle className="h-4 w-4" /> Ligar WhatsApp
-              </Button>
-            </div>
-          ) : (
+          {(
             <p className="border-t pt-4 text-xs text-muted-foreground">
               WhatsApp, Instagram e Facebook estão a caminho. Por agora, a Caixa de Entrada
               trabalha com email.
             </p>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* WhatsApp QR modal */}
-      <ConnectWhatsAppModal
-        open={connectModal.open}
-        onOpenChange={(o) => setConnectModal((m) => ({ ...m, open: o }))}
-        channelId={connectModal.channelId}
-        label={connectModal.label}
-      />
-
-      {/* Instagram connect modal */}
-      <Dialog open={igOpen} onOpenChange={(o) => { setIgOpen(o); if (!o) igConnect.reset(); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <InstagramIcon className="h-5 w-5 text-[#E4405F]" />
-              Ligar Instagram
-            </DialogTitle>
-            <DialogDescription>
-              Faz login com o Facebook para ligar a tua conta Instagram Business.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
-              <Input value={igLabel} onChange={(e) => setIgLabel(e.target.value)} placeholder="Ex: Instagram Vendas" className="mt-1" />
-            </div>
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-amber-700 dark:text-amber-400">Requisitos:</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                <li>A conta Instagram tem de ser <strong>Business</strong> (não Creator)</li>
-                <li>Tens de ter uma <strong>Página de Facebook</strong> com a conta Instagram ligada</li>
-              </ul>
-            </div>
-            <Button onClick={handleInstagramConnect} disabled={igConnect.isPending || !igLabel.trim()} className="w-full gap-2">
-              {igConnect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <InstagramIcon className="h-4 w-4" />}
-              {igConnect.isPending ? 'A ligar...' : 'Entrar com Facebook'}
-            </Button>
-            {igConnect.isPending && (
-              <p className="text-center text-xs text-muted-foreground">
-                Vai abrir uma janela de login. Faz login e autoriza o acesso.
-              </p>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -1366,8 +1265,7 @@ function InboxesManager() {
             <AlertDialogAction
               onClick={() => {
                 if (!toDelete) return;
-                if (toDelete.type === 'email') deleteEmailChannel.mutate(toDelete.id);
-                else deleteChannel.mutate(toDelete.id);
+                deleteEmailChannel.mutate(toDelete.id);
                 setToDelete(null);
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -1389,7 +1287,7 @@ function InboxesManager() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (toDisconnect) logoutChannel.mutate(toDisconnect); setToDisconnect(null); }}
+              onClick={() => setToDisconnect(null)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Desconectar

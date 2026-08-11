@@ -1,17 +1,16 @@
 import { useEffect } from "react";
-import { useWhatsappChannel, useMessagingChannels } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels } from "@/hooks/useMessagingChannels";
 import { useInboxUnreadTotal } from "@/hooks/useChatwootInbox";
 import { cn } from "@/lib/utils";
 
-// Unread WhatsApp messages badge for the nav. Mounted globally (sidebar/bottom
+// Unread messages badge for the nav. Mounted globally (sidebar/bottom
 // nav), it also keeps the document title in sync — "(3) Senvia OS" — so the
 // browser tab shows new messages even when the user is on another page.
 export function InboxUnreadBadge({ className }: { className?: string }) {
-  const { channel } = useWhatsappChannel();
   const { data: channels = [] } = useMessagingChannels();
-  // Same rule as the Inbox page's channelConfigured: ANY connected caixa counts —
-  // an org with only Instagram/Messenger (no WhatsApp) still gets its badge.
-  const connected = channel?.status === "connected" || channels.some((c) => c.status === "connected");
+  // Mesma regra do channelConfigured da Caixa de Entrada: qualquer caixa ligada
+  // conta. Deixou de haver um canal de WhatsApp para consultar à parte.
+  const connected = channels.some((c) => c.status === "connected");
   const { total } = useInboxUnreadTotal(connected);
 
   useEffect(() => {

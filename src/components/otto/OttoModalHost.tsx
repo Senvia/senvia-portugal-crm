@@ -1,4 +1,3 @@
-import { ConnectWhatsAppModal } from "@/components/settings/ConnectWhatsAppModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
@@ -17,11 +16,7 @@ export function OttoModalHost() {
 
   return (
     <>
-      <ConnectWhatsAppModal
-        open={activeModal === "whatsapp"}
-        onOpenChange={onOpenChange}
-        label={typeof params.label === "string" ? params.label : undefined}
-      />
+      {/* O modal de ligar WhatsApp foi removido com o resto da integração. */}
       {activeModal === "add_lead" && (
         <AddLeadModal open onOpenChange={onOpenChange} initialData={params.initialData} />
       )}

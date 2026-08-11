@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-import { getConfig, evolutionFetch } from "../_shared/multicanal.ts";
 
 // Motor dos fluxos de automação.
 //
@@ -189,61 +188,8 @@ class Engine {
   // deno-lint-ignore no-explicit-any
   constructor(private db: any) {}
 
-  /** Canal de WhatsApp ligado da organização, ou null. */
-  private async whatsappInstance(orgId: string): Promise<string | null> {
-    const { data } = await this.db
-      .from("messaging_channels")
-      .select("evolution_instance")
-      .eq("organization_id", orgId)
-      .eq("channel_type", "whatsapp")
-      .eq("status", "connected")
-      .not("evolution_instance", "is", null)
-      .limit(1)
-      .maybeSingle();
-    return data?.evolution_instance ?? null;
-  }
-
-  /**
-   * Envia texto (e opcionalmente um anexo) pelo canal da organização.
-   * Devolve null em sucesso, ou a mensagem de erro.
-   */
-  private async sendWhatsappText(
-    run: Run,
-    text: string,
-    media?: { url: string; mimetype?: string; filename?: string; kind?: string } | null,
-  ): Promise<string | null> {
-    const instance = await this.whatsappInstance(run.organization_id);
-    if (!instance) return "Nenhum canal de WhatsApp ligado nesta organização";
-    const number = normalizePhone(run.contact_phone!);
-
-    try {
-      let res: Response;
-      if (media?.url) {
-        const kind = media.kind
-          ?? (media.mimetype?.startsWith("image/") ? "image"
-            : media.mimetype?.startsWith("video/") ? "video" : "document");
-        res = await evolutionFetch(getConfig(), `/message/sendMedia/${instance}`, "POST", {
-          number,
-          mediatype: kind,
-          mimetype: media.mimetype || "application/octet-stream",
-          media: media.url,
-          fileName: media.filename || "anexo",
-          ...(text.trim() ? { caption: text } : {}),
-        });
-      } else {
-        res = await evolutionFetch(getConfig(), `/message/sendText/${instance}`, "POST", {
-          number, text,
-        });
-      }
-      if (!res.ok) {
-        const body = (await res.text()).slice(0, 240);
-        return `Evolution ${res.status}: ${body}`;
-      }
-      return null;
-    } catch (e) {
-      return `Envio falhou: ${(e as Error).message}`;
-    }
-  }
+  // Aqui viviam whatsappInstance() e sendWhatsappText(), os únicos pontos deste
+  // motor que falavam com a Evolution. Saíram com a integração.
 
   private async recordStep(
     run: Run, node: FlowNode, status: string, detail: Record<string, unknown>
@@ -393,119 +339,17 @@ class Engine {
         };
       }
 
-      case "wait_reply": {
-        // O nó conversacional: pergunta (opcionalmente com botões) e fica à
-        // espera do que a pessoa responder.
-        if (!run.contact_phone_key || !run.contact_phone) {
-          return { kind: "fail", error: "Contacto sem telefone — não é possível esperar resposta" };
-        }
-
-        const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
-        const question = cfg.question ? render(String(cfg.question), vars) : "";
-
-        if (question) {
-          const quiet = quietUntil(flow.quiet_hours);
-          if (quiet) {
-            return {
-              kind: "park", status: "waiting", wakeAt: quiet, resumeSelf: true,
-              detail: { adiado_por_horario_de_silencio_ate: quiet.toISOString() },
-            };
-          }
-
-          // Sem botões — ver a explicação no nó send_whatsapp. As opções vão
-          // numeradas e responder "1"/"2" é aceite pelo handleReply.
-          const options = rules.length
-            ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
-            : "";
-          const sendErr = await this.sendWhatsappText(run, `${question}${options}`);
-          if (sendErr) return { kind: "fail", error: sendErr };
-        }
-
-        const timeoutMs = durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" });
-        const wake = new Date(Date.now() + timeoutMs);
+      // Os nós de WhatsApp deixaram de poder enviar: a integração da Evolution
+      // foi removida do produto (violava os Termos da Meta e arriscava o ban do
+      // número). Falham de forma explícita em vez de fingirem que enviaram — um
+      // percurso que diz "ok" sem entregar nada é pior do que um que falha e diz
+      // porquê; foi exatamente esse o problema dos botões.
+      case "wait_reply":
+      case "send_whatsapp":
         return {
-          kind: "park", status: "awaiting_reply", wakeAt: wake,
-          detail: {
-            espera_resposta_ate: wake.toISOString(),
-            regras: rules.length,
-            pergunta_enviada: !!question,
-          },
+          kind: "fail",
+          error: "O envio por WhatsApp foi desativado neste CRM. Substitui este passo por um envio de email.",
         };
-      }
-
-      case "send_whatsapp": {
-        if (!run.contact_phone) return { kind: "fail", error: "Contacto sem telefone" };
-
-        const quiet = quietUntil(flow.quiet_hours);
-        if (quiet) {
-          return {
-            kind: "park", status: "waiting", wakeAt: quiet, resumeSelf: true,
-            detail: { adiado_por_horario_de_silencio_ate: quiet.toISOString() },
-          };
-        }
-
-        const text = render(String(cfg.message ?? ""), vars);
-        const media = (cfg.media ?? null) as
-          | { url?: string; mimetype?: string; filename?: string; kind?: string }
-          | null;
-        const mediaUrl = media?.url ?? (cfg.media_url ? String(cfg.media_url) : null);
-        if (!text.trim() && !mediaUrl) return { kind: "fail", error: "Mensagem vazia" };
-
-        // A mensagem pode esperar a resposta ela própria: é o modelo pedido —
-        // enviar com botões e ramificar pelo que a pessoa toca, sem um segundo
-        // nó de espera. rules vazio = mensagem simples que segue em frente.
-        const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
-        const waitsForReply = !!cfg.wait_reply && rules.length > 0;
-
-        // NÃO se envia com botões. Nunca.
-        //
-        // O WhatsApp deixou de entregar mensagens com botões interativos em
-        // ligações normais (não-API-oficial). O pior é COMO falha: a Evolution
-        // aceita o pedido e responde 2xx, portanto do nosso lado fica registado
-        // como enviado — e a mensagem nunca chega a ninguém, sem erro nenhum.
-        //
-        // Verificado a 11/08/2026, duas vezes: passo registado como enviado com
-        // botões, zero entregas, zero respostas, zero registos em
-        // inbox_messages. Pelo mesmo canal, mesma instância e MESMAS
-        // credenciais, o /message/sendText continua a entregar — é o que o
-        // envio legado do submit-lead usa desde sempre.
-        //
-        // Uma opção que perde mensagens de clientes em silêncio não vale a pena
-        // manter, nem sequer como escolha: as opções vão numeradas no texto, e
-        // responder "1"/"2" escolhe o ramo exatamente na mesma. O `use_buttons`
-        // que ficou gravado em fluxos antigos é simplesmente ignorado.
-        const options = waitsForReply
-          ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
-          : "";
-        const sendErr = await this.sendWhatsappText(run, `${text}${options}`, mediaUrl ? {
-          url: mediaUrl,
-          mimetype: media?.mimetype,
-          filename: media?.filename,
-          kind: media?.kind,
-        } : null);
-        if (sendErr) return { kind: "fail", error: sendErr };
-
-        const sentDetail = {
-          canal: "whatsapp",
-          para: run.contact_phone,
-          texto: text.slice(0, 300),
-          ...(mediaUrl ? { anexo: media?.filename ?? mediaUrl } : {}),
-          ...(waitsForReply ? { opcoes: rules.length } : {}),
-        };
-
-        if (!waitsForReply) return { kind: "next", detail: sentDetail };
-
-        if (!run.contact_phone_key) {
-          return { kind: "fail", error: "Contacto sem telefone válido — não é possível esperar resposta" };
-        }
-        const replyWake = new Date(
-          Date.now() + durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" }),
-        );
-        return {
-          kind: "park", status: "awaiting_reply", wakeAt: replyWake,
-          detail: { ...sentDetail, espera_resposta_ate: replyWake.toISOString() },
-        };
-      }
 
       case "send_email": {
         if (!run.contact_email) return { kind: "fail", error: "Contacto sem email" };
