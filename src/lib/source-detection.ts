@@ -88,6 +88,31 @@ const detectReferrerSource = (referrer: string): string | null => {
   return 'Landing Page';
 };
 
+/**
+ * Meta's click-attribution window. A `_fbc` cookie lives ~90 days, far longer
+ * than any sensible attribution, so it is only trusted inside this window —
+ * otherwise a months-old ad click would keep claiming organic traffic.
+ */
+const FBC_ATTRIBUTION_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
+
+/**
+ * True when `_fbc` proves a recent Facebook ad click.
+ *
+ * The Pixel only creates `_fbc` when the visitor arrives with an `fbclid` in
+ * the URL, and encodes it as `fb.<subdomainIndex>.<creationTimeMs>.<fbclid>`.
+ * So its mere presence is evidence of an ad click — including when the click
+ * id is long gone from the URL because the visitor landed on one page and
+ * converted on another.
+ */
+const hasRecentFbClick = (fbc: string | undefined): boolean => {
+  if (!fbc) return false;
+  const parts = fbc.split('.');
+  if (parts.length < 4 || parts[0] !== 'fb') return false;
+  const createdAt = Number(parts[2]);
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
+  return Date.now() - createdAt <= FBC_ATTRIBUTION_WINDOW_MS;
+};
+
 export interface SourceDetectionResult {
   source: string;
   tracking: {
@@ -200,7 +225,21 @@ export const detectLeadSource = (): SourceDetectionResult => {
       tracking,
     };
   }
-  
+
+  // 2b. The _fbc cookie, which only exists because of an fbclid (see
+  // hasRecentFbClick). Without this, a visitor who clicked an ad, landed on
+  // the site and then converted on a page that no longer carried the click id
+  // was recorded as "Direto" — invisible to every paid-traffic report despite
+  // being paid traffic. Ranked above the referrer heuristic on purpose: a real
+  // ad click is hard evidence, while the referrer is usually just our own
+  // landing page.
+  if (hasRecentFbClick(fbcCookie)) {
+    return {
+      source: 'Facebook Ads',
+      tracking,
+    };
+  }
+
   // 3. Referrer analysis
   const referrerSource = detectReferrerSource(referrer);
   if (referrerSource) {
