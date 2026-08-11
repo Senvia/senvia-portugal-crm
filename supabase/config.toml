@@ -175,6 +175,11 @@ verify_jwt = false
 [functions.meta-connect]
 verify_jwt = false
 
+# Envio de respostas. Exige sessão do utilizador (verificada dentro da função),
+# porque o token da Página nunca pode sair do servidor.
+[functions.meta-send]
+verify_jwt = false
+
 # Chamada pela Meta a cada mensagem recebida. Autentica-se pela assinatura
 # HMAC em X-Hub-Signature-256, verificada dentro da função.
 [functions.meta-webhook]

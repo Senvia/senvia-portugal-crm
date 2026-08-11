@@ -58,6 +58,7 @@ import { InboxProductSection } from "@/components/inbox/InboxProductPicker";
 import { InboxErrorBoundary } from "@/components/inbox/InboxErrorBoundary";
 import { useSendProductInbox } from "@/hooks/inbox/useSendProductInbox";
 import { InboxTasksModal } from "@/components/inbox/InboxTasksModal";
+import { MetaInbox } from "@/components/inbox/MetaInbox";
 import { InboxCaixaRail } from "@/components/inbox/InboxCaixaRail";
 import { CommandPalette } from "@/components/inbox/CommandPalette";
 import { ShortcutsOverlay } from "@/components/inbox/ShortcutsOverlay";
@@ -753,10 +754,13 @@ export default function Inbox() {
   // Caixas the current user may see (mirrors the server visibility rule): admin,
   // caixa with no assignees, or a caixa the user is assigned to.
   const visibleCaixas = useMemo(
-    () => [...channelByInbox.values()].filter(
+    // Antes vinha de [...channelByInbox.values()] — um mapa indexado pelo id da
+    // caixa no CHATWOOT. Os canais da Meta nao tem esse id (falam direto com
+    // ela), por isso ficavam de fora e a caixa de Instagram era invisivel.
+    () => channels.filter(
       (c) => isAdmin || !c.assigned_user_ids?.length || (!!user?.id && c.assigned_user_ids.includes(user.id)),
     ),
-    [channelByInbox, isAdmin, user?.id],
+    [channels, isAdmin, user?.id],
   );
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -766,6 +770,9 @@ export default function Inbox() {
   // Email mode: when an email caixa is picked in the rail, the chat columns are
   // replaced by the email list+reader for the selected folder.
   const [emailChannelId, setEmailChannelId] = useState<string | null>(null);
+  // Canal da Meta (Instagram/Messenger) aberto. Como o email, substitui as
+  // colunas do chat — le das nossas tabelas, nao do Chatwoot.
+  const [metaChannelId, setMetaChannelId] = useState<string | null>(null);
   const [emailFolderId, setEmailFolderId] = useState<string | null>(null);
   // Com os canais de mensagens desligados a Caixa de Entrada É o cliente de
   // email, por isso abre logo na primeira caixa de email em vez de mostrar a
@@ -3181,9 +3188,9 @@ export default function Inbox() {
         unreadByInbox={unreadByInbox}
         emailChannelId={emailChannelId}
         emailFolderId={emailFolderId}
-        onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); }}
-        onSelectMessaging={(ch) => { setEmailChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); }}
-        onSelectEmail={(ch) => { setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); }}
+        onSelectAll={() => { setEmailChannelId(null); setMetaChannelId(null); setCaixaFilter(null); }}
+        onSelectMessaging={(ch) => { setEmailChannelId(null); if (ch.provider === 'meta') { setMetaChannelId(ch.id); setSelectedId(null); } else { setMetaChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); } }}
+        onSelectEmail={(ch) => { setMetaChannelId(null); setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); }}
         onSelectFolder={(fid) => setEmailFolderId(fid)}
       />
       {/* Mobile: same rail inside a left Sheet (the desktop rail is hidden < md). */}
@@ -3199,14 +3206,22 @@ export default function Inbox() {
             emailChannelId={emailChannelId}
             emailFolderId={emailFolderId}
             onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); setRailSheetOpen(false); }}
-            onSelectMessaging={(ch) => { setEmailChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); setRailSheetOpen(false); }}
-            onSelectEmail={(ch) => { setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); setRailSheetOpen(false); }}
+            onSelectMessaging={(ch) => { setEmailChannelId(null); if (ch.provider === 'meta') { setMetaChannelId(ch.id); setSelectedId(null); } else { setMetaChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); } setRailSheetOpen(false); }}
+            onSelectEmail={(ch) => { setMetaChannelId(null); setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); setRailSheetOpen(false); }}
             onSelectFolder={(fid) => { setEmailFolderId(fid); setRailSheetOpen(false); }}
             className="flex w-full border-r-0"
           />
         </SheetContent>
       </Sheet>
-      {emailChannelId ? (
+      {metaChannelId ? (
+        // Instagram/Messenger: ecrã próprio, a ler das nossas tabelas. Substitui
+        // as colunas do chat tal como o cliente de email faz.
+        <MetaInbox
+          channelId={metaChannelId}
+          channelLabel={visibleCaixas.find((c) => c.id === metaChannelId)?.label ?? 'esta caixa'}
+          onOpenRail={() => setRailSheetOpen(true)}
+        />
+      ) : emailChannelId ? (
         <Suspense fallback={
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

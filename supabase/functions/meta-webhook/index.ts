@@ -83,11 +83,29 @@ Deno.serve(async (req) => {
   const appSecret = Deno.env.get("FACEBOOK_APP_SECRET");
   const raw = await req.text();
 
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
   if (!appSecret) {
     logError("FACEBOOK_APP_SECRET em falta — a recusar");
     return new Response("Not configured", { status: 500, headers: corsHeaders });
   }
-  if (!await signatureValid(raw, req.headers.get("x-hub-signature-256"), appSecret)) {
+
+  const sigOk = await signatureValid(raw, req.headers.get("x-hub-signature-256"), appSecret);
+
+  // Regista SEMPRE que fomos chamados, mesmo quando se recusa. Sem isto, uma
+  // subscrição mal configurada e uma assinatura inválida são indistinguíveis:
+  // nos dois casos não aparece mensagem nenhuma e não há onde olhar.
+  await supabase.from("meta_webhook_log").insert({
+    method: "POST",
+    valid_sig: sigOk,
+    body_head: raw.slice(0, 800),
+    note: sigOk ? null : "assinatura recusada",
+  }).then(() => {}, () => { /* diagnóstico não pode partir o webhook */ });
+
+  if (!sigOk) {
     logError("assinatura inválida — pedido recusado");
     return new Response("Invalid signature", { status: 401, headers: corsHeaders });
   }
@@ -97,10 +115,6 @@ Deno.serve(async (req) => {
   // uma mensagem perdida — o erro fica nos logs, que é onde se vai procurar.
   try {
     const body = JSON.parse(raw);
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
 
     for (const entry of body.entry ?? []) {
       // `messaging` no Messenger; o Instagram usa a mesma forma.
