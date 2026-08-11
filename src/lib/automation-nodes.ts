@@ -442,7 +442,6 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
     branching: true,
     defaultConfig: {
       question: '',
-      use_buttons: false,
       timeout_amount: 24,
       timeout_unit: 'hours',
       rules: [],
@@ -725,7 +724,7 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
       const count = config.rules?.length ?? 0;
       const amount = config.timeout_amount ?? config.timeout?.value ?? 24;
       const unit = config.timeout_unit ?? config.timeout?.unit ?? 'hours';
-      const mode = config.use_buttons ? 'botões' : count === 1 ? 'regra' : 'regras';
+      const mode = count === 1 ? 'regra' : 'regras';
       return `${count} ${mode} · ${amount} ${WAIT_UNIT_LABELS[unit] ?? ''}`.trimEnd();
     }
 

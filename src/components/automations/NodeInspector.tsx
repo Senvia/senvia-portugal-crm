@@ -542,7 +542,6 @@ function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: Form
       // edges are pruned by the editor in the same pass.
       set({
         wait_reply: undefined,
-        use_buttons: undefined,
         rules: undefined,
         timeout_amount: undefined,
         timeout_unit: undefined,
@@ -552,7 +551,6 @@ function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: Form
     }
     set({
       wait_reply: true,
-      use_buttons: config.use_buttons ?? false,
       timeout_amount: config.timeout_amount ?? config.timeout?.value ?? 24,
       timeout_unit: config.timeout_unit ?? config.timeout?.unit ?? 'hours',
       timeout: undefined,
@@ -600,7 +598,7 @@ function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: Form
         </Helper>
       </div>
 
-      {waitsForReply && <ReplyRulesEditor config={config} set={set} buttonsDefault={false} />}
+      {waitsForReply && <ReplyRulesEditor config={config} set={set} />}
     </>
   );
 }
@@ -788,8 +786,7 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
         </Helper>
       </Field>
 
-      {/* This node's engine branch treats a missing `use_buttons` as "no buttons". */}
-      <ReplyRulesEditor config={config} set={set} buttonsDefault={false} />
+      <ReplyRulesEditor config={config} set={set} />
     </>
   );
 }
@@ -797,18 +794,15 @@ function WaitReplyForm({ config, set }: { config: AutomationNodeConfig; set: For
 /**
  * Buttons, branches and timeout — the part shared by the standalone
  * `wait_reply` node and by a `send_whatsapp` that waits for the answer. Both
- * write the same engine keys: use_buttons / rules / timeout_amount+unit.
+ * write the same engine keys: rules / timeout_amount+unit.
  */
 function ReplyRulesEditor({
-  config, set, buttonsDefault,
+  config, set,
 }: {
   config: AutomationNodeConfig;
   set: FormProps['set'];
-  /** What the engine assumes when `use_buttons` is absent — it differs per node. */
-  buttonsDefault: boolean;
 }) {
   const rules = config.rules ?? [];
-  const useButtons = config.use_buttons ?? buttonsDefault;
   // Engine contract: timeout_amount / timeout_unit. The nested `timeout`
   // object is a legacy shape older editors saved — read it as a fallback and
   // clear it on the first write.
@@ -842,28 +836,17 @@ function ReplyRulesEditor({
 
   return (
     <>
-      <div className="space-y-1.5 rounded-lg border border-border bg-background p-3">
-        <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="reply-use-buttons" className="text-sm font-medium">
-            Enviar como botões
-          </Label>
-          <Switch
-            id="reply-use-buttons"
-            checked={useButtons}
-            onCheckedChange={(checked) => set({ use_buttons: checked })}
-          />
-        </div>
+      {/*
+        Havia aqui um interruptor "Enviar como botões". Foi removido: o WhatsApp
+        deixou de entregar botões interativos em contas normais, e falha da pior
+        maneira — a API aceita o envio e responde OK, portanto ficava registado
+        como enviado e a mensagem nunca chegava a ninguém. As opções vão
+        numeradas no texto e responder «1»/«2» escolhe o caminho na mesma.
+      */}
+      <div className="rounded-lg border border-border bg-muted/40 p-3">
         <Helper>
-          {useButtons ? (
-            <span className="text-warning">
-              Atenção: o WhatsApp deixou de entregar botões em contas normais. O envio é aceite mas a
-              mensagem pode nunca chegar — e nós não temos como saber. Desliga isto se o contacto não
-              receber nada.
-            </span>
-          ) : (
-            <>As opções saem numeradas na mensagem e o contacto responde «1», «2»… Esta é a forma
-            fiável: usa o mesmo envio de texto de sempre.</>
-          )}
+          As opções aparecem numeradas na mensagem e o contacto responde «1», «2»… — também
+          reconhecemos as palavras-chave de cada opção.
         </Helper>
       </div>
 

@@ -402,7 +402,6 @@ class Engine {
 
         const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
         const question = cfg.question ? render(String(cfg.question), vars) : "";
-        let buttonsSent = false;
 
         if (question) {
           const quiet = quietUntil(flow.quiet_hours);
@@ -413,40 +412,13 @@ class Engine {
             };
           }
 
-          const instance = await this.whatsappInstance(run.organization_id);
-          if (!instance) return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
-          const number = normalizePhone(run.contact_phone);
-
-          // Botões interativos primeiro; o WhatsApp não-oficial nem sempre os
-          // entrega, por isso qualquer falha degrada para opções numeradas —
-          // e a resposta por número também é aceite no handleReply.
-          if (cfg.use_buttons && rules.length) {
-            try {
-              const res = await evolutionFetch(getConfig(), `/message/sendButtons/${instance}`, "POST", {
-                number,
-                title: "",
-                description: question,
-                footer: "",
-                buttons: rules.map((r) => ({
-                  type: "reply",
-                  displayText: (r.label ?? r.keywords?.[0] ?? "Opção").slice(0, 20),
-                  id: r.id,
-                })),
-              });
-              buttonsSent = res.ok;
-              if (!res.ok) log("sendButtons falhou — a degradar para texto", { status: res.status });
-            } catch (e) {
-              log("sendButtons indisponível — a degradar para texto", { error: (e as Error).message });
-            }
-          }
-
-          if (!buttonsSent) {
-            const options = cfg.use_buttons && rules.length
-              ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
-              : "";
-            const sendErr = await this.sendWhatsappText(run, `${question}${options}`);
-            if (sendErr) return { kind: "fail", error: sendErr };
-          }
+          // Sem botões — ver a explicação no nó send_whatsapp. As opções vão
+          // numeradas e responder "1"/"2" é aceite pelo handleReply.
+          const options = rules.length
+            ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
+            : "";
+          const sendErr = await this.sendWhatsappText(run, `${question}${options}`);
+          if (sendErr) return { kind: "fail", error: sendErr };
         }
 
         const timeoutMs = durationMs({ amount: cfg.timeout_amount ?? 24, unit: cfg.timeout_unit ?? "hours" });
@@ -457,7 +429,6 @@ class Engine {
             espera_resposta_ate: wake.toISOString(),
             regras: rules.length,
             pergunta_enviada: !!question,
-            botoes: buttonsSent,
           },
         };
       }
@@ -485,65 +456,41 @@ class Engine {
         // nó de espera. rules vazio = mensagem simples que segue em frente.
         const rules = (cfg.rules ?? []) as Array<{ id: string; keywords?: string[]; label?: string }>;
         const waitsForReply = !!cfg.wait_reply && rules.length > 0;
-        let buttonsSent = false;
 
-        // Botões: OPT-IN explícito, e por boas razões.
+        // NÃO se envia com botões. Nunca.
         //
         // O WhatsApp deixou de entregar mensagens com botões interativos em
-        // ligações normais (não-API-oficial). A Evolution aceita o pedido e
-        // responde 2xx à mesma — por isso o `res.ok` abaixo dá verdadeiro, o
-        // degradar-para-texto nunca dispara, e a mensagem simplesmente nunca
-        // chega a ninguém. Verificado a 11/08/2026: um envio com botões,
-        // registado como enviado, zero entregas e zero respostas; pelo mesmo
-        // canal e com as mesmas credenciais, o /message/sendText de sempre
-        // continua a entregar.
+        // ligações normais (não-API-oficial). O pior é COMO falha: a Evolution
+        // aceita o pedido e responde 2xx, portanto do nosso lado fica registado
+        // como enviado — e a mensagem nunca chega a ninguém, sem erro nenhum.
         //
-        // Por isso o valor por omissão passou de "ligado" a "desligado": as
-        // opções numeradas em texto usam o sendText, que funciona, e responder
-        // "1" ou "2" escolhe o ramo à mesma.
-        if (waitsForReply && cfg.use_buttons === true) {
-          const instance = await this.whatsappInstance(run.organization_id);
-          if (!instance) return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
-          try {
-            const res = await evolutionFetch(getConfig(), `/message/sendButtons/${instance}`, "POST", {
-              number: normalizePhone(run.contact_phone),
-              title: "",
-              description: text,
-              footer: "",
-              buttons: rules.map((r) => ({
-                type: "reply",
-                displayText: (r.label ?? r.keywords?.[0] ?? "Opção").slice(0, 20),
-                id: r.id,
-              })),
-            });
-            buttonsSent = res.ok;
-            if (!res.ok) log("sendButtons falhou — a degradar para texto", { status: res.status });
-          } catch (e) {
-            log("sendButtons indisponível — a degradar para texto", { error: (e as Error).message });
-          }
-        }
-
-        if (!buttonsSent) {
-          // Sem botões (ou porque falharam): as opções vão como texto numerado
-          // e responder "1"/"2" também escolhe o ramo.
-          const options = waitsForReply
-            ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
-            : "";
-          const sendErr = await this.sendWhatsappText(run, `${text}${options}`, mediaUrl ? {
-            url: mediaUrl,
-            mimetype: media?.mimetype,
-            filename: media?.filename,
-            kind: media?.kind,
-          } : null);
-          if (sendErr) return { kind: "fail", error: sendErr };
-        }
+        // Verificado a 11/08/2026, duas vezes: passo registado como enviado com
+        // botões, zero entregas, zero respostas, zero registos em
+        // inbox_messages. Pelo mesmo canal, mesma instância e MESMAS
+        // credenciais, o /message/sendText continua a entregar — é o que o
+        // envio legado do submit-lead usa desde sempre.
+        //
+        // Uma opção que perde mensagens de clientes em silêncio não vale a pena
+        // manter, nem sequer como escolha: as opções vão numeradas no texto, e
+        // responder "1"/"2" escolhe o ramo exatamente na mesma. O `use_buttons`
+        // que ficou gravado em fluxos antigos é simplesmente ignorado.
+        const options = waitsForReply
+          ? "\n\n" + rules.map((r, i) => `${i + 1}️⃣ ${r.label ?? r.keywords?.[0] ?? ""}`).join("\n")
+          : "";
+        const sendErr = await this.sendWhatsappText(run, `${text}${options}`, mediaUrl ? {
+          url: mediaUrl,
+          mimetype: media?.mimetype,
+          filename: media?.filename,
+          kind: media?.kind,
+        } : null);
+        if (sendErr) return { kind: "fail", error: sendErr };
 
         const sentDetail = {
           canal: "whatsapp",
           para: run.contact_phone,
           texto: text.slice(0, 300),
           ...(mediaUrl ? { anexo: media?.filename ?? mediaUrl } : {}),
-          ...(waitsForReply ? { botoes: buttonsSent, opcoes: rules.length } : {}),
+          ...(waitsForReply ? { opcoes: rules.length } : {}),
         };
 
         if (!waitsForReply) return { kind: "next", detail: sentDetail };
