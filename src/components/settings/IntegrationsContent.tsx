@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MESSAGING_CHANNELS_ENABLED, CHANNEL_COMING_SOON_LABEL } from "@/lib/constants";
+import { MESSAGING_CHANNELS, CHANNEL_COMING_SOON_LABEL, isChannelEnabled } from "@/lib/constants";
 import { LucideIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -19,7 +19,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
@@ -777,10 +777,10 @@ type ChannelIcon = React.ComponentType<{ className?: string }>;
 // WhatsApp, Instagram e Facebook ficam indisponíveis enquanto
 // MESSAGING_CHANNELS_ENABLED for false — ver o comentário em constants.ts.
 const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; tint: string; available: boolean }[] = [
-  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: MESSAGING_CHANNELS_ENABLED },
+  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: MESSAGING_CHANNELS.whatsapp },
   { type: 'email', label: 'Email', icon: Mail, color: 'text-blue-600', tint: 'bg-blue-500/10', available: true },
-  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: MESSAGING_CHANNELS_ENABLED },
-  { type: 'facebook', label: 'Facebook', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
+  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: MESSAGING_CHANNELS.instagram },
+  { type: 'facebook', label: 'Messenger', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: MESSAGING_CHANNELS.facebook },
 ];
 
 function channelMeta(type: string) {
@@ -976,9 +976,7 @@ function InboxesManager() {
   // aparecer sozinhas quando MESSAGING_CHANNELS_ENABLED voltar a true. Sem este
   // filtro, os clientes continuariam a ver caixas de WhatsApp presas em
   // "A ligar..." que nunca vão ligar.
-  const channels = MESSAGING_CHANNELS_ENABLED
-    ? allChannels
-    : allChannels.filter((c) => c.channel_type === 'email');
+  const channels = allChannels.filter((c) => isChannelEnabled(c.channel_type));
   const { data: members = [] } = useTeamMembers();
   const { limits, planName } = useSubscription();
   const { organization } = useAuth();
@@ -1035,9 +1033,30 @@ function InboxesManager() {
     return true;
   };
 
-  // Aqui viviam o arranque da ligação de WhatsApp (modal do QR) e todo o fluxo
-  // de OAuth do Instagram. Saíram com as edge functions respetivas — o produto
-  // deixou de ligar canais de mensagens; só restam as caixas de email.
+  // Ligação de Instagram/Messenger pela API oficial da Meta (Facebook Login for
+  // Business). O arranque do WhatsApp por QR code saiu com a Evolution.
+  const connectMeta = useConnectMetaChannel();
+  const startMetaConnect = (connect: 'instagram' | 'messenger') => {
+    if (blockIfAtLimit()) { setNewOpen(false); return; }
+    setNewOpen(false);
+    connectMeta.mutate(
+      { connect, label: newLabel.trim() || undefined },
+      {
+        onSuccess: (data) => {
+          setNewLabel('');
+          toast({
+            title: connect === 'instagram' ? 'Instagram ligado' : 'Messenger ligado',
+            description: data.ig_username ? `@${data.ig_username} conectado` : `${data.label} conectado`,
+          });
+        },
+        onError: (err) => toast({
+          title: 'Não foi possível ligar',
+          description: (err as Error).message,
+          variant: 'destructive',
+        }),
+      },
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1222,6 +1241,8 @@ function InboxesManager() {
                     if (!c.available) return;
                     if (blockIfAtLimit()) { setNewOpen(false); return; }
                     if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
+                    if (c.type === 'instagram') { startMetaConnect('instagram'); return; }
+                    if (c.type === 'facebook') { startMetaConnect('messenger'); return; }
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',

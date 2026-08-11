@@ -109,3 +109,55 @@ export function useUpdateChannelGroups() {
 }
 
 // Log out a channel's WhatsApp session WITHOUT deleting it — the instance stays so
+
+/**
+ * Liga uma conta de Instagram ou uma Página do Messenger via Facebook Login for
+ * Business (edge function `meta-connect`).
+ *
+ * Abre o diálogo da Meta num popup e espera pelo postMessage do callback. O
+ * popup é preciso porque a Meta recusa ser embebida em iframe, e sair da página
+ * perderia o estado do CRM.
+ */
+export function useConnectMetaChannel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ connect, label }: { connect: 'instagram' | 'messenger'; label?: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+
+      const { data, error } = await supabase.functions.invoke('meta-connect', {
+        body: { action: 'oauth_url', organization_id: organization.id, connect, label },
+      });
+      if (error) throw error;
+      const url = (data as { url?: string; error?: string })?.url;
+      if (!url) throw new Error((data as { error?: string })?.error || 'Não foi possível iniciar o login');
+
+      const popup = window.open(url, 'meta-oauth', 'width=600,height=760');
+      if (!popup) throw new Error('O browser bloqueou a janela. Permite popups para este site.');
+
+      return await new Promise<{ channel_type: string; label: string; ig_username?: string | null }>((resolve, reject) => {
+        // Duas formas de isto acabar: a mensagem do callback, ou o utilizador
+        // fechar o popup. Sem a segunda, uma desistência ficava pendurada para
+        // sempre num spinner.
+        const timer = setInterval(() => {
+          if (popup.closed) { cleanup(); reject(new Error('Janela fechada antes de concluir.')); }
+        }, 700);
+        const onMessage = (event: MessageEvent) => {
+          if (event.data?.type !== 'meta-oauth') return;
+          cleanup();
+          if (event.data.error) reject(new Error(String(event.data.error)));
+          else resolve(event.data);
+        };
+        const cleanup = () => {
+          clearInterval(timer);
+          window.removeEventListener('message', onMessage);
+        };
+        window.addEventListener('message', onMessage);
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}

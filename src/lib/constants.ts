@@ -42,21 +42,34 @@ export const INBOX_CONFIG = {
 } as const;
 
 /**
- * Canais de mensagens (WhatsApp, Instagram, Facebook) desligados — "Brevemente".
+ * Que canais de mensagens estão abertos, um a um.
  *
- * A Caixa de Entrada funciona só para EMAIL enquanto isto for `false`.
+ * Era um interruptor único para todos. Deixou de servir: o Instagram e o
+ * Messenger passaram a funcionar pela API oficial da Meta (Facebook Login for
+ * Business → edge function `meta-connect`), enquanto o WhatsApp continua
+ * fechado — a ligação não-oficial que existia violava os Termos da Meta e
+ * arriscava o ban do número do cliente, e a via oficial ainda não está montada.
  *
- * Porquê: o WhatsApp por ligação não-oficial (Evolution) viola os Termos de
- * Serviço da Meta e arrisca o ban do número do cliente; e o Instagram/Messenger
- * exigem App Review da Meta, que ainda não está aprovada. Prometer canais que
- * não podemos entregar em condições é pior do que não os oferecer.
+ * O que estiver `false` aparece como "Brevemente" e não se liga.
  *
- * Para voltar a ligar: mudar para `true`. É o único sítio a mexer — o catálogo
- * de canais, a lista de caixas e o painel lateral da Caixa de Entrada leem
- * todos daqui. Os dados dos canais já ligados NÃO são apagados por isto, apenas
- * deixam de aparecer, por isso a mudança é reversível sem perder nada.
+ * Os canais já ligados de um tipo fechado NÃO são apagados — apenas deixam de
+ * ser listados. Reabrir é mudar aqui, e reaparecem.
  */
-export const MESSAGING_CHANNELS_ENABLED = false;
+export const MESSAGING_CHANNELS = {
+  whatsapp: false,
+  instagram: true,
+  facebook: true,
+} as const;
+
+/** True se ALGUM canal de mensagens está aberto (o email é sempre à parte). */
+export const MESSAGING_CHANNELS_ENABLED =
+  MESSAGING_CHANNELS.whatsapp || MESSAGING_CHANNELS.instagram || MESSAGING_CHANNELS.facebook;
+
+/** Um canal concreto está aberto? Tipos desconhecidos ficam fechados. */
+export function isChannelEnabled(channelType: string | null | undefined): boolean {
+  if (channelType === 'email') return true;
+  return MESSAGING_CHANNELS[channelType as keyof typeof MESSAGING_CHANNELS] ?? false;
+}
 
 /** Rótulo mostrado nos canais ainda por abrir. */
 export const CHANNEL_COMING_SOON_LABEL = 'Brevemente';

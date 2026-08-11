@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Mailbox, Inbox as InboxIcon, SlidersHorizontal, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MESSAGING_CHANNELS_ENABLED } from '@/lib/constants';
+import { MESSAGING_CHANNELS_ENABLED, isChannelEnabled } from '@/lib/constants';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
 import { EmailFolderList } from '@/components/email/EmailFolderList';
@@ -99,12 +99,11 @@ export function InboxCaixaRail({
     }
   };
 
-  // Canais de mensagens desligados ("Brevemente") — a Caixa de Entrada mostra
-  // só email. As caixas continuam na base de dados, apenas não são listadas
-  // (aqui e no seletor "Mostrar caixas", que também lê desta lista).
-  const visibleCaixas = MESSAGING_CHANNELS_ENABLED
-    ? caixas
-    : caixas.filter((c) => c.channel_type === 'email');
+  // Só os canais abertos aparecem — hoje email, Instagram e Messenger; o
+  // WhatsApp está fechado. As caixas de um canal fechado continuam na base de
+  // dados, apenas não são listadas (aqui e no seletor "Mostrar caixas", que lê
+  // desta mesma lista).
+  const visibleCaixas = caixas.filter((c) => isChannelEnabled(c.channel_type));
   const messaging = visibleCaixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
   const allActive = !emailChannelId && caixaFilter === null;

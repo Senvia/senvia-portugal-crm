@@ -103,7 +103,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
-import { INBOX_CONFIG, MESSAGING_CHANNELS_ENABLED } from "@/lib/constants";
+import { INBOX_CONFIG, MESSAGING_CHANNELS_ENABLED, isChannelEnabled } from "@/lib/constants";
 import { isActivityText, translateActivity } from "@/lib/activity-detection";
 import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
 import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
@@ -1165,20 +1165,28 @@ export default function Inbox() {
     [channels],
   );
 
+  // Caixas de canais FECHADOS (hoje o WhatsApp). As conversas delas continuam no
+  // Chatwoot e vinham na listagem na mesma — esconder a caixa nunca chegou,
+  // porque as conversas não são pedidas por caixa. Sem isto, desligar um canal
+  // deixava as conversas dele à vista.
+  const disabledInboxIds = useMemo(
+    () => new Set(
+      channels
+        .filter((c) => !isChannelEnabled(c.channel_type) && c.chatwoot_inbox_id != null)
+        .map((c) => c.chatwoot_inbox_id as number),
+    ),
+    [channels],
+  );
+
   // Hide the Evolution control bot's QR-code conversations + email conversations.
-  //
-  // Esta lista é SÓ de mensagens (o email tem cliente próprio, ver
-  // emailInboxIds acima) — ou seja, na prática é a lista do WhatsApp. Com os
-  // canais de mensagens desligados fica vazia: esconder as caixas não chegava,
-  // porque as conversas vêm do Chatwoot independentemente da lista de caixas, e
-  // era por isso que o WhatsApp continuava à vista.
+  // Esta lista é SÓ de mensagens: o email tem cliente próprio (ver emailInboxIds).
   const visible = useMemo(
-    () => (MESSAGING_CHANNELS_ENABLED
-      ? conversations.filter(
-        (c) => c.contact_name !== "EvolutionAPI" && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id)),
-      )
-      : []),
-    [conversations, emailInboxIds],
+    () => conversations.filter(
+      (c) => c.contact_name !== "EvolutionAPI"
+        && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id))
+        && !(c.inbox_id != null && disabledInboxIds.has(c.inbox_id)),
+    ),
+    [conversations, emailInboxIds, disabledInboxIds],
   );
 
   const filtered = useMemo(() => {
