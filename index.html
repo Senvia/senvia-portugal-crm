@@ -104,7 +104,19 @@
     n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
     t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
     (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '2027821837745963');
+    function senviaMetaExternalId(){
+      var key = 'senvia_external_id';
+      var params = new URLSearchParams(window.location.search);
+      var fromUrl = params.get('external_id');
+      var cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + key + '=([^;]+)'));
+      var fromCookie = cookieMatch ? decodeURIComponent(cookieMatch[1]) : '';
+      var fromStorage = localStorage.getItem(key) || '';
+      var value = fromUrl || fromStorage || fromCookie || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2));
+      localStorage.setItem(key, value);
+      document.cookie = key + '=' + encodeURIComponent(value) + '; path=/; domain=.senvia.pt; max-age=31536000; SameSite=Lax; Secure';
+      return value;
+    }
+    fbq('init', '2027821837745963', { external_id: senviaMetaExternalId() });
     fbq('track', 'PageView');
     </script>
   </head>

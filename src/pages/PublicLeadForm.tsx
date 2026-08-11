@@ -43,7 +43,7 @@ const installFbqFirewall = () => {
     // Create wrapper that blocks unauthorized Lead events
     const wrappedFbq = (...args: unknown[]) => {
       const command = args[0] as string;
-      const eventName = args[1] as string;
+      const eventName = command === 'trackSingle' ? args[2] as string : args[1] as string;
       
       // Check if this is a Lead event
       if ((command === 'track' || command === 'trackSingle' || command === 'trackCustom') && 
@@ -230,7 +230,9 @@ export default function PublicLeadForm() {
           // CRITICAL: Disable automatic event detection BEFORE init
           window.fbq('set', 'autoConfig', false, pixel.pixel_id);
           
-          window.fbq('init', pixel.pixel_id);
+          window.fbq('init', pixel.pixel_id, {
+            external_id: sourceDetection.tracking.external_id,
+          });
           window.fbq('trackSingle', pixel.pixel_id, 'PageView');
           console.log('[Meta Pixel] PageView tracked for:', pixel.pixel_id, '(autoConfig disabled)');
         }
@@ -280,7 +282,9 @@ export default function PublicLeadForm() {
     hasTrackedLeadRef.current = true;
     sessionStorage.setItem(leadStorageKey, 'true');
 
-    console.log('[Meta Pixel] Tracking Lead event for lead:', leadId, 'pixels:', activePixels.length);
+    const externalId = sourceDetection.tracking.external_id || leadId;
+
+    console.log('[Meta Pixel] Tracking Lead event for lead:', leadId, 'pixels:', activePixels.length, 'external_id:', externalId);
     
     // CRITICAL: Enable the firewall flag to allow our Lead event
     try {
@@ -288,7 +292,10 @@ export default function PublicLeadForm() {
       
       // Use fbq('track') with eventID for Facebook's automatic server-side deduplication
       activePixels.forEach((pixel) => {
-        window.fbq('track', 'Lead', {
+        window.fbq('init', pixel.pixel_id, {
+          external_id: externalId,
+        });
+        window.fbq('trackSingle', pixel.pixel_id, 'Lead', {
           content_name: formData.org_name,
           content_category: 'form_submission',
         }, { eventID: leadId });

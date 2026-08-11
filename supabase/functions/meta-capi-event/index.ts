@@ -12,6 +12,7 @@ interface UserData {
   client_user_agent?: string;
   fbc?: string;
   fbp?: string;
+  external_id?: string;
 }
 
 interface CapiRequest {
@@ -93,6 +94,9 @@ Deno.serve(async (req) => {
     }
     if (body.user_data.fbc) hashedUserData.fbc = body.user_data.fbc;
     if (body.user_data.fbp) hashedUserData.fbp = body.user_data.fbp;
+    if (body.user_data.external_id) {
+      hashedUserData.external_id = [await sha256Hash(body.user_data.external_id)];
+    }
 
     const eventPayload = {
       data: [

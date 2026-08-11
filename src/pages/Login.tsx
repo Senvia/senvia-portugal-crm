@@ -63,6 +63,16 @@ export default function Login() {
   const fbclid = searchParams.get('fbclid');
   const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : (searchParams.get('fbc') || null);
   const fbp = searchParams.get('fbp') || null;
+  const externalId = (() => {
+    const key = 'senvia_external_id';
+    const fromUrl = searchParams.get('external_id');
+    const cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + key + '=([^;]+)'));
+    const fromCookie = cookieMatch ? decodeURIComponent(cookieMatch[1]) : '';
+    const value = fromUrl || localStorage.getItem(key) || fromCookie || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    localStorage.setItem(key, value);
+    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; domain=.senvia.pt; max-age=31536000; SameSite=Lax; Secure`;
+    return value;
+  })();
   
   // Login form state
   const [loginCompanyCode, setLoginCompanyCode] = useState('');
@@ -357,7 +367,8 @@ export default function Login() {
         // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
         const capiEventId = `signup-${authData.user.id}`;
         if (typeof window.fbq === 'function') {
-          window.fbq('track', 'Lead', {
+          window.fbq('init', '2027821837745963', { external_id: externalId });
+          window.fbq('trackSingle', '2027821837745963', 'Lead', {
             content_name: 'Senvia OS Registration',
             content_category: 'signup',
           }, { eventID: capiEventId });
@@ -373,7 +384,7 @@ export default function Login() {
               event_name: 'Lead',
               event_id: `signup-${authData.user.id}`,
               event_source_url: window.location.href,
-              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, client_user_agent: navigator.userAgent },
+              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, external_id: externalId, client_user_agent: navigator.userAgent },
               custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
             }),
           }).catch(() => {});
@@ -416,7 +427,8 @@ export default function Login() {
       // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
       const capiEventId2 = `signup-${authData.user!.id}`;
       if (typeof window.fbq === 'function') {
-        window.fbq('track', 'Lead', {
+        window.fbq('init', '2027821837745963', { external_id: externalId });
+        window.fbq('trackSingle', '2027821837745963', 'Lead', {
           content_name: 'Senvia OS Registration',
           content_category: 'signup',
         }, { eventID: capiEventId2 });
@@ -432,7 +444,7 @@ export default function Login() {
               event_name: 'Lead',
               event_id: `signup-${authData.user!.id}`,
               event_source_url: window.location.href,
-              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, client_user_agent: navigator.userAgent },
+              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, external_id: externalId, client_user_agent: navigator.userAgent },
               custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
           }),
         }).catch(() => {});

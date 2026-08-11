@@ -100,6 +100,9 @@ export interface SourceDetectionResult {
     gclid?: string;
     ttclid?: string;
     referrer?: string;
+    fbc?: string;
+    fbp?: string;
+    external_id?: string;
   };
 }
 
@@ -149,6 +152,18 @@ export const detectLeadSource = (): SourceDetectionResult => {
   const fbcCookie = readCookie('_fbc');
   if (fbpCookie) tracking.fbp = fbpCookie;
   if (fbcCookie) tracking.fbc = fbcCookie;
+
+  const externalIdKey = 'senvia_external_id';
+  const externalIdFromUrl = urlParams.get('external_id');
+  const externalIdCookie = readCookie(externalIdKey);
+  const externalIdStored = localStorage.getItem(externalIdKey) || externalIdCookie;
+  const externalId =
+    externalIdFromUrl ||
+    externalIdStored ||
+    (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  localStorage.setItem(externalIdKey, externalId);
+  document.cookie = `${externalIdKey}=${encodeURIComponent(externalId)}; path=/; domain=.senvia.pt; max-age=31536000; SameSite=Lax; Secure`;
+  tracking.external_id = externalId;
 
   // Referrer
   const referrer = document.referrer;

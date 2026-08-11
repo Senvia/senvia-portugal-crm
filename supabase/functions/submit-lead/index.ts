@@ -1182,6 +1182,7 @@ Deno.serve(async (req) => {
       // timestamp); only reconstruct from fbclid as a fallback.
       const fbc = (cd?.fbc as string | undefined) || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined);
       const fbp = cd?.fbp as string | undefined;
+      const externalId = (cd?.external_id as string | undefined) || lead.id;
       
       if (fbc) console.log('CAPI: fbc constructed from fbclid:', fbc);
       
@@ -1214,6 +1215,7 @@ Deno.serve(async (req) => {
               client_user_agent: clientUserAgent || undefined,
               fbc: fbc || undefined,
               fbp: fbp || undefined,
+              external_id: externalId,
             },
             custom_data: {
               content_name: formSettings.form_name || 'Formulário Público',
