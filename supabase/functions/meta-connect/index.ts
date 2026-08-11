@@ -141,6 +141,40 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     const orgId = String(body.organization_id ?? "");
+
+    // Desligar: avisa a Meta para parar de enviar webhooks desta Página. Sem
+    // isto ela continua a entregar mensagens de uma caixa que já não existe, e
+    // o webhook regista-as como "página que não temos ligada" para sempre.
+    // A linha em si é apagada pelo CRM (RLS da organização) — aqui é só a
+    // subscrição.
+    if (body.action === "disconnect") {
+      const channelId = String(body.channel_id ?? "");
+      if (!orgId || !channelId) {
+        return new Response(JSON.stringify({ error: "organization_id ou channel_id em falta" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: ch } = await admin.from("messaging_channels")
+        .select("metadata").eq("id", channelId).eq("organization_id", orgId).maybeSingle();
+      const meta = (ch?.metadata ?? {}) as { page_id?: string; page_access_token?: string };
+
+      if (meta.page_id && meta.page_access_token) {
+        try {
+          await fetch(
+            `${GRAPH}/${meta.page_id}/subscribed_apps?access_token=${encodeURIComponent(meta.page_access_token)}`,
+            { method: "DELETE" },
+          );
+          log("subscrição removida", { pageId: meta.page_id });
+        } catch (e) {
+          // Melhor esforço: a caixa vai ser apagada de qualquer forma.
+          logError("falha a remover a subscrição", { error: (e as Error).message });
+        }
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const connect = body.connect === "messenger" ? "messenger" : "instagram";
     const label = String(body.label ?? "").trim();
 

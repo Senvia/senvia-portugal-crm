@@ -19,7 +19,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
@@ -982,6 +982,7 @@ function InboxesManager() {
   const { organization } = useAuth();
   const { toast } = useToast();
   const deleteEmailChannel = useDeleteEmailChannel();
+  const deleteChannel = useDeleteChannel();
   const updateAssign = useUpdateChannelAssignment();
   const updateGroups = useUpdateChannelGroups();
 
@@ -1286,7 +1287,11 @@ function InboxesManager() {
             <AlertDialogAction
               onClick={() => {
                 if (!toDelete) return;
-                deleteEmailChannel.mutate(toDelete.id);
+                // Cada tipo tem o seu caminho: o email passa pela função
+                // email-inbox (mexe em credenciais IMAP/SMTP), os outros apagam
+                // a linha. Mandar tudo para o email dava 404 ao apagar Instagram.
+                if (toDelete.type === 'email') deleteEmailChannel.mutate(toDelete.id);
+                else deleteChannel.mutate(toDelete.id);
                 setToDelete(null);
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

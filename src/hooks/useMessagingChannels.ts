@@ -200,3 +200,41 @@ export function useConnectMetaChannel() {
     },
   });
 }
+
+/**
+ * Elimina uma caixa que não é de email (hoje: Instagram/Messenger).
+ *
+ * As caixas de email têm o seu próprio caminho (useDeleteEmailChannel → função
+ * email-inbox), porque envolvem credenciais IMAP/SMTP. Estas não: apaga-se a
+ * linha, protegida pelo RLS da organização, e avisa-se a Meta para deixar de
+ * enviar webhooks desta Página.
+ *
+ * A remoção da subscrição é "melhor esforço": se falhar, a caixa desaparece do
+ * CRM na mesma e a Meta fica a enviar mensagens que o webhook ignora por não
+ * reconhecer a página. Preferível a recusar apagar por causa de uma chamada
+ * externa que não controlamos.
+ */
+export function useDeleteChannel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+
+      supabase.functions.invoke('meta-connect', {
+        body: { action: 'disconnect', organization_id: organization.id, channel_id: channelId },
+      }).catch(() => { /* melhor esforço — ver acima */ });
+
+      const { error } = await supabase
+        .from('messaging_channels')
+        .delete()
+        .eq('id', channelId)
+        .eq('organization_id', organization.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
