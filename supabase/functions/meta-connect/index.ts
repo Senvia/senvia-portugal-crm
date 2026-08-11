@@ -67,6 +67,38 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ── Arrancar o login direto do browser ────────────────────────────────────
+  // `?action=login` redireciona para o diálogo da Meta. Existe para se poder
+  // testar o fluxo inteiro sem interface nenhuma — basta abrir o endereço.
+  // O `config_id` pode vir no URL, o que permite testar ANTES de o segredo
+  // estar definido (é útil enquanto se anda a experimentar configurações).
+  if (url.searchParams.get("action") === "login") {
+    const cfg = url.searchParams.get("config_id") || configId;
+    if (!appId) {
+      return page("Configuração em falta", `
+        <h1>Configuração em falta <span class="tag">erro</span></h1>
+        <p>Falta <code>FACEBOOK_APP_ID</code> nos segredos do Supabase.</p>`, false);
+    }
+    if (!cfg) {
+      return page("Falta o config_id", `
+        <h1>Falta o <code>config_id</code> <span class="tag">erro</span></h1>
+        <p>O Facebook Login for Business precisa do id da configuração que criaste
+        no painel da Meta, em <em>Login do Facebook para Empresas → Configurações</em>.</p>
+        <p>Duas formas de o dar:</p>
+        <ul>
+          <li>Testar já, pondo-o no endereço:<br>
+            <code>${redirectUri}?action=login&amp;config_id=<strong>O_TEU_ID</strong></code></li>
+          <li>Definitivo: adicionar o segredo <code>FACEBOOK_LOGIN_CONFIG_ID</code> no Supabase.</li>
+        </ul>`, false);
+    }
+    const dialog = `https://www.facebook.com/v21.0/dialog/oauth`
+      + `?client_id=${encodeURIComponent(appId)}`
+      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      + `&config_id=${encodeURIComponent(cfg)}`
+      + `&response_type=code`;
+    return Response.redirect(dialog, 302);
+  }
+
   // ── Início do login: devolve o URL do diálogo ─────────────────────────────
   if (req.method === "POST") {
     if (!appId || !configId) {
