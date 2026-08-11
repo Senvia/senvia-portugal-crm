@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Mailbox, Inbox as InboxIcon, SlidersHorizontal, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MESSAGING_CHANNELS_ENABLED } from '@/lib/constants';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
 import { EmailFolderList } from '@/components/email/EmailFolderList';
@@ -98,7 +99,13 @@ export function InboxCaixaRail({
     }
   };
 
-  const messaging = caixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
+  // Canais de mensagens desligados ("Brevemente") — a Caixa de Entrada mostra
+  // só email. As caixas continuam na base de dados, apenas não são listadas
+  // (aqui e no seletor "Mostrar caixas", que também lê desta lista).
+  const visibleCaixas = MESSAGING_CHANNELS_ENABLED
+    ? caixas
+    : caixas.filter((c) => c.channel_type === 'email');
+  const messaging = visibleCaixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
   const allActive = !emailChannelId && caixaFilter === null;
   const unreadFor = (ch: MessagingChannel) =>
@@ -109,7 +116,7 @@ export function InboxCaixaRail({
     <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-muted/20 md:flex", className)}>
       <div className="flex items-center justify-between border-b px-3 py-3">
         <h1 className="px-1 text-sm font-semibold text-muted-foreground">Caixas</h1>
-        {caixas.length > 1 && (
+        {visibleCaixas.length > 1 && (
           <Popover>
             <PopoverTrigger asChild>
               <button title="Escolher caixas a mostrar" className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
@@ -119,7 +126,7 @@ export function InboxCaixaRail({
             <PopoverContent align="end" className="w-60 p-1.5">
               <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Mostrar caixas</p>
               <div className="max-h-72 overflow-y-auto">
-                {caixas.map((c) => (
+                {visibleCaixas.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => toggleHidden(c.id)}
@@ -137,18 +144,24 @@ export function InboxCaixaRail({
         )}
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
-        <button
-          onClick={onSelectAll}
-          className={cn(
-            'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
-            allActive ? 'bg-primary/10 font-semibold text-primary' : 'text-foreground/80 hover:bg-accent',
-          )}
-        >
-          <InboxIcon className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">Todas as conversas</span>
-          <CountBadge n={totalUnread} active={allActive} />
-        </button>
+        {/* Secção inteira escondida com os canais desligados: sem WhatsApp nem
+            Instagram, "Todas as conversas" não teria nada para mostrar. */}
+        {MESSAGING_CHANNELS_ENABLED && (
+          <>
+            <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
+            <button
+              onClick={onSelectAll}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
+                allActive ? 'bg-primary/10 font-semibold text-primary' : 'text-foreground/80 hover:bg-accent',
+              )}
+            >
+              <InboxIcon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left">Todas as conversas</span>
+              <CountBadge n={totalUnread} active={allActive} />
+            </button>
+          </>
+        )}
 
         {messaging.map((ch) => {
           const active = !emailChannelId && caixaFilter === ch.chatwoot_inbox_id;

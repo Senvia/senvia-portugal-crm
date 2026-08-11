@@ -40,3 +40,23 @@ export const INBOX_CONFIG = {
   // px width at/above which the contact panel is a fixed column (else a Sheet).
   DESKTOP_BREAKPOINT: 1024,
 } as const;
+
+/**
+ * Canais de mensagens (WhatsApp, Instagram, Facebook) desligados — "Brevemente".
+ *
+ * A Caixa de Entrada funciona só para EMAIL enquanto isto for `false`.
+ *
+ * Porquê: o WhatsApp por ligação não-oficial (Evolution) viola os Termos de
+ * Serviço da Meta e arrisca o ban do número do cliente; e o Instagram/Messenger
+ * exigem App Review da Meta, que ainda não está aprovada. Prometer canais que
+ * não podemos entregar em condições é pior do que não os oferecer.
+ *
+ * Para voltar a ligar: mudar para `true`. É o único sítio a mexer — o catálogo
+ * de canais, a lista de caixas e o painel lateral da Caixa de Entrada leem
+ * todos daqui. Os dados dos canais já ligados NÃO são apagados por isto, apenas
+ * deixam de aparecer, por isso a mudança é reversível sem perder nada.
+ */
+export const MESSAGING_CHANNELS_ENABLED = false;
+
+/** Rótulo mostrado nos canais ainda por abrir. */
+export const CHANNEL_COMING_SOON_LABEL = 'Brevemente';

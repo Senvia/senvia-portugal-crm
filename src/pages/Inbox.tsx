@@ -104,7 +104,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
-import { INBOX_CONFIG } from "@/lib/constants";
+import { INBOX_CONFIG, MESSAGING_CHANNELS_ENABLED } from "@/lib/constants";
 import { isActivityText, translateActivity } from "@/lib/activity-detection";
 import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
 import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
@@ -2712,7 +2712,9 @@ export default function Inbox() {
         <div>
           <h2 className="text-xl font-semibold">Liga a tua primeira caixa de entrada</h2>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Conecta um canal (WhatsApp, Email e mais) para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia.
+            {MESSAGING_CHANNELS_ENABLED
+              ? 'Conecta um canal (WhatsApp, Email e mais) para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia.'
+              : 'Liga a tua conta de email para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia. WhatsApp, Instagram e Facebook estão a caminho.'}
           </p>
         </div>
         <Button onClick={() => navigate('/settings?tab=inboxes&addInbox=1')}>

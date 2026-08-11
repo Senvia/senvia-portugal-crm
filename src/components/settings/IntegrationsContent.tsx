@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MESSAGING_CHANNELS_ENABLED, CHANNEL_COMING_SOON_LABEL } from "@/lib/constants";
 import { LucideIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -774,10 +775,12 @@ function IntakeWebhookCard({ webhook, members }: { webhook: LeadIntakeWebhook; m
 // --- Form sub-components ---
 
 type ChannelIcon = React.ComponentType<{ className?: string }>;
+// WhatsApp, Instagram e Facebook ficam indisponíveis enquanto
+// MESSAGING_CHANNELS_ENABLED for false — ver o comentário em constants.ts.
 const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; tint: string; available: boolean }[] = [
-  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: true },
+  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: MESSAGING_CHANNELS_ENABLED },
   { type: 'email', label: 'Email', icon: Mail, color: 'text-blue-600', tint: 'bg-blue-500/10', available: true },
-  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: true },
+  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: MESSAGING_CHANNELS_ENABLED },
   { type: 'facebook', label: 'Facebook', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
 ];
 
@@ -970,7 +973,15 @@ function EditCaixaModal({
 // surfaced as "em breve" until their providers are wired.
 function InboxesManager() {
   useAutoRepairWiring(); // silent one-time repair of broken Evolution→Chatwoot wiring
-  const { data: channels = [] } = useMessagingChannels();
+  const { data: allChannels = [] } = useMessagingChannels();
+  // Com os canais de mensagens desligados, só as caixas de email aparecem. As
+  // linhas dos outros canais continuam na base de dados intactas — voltam a
+  // aparecer sozinhas quando MESSAGING_CHANNELS_ENABLED voltar a true. Sem este
+  // filtro, os clientes continuariam a ver caixas de WhatsApp presas em
+  // "A ligar..." que nunca vão ligar.
+  const channels = MESSAGING_CHANNELS_ENABLED
+    ? allChannels
+    : allChannels.filter((c) => c.channel_type === 'email');
   const { data: members = [] } = useTeamMembers();
   const { limits, planName } = useSubscription();
   const { organization } = useAuth();
@@ -1264,25 +1275,36 @@ function InboxesManager() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">{c.label}</p>
-                    {!c.available && <p className="text-[10px] text-muted-foreground">Em breve</p>}
+                    {!c.available && (
+                      <p className="text-[10px] text-muted-foreground">{CHANNEL_COMING_SOON_LABEL}</p>
+                    )}
                   </div>
                 </button>
               );
             })}
           </div>
-          <div className="space-y-2 border-t pt-4">
-            <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
-            <Input
-              id="new-inbox-label"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Ex: Vendas, Suporte"
-              onKeyDown={(e) => e.key === 'Enter' && startNewWhatsApp()}
-            />
-            <Button onClick={startNewWhatsApp} className="w-full gap-2">
-              <MessageCircle className="h-4 w-4" /> Ligar WhatsApp
-            </Button>
-          </div>
+          {/* Este bloco ligava o WhatsApp diretamente, sem passar pelo catálogo
+              acima — deixá-lo aqui tornaria o "Brevemente" decorativo. */}
+          {MESSAGING_CHANNELS_ENABLED ? (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
+              <Input
+                id="new-inbox-label"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Ex: Vendas, Suporte"
+                onKeyDown={(e) => e.key === 'Enter' && startNewWhatsApp()}
+              />
+              <Button onClick={startNewWhatsApp} className="w-full gap-2">
+                <MessageCircle className="h-4 w-4" /> Ligar WhatsApp
+              </Button>
+            </div>
+          ) : (
+            <p className="border-t pt-4 text-xs text-muted-foreground">
+              WhatsApp, Instagram e Facebook estão a caminho. Por agora, a Caixa de Entrada
+              trabalha com email.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 
