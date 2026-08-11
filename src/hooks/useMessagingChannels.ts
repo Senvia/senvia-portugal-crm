@@ -129,7 +129,18 @@ export function useConnectMetaChannel() {
       const { data, error } = await supabase.functions.invoke('meta-connect', {
         body: { action: 'oauth_url', organization_id: organization.id, connect, label },
       });
-      if (error) throw error;
+      if (error) {
+        // O invoke() só entrega "Edge Function returned a non-2xx status code" e
+        // deita fora o corpo — que é onde está o motivo real. Vale a pena ir
+        // buscá-lo: a diferença entre "500" e "falta o FACEBOOK_LOGIN_CONFIG_ID"
+        // é a diferença entre adivinhar e resolver.
+        let detail = '';
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.error ?? '';
+        } catch { /* corpo não era JSON — fica a mensagem genérica */ }
+        throw new Error(detail || (error as Error).message);
+      }
       const url = (data as { url?: string; error?: string })?.url;
       if (!url) throw new Error((data as { error?: string })?.error || 'Não foi possível iniciar o login');
 
