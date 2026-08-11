@@ -5,11 +5,18 @@ import { cn } from '@/lib/utils';
  * Contact variables the engine resolves when rendering message templates
  * ({{nome}} → run context). Shown under every message-editing field.
  */
+// Estes nomes são os mesmos da configuração de IA antiga, de propósito: uma
+// mensagem copiada de lá funciona aqui tal e qual. Antes faltava
+// {{primeiro_nome}}, que é o mais usado de todos — ficava por substituir e o
+// contacto recebia "Olá, {{primeiro_nome}}!".
 const VARIABLES = [
-  { token: '{{nome}}', label: 'Nome' },
+  { token: '{{primeiro_nome}}', label: 'Primeiro nome' },
+  { token: '{{nome}}', label: 'Nome completo' },
   { token: '{{email}}', label: 'Email' },
   { token: '{{telefone}}', label: 'Telefone' },
   { token: '{{empresa}}', label: 'Empresa' },
+  { token: '{{nif}}', label: 'NIF' },
+  { token: '{{fonte}}', label: 'Fonte' },
   { token: '{{ultima_resposta}}', label: 'Última resposta' },
 ];
 

@@ -442,7 +442,7 @@ export const NODE_DEFINITIONS: Record<AutomationNodeType, NodeDefinition> = {
     branching: true,
     defaultConfig: {
       question: '',
-      use_buttons: true,
+      use_buttons: false,
       timeout_amount: 24,
       timeout_unit: 'hours',
       rules: [],

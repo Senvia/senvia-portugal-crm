@@ -552,7 +552,7 @@ function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: Form
     }
     set({
       wait_reply: true,
-      use_buttons: config.use_buttons ?? true,
+      use_buttons: config.use_buttons ?? false,
       timeout_amount: config.timeout_amount ?? config.timeout?.value ?? 24,
       timeout_unit: config.timeout_unit ?? config.timeout?.unit ?? 'hours',
       timeout: undefined,
@@ -600,7 +600,7 @@ function WhatsappForm({ config, set }: { config: AutomationNodeConfig; set: Form
         </Helper>
       </div>
 
-      {waitsForReply && <ReplyRulesEditor config={config} set={set} buttonsDefault />}
+      {waitsForReply && <ReplyRulesEditor config={config} set={set} buttonsDefault={false} />}
     </>
   );
 }
@@ -854,8 +854,16 @@ function ReplyRulesEditor({
           />
         </div>
         <Helper>
-          O contacto toca no botão e a resposta escolhe o caminho. Se o WhatsApp dele não mostrar
-          botões, saem opções numeradas — responder «1», «2»… também funciona.
+          {useButtons ? (
+            <span className="text-warning">
+              Atenção: o WhatsApp deixou de entregar botões em contas normais. O envio é aceite mas a
+              mensagem pode nunca chegar — e nós não temos como saber. Desliga isto se o contacto não
+              receber nada.
+            </span>
+          ) : (
+            <>As opções saem numeradas na mensagem e o contacto responde «1», «2»… Esta é a forma
+            fiável: usa o mesmo envio de texto de sempre.</>
+          )}
         </Helper>
       </div>
 

@@ -94,12 +94,44 @@ function normalizePhone(raw: string): string {
   return cleaned;
 }
 
-/** {{nome}} → valor do contexto. Deixa intacto o que não conhece. */
+/**
+ * {{nome}} → valor do contexto.
+ *
+ * O que não conhece é REMOVIDO, não deixado à vista. Antes ficava intacto, o que
+ * significa que um contacto recebia "Olá, {{primeiro_nome}}!" — é a mesma regra
+ * que o renderTemplate do submit-lead já seguia, e a razão é a mesma: mais vale
+ * uma frase com uma lacuna do que mostrar código a um cliente.
+ */
 function render(template: string, vars: Record<string, unknown>): string {
-  return String(template ?? "").replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key) => {
+  return String(template ?? "").replace(/\{\{\s*([\w:]+)\s*\}\}/g, (_whole, key) => {
     const v = vars[key];
-    return v === undefined || v === null ? whole : String(v);
+    return v === undefined || v === null ? "" : String(v);
   });
+}
+
+/**
+ * Variáveis disponíveis nas mensagens de um percurso.
+ *
+ * O contexto do run já traz o registo todo que despoletou o fluxo (o enroll faz
+ * `context: { ...record }`), mas com os nomes das COLUNAS — company_name, não
+ * empresa. Estes aliases dão os mesmos nomes que o sistema antigo usa, para uma
+ * mensagem copiada da configuração antiga funcionar tal e qual. Mantêm-se
+ * também as chaves cruas do contexto, para não partir fluxos existentes.
+ */
+function buildVars(run: Run): Record<string, unknown> {
+  const ctx = run.context ?? {};
+  const nome = String(run.contact_name ?? ctx.nome ?? "").trim();
+  const primeiro = nome.split(/\s+/)[0] || nome;
+  return {
+    ...ctx,
+    nome,
+    primeiro_nome: primeiro,
+    email: run.contact_email ?? ctx.email ?? "",
+    telefone: run.contact_phone ?? ctx.telefone ?? "",
+    empresa: ctx.company_name ?? ctx.empresa ?? "",
+    nif: ctx.company_nif ?? ctx.nif ?? "",
+    fonte: ctx.source ?? ctx.fonte ?? "",
+  };
 }
 
 /**
@@ -338,7 +370,7 @@ class Engine {
     resumeSelf?: boolean;
   }> {
     const cfg = node.config ?? {};
-    const vars = { ...run.context, nome: run.contact_name, email: run.contact_email, telefone: run.contact_phone };
+    const vars = buildVars(run);
 
     switch (node.type) {
       // O gatilho é apenas o ponto de entrada.
@@ -455,7 +487,21 @@ class Engine {
         const waitsForReply = !!cfg.wait_reply && rules.length > 0;
         let buttonsSent = false;
 
-        if (waitsForReply && cfg.use_buttons !== false) {
+        // Botões: OPT-IN explícito, e por boas razões.
+        //
+        // O WhatsApp deixou de entregar mensagens com botões interativos em
+        // ligações normais (não-API-oficial). A Evolution aceita o pedido e
+        // responde 2xx à mesma — por isso o `res.ok` abaixo dá verdadeiro, o
+        // degradar-para-texto nunca dispara, e a mensagem simplesmente nunca
+        // chega a ninguém. Verificado a 11/08/2026: um envio com botões,
+        // registado como enviado, zero entregas e zero respostas; pelo mesmo
+        // canal e com as mesmas credenciais, o /message/sendText de sempre
+        // continua a entregar.
+        //
+        // Por isso o valor por omissão passou de "ligado" a "desligado": as
+        // opções numeradas em texto usam o sendText, que funciona, e responder
+        // "1" ou "2" escolhe o ramo à mesma.
+        if (waitsForReply && cfg.use_buttons === true) {
           const instance = await this.whatsappInstance(run.organization_id);
           if (!instance) return { kind: "fail", error: "Nenhum canal de WhatsApp ligado nesta organização" };
           try {
