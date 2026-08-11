@@ -53,9 +53,12 @@ export function SalesPerformancePanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
-  const { selectedMonth } = useDashboardPeriod();
+  // `selectedMonth` só serve os OBJETIVOS, que estão guardados uma linha por
+  // mês (não há como um intervalo arbitrário mapear nisso). As vendas, essas,
+  // seguem o período exato escolhido.
+  const { selectedMonth, from, to } = useDashboardPeriod();
   const { objectives, isLoading: objLoading } = useMonthlyObjectives(selectedMonth);
-  const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics(selectedMonth);
+  const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics(selectedMonth, from, to);
   const { modules } = useModules();
   const [editOpen, setEditOpen] = useState(false);
   const [objOpen, setObjOpen] = useState(true);

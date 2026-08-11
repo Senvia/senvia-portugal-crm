@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +11,7 @@ import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
 import { getTrafficMatcher } from "@/lib/paid-traffic";
 import { supabase } from "@/integrations/supabase/client";
-import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useDashboardPeriod, formatPeriodLabel } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -59,18 +59,20 @@ export function TeamPerformanceTable() {
     return keys;
   }, [pipelineStages]);
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
-  const { selectedMonth } = useDashboardPeriod();
+  const { from, to } = useDashboardPeriod();
   const { filterKey } = usePaidTrafficFilter();
   const cardRef = useRef<HTMLDivElement>(null);
 
   const orgId = organization?.id;
-  const monthStartDate = startOfMonth(selectedMonth);
-  const monthEndDate = endOfMonth(selectedMonth);
+  // Honra o intervalo escolhido tal como foi escolhido. Sem período ("Todo o
+  // histórico"), abre para todo o passado e até ao fim do dia de hoje.
+  const monthStartDate = from ?? new Date(0);
+  const monthEndDate = endOfDay(to ?? from ?? new Date());
   const monthStart = monthStartDate.toISOString();
   const monthEnd = monthEndDate.toISOString();
   const monthStartMs = monthStartDate.getTime();
   const monthEndMs = monthEndDate.getTime();
-  const currentMonthLabel = format(monthStartDate, "MMMM yyyy", { locale: pt });
+  const currentMonthLabel = formatPeriodLabel(from, to);
 
   const allMemberList = useMemo(() => {
     const activeMembers = members.filter((member) => !member.is_banned);

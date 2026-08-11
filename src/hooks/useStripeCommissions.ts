@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
-import { endOfMonth, format } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
 export interface StripeCommissionRecord {
@@ -32,8 +32,11 @@ export interface StripeCommissionByUser {
 export function useStripeCommissions() {
   const { organization } = useAuth();
   const orgId = organization?.id;
-  const { selectedMonth } = useDashboardPeriod();
-  const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+  // Só o fim do período importa aqui (ver o comentário da query abaixo): uma
+  // comissão pendente é dívida que transita, por isso não leva limite inferior.
+  // Sem período escolhido, o corte é hoje.
+  const { to, from } = useDashboardPeriod();
+  const monthEnd = format(to ?? from ?? new Date(), "yyyy-MM-dd");
 
   return useQuery({
     queryKey: ["stripe-commissions", orgId, monthEnd],

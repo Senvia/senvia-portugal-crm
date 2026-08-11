@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { format } from "date-fns";
 
 export interface CommissionEntry {
   userId: string;
@@ -21,30 +21,34 @@ interface SalesSettings {
 export function useSalesCommissions() {
   const { organization, user } = useAuth();
   const orgId = organization?.id;
-  const { selectedMonth } = useDashboardPeriod();
+  const { from, to } = useDashboardPeriod();
 
   const salesSettings = (organization?.sales_settings as SalesSettings) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
   const globalRate = salesSettings.commission_percentage || null;
 
-  const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+  // Honra o intervalo do dashboard. Sem período, não há limites.
+  const monthStart = from ? format(from, "yyyy-MM-dd") : null;
+  const monthEnd = to ? format(to, "yyyy-MM-dd") : null;
 
   return useQuery({
-    queryKey: ["sales-commissions", orgId, monthStart, commissionsEnabled],
+    queryKey: ["sales-commissions", orgId, monthStart, monthEnd, commissionsEnabled],
     queryFn: async (): Promise<CommissionEntry[]> => {
       if (!orgId || !commissionsEnabled) return [];
 
       // Fetch sales for the period. `comissao` is the authoritative commission
       // for the sale — set either by the energy CPE engine, the telecom
       // auto-fill trigger (products × multiplier), or manually by the admin.
-      const { data: sales, error: salesError } = await supabase
+      let salesQuery = supabase
         .from("sales")
         .select("created_by, total_value, comissao")
         .eq("organization_id", orgId)
-        .gte("sale_date", monthStart)
-        .lte("sale_date", monthEnd)
         .in("status", ["fulfilled", "delivered"]);
+
+      if (monthStart) salesQuery = salesQuery.gte("sale_date", monthStart);
+      if (monthEnd) salesQuery = salesQuery.lte("sale_date", monthEnd);
+
+      const { data: sales, error: salesError } = await salesQuery;
 
       if (salesError) throw salesError;
 

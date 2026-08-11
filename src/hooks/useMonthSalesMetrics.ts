@@ -11,16 +11,21 @@ export interface UserSalesMetrics {
   comissao: number;
 }
 
-export function useMonthSalesMetrics(referenceDate?: Date) {
+/**
+ * `from`/`to` delimitam o período. Sem eles, cai no mês de `referenceDate`
+ * (ou no mês atual), que era o comportamento único até o dashboard passar a
+ * ter um intervalo de datas a sério.
+ */
+export function useMonthSalesMetrics(referenceDate?: Date, from?: Date | null, to?: Date | null) {
   const { organization } = useAuth();
   const orgId = organization?.id;
 
   const ref = referenceDate || new Date();
-  const monthStart = format(startOfMonth(ref), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(ref), "yyyy-MM-dd");
+  const monthStart = format(from ?? startOfMonth(ref), "yyyy-MM-dd");
+  const monthEnd = format(to ?? endOfMonth(ref), "yyyy-MM-dd");
 
   return useQuery({
-    queryKey: ["month-sales-metrics", orgId, monthStart],
+    queryKey: ["month-sales-metrics", orgId, monthStart, monthEnd],
     queryFn: async (): Promise<UserSalesMetrics[]> => {
       if (!orgId) return [];
 

@@ -55,7 +55,7 @@ export function MetricsPanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
-  const { selectedMonth } = useDashboardPeriod();
+  const { selectedMonth, from, to } = useDashboardPeriod();
   const { metrics, isLoading: metricsLoading } = useMonthlyMetrics(selectedMonth);
   const { modules } = useModules();
   const [editOpen, setEditOpen] = useState(false);
@@ -68,11 +68,14 @@ export function MetricsPanel() {
   const orgId = organization?.id;
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
-  const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
-  const monthEndStr = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+  // As secções "Ritmo" e "Concretização" são contagens por data, por isso
+  // seguem o período exato. Só as "Métricas Mensais" (secção A) é que estão
+  // guardadas por mês e continuam presas ao mês de `selectedMonth`.
+  const monthStart = format(from ?? startOfMonth(selectedMonth), "yyyy-MM-dd");
+  const monthEndStr = format(to ?? endOfMonth(selectedMonth), "yyyy-MM-dd");
 
   const { data: proposalsRaw = [], isLoading: proposalsLoading } = useQuery({
-    queryKey: ["metrics-proposals-ops", orgId, monthStart],
+    queryKey: ["metrics-proposals-ops", orgId, monthStart, monthEndStr],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
@@ -115,7 +118,7 @@ export function MetricsPanel() {
   });
 
   const { data: salesAggregated = [], isLoading: salesLoading } = useQuery({
-    queryKey: ["metrics-sales-ops-v2", orgId, monthStart],
+    queryKey: ["metrics-sales-ops-v2", orgId, monthStart, monthEndStr],
     queryFn: async () => {
       if (!orgId) return [];
       const { data: sales, error } = await supabase

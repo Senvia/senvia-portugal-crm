@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
-import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useDashboardPeriod, formatPeriodLabel } from "@/stores/useDashboardPeriod";
 import { getTrafficMatcher, isPaidFilter } from "@/lib/paid-traffic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, MousePointerClick } from "lucide-react";
@@ -27,17 +27,19 @@ export function PaidTrafficCard() {
   // cartão tinha um seletor de mês PRÓPRIO, por omissão em "Todo o histórico",
   // por isso mudar o período do dashboard não lhe mexia — dois filtros de data
   // no mesmo ecrã, e o global aparentemente sem efeito.
-  const { selectedMonth } = useDashboardPeriod();
-  const monthStart = startOfMonth(selectedMonth);
-  const monthEnd = endOfMonth(monthStart);
+  const { from, to } = useDashboardPeriod();
+  const fromStr = from ? format(from, "yyyy-MM-dd") : null;
+  const toStr = to ? format(to, "yyyy-MM-dd") : null;
 
   const wonKeys = stages.filter((s) => s.is_final_positive).map((s) => s.key);
   const FALLBACK_WON = ["won", "fechado", "ganho", "closed", "convertido"];
 
   const { data, isLoading } = useQuery({
+    // Ambas as pontas na chave: com só o início, dois períodos que começam no
+    // mesmo dia partilhavam cache.
     queryKey: [
       "paid-traffic-conversions", organization?.id, wonKeys.join(","),
-      format(monthStart, "yyyy-MM-dd"), filterKey,
+      fromStr, toStr, filterKey,
     ],
     queryFn: async () => {
       if (!organization?.id) return null;
@@ -58,10 +60,10 @@ export function PaidTrafficCard() {
         query = query.or(PAID_FILTER);
       }
 
-      // Restringe às leads que ENTRARAM no mês selecionado (por data de criação).
-      query = query
-        .gte("created_at", `${format(monthStart, "yyyy-MM-dd")}T00:00:00`)
-        .lte("created_at", `${format(monthEnd, "yyyy-MM-dd")}T23:59:59`);
+      // Restringe às leads que ENTRARAM no período (por data de criação).
+      // Sem período escolhido ("Todo o histórico"), não há limites nenhuns.
+      if (fromStr) query = query.gte("created_at", `${fromStr}T00:00:00`);
+      if (toStr) query = query.lte("created_at", `${toStr}T23:59:59`);
 
       const { data: leads, error } = await query;
       if (error) throw error;
@@ -102,7 +104,7 @@ export function PaidTrafficCard() {
             Tráfego Pago
           </CardTitle>
           <span className="text-xs capitalize text-muted-foreground">
-            {format(monthStart, "MMMM yyyy", { locale: pt })}
+            {formatPeriodLabel(from, to)}
           </span>
         </div>
       </CardHeader>
@@ -137,7 +139,7 @@ export function PaidTrafficCard() {
           </div>
         )}
         <p className="mt-2 text-[10px] text-muted-foreground/70">
-          Leads de tráfego pago que entraram no mês selecionado no dashboard.
+          Leads de tráfego pago que entraram no período selecionado no dashboard.
         </p>
       </CardContent>
     </Card>

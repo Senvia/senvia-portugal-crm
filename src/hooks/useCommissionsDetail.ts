@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { format } from "date-fns";
 
 export interface CommissionSaleDetail {
   saleId: string;
@@ -31,17 +31,20 @@ interface SalesSettings {
 export function useCommissionsDetail() {
   const { organization } = useAuth();
   const orgId = organization?.id;
-  const { selectedMonth } = useDashboardPeriod();
+  const { from, to } = useDashboardPeriod();
 
   const salesSettings = (organization?.sales_settings as SalesSettings) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
   const globalRate = salesSettings.commission_percentage || null;
 
-  const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+  // Honra o intervalo do dashboard. Sem período, abre de ponta a ponta — as
+  // datas entram numa expressão `or(...)` do PostgREST, por isso é preciso um
+  // valor em vez de omitir o limite.
+  const monthStart = from ? format(from, "yyyy-MM-dd") : "1900-01-01";
+  const monthEnd = to ? format(to, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
   return useQuery({
-    queryKey: ["commissions-detail", orgId, commissionsEnabled, monthStart],
+    queryKey: ["commissions-detail", orgId, commissionsEnabled, monthStart, monthEnd],
     queryFn: async (): Promise<{ byUser: CommissionByUser[]; grandTotal: number }> => {
       if (!orgId || !commissionsEnabled) return { byUser: [], grandTotal: 0 };
 
