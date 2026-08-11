@@ -367,6 +367,17 @@ export default function Login() {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Não foi possível criar o utilizador');
 
+      // O Supabase NÃO devolve erro quando o email já tem conta. Para não
+      // revelar quem está registado na plataforma, responde sucesso com um
+      // utilizador falso, não cria nada e não envia email nenhum. Como vem
+      // sempre sem sessão, sem esta verificação seguíamos para o ramo do
+      // "confirma o teu email" e mostrávamos "Conta criada com sucesso!" por
+      // uma conta que não existe — a pessoa fica à espera de um email que nunca
+      // chega. O sinal documentado deste caso é o identities vir vazio.
+      if (authData.user.identities?.length === 0) {
+        throw new Error('already registered');
+      }
+
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
         // No session means we cannot call create_organization_for_current_user
@@ -479,7 +490,8 @@ export default function Login() {
     } catch (error: any) {
       let message = error.message;
       if (error.message.includes('already registered')) {
-        message = 'Este email já está registado';
+        message =
+          'Este email já tem conta. Entre com ela, ou use "Esqueci-me da password" para recuperar o acesso.';
       } else if (
         // The signup transaction now also creates the organization, so a slug
         // taken between the availability check and submit aborts the whole
