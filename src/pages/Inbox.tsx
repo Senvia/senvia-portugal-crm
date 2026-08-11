@@ -771,6 +771,14 @@ export default function Inbox() {
   // replaced by the email list+reader for the selected folder.
   const [emailChannelId, setEmailChannelId] = useState<string | null>(null);
   const [emailFolderId, setEmailFolderId] = useState<string | null>(null);
+  // Com os canais de mensagens desligados a Caixa de Entrada É o cliente de
+  // email, por isso abre logo na primeira caixa de email em vez de mostrar a
+  // lista de conversas (que fica vazia) e obrigar a escolher.
+  useEffect(() => {
+    if (MESSAGING_CHANNELS_ENABLED || emailChannelId) return;
+    const firstEmail = channels.find((c) => c.channel_type === "email");
+    if (firstEmail) setEmailChannelId(firstEmail.id);
+  }, [channels, emailChannelId]);
   const [draft, setDraft] = useState("");
   // Per-conversation drafts (id -> unsent text), so the list can show "Rascunho:"
   // and switching chats never carries one conversation's unsent text into another.
@@ -920,7 +928,13 @@ export default function Inbox() {
   // A configured-but-dropped channel keeps the inbox usable (Chatwoot still
   // serves history) with a reconnect banner instead.
   // Inbox is usable as soon as the org has ANY connected caixa (not only WhatsApp).
-  const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
+  // Com os canais de mensagens desligados, só uma caixa de EMAIL torna a Caixa
+  // de Entrada utilizável. Sem isto, uma organização que só tenha WhatsApp
+  // ligado entrava e encontrava uma lista de conversas vazia, sem perceber
+  // porquê — em vez do ecrã que a convida a ligar o email.
+  const channelConfigured = MESSAGING_CHANNELS_ENABLED
+    ? (channels.some((c) => c.status === "connected") || !!channel)
+    : channels.some((c) => c.channel_type === "email" && c.status === "connected");
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
   // The getter tells the handler which thread is being read, so it doesn't
@@ -1156,10 +1170,18 @@ export default function Inbox() {
   );
 
   // Hide the Evolution control bot's QR-code conversations + email conversations.
+  //
+  // Esta lista é SÓ de mensagens (o email tem cliente próprio, ver
+  // emailInboxIds acima) — ou seja, na prática é a lista do WhatsApp. Com os
+  // canais de mensagens desligados fica vazia: esconder as caixas não chegava,
+  // porque as conversas vêm do Chatwoot independentemente da lista de caixas, e
+  // era por isso que o WhatsApp continuava à vista.
   const visible = useMemo(
-    () => conversations.filter(
-      (c) => c.contact_name !== "EvolutionAPI" && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id)),
-    ),
+    () => (MESSAGING_CHANNELS_ENABLED
+      ? conversations.filter(
+        (c) => c.contact_name !== "EvolutionAPI" && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id)),
+      )
+      : []),
     [conversations, emailInboxIds],
   );
 

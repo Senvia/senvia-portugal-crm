@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessagingChannels } from '@/hooks/useMessagingChannels';
 import { isActivityText } from '@/lib/activity-detection';
+import { MESSAGING_CHANNELS_ENABLED } from '@/lib/constants';
 import type {
   InboxConversation,
   InboxAttachment,
@@ -516,6 +517,11 @@ export function countUnreadConversations(
   conversations: InboxConversation[],
   excludeInboxIds?: Set<number>,
 ): number {
+  // Este contador é de MENSAGENS (o email é excluído por excludeInboxIds). Com
+  // os canais de mensagens desligados não há nada para contar — sem isto, o
+  // menu lateral continuava a mostrar um sino com não-lidas de WhatsApp que já
+  // não se conseguem abrir em lado nenhum.
+  if (!MESSAGING_CHANNELS_ENABLED) return 0;
   const muted = new Set(loadMutedIds());
   return conversations.filter(
     (c) =>
