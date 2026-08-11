@@ -170,6 +170,11 @@ verify_jwt = false
 [functions.instagram-connect]
 verify_jwt = false
 
+# Callback do OAuth da Meta — chamada pelo browser do utilizador no fim do
+# diálogo de login, sem JWT nenhum.
+[functions.meta-connect]
+verify_jwt = false
+
 # Chamada pela Meta, não por um utilizador nosso — não há JWT nenhum para
 # validar. A autenticação é feita dentro da função, verificando a assinatura
 # HMAC do signed_request com o App Secret.
