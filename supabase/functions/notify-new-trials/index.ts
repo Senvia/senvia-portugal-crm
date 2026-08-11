@@ -69,6 +69,12 @@ serve(async (req) => {
 
         let ownerName = "";
         let ownerEmail = "";
+        // Atribuição de tráfego do registo, gravada pelo Login.tsx nos
+        // metadados do utilizador. Sem isto, todo e qualquer trial entrava no
+        // CRM como "Trial SENVIA OS" e nunca contava como tráfego pago, mesmo
+        // vindo de um anúncio pago.
+        let signupSource = "";
+        let signupTracking: Record<string, unknown> | null = null;
         if (member?.user_id) {
           const { data: prof } = await supabase
             .from("profiles")
@@ -77,11 +83,25 @@ serve(async (req) => {
             .maybeSingle();
           ownerName = prof?.full_name ?? "";
           ownerEmail = prof?.email ?? "";
-          if (!ownerEmail) {
-            const { data: au } = await supabase.auth.admin.getUserById(member.user_id);
-            ownerEmail = au?.user?.email ?? "";
+
+          // Passou a ser incondicional: os metadados de atribuição só existem
+          // aqui, e antes esta chamada só acontecia quando faltava o email.
+          const { data: au } = await supabase.auth.admin.getUserById(member.user_id);
+          if (!ownerEmail) ownerEmail = au?.user?.email ?? "";
+          const meta = (au?.user?.user_metadata ?? {}) as Record<string, unknown>;
+          if (typeof meta.signup_source === "string") signupSource = meta.signup_source;
+          if (meta.signup_tracking && typeof meta.signup_tracking === "object") {
+            signupTracking = meta.signup_tracking as Record<string, unknown>;
           }
         }
+
+        // "Direto" não acrescenta nada ao rótulo; qualquer outra origem sim.
+        // Fica composto de propósito — "Trial SENVIA OS (Facebook Ads)" conta
+        // como tráfego pago (o classificador procura "ads") sem perder a
+        // informação de que é um trial, que é o que distingue estas leads.
+        const leadSource = signupSource && signupSource !== "Direto"
+          ? `Trial SENVIA OS (${signupSource})`
+          : "Trial SENVIA OS";
 
         const startStr = new Date(org.created_at).toLocaleString("pt-PT");
 
@@ -92,11 +112,14 @@ serve(async (req) => {
           email: ownerEmail || "",
           phone: org.contact_phone || "",
           company_name: org.name,
-          source: "Trial SENVIA OS",
+          source: leadSource,
           status: "new",
           temperature: "hot",
           automation_enabled: false,
           gdpr_consent: false,
+          // Mesma forma que as leads dos formulários públicos, para os
+          // relatórios de origem poderem tratar as duas da mesma maneira.
+          custom_data: signupTracking ?? {},
           notes:
             `🎉 Novo trial do SENVIA OS.\n` +
             `Empresa: ${org.name}\n` +

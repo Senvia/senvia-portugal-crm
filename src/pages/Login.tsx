@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { detectLeadSource } from '@/lib/source-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +74,18 @@ export default function Login() {
     document.cookie = `${key}=${encodeURIComponent(value)}; path=/; domain=.senvia.pt; max-age=31536000; SameSite=Lax; Secure`;
     return value;
   })();
-  
+
+  // De onde veio quem se está a registar. O bloco acima só serve o Pixel/CAPI e
+  // só olha para os parâmetros do URL; isto lê tudo o resto (utm_*, gclid, o
+  // referrer e os cookies _fbc/_fbp que provam um clique num anúncio mesmo
+  // quando o fbclid já não está no endereço) — a mesma deteção dos formulários
+  // públicos. Vai nos metadados do signUp para o notify-new-trials poder
+  // carimbar a lead do trial com a origem real: até aqui, todos os trials
+  // entravam no CRM como "Trial SENVIA OS", sem qualquer atribuição, e por
+  // isso nunca contavam como tráfego pago por muito que se gastasse em
+  // anúncios. Os dados existiam no browser e eram deitados fora.
+  const signupDetection = useMemo(() => detectLeadSource(), []);
+
   // Login form state
   const [loginCompanyCode, setLoginCompanyCode] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
@@ -342,6 +354,12 @@ export default function Login() {
             organization_name: organizationName,
             organization_slug: organizationSlug,
             contact_phone: contactPhone,
+            // Lido pelo notify-new-trials ao criar a lead do trial. Vive no
+            // raw_user_meta_data (JSONB livre), por isso não precisa de
+            // alteração de schema, e sobrevive à confirmação de email — fica
+            // preso ao utilizador, não a este separador do browser.
+            signup_source: signupDetection.source,
+            signup_tracking: signupDetection.tracking,
           },
         },
       });
