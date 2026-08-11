@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertCircle, Copy, MoreVertical, Pause, Play, Plus, Trash2, Workflow, Zap,
+  AlertCircle, Copy, MoreVertical, Pause, Play, Plus, Search, Trash2, Workflow, X, Zap,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -18,7 +22,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format';
-import { NODE_CATEGORY_STYLES, getNodeDefinition } from '@/lib/automation-nodes';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import {
+  NODE_CATEGORY_STYLES, TRIGGER_FAMILIES, getNodeDefinition, getNodeLabel, getTriggerFamily,
+} from '@/lib/automation-nodes';
 import { FlowStatusPill } from '@/components/automations/FlowStatusPill';
 import { CreateFlowDialog } from '@/components/automations/CreateFlowDialog';
 import {
@@ -36,6 +43,44 @@ export default function Automations() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [flowToDelete, setFlowToDelete] = useState<AutomationFlow | null>(null);
+
+  // A pesquisa não persiste (é sempre pontual); os filtros sim, como no resto
+  // da app — quem trabalha só nas automações de trials não quer voltar a
+  // escolher isso a cada visita.
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = usePersistedState('automations-status-v1', 'all');
+  const [familyFilter, setFamilyFilter] = usePersistedState('automations-family-v1', 'all');
+
+  // Só se oferecem as famílias que a organização REALMENTE tem. Um dropdown com
+  // nove opções das quais sete não dão resultado nenhum não ajuda a procurar.
+  const availableFamilies = useMemo(() => {
+    const present = new Set((flows ?? []).map((f) => getTriggerFamily(f.trigger_type)));
+    return TRIGGER_FAMILIES.filter((f) => present.has(f.key));
+  }, [flows]);
+
+  const visibleFlows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return (flows ?? []).filter((flow) => {
+      if (statusFilter !== 'all' && flow.status !== statusFilter) return false;
+      if (familyFilter !== 'all' && getTriggerFamily(flow.trigger_type) !== familyFilter) return false;
+      if (!term) return true;
+      // Procura também pelo nome do gatilho ("lead criada"), que é como se
+      // descreve uma automação por palavras, e não pelo id interno.
+      const haystack = [
+        flow.name,
+        flow.description ?? '',
+        flow.trigger_type ? getNodeLabel(flow.trigger_type) : '',
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [flows, search, statusFilter, familyFilter]);
+
+  const isFiltered = search.trim() !== '' || statusFilter !== 'all' || familyFilter !== 'all';
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setFamilyFilter('all');
+  };
 
   return (
     <div className="space-y-6 p-4 pb-nav-safe md:p-6 md:pb-6">
@@ -69,8 +114,59 @@ export default function Automations() {
           </Button>
         </EmptyState>
       ) : (
+        <>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Procurar por nome, descrição ou gatilho…"
+              className="h-9 pl-9"
+            />
+          </div>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os estados</SelectItem>
+              <SelectItem value="active">Ativas</SelectItem>
+              <SelectItem value="paused">Em pausa</SelectItem>
+              <SelectItem value="draft">Rascunho</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {availableFamilies.length > 1 && (
+            <Select value={familyFilter} onValueChange={setFamilyFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {availableFamilies.map((family) => (
+                  <SelectItem key={family.key} value={family.key}>{family.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {isFiltered && (
+            <Button variant="ghost" size="sm" className="h-9 shrink-0 text-muted-foreground" onClick={clearFilters}>
+              <X className="mr-1 h-4 w-4" />
+              Limpar
+            </Button>
+          )}
+        </div>
+
+        {visibleFlows.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="Nenhuma automação encontrada"
+            description="Nenhuma automação corresponde à pesquisa ou aos filtros escolhidos."
+          >
+            <Button variant="outline" onClick={clearFilters}>Limpar filtros</Button>
+          </EmptyState>
+        ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          {flows.map((flow) => (
+          {visibleFlows.map((flow) => (
             <FlowRow
               key={flow.id}
               flow={flow}
@@ -87,6 +183,8 @@ export default function Automations() {
             />
           ))}
         </div>
+        )}
+        </>
       )}
 
       <CreateFlowDialog open={createOpen} onOpenChange={setCreateOpen} />

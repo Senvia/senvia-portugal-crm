@@ -757,6 +757,41 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
   }
 }
 
+/**
+ * Famílias de gatilho, para o filtro "Tipo" da lista de automações.
+ *
+ * São 27 tipos de gatilho no catálogo — demasiados para um dropdown. Agrupam-se
+ * pelo assunto de que tratam, que é como uma pessoa procura ("as dos trials",
+ * "as das vendas"). A ordem aqui é a ordem no filtro.
+ */
+export const TRIGGER_FAMILIES: readonly { key: string; label: string }[] = Object.freeze([
+  { key: 'lead', label: 'Leads' },
+  { key: 'client', label: 'Clientes' },
+  { key: 'proposal', label: 'Propostas' },
+  { key: 'sale', label: 'Vendas' },
+  { key: 'trial', label: 'Trials' },
+  { key: 'billing', label: 'Subscrições' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'list', label: 'Listas' },
+  { key: 'other', label: 'Outros' },
+]);
+
+/** A que família pertence um gatilho. Por prefixo, para os legados entrarem sozinhos. */
+export function getTriggerFamily(triggerType: string | null | undefined): string {
+  const t = (triggerType ?? '').toLowerCase();
+  if (!t) return 'other';
+  // form_submitted vive com as leads: é por aí que uma lead entra.
+  if (t.startsWith('lead_') || t === 'form_submitted') return 'lead';
+  if (t.startsWith('trial_')) return 'trial';
+  if (t.startsWith('stripe_')) return 'billing';
+  if (t.startsWith('sale_')) return 'sale';
+  if (t.startsWith('client_')) return 'client';
+  if (t.startsWith('proposal_')) return 'proposal';
+  if (t.startsWith('whatsapp_')) return 'whatsapp';
+  if (t.startsWith('list_')) return 'list';
+  return 'other';
+}
+
 /** Human label for each raw key the engine writes into a run step's `detail`. */
 const STEP_DETAIL_LABELS: Record<string, string> = {
   canal: 'Canal',
