@@ -59,6 +59,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const InviteRegister = lazy(() => import("./pages/InviteRegister"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const DataDeletion = lazy(() => import("./pages/DataDeletion"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Install = lazy(() => import("./pages/Install"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
@@ -111,6 +112,9 @@ const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future
                 <Route path="/invite/:token" element={<InviteRegister />} />
                 <Route path="/precos" element={<Pricing />} />
                 <Route path="/privacy" element={<Privacy />} />
+                {/* Público e sem login: a Meta exige aceder a esta página sem
+                    credenciais durante a revisão da app. */}
+                <Route path="/data-deletion" element={<DataDeletion />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/install" element={<Install />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
