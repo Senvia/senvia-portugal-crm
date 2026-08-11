@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertCircle, Ban, CheckCircle2, ChevronDown, ChevronRight, Clock,
   Loader2, MessagesSquare, Activity as ActivityIcon, SkipForward,
@@ -11,9 +11,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
-import { getNodeLabel } from '@/lib/automation-nodes';
+import { getNodeLabel, describeStepDetail, type StepDetailLookups } from '@/lib/automation-nodes';
 import { findNode } from '@/lib/automation-graph';
 import { useAutomationRunSteps, useCancelAutomationRun, useAutomationRuns } from '@/hooks/useAutomationFlows';
+import { useEmailTemplates } from '@/hooks/useEmailTemplates';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useContactLists } from '@/hooks/useContactLists';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
 import type {
   AutomationGraph, AutomationRun, AutomationRunStatus, AutomationRunStepStatus,
 } from '@/types/automations';
@@ -65,6 +69,19 @@ interface FlowActivityProps {
 export function FlowActivity({ flowId, graph }: FlowActivityProps) {
   const { data: runs, isLoading } = useAutomationRuns(flowId);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+
+  // Run steps only ever store ids (template, user, list, stage) — resolve them
+  // to names once here so the timeline reads like a sentence, not a database dump.
+  const { data: templates } = useEmailTemplates();
+  const { data: members } = useTeamMembers();
+  const { data: lists } = useContactLists();
+  const { data: stages } = usePipelineStages();
+  const lookups = useMemo<StepDetailLookups>(() => ({
+    templateNameById: Object.fromEntries((templates ?? []).map((t) => [t.id, t.name])),
+    memberNameById: Object.fromEntries((members ?? []).map((m) => [m.user_id, m.full_name || m.email || 'utilizador'])),
+    listNameById: Object.fromEntries((lists ?? []).map((l) => [l.id, l.name])),
+    stageNameByKey: Object.fromEntries((stages ?? []).map((s) => [s.key, s.name])),
+  }), [templates, members, lists, stages]);
 
   if (isLoading) {
     return (
@@ -120,6 +137,7 @@ export function FlowActivity({ flowId, graph }: FlowActivityProps) {
                   key={run.id}
                   run={run}
                   graph={graph}
+                  lookups={lookups}
                   expanded={expandedRunId === run.id}
                   onToggle={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
                 />
@@ -154,10 +172,11 @@ function StatCard({
 }
 
 function RunRow({
-  run, graph, expanded, onToggle,
+  run, graph, lookups, expanded, onToggle,
 }: {
   run: AutomationRun;
   graph: AutomationGraph;
+  lookups: StepDetailLookups;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -234,7 +253,7 @@ function RunRow({
       {expanded && (
         <TableRow className="hover:bg-transparent">
           <TableCell colSpan={6} className="bg-muted/30 p-0">
-            <RunStepsTimeline run={run} />
+            <RunStepsTimeline run={run} lookups={lookups} />
           </TableCell>
         </TableRow>
       )}
@@ -242,7 +261,7 @@ function RunRow({
   );
 }
 
-function RunStepsTimeline({ run }: { run: AutomationRun }) {
+function RunStepsTimeline({ run, lookups }: { run: AutomationRun; lookups: StepDetailLookups }) {
   const { data: steps, isLoading } = useAutomationRunSteps(run.id);
 
   if (isLoading) {
@@ -272,7 +291,7 @@ function RunStepsTimeline({ run }: { run: AutomationRun }) {
           {steps.map((step) => {
             const meta = STEP_STATUS_META[step.status] ?? STEP_STATUS_META.ok;
             const StepIcon = meta.icon;
-            const detail = step.detail && Object.keys(step.detail).length ? step.detail : null;
+            const rows = describeStepDetail(step.detail, lookups);
 
             return (
               <li key={step.id} className="relative">
@@ -285,17 +304,26 @@ function RunStepsTimeline({ run }: { run: AutomationRun }) {
                   <span className={cn('text-[11px] font-medium', meta.className)}>{meta.label}</span>
                   <span className="text-[11px] text-muted-foreground">{formatDateTime(step.created_at)}</span>
                 </div>
-                {detail && (
-                  <pre
+                {rows.length > 0 && (
+                  <dl
                     className={cn(
-                      'mt-1 max-h-32 overflow-auto rounded-md border p-2 text-[11px] leading-snug',
+                      'mt-1 space-y-0.5 rounded-md border p-2 text-[11px] leading-snug',
                       step.status === 'failed'
-                        ? 'border-destructive/30 bg-destructive/5 text-destructive'
-                        : 'border-border bg-background text-muted-foreground',
+                        ? 'border-destructive/30 bg-destructive/5'
+                        : 'border-border bg-background',
                     )}
                   >
-                    {JSON.stringify(detail, null, 2)}
-                  </pre>
+                    {rows.map((row) => (
+                      <div key={row.key} className="flex gap-1.5">
+                        <dt className={cn('shrink-0 font-medium', step.status === 'failed' ? 'text-destructive/80' : 'text-muted-foreground')}>
+                          {row.label}:
+                        </dt>
+                        <dd className={cn('break-words', step.status === 'failed' ? 'text-destructive' : 'text-foreground')}>
+                          {row.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                 )}
               </li>
             );

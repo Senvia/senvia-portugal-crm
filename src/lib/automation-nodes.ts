@@ -16,6 +16,7 @@ import type {
   AutomationNodeCategory, AutomationNodeConfig, AutomationNodeType,
   AutomationTriggerType, AutomationGraphNode,
 } from '@/types/automations';
+import { formatDateTime } from '@/lib/format';
 
 /**
  * Tailwind classes per category. Everything resolves through the app's CSS
@@ -754,4 +755,90 @@ export function getNodeSubtitle(node: AutomationGraphNode): string {
     default:
       return getNodeDefinition(node.type)?.description ?? 'Tipo de passo desconhecido';
   }
+}
+
+/** Human label for each raw key the engine writes into a run step's `detail`. */
+const STEP_DETAIL_LABELS: Record<string, string> = {
+  canal: 'Canal',
+  para: 'Para',
+  texto: 'Mensagem',
+  anexo: 'Anexo',
+  botoes: 'Enviado com botões',
+  opcoes: 'Opções de resposta',
+  template: 'Modelo de email',
+  campo: 'Campo',
+  operador: 'Condição',
+  resultado: 'Condição verdadeira',
+  nova_etapa: 'Nova etapa',
+  atribuido_a: 'Atribuído a',
+  lista: 'Lista',
+  tarefa: 'Tarefa criada',
+  prazo: 'Prazo',
+  sem_ligacao: 'Aviso',
+  url: 'URL',
+  status: 'Resposta do servidor',
+  motivo: 'Motivo',
+  ramo: 'Caminho seguido',
+  resposta: 'Resposta do contacto',
+  ignorado: 'Ignorado',
+  espera_ate: 'Retoma às',
+  espera_resposta_ate: 'Prazo para responder',
+  adiado_por_horario_de_silencio_ate: 'Adiado até',
+  adiado_por_silencio: 'Adiado por horário de silêncio',
+};
+
+/** Keys whose value is redundant with the step's own title, or an ISO date, or a boolean. */
+const SKIP_DETAIL_KEYS = new Set(['entrada']);
+const DATE_DETAIL_KEYS = new Set([
+  'espera_ate', 'espera_resposta_ate', 'adiado_por_horario_de_silencio_ate', 'prazo',
+]);
+const BOOLEAN_DETAIL_KEYS = new Set(['resultado', 'botoes', 'adiado_por_silencio']);
+
+const CHANNEL_LABELS: Record<string, string> = { email: 'Email', whatsapp: 'WhatsApp' };
+
+export interface StepDetailRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/** Names looked up by id, so ids the engine records (template, user, list, stage) render as text. */
+export interface StepDetailLookups {
+  templateNameById?: Record<string, string>;
+  memberNameById?: Record<string, string>;
+  listNameById?: Record<string, string>;
+  stageNameByKey?: Record<string, string>;
+}
+
+/**
+ * A run step's `detail` is whatever JSON the engine happened to write — meant
+ * for logs, not people. This turns it into short, labelled rows a non-technical
+ * user can read (the Atividade tab used to just dump the raw JSON).
+ */
+export function describeStepDetail(
+  detail: Record<string, unknown> | null | undefined,
+  lookups: StepDetailLookups = {},
+): StepDetailRow[] {
+  if (!detail) return [];
+
+  const rows: StepDetailRow[] = [];
+  for (const [key, raw] of Object.entries(detail)) {
+    if (SKIP_DETAIL_KEYS.has(key) || raw === null || raw === undefined || raw === '') continue;
+
+    let value: string;
+    if (key === 'canal') value = CHANNEL_LABELS[String(raw)] ?? String(raw);
+    else if (key === 'template') value = lookups.templateNameById?.[String(raw)] ?? 'Modelo removido';
+    else if (key === 'atribuido_a') value = lookups.memberNameById?.[String(raw)] ?? String(raw);
+    else if (key === 'lista') value = lookups.listNameById?.[String(raw)] ?? String(raw);
+    else if (key === 'nova_etapa') value = lookups.stageNameByKey?.[String(raw)] ?? String(raw);
+    else if (key === 'campo') value = CONDITION_FIELD_OPTIONS.find((o) => o.value === raw)?.label ?? String(raw);
+    else if (key === 'operador') value = CONDITION_OPERATOR_OPTIONS.find((o) => o.value === raw)?.label ?? String(raw);
+    else if (key === 'ramo' && raw === 'timeout') value = 'Sem resposta (esgotou o prazo)';
+    else if (DATE_DETAIL_KEYS.has(key)) value = formatDateTime(String(raw));
+    else if (BOOLEAN_DETAIL_KEYS.has(key)) value = raw ? 'Sim' : 'Não';
+    else value = String(raw);
+
+    rows.push({ key, label: STEP_DETAIL_LABELS[key] ?? humanizeNodeType(key), value });
+  }
+  return rows;
 }
