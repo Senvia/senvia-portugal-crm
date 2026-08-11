@@ -1,16 +1,13 @@
-import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { getTrafficMatcher, isPaidFilter } from "@/lib/paid-traffic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { TrendingUp, MousePointerClick } from "lucide-react";
-import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, endOfMonth, format } from "date-fns";
 import { pt } from "date-fns/locale";
 
 // Filtro PostgREST: apanha qualquer source que contenha "ads", "pago", "paid"
@@ -22,30 +19,26 @@ const PAID_FILTER = [
   "source.eq.Webhook Externo",
 ].join(",");
 
-// "Todo o histórico" + os últimos 12 meses, para o seletor de período.
-function buildMonthOptions() {
-  const opts: { value: string; label: string }[] = [{ value: "all", label: "Todo o histórico" }];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = startOfMonth(subMonths(now, i));
-    opts.push({ value: format(d, "yyyy-MM-dd"), label: format(d, "MMMM yyyy", { locale: pt }) });
-  }
-  return opts;
-}
-
 export function PaidTrafficCard() {
   const { organization } = useAuth();
   const { data: stages = [] } = usePipelineStages();
   const { filterKey } = usePaidTrafficFilter();
-  const monthOptions = useMemo(() => buildMonthOptions(), []);
-  // "all" = todo o histórico; caso contrário, o início do mês selecionado (yyyy-MM-dd).
-  const [period, setPeriod] = useState("all");
+  // Segue o filtro de data do dashboard, como todos os outros painéis. Este
+  // cartão tinha um seletor de mês PRÓPRIO, por omissão em "Todo o histórico",
+  // por isso mudar o período do dashboard não lhe mexia — dois filtros de data
+  // no mesmo ecrã, e o global aparentemente sem efeito.
+  const { selectedMonth } = useDashboardPeriod();
+  const monthStart = startOfMonth(selectedMonth);
+  const monthEnd = endOfMonth(monthStart);
 
   const wonKeys = stages.filter((s) => s.is_final_positive).map((s) => s.key);
   const FALLBACK_WON = ["won", "fechado", "ganho", "closed", "convertido"];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["paid-traffic-conversions", organization?.id, wonKeys.join(","), period, filterKey],
+    queryKey: [
+      "paid-traffic-conversions", organization?.id, wonKeys.join(","),
+      format(monthStart, "yyyy-MM-dd"), filterKey,
+    ],
     queryFn: async () => {
       if (!organization?.id) return null;
 
@@ -66,13 +59,9 @@ export function PaidTrafficCard() {
       }
 
       // Restringe às leads que ENTRARAM no mês selecionado (por data de criação).
-      if (period !== "all") {
-        const start = new Date(period);
-        const monthEnd = endOfMonth(start);
-        query = query
-          .gte("created_at", `${format(start, "yyyy-MM-dd")}T00:00:00`)
-          .lte("created_at", `${format(monthEnd, "yyyy-MM-dd")}T23:59:59`);
-      }
+      query = query
+        .gte("created_at", `${format(monthStart, "yyyy-MM-dd")}T00:00:00`)
+        .lte("created_at", `${format(monthEnd, "yyyy-MM-dd")}T23:59:59`);
 
       const { data: leads, error } = await query;
       if (error) throw error;
@@ -112,18 +101,9 @@ export function PaidTrafficCard() {
             <MousePointerClick className="h-4 w-4" />
             Tráfego Pago
           </CardTitle>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="h-7 w-[150px] text-xs capitalize">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value} className="text-xs capitalize">
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <span className="text-xs capitalize text-muted-foreground">
+            {format(monthStart, "MMMM yyyy", { locale: pt })}
+          </span>
         </div>
       </CardHeader>
       <CardContent>
@@ -157,9 +137,7 @@ export function PaidTrafficCard() {
           </div>
         )}
         <p className="mt-2 text-[10px] text-muted-foreground/70">
-          {period === "all"
-            ? "Todas as leads de tráfego pago (todo o histórico)."
-            : "Leads de tráfego pago que entraram no mês selecionado."}
+          Leads de tráfego pago que entraram no mês selecionado no dashboard.
         </p>
       </CardContent>
     </Card>
