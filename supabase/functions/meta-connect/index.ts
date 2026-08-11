@@ -55,7 +55,16 @@ Deno.serve(async (req) => {
   const appId = Deno.env.get("FACEBOOK_APP_ID");
   const appSecret = Deno.env.get("FACEBOOK_APP_SECRET");
   const configId = Deno.env.get("FACEBOOK_LOGIN_CONFIG_ID");
-  const redirectUri = `${url.origin}${url.pathname}`;
+
+  // O endereço PÚBLICO, construído a partir do SUPABASE_URL — não do pedido.
+  //
+  // As edge functions correm atrás de um proxy: por dentro, o `req.url` chega
+  // como `http://<ref>.supabase.co/meta-connect` — sem HTTPS e sem o prefixo
+  // `/functions/v1`. Derivar o redirect_uri daí produzia um endereço que não
+  // existe, e a Meta respondia "URL bloqueada" a queixar-se de uma lista de
+  // permitidos que na verdade estava correta. O redirect_uri tem de bater certo
+  // caractere a caractere com o que está registado no painel.
+  const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-connect`;
 
   // ── Desautorização ────────────────────────────────────────────────────────
   // A Meta chama isto quando alguém remove a app. Não apaga dados (isso é o
