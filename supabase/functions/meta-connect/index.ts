@@ -10,8 +10,8 @@
 //   POST {action:'oauth_url', organization_id, connect:'instagram'|'messenger'}
 //        -> devolve o URL do diálogo, com um `state` assinado
 //   GET  ?code=...&state=...
-//        -> troca o código, encontra a Página, cria a caixa no Chatwoot e a
-//           linha em messaging_channels
+//        -> troca o código, encontra a Página, subscreve-a aos nossos webhooks
+//           e cria a linha em messaging_channels
 //   GET  ?action=login[&config_id=]  -> arranque manual, para testar sem UI
 //   GET|POST ?action=deauthorize     -> callback de desautorização da Meta
 //
@@ -20,7 +20,7 @@
 // caixas numa organização à escolha dela.
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-import { getConfig, chatwootFetch, ensureChatwootAccount } from "../_shared/multicanal.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -262,14 +262,9 @@ Deno.serve(async (req) => {
     // repetir para ligar as outras (cada uma vira uma caixa própria).
     const target = candidates[0];
 
-    const cfg = getConfig();
     const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    const { data: orgData } = await admin.from("organizations")
-      .select("id, name, chatwoot_account_id, chatwoot_account_token").eq("id", orgId).maybeSingle();
-    if (!orgData) return popupDone({ error: "Organização não encontrada" });
-
-    // Já ligada? Evita criar caixas duplicadas para a mesma Página.
+    // Já ligada? Evita duplicar a caixa para a mesma Página.
     const channelType = wantsInstagram ? "instagram" : "facebook";
     const { data: existing } = await admin.from("messaging_channels")
       .select("id").eq("organization_id", orgId).eq("channel_type", channelType)
@@ -278,55 +273,56 @@ Deno.serve(async (req) => {
       return popupDone({ error: `Esta Página já está ligada como caixa de ${wantsInstagram ? "Instagram" : "Messenger"}.` });
     }
 
-    const { accountId, token } = await ensureChatwootAccount(admin, cfg, orgData);
-
     const defaultLabel = wantsInstagram
       ? `@${target.instagram_business_account!.username}`
       : target.name;
     const label = (state.label || defaultLabel).trim();
 
-    // Tipos de canal do Chatwoot: 'instagram' e 'facebook_page'.
-    const cwRes = await chatwootFetch(cfg, token, `/api/v1/accounts/${accountId}/inboxes`, "POST", {
-      name: label,
-      channel: {
-        type: wantsInstagram ? "instagram" : "facebook_page",
-        page_id: target.id,
-        page_access_token: target.access_token,
-      },
+    // Subscrever a Página aos nossos webhooks. SEM ISTO a Meta não envia
+    // mensagem nenhuma — a ligação fica feita e a caixa aparece vazia para
+    // sempre, sem erro nenhum a explicar porquê.
+    const subFields = wantsInstagram
+      ? "messages,messaging_postbacks,message_reactions"
+      : "messages,messaging_postbacks,messaging_optins";
+    const subRes = await fetch(`${GRAPH}/${target.id}/subscribed_apps`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscribed_fields: subFields, access_token: target.access_token }),
     });
-    if (!cwRes.ok) {
-      const errText = (await cwRes.text()).slice(0, 300);
-      logError("Chatwoot recusou criar a caixa", { status: cwRes.status, errText });
-      return popupDone({ error: `O Chatwoot recusou criar a caixa: ${errText}` });
+    const subJson = await subRes.json().catch(() => ({}));
+    if (!subRes.ok || subJson?.success === false) {
+      logError("subscrição da Página falhou", { status: subRes.status, subJson });
+      return popupDone({
+        error: `A Página foi autorizada mas não conseguimos subscrever as mensagens: ${
+          subJson?.error?.message ?? subRes.status
+        }`,
+      });
     }
-    const cwInbox = await cwRes.json();
 
     const { error: insertErr } = await admin.from("messaging_channels").insert({
       organization_id: orgId,
       channel_type: channelType,
       provider: "meta",
-      chatwoot_inbox_id: cwInbox?.id ?? null,
       status: "connected",
       label,
       metadata: {
         page_id: target.id,
         page_name: target.name,
+        // Token da Página: é com ele que se responde. Sem expiração, desde que
+        // a pessoa não retire a autorização à app.
         page_access_token: target.access_token,
         ig_account_id: target.instagram_business_account?.id ?? null,
         ig_username: target.instagram_business_account?.username ?? null,
-        inbox_name: cwInbox?.name ?? label,
+        subscribed_fields: subFields,
       },
     });
 
     if (insertErr) {
-      // Desfaz a caixa no Chatwoot: uma caixa órfã lá dentro, sem linha nossa,
-      // fica invisível no CRM e impossível de gerir.
-      logError("insert falhou — a desfazer a caixa no Chatwoot", { error: insertErr.message });
-      await chatwootFetch(cfg, token, `/api/v1/accounts/${accountId}/inboxes/${cwInbox?.id}`, "DELETE");
+      logError("insert falhou", { error: insertErr.message });
       return popupDone({ error: "Erro ao guardar a caixa na base de dados." });
     }
 
-    log("caixa criada", { orgId, channelType, page: target.name, inbox: cwInbox?.id });
+    log("caixa criada", { orgId, channelType, page: target.name });
     return popupDone({
       success: true,
       channel_type: channelType,

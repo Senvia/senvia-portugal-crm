@@ -175,6 +175,11 @@ verify_jwt = false
 [functions.meta-connect]
 verify_jwt = false
 
+# Chamada pela Meta a cada mensagem recebida. Autentica-se pela assinatura
+# HMAC em X-Hub-Signature-256, verificada dentro da função.
+[functions.meta-webhook]
+verify_jwt = false
+
 # Chamada pela Meta, não por um utilizador nosso — não há JWT nenhum para
 # validar. A autenticação é feita dentro da função, verificando a assinatura
 # HMAC do signed_request com o App Secret.
