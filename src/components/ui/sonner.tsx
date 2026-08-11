@@ -10,7 +10,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
+      // O sonner é ancorado em BAIXO (bottom-right por omissão), por isso a
+      // safe-area que interessa é a de baixo (barra do iPhone), não a de cima.
+      // Havia aqui um `style={{ top: ... }}`: como o CSS do sonner já define
+      // `position:fixed` + `bottom` e não define `height`, acrescentar `top`
+      // esticava o contentor de cima a baixo do ecrã — uma coluna invisível de
+      // 356px encostada à direita, com z-index 999999999 e pointer-events
+      // normais, que engolia todos os cliques enquanto houvesse um toast.
+      offset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
       toastOptions={{
         classNames: {
           toast:

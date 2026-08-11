@@ -619,3 +619,18 @@
   0%, 100% { box-shadow: 0 0 0 2px rgba(245, 200, 0, 0.4); }
   50%      { box-shadow: 0 0 18px 3px rgba(245, 200, 0, 0.85); }
 }
+
+/* Rede de segurança dos toasts.
+   O CSS do sonner define o contentor com `position:fixed` mas sem `height` e
+   sem `pointer-events`, e todas as suas regras usam `:where(...)` (specificity
+   zero). Bastou alguém acrescentar um `top` ao contentor ancorado em baixo para
+   ele esticar a altura toda do ecrã e passar a engolir todos os cliques
+   enquanto um toast estivesse visível. O contentor nunca precisa de receber
+   cliques — só o toast em si — por isso fica explícito aqui, e a origem do
+   problema deixa de conseguir repetir-se. */
+[data-sonner-toaster] {
+  pointer-events: none;
+}
+[data-sonner-toast] {
+  pointer-events: auto;
+}

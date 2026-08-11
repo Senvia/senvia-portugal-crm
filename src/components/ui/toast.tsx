@@ -14,7 +14,11 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:bottom-0 sm:right-0 sm:top-auto sm:pt-4 sm:flex-col md:max-w-[420px]",
+      // `pointer-events-none` no viewport, `pointer-events-auto` no toast (ver
+      // toastVariants). O viewport está sempre montado e tem p-4, por isso sem
+      // isto ficava uma faixa morta permanente a comer cliques no fundo do ecrã
+      // (largura toda no telemóvel, 420px no desktop) mesmo sem nenhum toast.
+      "pointer-events-none fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:bottom-0 sm:right-0 sm:top-auto sm:pt-4 sm:flex-col md:max-w-[420px]",
       className,
     )}
     {...props}
