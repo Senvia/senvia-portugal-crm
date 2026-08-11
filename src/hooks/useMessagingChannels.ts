@@ -147,25 +147,53 @@ export function useConnectMetaChannel() {
       const popup = window.open(url, 'meta-oauth', 'width=600,height=760');
       if (!popup) throw new Error('O browser bloqueou a janela. Permite popups para este site.');
 
-      return await new Promise<{ channel_type: string; label: string; ig_username?: string | null }>((resolve, reject) => {
-        // Duas formas de isto acabar: a mensagem do callback, ou o utilizador
-        // fechar o popup. Sem a segunda, uma desistência ficava pendurada para
-        // sempre num spinner.
-        const timer = setInterval(() => {
-          if (popup.closed) { cleanup(); reject(new Error('Janela fechada antes de concluir.')); }
-        }, 700);
-        const onMessage = (event: MessageEvent) => {
-          if (event.data?.type !== 'meta-oauth') return;
-          cleanup();
-          if (event.data.error) reject(new Error(String(event.data.error)));
-          else resolve(event.data);
-        };
-        const cleanup = () => {
-          clearInterval(timer);
-          window.removeEventListener('message', onMessage);
-        };
-        window.addEventListener('message', onMessage);
-      });
+      const before = new Date().toISOString();
+
+      const result = await new Promise<{ channel_type?: string; label?: string; ig_username?: string | null } | null>(
+        (resolve, reject) => {
+          // O postMessage é o caminho rápido, mas NÃO se pode depender dele: o
+          // Supabase serve a resposta do popup como text/plain, por isso o
+          // browser mostra o HTML como texto e nunca corre o script. Quando isso
+          // acontece só resta o fecho da janela — e fechar não distingue "ligou"
+          // de "desistiu". Por isso o fecho não decide nada: vai confirmar aos
+          // dados (abaixo) o que aconteceu de facto.
+          const timer = setInterval(() => {
+            if (popup.closed) { cleanup(); resolve(null); }
+          }, 700);
+          const onMessage = (event: MessageEvent) => {
+            if (event.data?.type !== 'meta-oauth') return;
+            cleanup();
+            if (event.data.error) reject(new Error(String(event.data.error)));
+            else resolve(event.data);
+          };
+          const cleanup = () => {
+            clearInterval(timer);
+            window.removeEventListener('message', onMessage);
+          };
+          window.addEventListener('message', onMessage);
+        },
+      );
+
+      if (result) return result as { channel_type: string; label: string; ig_username?: string | null };
+
+      // Janela fechada sem mensagem: a única fonte de verdade é a base de dados.
+      const wanted = connect === 'messenger' ? 'facebook' : 'instagram';
+      const { data: created } = await supabase
+        .from('messaging_channels')
+        .select('channel_type, label, metadata')
+        .eq('organization_id', organization.id)
+        .eq('channel_type', wanted)
+        .gte('created_at', before)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!created) throw new Error('Ligação não concluída — a janela foi fechada antes do fim.');
+      return {
+        channel_type: created.channel_type,
+        label: created.label ?? '',
+        ig_username: (created.metadata as { ig_username?: string } | null)?.ig_username ?? null,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
