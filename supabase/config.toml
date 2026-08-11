@@ -170,5 +170,11 @@ verify_jwt = false
 [functions.instagram-connect]
 verify_jwt = false
 
+# Chamada pela Meta, não por um utilizador nosso — não há JWT nenhum para
+# validar. A autenticação é feita dentro da função, verificando a assinatura
+# HMAC do signed_request com o App Secret.
+[functions.meta-data-deletion]
+verify_jwt = false
+
 [functions.transcribe-audio]
 verify_jwt = true
