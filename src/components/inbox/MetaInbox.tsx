@@ -30,7 +30,7 @@ export function MetaInbox({
   channelLabel: string;
   onOpenRail?: () => void;
 }) {
-  const { data: conversations = [], isLoading } = useMetaConversations(channelId);
+  const { data: conversations = [], isLoading, isError, refetch } = useMetaConversations(channelId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const markRead = useMarkMetaRead();
@@ -50,7 +50,7 @@ export function MetaInbox({
 
   const openConversation = (c: MetaConversation) => {
     setSelectedId(c.id);
-    if (c.unread_count > 0) markRead.mutate(c.id);
+    if (c.unread_count > 0) markRead.mutate({ conversationId: c.id, seen: c.unread_count });
   };
 
   return (
@@ -78,6 +78,18 @@ export function MetaInbox({
           {isLoading ? (
             <div className="space-y-2 p-3">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+            </div>
+          ) : isError ? (
+            /* Uma falha de leitura NÃO pode aparecer como "ainda sem conversas":
+               o agente lê isso como "este cliente não escreveu nada" e a verdade
+               é que não conseguimos ir buscar o que ele escreveu. */
+            <div className="flex flex-col items-center gap-3 p-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Não foi possível carregar as conversas.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                Tentar novamente
+              </Button>
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
@@ -125,6 +137,9 @@ export function MetaInbox({
       {/* Conversa */}
       {selected ? (
         <MetaThread
+          // Sem `key`, o rascunho e a resposta citada da conversa anterior ainda
+          // aparecem por baixo do cabeçalho da nova durante um instante.
+          key={selected.id}
           conversation={selected}
           onBack={() => setSelectedId(null)}
         />
@@ -146,14 +161,16 @@ function MetaThread({
   conversation: MetaConversation;
   onBack: () => void;
 }) {
-  const { data: messages = [], isLoading } = useMetaMessages(conversation.id);
+  const { data: messages = [], isLoading, isError, refetch } = useMetaMessages(conversation.id);
   const send = useSendMetaMessage();
+  const markRead = useMarkMetaRead();
   const act = useMetaAction();
   const sendFile = useSendMetaAttachment();
   const [draft, setDraft] = useState('');
   // Mensagem a que se está a responder. Guarda-se a mensagem inteira, não só o
   // id, para mostrar a citação sem a ir procurar outra vez à lista.
   const [replyTo, setReplyTo] = useState<MetaMessage | null>(null);
+  const [aGravar, setAGravar] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingRef = useRef<number | null>(null);
@@ -161,11 +178,31 @@ function MetaThread({
   useEffect(() => { setDraft(''); setReplyTo(null); }, [conversation.id]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
 
+  // A Meta só deixa responder até 24h depois da última mensagem DA PESSOA.
+  // Mostrar isto antes de escrever evita perder uma resposta já redigida.
+  const windowExpired = !!conversation.window_expires_at
+    && new Date(conversation.window_expires_at) < new Date();
+
   // "Visto" ao abrir a conversa — é o que a pessoa do outro lado espera ver.
+  //
+  // Fora da janela das 24h a Meta recusa, e a recusa vinha como erro não tratado
+  // sempre que se abria uma conversa antiga. Não se pede o que já se sabe que
+  // vai ser negado.
   useEffect(() => {
+    if (windowExpired) return;
     act.mutate({ conversationId: conversation.id, action: 'mark_seen' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id]);
+
+  // Mensagens que cheguem com a conversa ABERTA também contam como lidas. Sem
+  // isto, o contador subia na conversa que o agente está literalmente a ler, e
+  // só descia ao sair e voltar a entrar.
+  useEffect(() => {
+    if (conversation.unread_count > 0) {
+      markRead.mutate({ conversationId: conversation.id, seen: conversation.unread_count });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, conversation.unread_count]);
 
   /**
    * "A escrever…" no Instagram da pessoa.
@@ -180,11 +217,6 @@ function MetaThread({
     typingRef.current = agora;
     act.mutate({ conversationId: conversation.id, action: 'typing_on' });
   };
-
-  // A Meta só deixa responder até 24h depois da última mensagem DA PESSOA.
-  // Mostrar isto antes de escrever evita perder uma resposta já redigida.
-  const windowExpired = !!conversation.window_expires_at
-    && new Date(conversation.window_expires_at) < new Date();
 
   const handleSend = () => {
     const text = draft.trim();
@@ -219,6 +251,17 @@ function MetaThread({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
         {isLoading ? (
           [...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-2/3 rounded-lg" />)
+        ) : isError ? (
+          /* "Sem mensagens" quando a leitura falhou é enganar o agente: ele
+             responde a partir de uma conversa que julga vazia. */
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Não foi possível carregar as mensagens desta conversa.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : messages.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground">Sem mensagens nesta conversa.</p>
         ) : (
@@ -253,13 +296,21 @@ function MetaThread({
                     outgoing={m.direction === 'outgoing'}
                   />
                 )}
-                {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-                {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
+                {m.is_deleted ? (
+                  // A pessoa retirou a mensagem. Continuar a mostrá-la seria
+                  // responder a algo que ela já não vê do lado dela.
+                  <p className="italic opacity-70">Mensagem apagada</p>
+                ) : (
+                  <>
+                    {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+                    {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
+                  </>
+                )}
                 <p className={cn(
                   'mt-0.5 text-[10px]',
                   m.direction === 'outgoing' ? 'text-primary-foreground/70' : 'text-muted-foreground',
                 )}>
-                  {formatRelativeTime(m.created_at)}
+                  {formatRelativeTime(m.sent_at ?? m.created_at)}
                 </p>
                 {m.reaction && (
                   // Colada ao canto inferior, como no Instagram.
@@ -361,13 +412,17 @@ function MetaThread({
             {/* Como no Instagram: sem texto escrito, o botão grava voz; com
                 texto, envia. Um só lugar para "responder", em vez de tratar a
                 voz como se fosse um ficheiro qualquer. */}
-            {draft.trim() ? (
+            {/* `&& !aGravar`: escrever uma letra a meio de uma gravação trocava
+                o gravador pelo botão de enviar, e a gravação era interrompida a
+                meio — enviando o pedaço já gravado. */}
+            {draft.trim() && !aGravar ? (
               <Button onClick={handleSend} disabled={send.isPending} size="icon" className="h-10 w-10 shrink-0">
                 {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             ) : (
               <VoiceRecorder
                 disabled={sendFile.isPending}
+                onRecordingChange={setAGravar}
                 onRecorded={(file) => sendFile.mutate(
                   { conversationId: conversation.id, file },
                   { onError: (err) => toast.error('Áudio não enviado', { description: (err as Error).message }) },
@@ -414,10 +469,16 @@ function ContactAvatar({ name, url }: { name: string | null; url: string | null 
   );
 }
 
-/** Extrai o código de uma publicação/Reel do Instagram a partir do endereço. */
-function instagramCode(url: string): string | null {
-  const m = url.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/);
-  return m?.[1] ?? null;
+/**
+ * Extrai o tipo e o código de uma publicação/Reel do Instagram.
+ *
+ * O tipo importa: o incorporador usava sempre `/reel/`, e uma FOTO partilhada
+ * ficava com um endereço de reel — uma caixa em branco de 560px.
+ */
+function instagramCode(url: string): { seg: string; code: string } | null {
+  const m = url.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  return { seg: m[1] === 'reels' ? 'reel' : m[1], code: m[2] };
 }
 
 /**
@@ -440,11 +501,14 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
   const [broken, setBroken] = useState(false);
   if (!url) return <span className="text-xs opacity-70">[{type}]</span>;
 
-  const code = instagramCode(url);
-  const isShare = type === 'ig_reel' || type === 'share' || !!code;
+  const ig = instagramCode(url);
+  // `share` foi retirado pela Meta em fevereiro de 2026 e substituído por
+  // `ig_post`. Sem o novo nome, uma publicação partilhada caía no ramo genérico
+  // e aparecia como "Anexo" com um link.
+  const isShare = type === 'ig_reel' || type === 'ig_post' || type === 'share' || !!ig;
 
-  if (isShare && code && !broken) {
-    return <InstagramEmbed code={code} url={url} onBroken={() => setBroken(true)} />;
+  if (isShare && ig && !broken) {
+    return <InstagramEmbed seg={ig.seg} code={ig.code} url={url} onBroken={() => setBroken(true)} />;
   }
 
   if (type === 'image' && !broken) {
@@ -477,6 +541,7 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
     : type === 'video' ? 'Vídeo'
     : type === 'audio' ? 'Áudio'
     : type === 'story_mention' ? 'Menção em story'
+    : type === 'story_reply' ? 'Resposta a um story'
     : isShare ? 'Publicação do Instagram'
     : 'Anexo';
 
@@ -557,10 +622,12 @@ function ReactionPicker({
  * mensagem e ajusta-se — assim cabe sempre, seja qual for a publicação.
  */
 function InstagramEmbed({
+  seg,
   code,
   url,
   onBroken,
 }: {
+  seg: string;
   code: string;
   url: string;
   onBroken: () => void;
@@ -588,7 +655,7 @@ function InstagramEmbed({
     <div className="mt-1 overflow-hidden rounded-lg bg-background">
       <iframe
         ref={frameRef}
-        src={`https://www.instagram.com/reel/${code}/embed`}
+        src={`https://www.instagram.com/${seg}/${code}/embed`}
         title="Publicação do Instagram"
         style={{ height }}
         // scrolling="no" evita a barra no intervalo entre montar e medir.
@@ -622,9 +689,11 @@ const FORMATOS_AUDIO = [
 
 function VoiceRecorder({
   onRecorded,
+  onRecordingChange,
   disabled,
 }: {
   onRecorded: (file: File) => void;
+  onRecordingChange?: (a: boolean) => void;
   disabled?: boolean;
 }) {
   const [recording, setRecording] = useState(false);
@@ -635,8 +704,14 @@ function VoiceRecorder({
 
   // Largar o microfone e o contador se o componente sair a meio de uma gravação
   // — senão o browser fica com a luz do micro acesa indefinidamente.
+  //
+  // O buffer é limpo PRIMEIRO. Parar as pistas do stream faz o MediaRecorder
+  // disparar `onstop`, e o `onstop` envia: sem esta linha, desmontar a meio de
+  // uma gravação mandava ao cliente meio áudio que ninguém pediu, sem sequer
+  // aparecer na conversa.
   useEffect(() => () => {
     if (tickRef.current) window.clearInterval(tickRef.current);
+    chunksRef.current = [];
     recRef.current?.stream.getTracks().forEach((t) => t.stop());
   }, []);
 
@@ -662,6 +737,7 @@ function VoiceRecorder({
       rec.start();
       recRef.current = rec;
       setRecording(true);
+      onRecordingChange?.(true);
       setSeconds(0);
       tickRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
@@ -680,6 +756,7 @@ function VoiceRecorder({
     rec.stop();
     recRef.current = null;
     setRecording(false);
+    onRecordingChange?.(false);
   };
 
   if (recording) {

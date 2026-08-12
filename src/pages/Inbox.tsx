@@ -3185,6 +3185,7 @@ export default function Inbox() {
       <InboxCaixaRail
         caixas={visibleCaixas}
         caixaFilter={caixaFilter}
+        metaChannelId={metaChannelId}
         unreadByInbox={unreadByInbox}
         emailChannelId={emailChannelId}
         emailFolderId={emailFolderId}
@@ -3202,10 +3203,11 @@ export default function Inbox() {
           <InboxCaixaRail
             caixas={visibleCaixas}
             caixaFilter={caixaFilter}
+            metaChannelId={metaChannelId}
             unreadByInbox={unreadByInbox}
             emailChannelId={emailChannelId}
             emailFolderId={emailFolderId}
-            onSelectAll={() => { setEmailChannelId(null); setCaixaFilter(null); setRailSheetOpen(false); }}
+            onSelectAll={() => { setEmailChannelId(null); setMetaChannelId(null); setCaixaFilter(null); setRailSheetOpen(false); }}
             onSelectMessaging={(ch) => { setEmailChannelId(null); if (ch.provider === 'meta') { setMetaChannelId(ch.id); setSelectedId(null); } else { setMetaChannelId(null); setCaixaFilter(ch.chatwoot_inbox_id ?? null); } setRailSheetOpen(false); }}
             onSelectEmail={(ch) => { setMetaChannelId(null); setEmailChannelId(ch.id); setEmailFolderId(null); setSelectedId(null); setRailSheetOpen(false); }}
             onSelectFolder={(fid) => { setEmailFolderId(fid); setRailSheetOpen(false); }}

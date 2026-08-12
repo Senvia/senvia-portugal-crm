@@ -100,13 +100,24 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    // O canal TEM de pertencer à mesma organização da conversa. Sem este filtro,
+    // um membro podia alterar o channel_id da sua conversa (o RLS só verifica o
+    // organization_id) e passar a enviar pela Página de outra organização.
     const { data: channel } = await admin
       .from("messaging_channels")
       .select("metadata, channel_type")
       .eq("id", conv.channel_id)
+      .eq("organization_id", conv.organization_id)
       .maybeSingle();
-    const meta = (channel?.metadata ?? {}) as { page_id?: string; page_access_token?: string };
-    if (!meta.page_id || !meta.page_access_token) {
+    // O token vive fora do metadata: aquela tabela é legível por qualquer membro.
+    const { data: secret } = await admin
+      .from("messaging_channel_secrets")
+      .select("page_access_token")
+      .eq("channel_id", conv.channel_id)
+      .maybeSingle();
+    const meta = (channel?.metadata ?? {}) as { page_id?: string };
+    const pageToken = secret?.page_access_token;
+    if (!meta.page_id || !pageToken) {
       return json({ error: "Canal sem credenciais — volta a ligar a conta." }, 400);
     }
 
@@ -150,7 +161,7 @@ Deno.serve(async (req) => {
     const res = await fetch(`${GRAPH}/${meta.page_id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, access_token: meta.page_access_token }),
+      body: JSON.stringify({ ...payload, access_token: pageToken }),
     });
     const body = await res.json().catch(() => ({}));
 
@@ -185,7 +196,12 @@ Deno.serve(async (req) => {
       : `[${attachment_type || "anexo"}]`;
 
     // Guarda a mensagem enviada, para aparecer na conversa como qualquer outra.
-    await admin.from("meta_messages").insert({
+    //
+    // O erro deste insert É verificado. Neste ponto a Meta já entregou a
+    // mensagem ao cliente: se a gravação falhar em silêncio, respondemos
+    // `success` ao CRM, o rascunho é limpo, e fica uma mensagem que o cliente
+    // recebeu e que não existe em lado nenhum do sistema — o agente reescreve-a.
+    const { error: insertErr } = await admin.from("meta_messages").insert({
       organization_id: conv.organization_id,
       conversation_id: conv.id,
       external_id: body?.message_id ?? null,
@@ -196,16 +212,26 @@ Deno.serve(async (req) => {
         ? [{ type: attachment_type || "file", url: attachment_url }]
         : [],
       sent_by: user.id,
+      sent_at: new Date().toISOString(),
     });
 
-    await admin.from("meta_conversations").update({
+    if (insertErr) {
+      logError("ENTREGUE MAS NÃO GUARDADA", {
+        conversa: conv.id, message_id: body?.message_id, error: insertErr.message,
+      });
+    }
+
+    const { error: convErr } = await admin.from("meta_conversations").update({
       last_message: resumo,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", conv.id);
+    if (convErr) logError("falha a atualizar a conversa", { error: convErr.message });
 
     log("mensagem enviada", { conversa: conv.id, canal: channel?.channel_type });
-    return json({ success: true, message_id: body?.message_id ?? null });
+    // `stored: false` diz ao CRM que a mensagem foi mesmo entregue mas não ficou
+    // registada — é a diferença entre "reenvia" e "não reenvies, já foi".
+    return json({ success: true, stored: !insertErr, message_id: body?.message_id ?? null });
   } catch (e) {
     logError("erro inesperado", { error: (e as Error).message });
     return json({ error: (e as Error).message }, 500);

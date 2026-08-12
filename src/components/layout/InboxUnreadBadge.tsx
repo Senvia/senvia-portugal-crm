@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMessagingChannels } from "@/hooks/useMessagingChannels";
 import { useInboxUnreadTotal } from "@/hooks/useChatwootInbox";
+import { useMetaUnreadTotals } from "@/hooks/useMetaInbox";
 import { cn } from "@/lib/utils";
 
 // Unread messages badge for the nav. Mounted globally (sidebar/bottom
@@ -11,7 +12,13 @@ export function InboxUnreadBadge({ className }: { className?: string }) {
   // Mesma regra do channelConfigured da Caixa de Entrada: qualquer caixa ligada
   // conta. Deixou de haver um canal de WhatsApp para consultar à parte.
   const connected = channels.some((c) => c.status === "connected");
-  const { total } = useInboxUnreadTotal(connected);
+  const { total: totalChatwoot } = useInboxUnreadTotal(connected);
+  // O Instagram e o Messenger não passam pelo Chatwoot: o contador deles vem das
+  // nossas tabelas. Sem esta parcela, chegava uma DM e nada no CRM o dizia — nem
+  // o menu, nem o título do separador. Só abrindo a caixa.
+  const { data: metaUnread } = useMetaUnreadTotals();
+  const totalMeta = Object.values(metaUnread ?? {}).reduce((s, n) => s + n, 0);
+  const total = totalChatwoot + totalMeta;
 
   useEffect(() => {
     const baseTitle = document.title.replace(/^\(\d+\)\s*/, "");
@@ -23,7 +30,7 @@ export function InboxUnreadBadge({ className }: { className?: string }) {
     };
   }, [total]);
 
-  if (!connected || total <= 0) return null;
+  if (total <= 0) return null;
   return (
     <span
       className={cn(

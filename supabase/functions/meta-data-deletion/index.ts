@@ -161,24 +161,66 @@ ${code ? `<p>Código de confirmação: <code>${code.replace(/[^A-Za-z0-9_-]/g, "
       console.error("[META-DATA-DELETION] ERROR falha a registar pedido:", e);
     });
 
-    // As mensagens de Instagram/Messenger vivem no Chatwoot; do nosso lado o que
-    // guardamos são mensagens e contactos na inbox_messages. Apagamos o que
-    // estiver associado a este utilizador da Meta.
-    const { error: delErr, count } = await supabase
-      .from("inbox_messages")
-      .delete({ count: "exact" })
-      .eq("sender_meta_id", metaUserId);
+    // As mensagens de Instagram e Messenger estão em meta_conversations, com a
+    // pessoa identificada por `contact_ref` (o IGSID / PSID que a Meta nos dá).
+    //
+    // Isto apagava de `inbox_messages WHERE sender_meta_id = …` — uma coluna que
+    // NÃO EXISTE. O Postgres devolvia 42703, o código tratava-o como "não há
+    // nada para apagar", e devolvíamos à Meta um código de confirmação válido
+    // sem ter apagado uma única linha. Certificar uma eliminação que não
+    // aconteceu é pior do que não ter o endpoint.
+    let conversasApagadas = 0;
+    let mensagensApagadas = 0;
+    const falhas: string[] = [];
 
-    if (delErr) {
-      // 42703 = a coluna ainda não existe (a integração de Instagram nunca
-      // chegou a gravar nada). Não é erro: não há dados para apagar.
-      const code = (delErr as { code?: string }).code;
-      if (code !== "42703") {
-        console.error("[META-DATA-DELETION] ERROR falha a apagar:", delErr.message);
-      }
+    // As mensagens vão atrás por ON DELETE CASCADE, mas contam-se primeiro para
+    // o registo do pedido dizer o que foi feito.
+    const { data: convs, error: convFindErr } = await supabase
+      .from("meta_conversations")
+      .select("id")
+      .eq("contact_ref", metaUserId);
+    if (convFindErr) falhas.push(`conversas: ${convFindErr.message}`);
+
+    const convIds = (convs ?? []).map((c) => c.id);
+    if (convIds.length > 0) {
+      const { count: msgCount } = await supabase
+        .from("meta_messages")
+        .select("id", { count: "exact", head: true })
+        .in("conversation_id", convIds);
+      mensagensApagadas = msgCount ?? 0;
+
+      const { error: delErr, count } = await supabase
+        .from("meta_conversations")
+        .delete({ count: "exact" })
+        .eq("contact_ref", metaUserId);
+      if (delErr) falhas.push(`eliminação: ${delErr.message}`);
+      else conversasApagadas = count ?? 0;
     }
 
-    log("pedido processado", { metaUserId, apagadas: count ?? 0, confirmationCode });
+    // O diagnóstico do webhook guarda os primeiros 800 caracteres do corpo — o
+    // que inclui o texto das mensagens desta pessoa. Também tem de sair.
+    const { error: logErr } = await supabase
+      .from("meta_webhook_log")
+      .delete()
+      .like("body_head", `%${metaUserId}%`);
+    if (logErr) falhas.push(`diagnóstico: ${logErr.message}`);
+
+    await supabase.from("meta_data_deletion_requests").update({
+      status: falhas.length ? "error" : "done",
+      deleted_conversations: conversasApagadas,
+      deleted_messages: mensagensApagadas,
+      error: falhas.length ? falhas.join(" | ") : null,
+      processed_at: new Date().toISOString(),
+    }).eq("confirmation_code", confirmationCode)
+      .then(() => {}, () => { /* o registo é prova, não pode partir a resposta */ });
+
+    if (falhas.length) {
+      console.error("[META-DATA-DELETION] ERROR eliminação incompleta:", falhas.join(" | "));
+    }
+
+    log("pedido processado", {
+      metaUserId, conversasApagadas, mensagensApagadas, confirmationCode,
+    });
 
     // Formato exigido pela Meta: o URL onde o utilizador vê o estado, e o código.
     const statusUrl = `${url.origin}${url.pathname}?id=${confirmationCode}`;

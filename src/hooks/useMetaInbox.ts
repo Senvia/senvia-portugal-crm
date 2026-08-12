@@ -41,7 +41,42 @@ export interface MetaMessage {
   reply_to_external_id: string | null;
   reaction: string | null;
   reaction_by: string | null;
+  /** A pessoa retirou a mensagem do lado dela. */
+  is_deleted: boolean | null;
+  /** Quando a Meta diz que foi enviada — é por aqui que se ordena. */
+  sent_at: string | null;
   created_at: string;
+}
+
+/**
+ * Por ler, por caixa de Meta.
+ *
+ * Sem isto o contador do menu e o distintivo de cada caixa só contavam o
+ * Chatwoot: chegava uma DM de Instagram e nada no CRM o dizia — nem a barra
+ * lateral, nem o título do separador. Só se descobria abrindo a caixa.
+ */
+export function useMetaUnreadTotals() {
+  const { organization } = useAuth();
+
+  return useQuery({
+    queryKey: ['meta-unread-totals', organization?.id],
+    queryFn: async (): Promise<Record<string, number>> => {
+      if (!organization?.id) return {};
+      const { data, error } = await db
+        .from('meta_conversations')
+        .select('channel_id, unread_count')
+        .eq('organization_id', organization.id)
+        .gt('unread_count', 0);
+      if (error) throw error;
+      const totais: Record<string, number> = {};
+      for (const linha of (data ?? []) as Array<{ channel_id: string; unread_count: number }>) {
+        totais[linha.channel_id] = (totais[linha.channel_id] ?? 0) + (linha.unread_count ?? 0);
+      }
+      return totais;
+    },
+    enabled: !!organization?.id,
+    refetchInterval: 30_000,
+  });
 }
 
 /** Conversas de uma caixa, mais recentes primeiro. */
@@ -68,7 +103,18 @@ export function useMetaConversations(channelId: string | null) {
   });
 }
 
-/** Mensagens de uma conversa, por ordem cronológica. */
+/** Quantas mensagens se leem de uma vez. */
+export const META_PAGINA = 200;
+
+/**
+ * Mensagens de uma conversa, por ordem cronológica.
+ *
+ * Lê-se do FIM para o princípio e inverte-se. Parece um pormenor e não é: o
+ * PostgREST corta em 1000 linhas, e por ordem crescente o que ele guardava eram
+ * as 1000 MAIS ANTIGAS. Uma conversa com mais do que isso congelava — as
+ * mensagens novas ficavam guardadas na base de dados e nunca mais apareciam, sem
+ * erro nenhum. O agente via uma conversa parada e o envio parecia não fazer nada.
+ */
 export function useMetaMessages(conversationId: string | null) {
   return useQuery({
     queryKey: ['meta-messages', conversationId],
@@ -76,11 +122,13 @@ export function useMetaMessages(conversationId: string | null) {
       if (!conversationId) return [];
       const { data, error } = await db
         .from('meta_messages')
-        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reply_to_external_id, reaction, reaction_by, created_at')
+        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reply_to_external_id, reaction, reaction_by, is_deleted, sent_at, created_at')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
+        .order('sent_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(META_PAGINA);
       if (error) throw error;
-      return (data || []) as MetaMessage[];
+      return ((data || []) as MetaMessage[]).slice().reverse();
     },
     enabled: !!conversationId,
     refetchInterval: 10_000,
@@ -117,17 +165,23 @@ export function useSendMetaMessage() {
   });
 }
 
-/** Marca como lida (zera o contador). */
+/**
+ * Marca como lida.
+ *
+ * Desconta o que foi visto em vez de escrever zero: uma mensagem que chegasse
+ * entre a leitura e a escrita tinha o incremento deitado fora, e a conversa
+ * ficava a dizer "lida" com uma mensagem por ler lá dentro.
+ */
 export function useMarkMetaRead() {
   const queryClient = useQueryClient();
   const { organization } = useAuth();
 
   return useMutation({
-    mutationFn: async (conversationId: string) => {
-      const { error } = await db
-        .from('meta_conversations')
-        .update({ unread_count: 0 })
-        .eq('id', conversationId);
+    mutationFn: async ({ conversationId, seen }: { conversationId: string; seen: number }) => {
+      const { error } = await db.rpc('mark_meta_read', {
+        _conversation_id: conversationId,
+        _seen: seen,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -215,6 +269,14 @@ export function useSendMetaAttachment() {
 
       const { data: pub } = supabase.storage.from('automation-media').getPublicUrl(caminho);
 
+      // Se o envio falhar, o ficheiro sai. O caso comum é a janela de 24h ter
+      // fechado: o agente escolhia um anexo, levava com o aviso, e o ficheiro
+      // ficava público para sempre num contentor que ninguém limpa.
+      const apagarFicheiro = async () => {
+        await supabase.storage.from('automation-media').remove([caminho])
+          .then(() => {}, () => { /* melhor esforço */ });
+      };
+
       const { data, error } = await supabase.functions.invoke('meta-send', {
         body: {
           conversation_id: conversationId,
@@ -228,9 +290,13 @@ export function useSendMetaAttachment() {
           const body = await (error as { context?: Response }).context?.json();
           detail = body?.error ?? '';
         } catch { /* corpo não era JSON */ }
+        await apagarFicheiro();
         throw new Error(detail || (error as Error).message);
       }
-      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      if ((data as { error?: string })?.error) {
+        await apagarFicheiro();
+        throw new Error((data as { error: string }).error);
+      }
       return data;
     },
     onSuccess: (_d, vars) => {
