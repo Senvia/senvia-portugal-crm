@@ -3,7 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { toast } from "sonner";
-import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus, ProposalType, ModeloServico, NegotiationType } from "@/types/sales";
+import type {
+  BillingProvider,
+  BillingStatus,
+  CycleStatus,
+  ActivePaidTrafficSaleRecord,
+  SaleBillingSummary,
+  SaleCycleSummary,
+  SaleProductReference,
+  SaleRecurrenceSummary,
+  SaleStatus,
+  SaleWithDetails,
+  PaymentMethod,
+  PaymentStatus,
+  ProposalType,
+  ModeloServico,
+  NegotiationType,
+  ServiceStatus,
+} from "@/types/sales";
+import type { Tables } from "@/integrations/supabase/types";
 
 export function useSales() {
   const { organization } = useAuth();
@@ -26,21 +44,206 @@ export function useSales() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      
-      let result = (data as unknown as SaleWithDetails[]) || [];
+
+      const result = (data as unknown as SaleWithDetails[]) || [];
+      const saleIds = result.map((sale) => sale.id);
+      const recurrenceResponse = await supabase
+        .from("sale_recurrences")
+        .select("*")
+        .eq("organization_id", organization.id);
+      if (recurrenceResponse.error) throw recurrenceResponse.error;
+
+      const recurrenceRows = recurrenceResponse.data ?? [];
+      const recurrenceIds = recurrenceRows.map((recurrence) => recurrence.id);
+      const cycleResponse = recurrenceIds.length
+        ? await supabase
+            .from("sale_recurring_cycles")
+            .select("*")
+            .eq("organization_id", organization.id)
+            .in("recurrence_id", recurrenceIds)
+        : { data: [], error: null };
+      if (cycleResponse.error) throw cycleResponse.error;
+
+      const itemResponse = saleIds.length
+        ? await supabase
+            .from("sale_items")
+            .select("sale_id, product_id")
+            .in("sale_id", saleIds)
+        : { data: [], error: null };
+      if (itemResponse.error) throw itemResponse.error;
+
+      const productIds = Array.from(
+        new Set((itemResponse.data ?? []).map((item) => item.product_id).filter((id): id is string => id !== null)),
+      );
+      const productResponse = productIds.length
+        ? await supabase
+            .from("products")
+            .select("id, name, is_recurring")
+            .eq("organization_id", organization.id)
+            .in("id", productIds)
+        : { data: [], error: null };
+      if (productResponse.error) throw productResponse.error;
+
+      const recurrencesBySaleId = new Map(recurrenceRows.map((recurrence) => [recurrence.sale_id, recurrence]));
+      const cyclesByRecurrenceId = new Map<string, Tables<"sale_recurring_cycles">["Row"][]>();
+      for (const cycle of cycleResponse.data ?? []) {
+        const cycles = cyclesByRecurrenceId.get(cycle.recurrence_id) ?? [];
+        cycles.push(cycle);
+        cyclesByRecurrenceId.set(cycle.recurrence_id, cycles);
+      }
+      const productsById = new Map(
+        (productResponse.data ?? []).map((product) => [product.id, product]),
+      );
+      const recurringProductsBySaleId = new Map<string, SaleProductReference[]>();
+      for (const item of itemResponse.data ?? []) {
+        if (!item.product_id || productsById.get(item.product_id)?.is_recurring !== true) continue;
+        const product = productsById.get(item.product_id);
+        if (!product) continue;
+        const products = recurringProductsBySaleId.get(item.sale_id) ?? [];
+        if (!products.some((entry) => entry.id === product.id)) {
+          products.push({ id: product.id, name: product.name });
+        }
+        recurringProductsBySaleId.set(item.sale_id, products);
+      }
+
+      const enrichedResult = result.map((sale) => {
+        const recurrence = recurrencesBySaleId.get(sale.id);
+        const recurringProducts = recurringProductsBySaleId.get(sale.id) ?? [];
+        const cycles = recurrence ? cyclesByRecurrenceId.get(recurrence.id) ?? [] : [];
+        const recurrenceSummary = recurrence ? toRecurrenceSummary(recurrence, cycles) : null;
+        return {
+          ...sale,
+          recurrence: recurrenceSummary,
+          recurring_product_ids: recurringProducts.map((product) => product.id),
+          recurring_products: recurringProducts,
+          billing_summary: recurrenceSummary ? toBillingSummary(recurrenceSummary, cycles) : null,
+        };
+      });
       
       // Filter by user IDs (admin/leader/single user)
       if (effectiveUserIds) {
-        result = result.filter(sale => 
+        return enrichedResult.filter(sale =>
           (sale.created_by && effectiveUserIds.includes(sale.created_by)) || 
           (sale.lead?.assigned_to && effectiveUserIds.includes(sale.lead.assigned_to))
         );
       }
       
-      return result;
+      return enrichedResult;
     },
     enabled: !!organization?.id,
   });
+}
+
+export async function fetchActivePaidTrafficSales(
+  organizationId: string,
+  productId: string,
+): Promise<ActivePaidTrafficSaleRecord[]> {
+  const recurrenceResponse = await supabase
+    .from("sale_recurrences")
+    .select("id, sale_id, organization_id, amount, service_status, billing_status, billing_provider")
+    .eq("organization_id", organizationId)
+    .eq("service_status", "active");
+  if (recurrenceResponse.error) throw recurrenceResponse.error;
+
+  const recurrences = recurrenceResponse.data ?? [];
+  const saleIds = recurrences.map((recurrence) => recurrence.sale_id);
+  if (saleIds.length === 0) return [];
+
+  const itemResponse = await supabase
+    .from("sale_items")
+    .select("sale_id, product_id")
+    .in("sale_id", saleIds)
+    .eq("product_id", productId);
+  if (itemResponse.error) throw itemResponse.error;
+
+  const matchingSaleIds = new Set((itemResponse.data ?? []).map((item) => item.sale_id));
+  return recurrences
+    .filter((recurrence) => matchingSaleIds.has(recurrence.sale_id))
+    .map((recurrence) => ({
+      sale_id: recurrence.sale_id,
+      organization_id: recurrence.organization_id,
+      recurrence_id: recurrence.id,
+      amount: recurrence.amount,
+      service_status: parseServiceStatus(recurrence.service_status),
+      billing_status: parseBillingStatus(recurrence.billing_status),
+      billing_provider: parseBillingProvider(recurrence.billing_provider),
+      product_ids: [productId],
+    }));
+}
+
+const SERVICE_STATUS_VALUES = ["pending", "active", "paused", "inactive", "cancelled"] as const;
+const BILLING_STATUS_VALUES = ["not_started", "current", "past_due", "uncollectible"] as const;
+const BILLING_PROVIDER_VALUES = ["manual", "stripe"] as const;
+const CYCLE_STATUS_VALUES = ["pending", "paid", "failed", "void"] as const;
+
+function parseServiceStatus(value: string): ServiceStatus {
+  return SERVICE_STATUS_VALUES.find((status) => status === value) ?? "pending";
+}
+
+function parseBillingStatus(value: string): BillingStatus {
+  return BILLING_STATUS_VALUES.find((status) => status === value) ?? "not_started";
+}
+
+function parseBillingProvider(value: string): BillingProvider {
+  return BILLING_PROVIDER_VALUES.find((provider) => provider === value) ?? "manual";
+}
+
+function parseCycleStatus(value: string): CycleStatus {
+  return CYCLE_STATUS_VALUES.find((status) => status === value) ?? "pending";
+}
+
+function toRecurrenceSummary(
+  recurrence: Tables<"sale_recurrences">["Row"],
+  cycles: Tables<"sale_recurring_cycles">["Row"][],
+): SaleRecurrenceSummary {
+  const currentCycle = cycles.reduce<Tables<"sale_recurring_cycles">["Row"] | null>(
+    (latest, cycle) => (!latest || cycle.period_start > latest.period_start ? cycle : latest),
+    null,
+  );
+
+  return {
+    id: recurrence.id,
+    amount: recurrence.amount,
+    service_status: parseServiceStatus(recurrence.service_status),
+    billing_status: parseBillingStatus(recurrence.billing_status),
+    billing_provider: parseBillingProvider(recurrence.billing_provider),
+    next_cycle_date: recurrence.next_cycle_date,
+    last_cycle_date: recurrence.last_cycle_date,
+    current_cycle: currentCycle ? toCycleSummary(currentCycle) : null,
+  };
+}
+
+function toCycleSummary(cycle: Tables<"sale_recurring_cycles">["Row"]): SaleCycleSummary {
+  return {
+    id: cycle.id,
+    period_start: cycle.period_start,
+    period_end: cycle.period_end,
+    due_date: cycle.due_date,
+    amount: cycle.amount,
+    status: parseCycleStatus(cycle.status),
+  };
+}
+
+function toBillingSummary(
+  recurrence: SaleRecurrenceSummary,
+  cycles: Tables<"sale_recurring_cycles">["Row"][],
+): SaleBillingSummary {
+  let outstandingAmount = 0;
+  let paidAmount = 0;
+  for (const cycle of cycles) {
+    const amount = cycle.amount;
+    const status = parseCycleStatus(cycle.status);
+    if (status === "paid") paidAmount += amount;
+    if (status === "pending" || status === "failed") outstandingAmount += amount;
+  }
+
+  return {
+    status: recurrence.billing_status,
+    provider: recurrence.billing_provider,
+    current_cycle_status: recurrence.current_cycle?.status ?? null,
+    outstanding_amount: outstandingAmount,
+    paid_amount: paidAmount,
+  };
 }
 
 export function useCreateSale() {
