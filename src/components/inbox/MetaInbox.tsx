@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus } from 'lucide-react';
+import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -290,7 +290,7 @@ function MetaThread({
               ref={fileRef}
               type="file"
               className="hidden"
-              accept="image/png,image/jpeg,video/*,audio/*,application/pdf"
+              accept="image/png,image/jpeg,video/*,application/pdf"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
@@ -305,7 +305,7 @@ function MetaThread({
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
-              title="Enviar imagem, áudio, vídeo ou PDF"
+              title="Enviar imagem, vídeo ou PDF"
               disabled={sendFile.isPending}
               onClick={() => fileRef.current?.click()}
             >
@@ -321,9 +321,22 @@ function MetaThread({
               rows={1}
               className="max-h-32 min-h-[40px] resize-none"
             />
-            <Button onClick={handleSend} disabled={!draft.trim() || send.isPending} size="icon" className="h-10 w-10 shrink-0">
-              {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
+            {/* Como no Instagram: sem texto escrito, o botão grava voz; com
+                texto, envia. Um só lugar para "responder", em vez de tratar a
+                voz como se fosse um ficheiro qualquer. */}
+            {draft.trim() ? (
+              <Button onClick={handleSend} disabled={send.isPending} size="icon" className="h-10 w-10 shrink-0">
+                {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            ) : (
+              <VoiceRecorder
+                disabled={sendFile.isPending}
+                onRecorded={(file) => sendFile.mutate(
+                  { conversationId: conversation.id, file },
+                  { onError: (err) => toast.error('Áudio não enviado', { description: (err as Error).message }) },
+                )}
+              />
+            )}
           </div>
         )}
       </footer>
@@ -393,23 +406,7 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
   const isShare = type === 'ig_reel' || type === 'share' || !!code;
 
   if (isShare && code && !broken) {
-    return (
-      <div className="mt-1 overflow-hidden rounded-lg bg-background">
-        <iframe
-          src={`https://www.instagram.com/reel/${code}/embed`}
-          title="Publicação do Instagram"
-          // 9:16 com folga para a barra do Instagram — a altura fixa de 400px
-          // cortava o Reel e obrigava a rolar dentro do próprio anexo.
-          className="aspect-[9/16] h-auto w-full max-w-[340px] border-0"
-          loading="lazy"
-          allowFullScreen
-          onError={() => setBroken(true)}
-        />
-        <a href={url} target="_blank" rel="noreferrer" className="block px-2 py-1 text-[11px] underline opacity-80">
-          Abrir no Instagram
-        </a>
-      </div>
-    );
+    return <InstagramEmbed code={code} url={url} onBroken={() => setBroken(true)} />;
   }
 
   if (type === 'image' && !broken) {
@@ -506,5 +503,174 @@ function ReactionPicker({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Publicação do Instagram incorporada, sem barra de scroll.
+ *
+ * Uma altura fixa nunca serve: o incorporador traz cabeçalho, vídeo e legenda, e
+ * cada publicação tem um tamanho diferente — foi por isso que 400px cortava o
+ * Reel e 9:16 continuava a deixar scroll.
+ *
+ * O próprio Instagram resolve isto: a página incorporada envia à janela-mãe a
+ * altura de que precisa, com `{"type":"MEASURE","details":{"height":N}}`. É o
+ * mecanismo que o script oficial deles usa para redimensionar. Ouve-se essa
+ * mensagem e ajusta-se — assim cabe sempre, seja qual for a publicação.
+ */
+function InstagramEmbed({
+  code,
+  url,
+  onBroken,
+}: {
+  code: string;
+  url: string;
+  onBroken: () => void;
+}) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  // Altura inicial só para não saltar antes de a medição chegar.
+  const [height, setHeight] = useState(560);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('instagram.com')) return;
+      // Só mensagens deste iframe: a conversa pode ter vários incorporados.
+      if (frameRef.current && event.source !== frameRef.current.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const h = Number(data?.details?.height);
+        if (data?.type === 'MEASURE' && Number.isFinite(h) && h > 0) setHeight(Math.ceil(h));
+      } catch { /* nem tudo o que o Instagram envia é a medição */ }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  return (
+    <div className="mt-1 overflow-hidden rounded-lg bg-background">
+      <iframe
+        ref={frameRef}
+        src={`https://www.instagram.com/reel/${code}/embed`}
+        title="Publicação do Instagram"
+        style={{ height }}
+        // scrolling="no" evita a barra no intervalo entre montar e medir.
+        scrolling="no"
+        className="w-full max-w-[340px] border-0"
+        loading="lazy"
+        allowFullScreen
+        onError={onBroken}
+      />
+      <a href={url} target="_blank" rel="noreferrer" className="block px-2 py-1 text-[11px] underline opacity-80">
+        Abrir no Instagram
+      </a>
+    </div>
+  );
+}
+
+/**
+ * Gravar uma mensagem de voz e enviá-la.
+ *
+ * Sobre o formato: o MediaRecorder de cada browser grava no que lhe apetece, e a
+ * Meta só aceita alguns. Tenta-se por ordem de compatibilidade (MP4/AAC primeiro,
+ * que é o mais universal; OGG e WEBM a seguir) em vez de assumir um — o Safari
+ * não grava WEBM e o Chrome não grava MP4 em todas as versões.
+ */
+const FORMATOS_AUDIO = [
+  { mime: 'audio/mp4', ext: 'm4a' },
+  { mime: 'audio/ogg;codecs=opus', ext: 'ogg' },
+  { mime: 'audio/webm;codecs=opus', ext: 'webm' },
+  { mime: 'audio/webm', ext: 'webm' },
+];
+
+function VoiceRecorder({
+  onRecorded,
+  disabled,
+}: {
+  onRecorded: (file: File) => void;
+  disabled?: boolean;
+}) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const tickRef = useRef<number | null>(null);
+
+  // Largar o microfone e o contador se o componente sair a meio de uma gravação
+  // — senão o browser fica com a luz do micro acesa indefinidamente.
+  useEffect(() => () => {
+    if (tickRef.current) window.clearInterval(tickRef.current);
+    recRef.current?.stream.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  const começar = async () => {
+    const formato = FORMATOS_AUDIO.find((f) => MediaRecorder.isTypeSupported(f.mime));
+    if (!formato) {
+      toast.error('O teu browser não permite gravar áudio.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream, { mimeType: formato.mime });
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: formato.mime });
+        // Gravações de menos de um segundo são quase sempre um toque acidental.
+        if (blob.size > 1000) {
+          onRecorded(new File([blob], `voz-${Date.now()}.${formato.ext}`, { type: formato.mime }));
+        }
+      };
+      rec.start();
+      recRef.current = rec;
+      setRecording(true);
+      setSeconds(0);
+      tickRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    } catch {
+      toast.error('Sem acesso ao microfone', {
+        description: 'Autoriza o microfone para este site nas definições do browser.',
+      });
+    }
+  };
+
+  const parar = (enviar: boolean) => {
+    if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null; }
+    const rec = recRef.current;
+    if (!rec) return;
+    // Cancelar: limpa o que foi gravado ANTES de parar, para o onstop não enviar.
+    if (!enviar) chunksRef.current = [];
+    rec.stop();
+    recRef.current = null;
+    setRecording(false);
+  };
+
+  if (recording) {
+    return (
+      <div className="flex h-10 shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-2">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+        <span className="text-xs font-medium tabular-nums text-destructive">
+          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        </span>
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="Cancelar" onClick={() => parar(false)}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="icon" className="h-7 w-7" title="Enviar" onClick={() => parar(true)}>
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-10 w-10 shrink-0"
+      title="Gravar mensagem de voz"
+      disabled={disabled}
+      onClick={começar}
+    >
+      <Mic className="h-4 w-4" />
+    </Button>
   );
 }
