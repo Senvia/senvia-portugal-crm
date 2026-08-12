@@ -6336,9 +6336,13 @@ export type Database = {
           payment_date: string
           payment_method: string | null
           qr_code_url: string | null
+          recurring_cycle_id: string | null
           sale_id: string
           status: string
+          stripe_fee_amount: number | null
+          stripe_gross_amount: number | null
           stripe_invoice_id: string | null
+          stripe_net_amount: number | null
           updated_at: string | null
         }
         Insert: {
@@ -6358,9 +6362,13 @@ export type Database = {
           payment_date: string
           payment_method?: string | null
           qr_code_url?: string | null
+          recurring_cycle_id?: string | null
           sale_id: string
           status?: string
+          stripe_fee_amount?: number | null
+          stripe_gross_amount?: number | null
           stripe_invoice_id?: string | null
+          stripe_net_amount?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -6380,9 +6388,13 @@ export type Database = {
           payment_date?: string
           payment_method?: string | null
           qr_code_url?: string | null
+          recurring_cycle_id?: string | null
           sale_id?: string
           status?: string
+          stripe_fee_amount?: number | null
+          stripe_gross_amount?: number | null
           stripe_invoice_id?: string | null
+          stripe_net_amount?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -6415,11 +6427,170 @@ export type Database = {
             referencedColumns: ["organization_id"]
           },
           {
+            foreignKeyName: "sale_payments_recurring_cycle_fkey"
+            columns: ["recurring_cycle_id", "sale_id", "organization_id"]
+            isOneToOne: true
+            referencedRelation: "sale_recurring_cycles"
+            referencedColumns: ["id", "sale_id", "organization_id"]
+          },
+          {
             foreignKeyName: "sale_payments_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_recurring_cycles: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          due_date: string
+          failure_reason: string | null
+          id: string
+          organization_id: string
+          paid_at: string | null
+          period_end: string
+          period_start: string
+          recurrence_id: string
+          sale_id: string
+          status: string
+          stripe_invoice_id: string | null
+          stripe_invoice_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          due_date: string
+          failure_reason?: string | null
+          id?: string
+          organization_id: string
+          paid_at?: string | null
+          period_end: string
+          period_start: string
+          recurrence_id: string
+          sale_id: string
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_invoice_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          due_date?: string
+          failure_reason?: string | null
+          id?: string
+          organization_id?: string
+          paid_at?: string | null
+          period_end?: string
+          period_start?: string
+          recurrence_id?: string
+          sale_id?: string
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_invoice_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_recurring_cycles_recurrence_fkey"
+            columns: ["recurrence_id", "sale_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "sale_recurrences"
+            referencedColumns: ["id", "sale_id", "organization_id"]
+          },
+          {
+            foreignKeyName: "sale_recurring_cycles_sale_fkey"
+            columns: ["sale_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      sale_recurrences: {
+        Row: {
+          amount: number
+          anchor_date: string
+          billing_provider: string
+          billing_status: string
+          cancelled_at: string | null
+          created_at: string
+          currency: string
+          id: string
+          inactive_at: string | null
+          interval: string
+          interval_count: number
+          last_cycle_date: string | null
+          next_cycle_date: string | null
+          organization_id: string
+          paused_at: string | null
+          sale_id: string
+          service_status: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          anchor_date: string
+          billing_provider?: string
+          billing_status?: string
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          inactive_at?: string | null
+          interval?: string
+          interval_count?: number
+          last_cycle_date?: string | null
+          next_cycle_date?: string | null
+          organization_id: string
+          paused_at?: string | null
+          sale_id: string
+          service_status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          anchor_date?: string
+          billing_provider?: string
+          billing_status?: string
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          inactive_at?: string | null
+          interval?: string
+          interval_count?: number
+          last_cycle_date?: string | null
+          next_cycle_date?: string | null
+          organization_id?: string
+          paused_at?: string | null
+          sale_id?: string
+          service_status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_recurrences_sale_fkey"
+            columns: ["sale_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id", "organization_id"]
           },
         ]
       }
@@ -6905,6 +7076,192 @@ export type Database = {
           },
         ]
       }
+      stripe_connections: {
+        Row: {
+          charges_enabled: boolean
+          connected_at: string
+          created_at: string
+          details_submitted: boolean
+          disconnected_at: string | null
+          id: string
+          last_error: string | null
+          mode: string
+          organization_id: string
+          status: string
+          stripe_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          charges_enabled?: boolean
+          connected_at?: string
+          created_at?: string
+          details_submitted?: boolean
+          disconnected_at?: string | null
+          id?: string
+          last_error?: string | null
+          mode: string
+          organization_id: string
+          status?: string
+          stripe_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          charges_enabled?: boolean
+          connected_at?: string
+          created_at?: string
+          details_submitted?: boolean
+          disconnected_at?: string | null
+          id?: string
+          last_error?: string | null
+          mode?: string
+          organization_id?: string
+          status?: string
+          stripe_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "stripe_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      stripe_events: {
+        Row: {
+          attempts: number
+          event_type: string
+          id: string
+          last_error: string | null
+          livemode: boolean
+          organization_id: string
+          processed_at: string | null
+          received_at: string
+          status: string
+          stripe_account_id: string
+          stripe_event_id: string
+        }
+        Insert: {
+          attempts?: number
+          event_type: string
+          id?: string
+          last_error?: string | null
+          livemode: boolean
+          organization_id: string
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          stripe_account_id: string
+          stripe_event_id: string
+        }
+        Update: {
+          attempts?: number
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          livemode?: boolean
+          organization_id?: string
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          stripe_account_id?: string
+          stripe_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_events_connection_fkey"
+            columns: ["stripe_account_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stripe_connections"
+            referencedColumns: ["stripe_account_id", "organization_id"]
+          },
+        ]
+      }
+      stripe_product_mappings: {
+        Row: {
+          active: boolean
+          created_at: string
+          currency: string
+          id: string
+          interval: string
+          interval_count: number
+          organization_id: string
+          product_id: string
+          stripe_connection_id: string
+          stripe_price_id: string
+          stripe_product_id: string
+          sync_error: string | null
+          synced_at: string | null
+          unit_amount: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          currency?: string
+          id?: string
+          interval?: string
+          interval_count?: number
+          organization_id: string
+          product_id: string
+          stripe_connection_id: string
+          stripe_price_id: string
+          stripe_product_id: string
+          sync_error?: string | null
+          synced_at?: string | null
+          unit_amount: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          currency?: string
+          id?: string
+          interval?: string
+          interval_count?: number
+          organization_id?: string
+          product_id?: string
+          stripe_connection_id?: string
+          stripe_price_id?: string
+          stripe_product_id?: string
+          sync_error?: string | null
+          synced_at?: string | null
+          unit_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_product_mappings_connection_fkey"
+            columns: ["stripe_connection_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stripe_connections"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "stripe_product_mappings_product_fkey"
+            columns: ["product_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           created_at: string
@@ -7149,6 +7506,45 @@ export type Database = {
       }
     }
     Views: {
+      stripe_connection_summaries: {
+        Row: {
+          charges_enabled: boolean | null
+          connected_at: string | null
+          details_submitted: boolean | null
+          disconnected_at: string | null
+          id: string | null
+          masked_account_id: string | null
+          mode: string | null
+          organization_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          charges_enabled?: boolean | null
+          connected_at?: string | null
+          details_submitted?: boolean | null
+          disconnected_at?: string | null
+          id?: string | null
+          masked_account_id?: never
+          mode?: string | null
+          organization_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          charges_enabled?: boolean | null
+          connected_at?: string | null
+          details_submitted?: boolean | null
+          disconnected_at?: string | null
+          id?: string | null
+          masked_account_id?: never
+          mode?: string | null
+          organization_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       trial_activation_counts: {
         Row: {
           days_since_registration: number | null
@@ -7278,6 +7674,10 @@ export type Database = {
             Args: { _contact_phone?: string; _name: string; _slug: string }
             Returns: string
           }
+      create_recurring_cycle: {
+        Args: { p_period_start: string; p_recurrence_id: string }
+        Returns: Database["public"]["Tables"]["sale_recurring_cycles"]["Row"]
+      }
       distribute_prospects_round_robin:
         | {
             Args: {
@@ -7817,6 +8217,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      transition_sale_recurrence: {
+        Args: { p_action: string; p_recurrence_id: string }
+        Returns: Database["public"]["Tables"]["sale_recurrences"]["Row"]
+      }
       unaccent: { Args: { "": string }; Returns: string }
       verify_automation_secret: { Args: { p_secret: string }; Returns: boolean }
       verify_stripe_cron_secret: {
