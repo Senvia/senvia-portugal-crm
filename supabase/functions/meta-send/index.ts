@@ -57,9 +57,17 @@ Deno.serve(async (req) => {
 
     // Membro da organização da conversa? O RLS protege as leituras do cliente,
     // mas aqui corremos como service_role — a verificação é nossa.
-    const { data: isMember } = await admin.rpc("is_org_member", {
-      _user_id: user.id, _organization_id: conv.organization_id,
+    //
+    // O parâmetro chama-se `_org_id` (não `_organization_id`): com o nome errado
+    // o Postgres não encontra a função, o `data` vem nulo, e a resposta seria um
+    // "Sem acesso a esta conversa" a toda a gente — um 403 a mentir sobre a causa.
+    const { data: isMember, error: memberErr } = await admin.rpc("is_org_member", {
+      _user_id: user.id, _org_id: conv.organization_id,
     });
+    if (memberErr) {
+      logError("verificação de membro falhou", { error: memberErr.message });
+      return json({ error: "Não foi possível verificar o acesso" }, 500);
+    }
     if (!isMember) return json({ error: "Sem acesso a esta conversa" }, 403);
 
     // A janela das 24h. Verificada aqui para dar uma resposta que se entende.

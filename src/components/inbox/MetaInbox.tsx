@@ -203,13 +203,7 @@ function MetaThread({
                   : 'bg-muted text-foreground',
               )}>
                 {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-                {m.attachments?.map((a, i) => (
-                  a.url
-                    ? <a key={i} href={a.url} target="_blank" rel="noreferrer" className="block text-xs underline">
-                        {a.type === 'image' ? 'Imagem' : a.type === 'video' ? 'Vídeo' : 'Anexo'}
-                      </a>
-                    : <span key={i} className="text-xs opacity-70">[{a.type}]</span>
-                ))}
+                {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
                 <p className={cn(
                   'mt-0.5 text-[10px]',
                   m.direction === 'outgoing' ? 'text-primary-foreground/70' : 'text-muted-foreground',
@@ -283,5 +277,92 @@ function ContactAvatar({ name, url }: { name: string | null; url: string | null 
     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
       {initials}
     </span>
+  );
+}
+
+/** Extrai o código de uma publicação/Reel do Instagram a partir do endereço. */
+function instagramCode(url: string): string | null {
+  const m = url.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Desenha o anexo conforme o que ele é.
+ *
+ * A Meta manda tipos diferentes e antes tratava-os todos como "Anexo" com um
+ * link — obrigando a sair do CRM para ver uma imagem que já vinha pronta a
+ * mostrar.
+ *
+ * Reels e publicações partilhadas não vêm com ficheiro: vêm com o endereço do
+ * post. Para esses usa-se o incorporador público do Instagram, que não precisa
+ * de API nem de permissões — mas só funciona com contas/publicações públicas,
+ * por isso há sempre o link por baixo.
+ *
+ * Nota sobre imagens e vídeos: os endereços do CDN da Meta são assinados e
+ * EXPIRAM. Enquanto a conversa é recente mostram-se; mais tarde deixam de
+ * abrir, e por isso o link fica sempre disponível como alternativa.
+ */
+function Attachment({ type, url }: { type: string; url: string | null }) {
+  const [broken, setBroken] = useState(false);
+  if (!url) return <span className="text-xs opacity-70">[{type}]</span>;
+
+  const code = instagramCode(url);
+  const isShare = type === 'ig_reel' || type === 'share' || !!code;
+
+  if (isShare && code && !broken) {
+    return (
+      <div className="mt-1 overflow-hidden rounded-lg bg-background">
+        <iframe
+          src={`https://www.instagram.com/reel/${code}/embed`}
+          title="Publicação do Instagram"
+          className="h-[400px] w-full max-w-[320px] border-0"
+          loading="lazy"
+          allowFullScreen
+          onError={() => setBroken(true)}
+        />
+        <a href={url} target="_blank" rel="noreferrer" className="block px-2 py-1 text-[11px] underline opacity-80">
+          Abrir no Instagram
+        </a>
+      </div>
+    );
+  }
+
+  if (type === 'image' && !broken) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="mt-1 block">
+        <img
+          src={url}
+          alt="Imagem recebida"
+          onError={() => setBroken(true)}
+          className="max-h-64 max-w-full rounded-lg object-cover"
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+
+  if ((type === 'video' || type === 'audio') && !broken) {
+    const Tag = type === 'video' ? 'video' : 'audio';
+    return (
+      <Tag
+        src={url}
+        controls
+        onError={() => setBroken(true)}
+        className={cn('mt-1 max-w-full rounded-lg', type === 'video' && 'max-h-64')}
+      />
+    );
+  }
+
+  const rotulo = type === 'image' ? 'Imagem'
+    : type === 'video' ? 'Vídeo'
+    : type === 'audio' ? 'Áudio'
+    : type === 'story_mention' ? 'Menção em story'
+    : isShare ? 'Publicação do Instagram'
+    : 'Anexo';
+
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs underline">
+      {rotulo}{broken ? ' (já não abre aqui)' : ''}
+    </a>
   );
 }
