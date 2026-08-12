@@ -94,6 +94,7 @@ export function MetaInbox({
                   selectedId === c.id && 'bg-primary/5',
                 )}
               >
+                <ContactAvatar name={c.contact_name} url={c.contact_avatar_url} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-foreground">
@@ -173,6 +174,7 @@ function MetaThread({
     <section className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b p-3">
         <Button variant="ghost" size="sm" className="md:hidden" onClick={onBack}>Voltar</Button>
+        <ContactAvatar name={conversation.contact_name} url={conversation.contact_avatar_url} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {conversation.contact_name || conversation.contact_ref}
@@ -249,5 +251,37 @@ function MetaThread({
         )}
       </footer>
     </section>
+  );
+}
+
+/**
+ * Foto do contacto, com as iniciais como recurso.
+ *
+ * O endereço da foto vem assinado pela Meta e EXPIRA — por isso o onError não é
+ * decoração: quando o link caduca, a imagem falha e sem isto ficava um quadrado
+ * partido. Cai nas iniciais, que funcionam sempre.
+ */
+function ContactAvatar({ name, url }: { name: string | null; url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const label = (name ?? '').replace(/^@/, '');
+  const initials = label
+    ? label.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')
+    : '?';
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={label || 'Contacto'}
+        onError={() => setFailed(true)}
+        className="h-9 w-9 shrink-0 rounded-full object-cover"
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+      {initials}
+    </span>
   );
 }

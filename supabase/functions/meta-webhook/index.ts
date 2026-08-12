@@ -129,14 +129,26 @@ Deno.serve(async (req) => {
         const pageId = String(entry.id ?? ev.recipient?.id ?? "");
         if (!senderId || !pageId) continue;
 
-        // Que caixa é esta? A ligação é pelo id da Página/conta guardado no
-        // metadata quando o canal foi ligado.
-        const { data: channel } = await supabase
-          .from("messaging_channels")
-          .select("id, organization_id, channel_type")
-          .or(`metadata->>page_id.eq.${pageId},metadata->>ig_account_id.eq.${pageId}`)
-          .limit(1)
-          .maybeSingle();
+        // Que caixa é esta? No Instagram o `entry.id` é o id da CONTA
+        // (ig_account_id); no Messenger é o id da PÁGINA. Procuram-se os dois.
+        //
+        // Isto era um `.or("metadata->>page_id.eq.X,metadata->>ig_account_id.eq.X")`
+        // — e falhava em silêncio. O erro do PostgREST nem era verificado, por
+        // isso o canal vinha nulo, o evento era descartado como "página que não
+        // temos ligada", e ficava uma mensagem real perdida sem rasto. Duas
+        // consultas simples são mais feias e funcionam.
+        const findChannel = async (col: "ig_account_id" | "page_id") => {
+          const { data, error } = await supabase
+            .from("messaging_channels")
+            .select("id, organization_id, channel_type, metadata")
+            .eq(`metadata->>${col}`, pageId)
+            .limit(1)
+            .maybeSingle();
+          if (error) logError(`procura de canal por ${col} falhou`, { error: error.message });
+          return data;
+        };
+
+        const channel = await findChannel("ig_account_id") ?? await findChannel("page_id");
 
         if (!channel) {
           log("evento para uma página que não temos ligada", { pageId });
@@ -166,12 +178,49 @@ Deno.serve(async (req) => {
             status: "open",
             updated_at: new Date().toISOString(),
           }, { onConflict: "channel_id,contact_ref" })
-          .select("id")
+          .select("id, contact_name")
           .single();
 
         if (convErr || !conv) {
           logError("falha a gravar a conversa", { error: convErr?.message });
           continue;
+        }
+
+        // Nome e foto de quem escreveu.
+        //
+        // A Meta não os manda no webhook — só o identificador. Sem este pedido
+        // extra a conversa aparece como "682024387765816", que não diz nada a
+        // quem tem de responder.
+        //
+        // Só se pede uma vez, quando ainda não temos nome: é uma chamada por
+        // contacto novo, não por mensagem.
+        if (!conv.contact_name) {
+          const pageToken = (channel.metadata as { page_access_token?: string } | null)?.page_access_token;
+          if (pageToken) {
+            try {
+              const profRes = await fetch(
+                `https://graph.facebook.com/v21.0/${senderId}`
+                + `?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageToken)}`,
+              );
+              const prof = await profRes.json();
+              if (profRes.ok && !prof?.error) {
+                await supabase.from("meta_conversations").update({
+                  contact_name: prof.username ? `@${prof.username}` : (prof.name ?? null),
+                  // Atenção: este endereço é assinado e EXPIRA. Guarda-se para
+                  // ter foto já; quando deixar de abrir, basta limpar o nome
+                  // que o próximo webhook volta a pedir os dois.
+                  contact_avatar_url: prof.profile_pic ?? null,
+                }).eq("id", conv.id);
+                log("perfil obtido", { senderId, username: prof.username ?? prof.name });
+              } else {
+                // Acontece: contas com restrições de privacidade não expõem o
+                // perfil. A conversa funciona à mesma, só sem nome.
+                log("perfil indisponível", { senderId, erro: prof?.error?.message });
+              }
+            } catch (e) {
+              log("falha a obter o perfil", { senderId, error: (e as Error).message });
+            }
+          }
         }
 
         const { error: msgErr } = await supabase.from("meta_messages").insert({
