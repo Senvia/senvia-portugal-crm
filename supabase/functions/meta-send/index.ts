@@ -49,6 +49,8 @@ Deno.serve(async (req) => {
       attachment_url, attachment_type,
       // "react" / "unreact" / "typing_on" / "typing_off" / "mark_seen"
       action, message_external_id, reaction,
+      // Responder A uma mensagem concreta (o `mid` dela, do lado da Meta).
+      reply_to_mid,
     } = await req.json().catch(() => ({}));
 
     const temTexto = !!String(text ?? "").trim();
@@ -130,13 +132,17 @@ Deno.serve(async (req) => {
             type: attachment_type || "file",
             payload: { url: attachment_url },
           },
+          ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
         },
         messaging_type: "RESPONSE",
       };
     } else {
       payload = {
         recipient: { id: conv.contact_ref },
-        message: { text: String(text) },
+        message: {
+          text: String(text),
+          ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
+        },
         messaging_type: "RESPONSE",
       };
     }
@@ -185,6 +191,7 @@ Deno.serve(async (req) => {
       external_id: body?.message_id ?? null,
       direction: "outgoing",
       content: temTexto ? String(text) : null,
+      reply_to_external_id: reply_to_mid ?? null,
       attachments: attachment_url
         ? [{ type: attachment_type || "file", url: attachment_url }]
         : [],

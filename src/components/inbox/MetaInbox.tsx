@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X } from 'lucide-react';
+import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import {
   useMetaConversations, useMetaMessages, useSendMetaMessage, useMarkMetaRead,
   useMetaAction, useSendMetaAttachment,
-  type MetaConversation,
+  type MetaConversation, type MetaMessage,
 } from '@/hooks/useMetaInbox';
 
 /**
@@ -151,11 +151,14 @@ function MetaThread({
   const act = useMetaAction();
   const sendFile = useSendMetaAttachment();
   const [draft, setDraft] = useState('');
+  // Mensagem a que se está a responder. Guarda-se a mensagem inteira, não só o
+  // id, para mostrar a citação sem a ir procurar outra vez à lista.
+  const [replyTo, setReplyTo] = useState<MetaMessage | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingRef = useRef<number | null>(null);
 
-  useEffect(() => { setDraft(''); }, [conversation.id]);
+  useEffect(() => { setDraft(''); setReplyTo(null); }, [conversation.id]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
 
   // "Visto" ao abrir a conversa — é o que a pessoa do outro lado espera ver.
@@ -187,9 +190,9 @@ function MetaThread({
     const text = draft.trim();
     if (!text) return;
     send.mutate(
-      { conversationId: conversation.id, text },
+      { conversationId: conversation.id, text, replyToMid: replyTo?.external_id ?? null },
       {
-        onSuccess: () => setDraft(''),
+        onSuccess: () => { setDraft(''); setReplyTo(null); },
         onError: (e) => toast.error('Não foi enviada', { description: (e as Error).message }),
       },
     );
@@ -224,15 +227,18 @@ function MetaThread({
               {/* Reagir. Só faz sentido em mensagens que a Meta conhece pelo id
                   — sem external_id não há a que reagir do lado dela. */}
               {m.direction === 'outgoing' && m.external_id && (
-                <ReactionPicker
-                  current={m.reaction}
-                  onPick={(emoji) => act.mutate({
-                    conversationId: conversation.id,
-                    action: emoji ? 'react' : 'unreact',
-                    messageExternalId: m.external_id,
-                    reaction: emoji ?? undefined,
-                  })}
-                />
+                <>
+                  <ReplyButton onClick={() => setReplyTo(m)} />
+                  <ReactionPicker
+                    current={m.reaction}
+                    onPick={(emoji) => act.mutate({
+                      conversationId: conversation.id,
+                      action: emoji ? 'react' : 'unreact',
+                      messageExternalId: m.external_id,
+                      reaction: emoji ?? undefined,
+                    })}
+                  />
+                </>
               )}
               <div className={cn(
                 'relative max-w-[75%] rounded-2xl px-3 py-2 text-sm',
@@ -240,6 +246,13 @@ function MetaThread({
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground',
               )}>
+                {/* Citação da mensagem respondida, como no Instagram. */}
+                {m.reply_to_external_id && (
+                  <QuotedMessage
+                    original={messages.find((o) => o.external_id === m.reply_to_external_id) ?? null}
+                    outgoing={m.direction === 'outgoing'}
+                  />
+                )}
                 {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
                 {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
                 <p className={cn(
@@ -259,15 +272,18 @@ function MetaThread({
                 )}
               </div>
               {m.direction === 'incoming' && m.external_id && (
-                <ReactionPicker
-                  current={m.reaction}
-                  onPick={(emoji) => act.mutate({
-                    conversationId: conversation.id,
-                    action: emoji ? 'react' : 'unreact',
-                    messageExternalId: m.external_id,
-                    reaction: emoji ?? undefined,
-                  })}
-                />
+                <>
+                  <ReactionPicker
+                    current={m.reaction}
+                    onPick={(emoji) => act.mutate({
+                      conversationId: conversation.id,
+                      action: emoji ? 'react' : 'unreact',
+                      messageExternalId: m.external_id,
+                      reaction: emoji ?? undefined,
+                    })}
+                  />
+                  <ReplyButton onClick={() => setReplyTo(m)} />
+                </>
               )}
             </div>
           ))
@@ -285,6 +301,27 @@ function MetaThread({
             nova mensagem.
           </p>
         ) : (
+          <div className="space-y-2">
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted/60 px-2 py-1.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-primary">
+                  Responder a {replyTo.direction === 'outgoing' ? 'ti' : (conversation.contact_name || 'contacto')}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {replyTo.content || `[${replyTo.attachments?.[0]?.type ?? 'anexo'}]`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyTo(null)}
+                title="Cancelar resposta"
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <input
               ref={fileRef}
@@ -337,6 +374,7 @@ function MetaThread({
                 )}
               />
             )}
+          </div>
           </div>
         )}
       </footer>
@@ -672,5 +710,47 @@ function VoiceRecorder({
     >
       <Mic className="h-4 w-4" />
     </Button>
+  );
+}
+
+/** Botão de responder a uma mensagem. Aparece ao passar o rato, como o de reagir. */
+function ReplyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Responder a esta mensagem"
+      className="shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/msg:opacity-100"
+    >
+      <Reply className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+/**
+ * A mensagem citada dentro da bolha.
+ *
+ * `original` pode vir nulo: responde-se a mensagens antigas que já não estão
+ * carregadas na conversa, e a citação não pode desaparecer só por isso — mostra
+ * que houve uma resposta, mesmo sem conseguir mostrar a quê.
+ */
+function QuotedMessage({
+  original,
+  outgoing,
+}: {
+  original: MetaMessage | null;
+  outgoing: boolean;
+}) {
+  return (
+    <div className={cn(
+      'mb-1 border-l-2 pl-2 text-xs',
+      outgoing ? 'border-primary-foreground/40 text-primary-foreground/75' : 'border-primary/40 text-muted-foreground',
+    )}>
+      {original
+        ? <p className="line-clamp-2 break-words">
+            {original.content || `[${original.attachments?.[0]?.type ?? 'anexo'}]`}
+          </p>
+        : <p className="italic opacity-70">mensagem anterior</p>}
+    </div>
   );
 }

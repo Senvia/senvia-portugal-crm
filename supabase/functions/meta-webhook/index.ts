@@ -52,6 +52,7 @@ interface MetaMessaging {
     mid?: string;
     text?: string;
     is_echo?: boolean;
+    reply_to?: { mid?: string };
     attachments?: Array<{ type?: string; payload?: { url?: string } }>;
   };
 }
@@ -244,6 +245,8 @@ Deno.serve(async (req) => {
           external_id: ev.message?.mid ?? null,
           direction: "incoming",
           content: text || null,
+          // A que mensagem esta responde, quando é uma resposta.
+          reply_to_external_id: ev.message?.reply_to?.mid ?? null,
           attachments,
         });
 

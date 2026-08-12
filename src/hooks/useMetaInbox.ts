@@ -38,6 +38,7 @@ export interface MetaMessage {
   content: string | null;
   attachments: Array<{ type: string; url: string | null }>;
   sent_by: string | null;
+  reply_to_external_id: string | null;
   reaction: string | null;
   reaction_by: string | null;
   created_at: string;
@@ -75,7 +76,7 @@ export function useMetaMessages(conversationId: string | null) {
       if (!conversationId) return [];
       const { data, error } = await db
         .from('meta_messages')
-        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reaction, reaction_by, created_at')
+        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reply_to_external_id, reaction, reaction_by, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -92,9 +93,9 @@ export function useSendMetaMessage() {
   const { organization } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ conversationId, text }: { conversationId: string; text: string }) => {
+    mutationFn: async ({ conversationId, text, replyToMid }: { conversationId: string; text: string; replyToMid?: string | null }) => {
       const { data, error } = await supabase.functions.invoke('meta-send', {
-        body: { conversation_id: conversationId, text },
+        body: { conversation_id: conversationId, text, reply_to_mid: replyToMid ?? undefined },
       });
       if (error) {
         // O invoke() deita fora o corpo do erro, que é onde está o motivo — por
