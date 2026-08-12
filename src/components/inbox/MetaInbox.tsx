@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MessageCircle, Send, PanelLeft, Clock } from 'lucide-react';
+import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +10,7 @@ import { formatRelativeTime, formatDateTime } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   useMetaConversations, useMetaMessages, useSendMetaMessage, useMarkMetaRead,
+  useMetaAction, useSendMetaAttachment,
   type MetaConversation,
 } from '@/hooks/useMetaInbox';
 
@@ -147,11 +148,35 @@ function MetaThread({
 }) {
   const { data: messages = [], isLoading } = useMetaMessages(conversation.id);
   const send = useSendMetaMessage();
+  const act = useMetaAction();
+  const sendFile = useSendMetaAttachment();
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const typingRef = useRef<number | null>(null);
 
   useEffect(() => { setDraft(''); }, [conversation.id]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+
+  // "Visto" ao abrir a conversa — é o que a pessoa do outro lado espera ver.
+  useEffect(() => {
+    act.mutate({ conversationId: conversation.id, action: 'mark_seen' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id]);
+
+  /**
+   * "A escrever…" no Instagram da pessoa.
+   *
+   * Estrangulado a um envio por 3 segundos: a cada tecla seria uma chamada à
+   * Meta por caractere, o que arde o limite de pedidos sem acrescentar nada —
+   * o indicador dela dura alguns segundos de qualquer forma.
+   */
+  const sinalizarEscrita = () => {
+    const agora = Date.now();
+    if (typingRef.current && agora - typingRef.current < 3000) return;
+    typingRef.current = agora;
+    act.mutate({ conversationId: conversation.id, action: 'typing_on' });
+  };
 
   // A Meta só deixa responder até 24h depois da última mensagem DA PESSOA.
   // Mostrar isto antes de escrever evita perder uma resposta já redigida.
@@ -195,9 +220,22 @@ function MetaThread({
           <p className="text-center text-sm text-muted-foreground">Sem mensagens nesta conversa.</p>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className={cn('flex', m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+            <div key={m.id} className={cn('group/msg flex items-center gap-1', m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+              {/* Reagir. Só faz sentido em mensagens que a Meta conhece pelo id
+                  — sem external_id não há a que reagir do lado dela. */}
+              {m.direction === 'outgoing' && m.external_id && (
+                <ReactionPicker
+                  current={m.reaction}
+                  onPick={(emoji) => act.mutate({
+                    conversationId: conversation.id,
+                    action: emoji ? 'react' : 'unreact',
+                    messageExternalId: m.external_id,
+                    reaction: emoji ?? undefined,
+                  })}
+                />
+              )}
               <div className={cn(
-                'max-w-[75%] rounded-2xl px-3 py-2 text-sm',
+                'relative max-w-[75%] rounded-2xl px-3 py-2 text-sm',
                 m.direction === 'outgoing'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground',
@@ -210,7 +248,27 @@ function MetaThread({
                 )}>
                   {formatRelativeTime(m.created_at)}
                 </p>
+                {m.reaction && (
+                  // Colada ao canto inferior, como no Instagram.
+                  <span
+                    title={m.reaction_by === 'agent' ? 'Reagiste a esta mensagem' : 'Reação do contacto'}
+                    className="absolute -bottom-2 -right-1 rounded-full border bg-background px-1 text-xs shadow-sm"
+                  >
+                    {m.reaction}
+                  </span>
+                )}
               </div>
+              {m.direction === 'incoming' && m.external_id && (
+                <ReactionPicker
+                  current={m.reaction}
+                  onPick={(emoji) => act.mutate({
+                    conversationId: conversation.id,
+                    action: emoji ? 'react' : 'unreact',
+                    messageExternalId: m.external_id,
+                    reaction: emoji ?? undefined,
+                  })}
+                />
+              )}
             </div>
           ))
         )}
@@ -228,9 +286,34 @@ function MetaThread({
           </p>
         ) : (
           <div className="flex items-end gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              accept="image/png,image/jpeg,video/*,audio/*,application/pdf"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                sendFile.mutate(
+                  { conversationId: conversation.id, file: f },
+                  { onError: (err) => toast.error('Anexo não enviado', { description: (err as Error).message }) },
+                );
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              title="Enviar imagem, áudio, vídeo ou PDF"
+              disabled={sendFile.isPending}
+              onClick={() => fileRef.current?.click()}
+            >
+              {sendFile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </Button>
             <Textarea
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { setDraft(e.target.value); sinalizarEscrita(); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
@@ -315,7 +398,9 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
         <iframe
           src={`https://www.instagram.com/reel/${code}/embed`}
           title="Publicação do Instagram"
-          className="h-[400px] w-full max-w-[320px] border-0"
+          // 9:16 com folga para a barra do Instagram — a altura fixa de 400px
+          // cortava o Reel e obrigava a rolar dentro do próprio anexo.
+          className="aspect-[9/16] h-auto w-full max-w-[340px] border-0"
           loading="lazy"
           allowFullScreen
           onError={() => setBroken(true)}
@@ -364,5 +449,62 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
     <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs underline">
       {rotulo}{broken ? ' (já não abre aqui)' : ''}
     </a>
+  );
+}
+
+/** As reações que o Instagram aceita na aplicação. */
+const REACOES = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+/**
+ * Escolher (ou tirar) a reação a uma mensagem.
+ *
+ * Aparece ao passar o rato — colar seis emojis a cada linha da conversa
+ * tornaria a leitura impossível.
+ */
+function ReactionPicker({
+  current,
+  onPick,
+}: {
+  current: string | null;
+  onPick: (emoji: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Reagir"
+        className={cn(
+          'rounded-full p-1 text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground',
+          open ? 'opacity-100' : 'opacity-0 group-hover/msg:opacity-100',
+        )}
+      >
+        <SmilePlus className="h-3.5 w-3.5" />
+      </button>
+
+      {open && (
+        <>
+          {/* Fecha ao clicar fora, sem prender o clique dentro do seletor. */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 gap-0.5 rounded-full border bg-popover p-1 shadow-md">
+            {REACOES.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => { onPick(current === e ? null : e); setOpen(false); }}
+                className={cn(
+                  'rounded-full px-1 text-base leading-none transition-transform hover:scale-125',
+                  current === e && 'bg-accent',
+                )}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

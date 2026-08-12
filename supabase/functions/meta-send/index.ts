@@ -43,9 +43,24 @@ Deno.serve(async (req) => {
     const { data: { user } } = await admin.auth.getUser(bearer);
     if (!user) return json({ error: "Sessão inválida" }, 401);
 
-    const { conversation_id, text } = await req.json().catch(() => ({}));
-    if (!conversation_id || !String(text ?? "").trim()) {
-      return json({ error: "conversation_id e text são obrigatórios" }, 400);
+    const {
+      conversation_id, text,
+      // Anexo por URL (a Meta vai buscá-lo, por isso tem de ser público).
+      attachment_url, attachment_type,
+      // "react" / "unreact" / "typing_on" / "typing_off" / "mark_seen"
+      action, message_external_id, reaction,
+    } = await req.json().catch(() => ({}));
+
+    const temTexto = !!String(text ?? "").trim();
+    if (!conversation_id) return json({ error: "conversation_id é obrigatório" }, 400);
+    if (!temTexto && !attachment_url && !action) {
+      return json({ error: "Nada para enviar" }, 400);
+    }
+    // Limite da Meta: 1000 bytes, não 1000 caracteres — acentos contam a dobrar.
+    if (temTexto && new TextEncoder().encode(String(text)).length > 1000) {
+      return json({
+        error: "A mensagem excede o limite de 1000 bytes do Instagram. Divide-a em duas.",
+      }, 400);
     }
 
     const { data: conv } = await admin
@@ -71,7 +86,10 @@ Deno.serve(async (req) => {
     if (!isMember) return json({ error: "Sem acesso a esta conversa" }, 403);
 
     // A janela das 24h. Verificada aqui para dar uma resposta que se entende.
-    if (conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
+    // As ações de sinalização (a escrever, visto) não contam como mensagem, por
+    // isso não são bloqueadas por ela.
+    const acaoSinal = action === "typing_on" || action === "typing_off" || action === "mark_seen";
+    if (!acaoSinal && conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
       return json({
         error: "Passaram mais de 24 horas desde a última mensagem desta pessoa. "
           + "A Meta só permite responder dentro desse prazo — só é possível "
@@ -90,15 +108,43 @@ Deno.serve(async (req) => {
       return json({ error: "Canal sem credenciais — volta a ligar a conta." }, 400);
     }
 
-    const res = await fetch(`${GRAPH}/${meta.page_id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // O corpo muda conforme o que se está a fazer. Texto e anexo NÃO podem ir
+    // na mesma mensagem — é limitação da Meta, não escolha nossa.
+    let payload: Record<string, unknown>;
+    if (acaoSinal) {
+      payload = { recipient: { id: conv.contact_ref }, sender_action: action };
+    } else if (action === "react" || action === "unreact") {
+      if (!message_external_id) return json({ error: "message_external_id em falta" }, 400);
+      payload = {
+        recipient: { id: conv.contact_ref },
+        sender_action: action,
+        payload: action === "react"
+          ? { message_id: message_external_id, reaction: reaction || "❤️" }
+          : { message_id: message_external_id },
+      };
+    } else if (attachment_url) {
+      payload = {
+        recipient: { id: conv.contact_ref },
+        message: {
+          attachment: {
+            type: attachment_type || "file",
+            payload: { url: attachment_url },
+          },
+        },
+        messaging_type: "RESPONSE",
+      };
+    } else {
+      payload = {
         recipient: { id: conv.contact_ref },
         message: { text: String(text) },
         messaging_type: "RESPONSE",
-        access_token: meta.page_access_token,
-      }),
+      };
+    }
+
+    const res = await fetch(`${GRAPH}/${meta.page_id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, access_token: meta.page_access_token }),
     });
     const body = await res.json().catch(() => ({}));
 
@@ -109,18 +155,44 @@ Deno.serve(async (req) => {
       }, 502);
     }
 
+    // Sinalizações (a escrever / visto) não são mensagens: não se guardam nem
+    // mexem na conversa. Gravá-las poluiria a thread com linhas vazias.
+    if (acaoSinal) {
+      return json({ success: true });
+    }
+
+    // Reações não são mensagens novas — anotam-se na mensagem reagida.
+    if (action === "react" || action === "unreact") {
+      await admin.from("meta_messages")
+        .update({
+          reaction: action === "react" ? (reaction || "❤️") : null,
+          reaction_by: action === "react" ? "agent" : null,
+        })
+        .eq("conversation_id", conv.id)
+        .eq("external_id", message_external_id);
+      log("reação registada", { conversa: conv.id, action });
+      return json({ success: true });
+    }
+
+    const resumo = temTexto
+      ? String(text)
+      : `[${attachment_type || "anexo"}]`;
+
     // Guarda a mensagem enviada, para aparecer na conversa como qualquer outra.
     await admin.from("meta_messages").insert({
       organization_id: conv.organization_id,
       conversation_id: conv.id,
       external_id: body?.message_id ?? null,
       direction: "outgoing",
-      content: String(text),
+      content: temTexto ? String(text) : null,
+      attachments: attachment_url
+        ? [{ type: attachment_type || "file", url: attachment_url }]
+        : [],
       sent_by: user.id,
     });
 
     await admin.from("meta_conversations").update({
-      last_message: String(text),
+      last_message: resumo,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", conv.id);

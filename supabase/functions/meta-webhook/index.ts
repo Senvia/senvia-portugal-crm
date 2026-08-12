@@ -129,6 +129,21 @@ Deno.serve(async (req) => {
         const pageId = String(entry.id ?? ev.recipient?.id ?? "");
         if (!senderId || !pageId) continue;
 
+        // Reação a uma mensagem nossa. Não é mensagem nova — anota-se na
+        // mensagem reagida, para aparecer colada a ela como no Instagram.
+        const reac = (ev as { reaction?: { mid?: string; emoji?: string; action?: string } }).reaction;
+        if (reac?.mid) {
+          const { error } = await supabase.from("meta_messages")
+            .update({
+              reaction: reac.action === "unreact" ? null : (reac.emoji ?? "❤️"),
+              reaction_by: reac.action === "unreact" ? null : "contact",
+            })
+            .eq("external_id", reac.mid);
+          if (error) logError("falha a gravar a reação", { error: error.message });
+          else log("reação recebida", { mid: reac.mid, emoji: reac.emoji, action: reac.action });
+          continue;
+        }
+
         // Que caixa é esta? No Instagram o `entry.id` é o id da CONTA
         // (ig_account_id); no Messenger é o id da PÁGINA. Procuram-se os dois.
         //

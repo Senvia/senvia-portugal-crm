@@ -33,10 +33,13 @@ export interface MetaConversation {
 export interface MetaMessage {
   id: string;
   conversation_id: string;
+  external_id: string | null;
   direction: 'incoming' | 'outgoing';
   content: string | null;
   attachments: Array<{ type: string; url: string | null }>;
   sent_by: string | null;
+  reaction: string | null;
+  reaction_by: string | null;
   created_at: string;
 }
 
@@ -72,7 +75,7 @@ export function useMetaMessages(conversationId: string | null) {
       if (!conversationId) return [];
       const { data, error } = await db
         .from('meta_messages')
-        .select('id, conversation_id, direction, content, attachments, sent_by, created_at')
+        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reaction, reaction_by, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -127,6 +130,110 @@ export function useMarkMetaRead() {
       if (error) throw error;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meta-conversations', organization?.id] });
+    },
+  });
+}
+
+/**
+ * Ações que não são mensagens: reagir, tirar a reação, "a escrever…" e "visto".
+ *
+ * Todas passam pela mesma edge function — é lá que está o token da Página, e é
+ * lá que se sabe se a janela de 24h ainda está aberta.
+ */
+export function useMetaAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (vars: {
+      conversationId: string;
+      action: 'react' | 'unreact' | 'typing_on' | 'typing_off' | 'mark_seen';
+      messageExternalId?: string | null;
+      reaction?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('meta-send', {
+        body: {
+          conversation_id: vars.conversationId,
+          action: vars.action,
+          message_external_id: vars.messageExternalId,
+          reaction: vars.reaction,
+        },
+      });
+      if (error) {
+        let detail = '';
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.error ?? '';
+        } catch { /* corpo não era JSON */ }
+        throw new Error(detail || (error as Error).message);
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      // "A escrever" e "visto" não mudam nada do nosso lado — recarregar seria
+      // trabalho a troco de nada, e a cada tecla premida.
+      if (vars.action === 'react' || vars.action === 'unreact') {
+        queryClient.invalidateQueries({ queryKey: ['meta-messages', vars.conversationId] });
+      }
+    },
+  });
+}
+
+/**
+ * Envia um ficheiro. Sobe primeiro para o nosso armazenamento e manda o
+ * endereço à Meta — ela vai buscá-lo, por isso tem de ser público.
+ *
+ * Limites da Meta, verificados antes de subir para não gastar a subida em vão:
+ * imagens 8 MB (PNG/JPEG), áudio/vídeo/PDF 25 MB.
+ */
+export function useSendMetaAttachment() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ conversationId, file }: { conversationId: string; file: File }) => {
+      const ehImagem = file.type.startsWith('image/');
+      const tipo = ehImagem ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio'
+        : 'file';
+
+      const limite = ehImagem ? 8 * 1024 * 1024 : 25 * 1024 * 1024;
+      if (file.size > limite) {
+        throw new Error(
+          `O Instagram aceita no máximo ${ehImagem ? '8' : '25'} MB para este tipo de ficheiro.`,
+        );
+      }
+
+      const caminho = `meta/${organization?.id}/${conversationId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
+      const { error: upErr } = await supabase.storage
+        .from('automation-media')
+        .upload(caminho, file, { contentType: file.type, upsert: false });
+      if (upErr) throw new Error(`Falha ao carregar o ficheiro: ${upErr.message}`);
+
+      const { data: pub } = supabase.storage.from('automation-media').getPublicUrl(caminho);
+
+      const { data, error } = await supabase.functions.invoke('meta-send', {
+        body: {
+          conversation_id: conversationId,
+          attachment_url: pub.publicUrl,
+          attachment_type: tipo,
+        },
+      });
+      if (error) {
+        let detail = '';
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.error ?? '';
+        } catch { /* corpo não era JSON */ }
+        throw new Error(detail || (error as Error).message);
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['meta-messages', vars.conversationId] });
       queryClient.invalidateQueries({ queryKey: ['meta-conversations', organization?.id] });
     },
   });
