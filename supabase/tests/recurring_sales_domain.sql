@@ -876,6 +876,339 @@ begin
 end;
 $$;
 
+do $$
+declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
+  v_other_org_id uuid := '10000000-0000-0000-0000-000000000002';
+  v_active_sale_id uuid := '20000000-0000-0000-0000-000000000040';
+  v_missing_date_sale_id uuid := '20000000-0000-0000-0000-000000000041';
+  v_cancelled_sale_id uuid := '20000000-0000-0000-0000-000000000042';
+  v_non_recurring_sale_id uuid := '20000000-0000-0000-0000-000000000043';
+  v_active_recurrence public.sale_recurrences%rowtype;
+  v_missing_date_recurrence public.sale_recurrences%rowtype;
+  v_cancelled_recurrence public.sale_recurrences%rowtype;
+  v_non_recurring_result public.sale_recurrences%rowtype;
+  v_payment_count_before integer;
+  v_payment_count_after integer;
+  v_payment_amount_before numeric;
+  v_payment_amount_after numeric;
+  v_payment_checksum_before text;
+  v_payment_checksum_after text;
+  v_recurrence_count integer;
+  v_audit_flag boolean;
+  v_visible_count integer;
+begin
+  -- Given: active legacy sales with and without dates, a cancelled legacy sale,
+  -- a non-recurring sale, and immutable historical payment rows.
+  insert into public.sales (
+    id,
+    organization_id,
+    code,
+    total_value,
+    status,
+    sale_date,
+    has_recurring,
+    recurring_value,
+    recurring_status,
+    next_renewal_date,
+    last_renewal_date,
+    created_at,
+    updated_at
+  ) values
+    (
+      v_active_sale_id,
+      v_org_id,
+      'LEGACY-ACTIVE-DATED',
+      49.00,
+      'delivered',
+      date '2026-03-15',
+      true,
+      77.25,
+      'active',
+      date '2026-09-15',
+      date '2026-08-15',
+      timestamptz '2026-03-15 10:00:00+00',
+      timestamptz '2026-08-15 10:00:00+00'
+    ),
+    (
+      v_missing_date_sale_id,
+      v_org_id,
+      'LEGACY-ACTIVE-MISSING-DATE',
+      88.00,
+      'delivered',
+      date '2026-04-20',
+      true,
+      88.50,
+      'active',
+      null,
+      null,
+      timestamptz '2026-04-20 11:00:00+00',
+      timestamptz '2026-04-20 11:00:00+00'
+    ),
+    (
+      v_cancelled_sale_id,
+      v_org_id,
+      'LEGACY-CANCELLED',
+      35.00,
+      'cancelled',
+      date '2026-02-10',
+      true,
+      35.75,
+      'cancelled',
+      date '2026-07-10',
+      date '2026-06-10',
+      timestamptz '2026-02-10 12:00:00+00',
+      timestamptz '2026-07-10 12:00:00+00'
+    ),
+    (
+      v_non_recurring_sale_id,
+      v_org_id,
+      'LEGACY-NON-RECURRING',
+      120.00,
+      'delivered',
+      date '2026-05-01',
+      false,
+      0,
+      'active',
+      null,
+      null,
+      timestamptz '2026-05-01 09:00:00+00',
+      timestamptz '2026-05-01 09:00:00+00'
+    );
+
+  insert into public.sale_payments (
+    id,
+    organization_id,
+    sale_id,
+    amount,
+    payment_date,
+    status
+  ) values
+    (
+      '60000000-0000-0000-0000-000000000040',
+      v_org_id,
+      v_active_sale_id,
+      77.25,
+      date '2026-08-15',
+      'paid'
+    ),
+    (
+      '60000000-0000-0000-0000-000000000041',
+      v_org_id,
+      v_cancelled_sale_id,
+      35.75,
+      date '2026-06-10',
+      'paid'
+    );
+
+  select
+    count(*),
+    sum(amount),
+    md5(string_agg(
+      concat_ws(
+        '|',
+        id::text,
+        amount::text,
+        payment_date::text,
+        status,
+        coalesce(recurring_cycle_id::text, ''),
+        coalesce(stripe_gross_amount::text, ''),
+        coalesce(stripe_fee_amount::text, ''),
+        coalesce(stripe_net_amount::text, '')
+      ),
+      ',' order by id
+    ))
+  into
+    v_payment_count_before,
+    v_payment_amount_before,
+    v_payment_checksum_before
+  from public.sale_payments
+  where id in (
+    '60000000-0000-0000-0000-000000000040',
+    '60000000-0000-0000-0000-000000000041'
+  );
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_owner_user_id,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+    )::text,
+    true
+  );
+  execute 'set local role authenticated';
+
+  begin
+    perform public.ensure_sale_recurrence_from_legacy(null);
+    raise exception 'null legacy sale id was accepted';
+  exception
+    when check_violation then
+      null;
+  end;
+
+  begin
+    perform public.ensure_sale_recurrence_from_legacy(
+      '20000000-0000-0000-0000-000000000099'
+    );
+    raise exception 'missing legacy sale id was accepted';
+  exception
+    when no_data_found then
+      null;
+  end;
+
+  -- When: each legacy sale is passed through the compatibility RPC twice.
+  select * into v_active_recurrence
+  from public.ensure_sale_recurrence_from_legacy(v_active_sale_id);
+  perform public.ensure_sale_recurrence_from_legacy(v_active_sale_id);
+
+  select * into v_missing_date_recurrence
+  from public.ensure_sale_recurrence_from_legacy(v_missing_date_sale_id);
+  perform public.ensure_sale_recurrence_from_legacy(v_missing_date_sale_id);
+
+  select * into v_cancelled_recurrence
+  from public.ensure_sale_recurrence_from_legacy(v_cancelled_sale_id);
+  perform public.ensure_sale_recurrence_from_legacy(v_cancelled_sale_id);
+
+  select * into v_non_recurring_result
+  from public.ensure_sale_recurrence_from_legacy(v_non_recurring_sale_id);
+
+  -- Then: values, statuses and legacy dates are preserved one-for-one.
+  if v_active_recurrence.amount is distinct from 77.25
+     or v_active_recurrence.service_status is distinct from 'active'
+     or v_active_recurrence.next_cycle_date is distinct from date '2026-09-15'
+     or v_active_recurrence.last_cycle_date is distinct from date '2026-08-15' then
+    raise exception 'dated active legacy recurrence was not preserved';
+  end if;
+
+  if v_missing_date_recurrence.amount is distinct from 88.50
+     or v_missing_date_recurrence.service_status is distinct from 'active'
+     or v_missing_date_recurrence.anchor_date is distinct from date '2026-04-20'
+     or v_missing_date_recurrence.next_cycle_date is not null
+     or v_missing_date_recurrence.last_cycle_date is not null then
+    raise exception 'missing-date legacy recurrence was not mapped conservatively';
+  end if;
+
+  if v_cancelled_recurrence.amount is distinct from 35.75
+     or v_cancelled_recurrence.service_status is distinct from 'cancelled'
+     or v_cancelled_recurrence.next_cycle_date is distinct from date '2026-07-10'
+     or v_cancelled_recurrence.last_cycle_date is distinct from date '2026-06-10' then
+    raise exception 'cancelled legacy recurrence was not preserved';
+  end if;
+
+  if v_non_recurring_result.id is not null then
+    raise exception 'non-recurring legacy sale created a recurrence';
+  end if;
+
+  execute 'reset role';
+
+  select count(*) into v_recurrence_count
+  from public.sale_recurrences
+  where sale_id in (
+    v_active_sale_id,
+    v_missing_date_sale_id,
+    v_cancelled_sale_id
+  );
+
+  if v_recurrence_count <> 3
+     or exists (
+       select 1
+       from public.sale_recurrences
+       where sale_id = v_non_recurring_sale_id
+     )
+     or exists (
+       select sale_id
+       from public.sale_recurrences
+       where sale_id in (
+         v_active_sale_id,
+         v_missing_date_sale_id,
+         v_cancelled_sale_id
+       )
+       group by sale_id
+       having count(*) <> 1
+     ) then
+    raise exception 'legacy recurrence cardinality was not idempotent';
+  end if;
+
+  select legacy_date_needs_audit into strict v_audit_flag
+  from public.sales_with_recurrence
+  where id = v_missing_date_sale_id;
+
+  if v_audit_flag is distinct from true
+     or exists (
+       select 1
+       from public.sales_with_recurrence
+       where id = v_active_sale_id
+         and legacy_date_needs_audit
+     ) then
+    raise exception 'legacy missing-date audit signal was not explicit';
+  end if;
+
+  select
+    count(*),
+    sum(amount),
+    md5(string_agg(
+      concat_ws(
+        '|',
+        id::text,
+        amount::text,
+        payment_date::text,
+        status,
+        coalesce(recurring_cycle_id::text, ''),
+        coalesce(stripe_gross_amount::text, ''),
+        coalesce(stripe_fee_amount::text, ''),
+        coalesce(stripe_net_amount::text, '')
+      ),
+      ',' order by id
+    ))
+  into
+    v_payment_count_after,
+    v_payment_amount_after,
+    v_payment_checksum_after
+  from public.sale_payments
+  where id in (
+    '60000000-0000-0000-0000-000000000040',
+    '60000000-0000-0000-0000-000000000041'
+  );
+
+  if v_payment_count_after is distinct from v_payment_count_before
+     or v_payment_amount_after is distinct from v_payment_amount_before
+     or v_payment_checksum_after is distinct from v_payment_checksum_before then
+    raise exception 'legacy compatibility changed historical payments';
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', '40000000-0000-0000-0000-000000000002'::uuid,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_other_org_id)
+    )::text,
+    true
+  );
+  execute 'set local role authenticated';
+
+  select count(*) into v_visible_count
+  from public.sales_with_recurrence
+  where id in (v_active_sale_id, v_missing_date_sale_id, v_cancelled_sale_id);
+
+  begin
+    perform public.ensure_sale_recurrence_from_legacy(v_active_sale_id);
+    raise exception 'cross-organization legacy migration was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  execute 'reset role';
+
+  if v_visible_count <> 0 then
+    raise exception 'compatibility view leaked another organization';
+  end if;
+end;
+$$;
+
 select jsonb_build_object(
   'authenticated_recurrence_dml_denied',
     not has_table_privilege('authenticated', 'public.sale_recurrences', 'INSERT')
@@ -953,6 +1286,57 @@ select jsonb_build_object(
     select billing_status
     from public.sale_recurrences
     where id = '30000000-0000-0000-0000-000000000003'
+  ),
+  'legacy_recurrence_rows', (
+    select count(*)
+    from public.sale_recurrences
+    where sale_id in (
+      '20000000-0000-0000-0000-000000000040',
+      '20000000-0000-0000-0000-000000000041',
+      '20000000-0000-0000-0000-000000000042'
+    )
+  ),
+  'legacy_non_recurring_rows', (
+    select count(*)
+    from public.sale_recurrences
+    where sale_id = '20000000-0000-0000-0000-000000000043'
+  ),
+  'legacy_payment_count', (
+    select count(*)
+    from public.sale_payments
+    where id in (
+      '60000000-0000-0000-0000-000000000040',
+      '60000000-0000-0000-0000-000000000041'
+    )
+  ),
+  'legacy_payment_amount', (
+    select sum(amount)
+    from public.sale_payments
+    where id in (
+      '60000000-0000-0000-0000-000000000040',
+      '60000000-0000-0000-0000-000000000041'
+    )
+  ),
+  'legacy_payment_checksum', (
+    select md5(string_agg(
+      concat_ws(
+        '|',
+        id::text,
+        amount::text,
+        payment_date::text,
+        status,
+        coalesce(recurring_cycle_id::text, ''),
+        coalesce(stripe_gross_amount::text, ''),
+        coalesce(stripe_fee_amount::text, ''),
+        coalesce(stripe_net_amount::text, '')
+      ),
+      ',' order by id
+    ))
+    from public.sale_payments
+    where id in (
+      '60000000-0000-0000-0000-000000000040',
+      '60000000-0000-0000-0000-000000000041'
+    )
   )
 ) as recurring_domain_assertions;
 
