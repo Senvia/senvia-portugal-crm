@@ -263,28 +263,28 @@ for select
 to authenticated
 using (public.is_org_member(auth.uid(), organization_id));
 
-create policy sale_recurrences_member_all
+create policy sale_recurrences_member_select
 on public.sale_recurrences
-for all
+for select
 to authenticated
-using (public.is_org_member(auth.uid(), organization_id))
-with check (public.is_org_member(auth.uid(), organization_id));
+using (public.is_org_member(auth.uid(), organization_id));
 
-create policy sale_recurring_cycles_member_all
+create policy sale_recurring_cycles_member_select
 on public.sale_recurring_cycles
-for all
+for select
 to authenticated
-using (public.is_org_member(auth.uid(), organization_id))
-with check (public.is_org_member(auth.uid(), organization_id));
+using (public.is_org_member(auth.uid(), organization_id));
 
 revoke all on public.stripe_connections from anon, authenticated;
 revoke all on public.stripe_events from anon, authenticated;
+revoke all on public.sale_recurrences from anon, authenticated;
+revoke all on public.sale_recurring_cycles from anon, authenticated;
 grant all on public.stripe_connections to service_role;
 grant select on public.stripe_product_mappings to authenticated;
 grant all on public.stripe_product_mappings to service_role;
-grant select, insert, update, delete on public.sale_recurrences to authenticated;
+grant select on public.sale_recurrences to authenticated;
 grant all on public.sale_recurrences to service_role;
-grant select, insert, update, delete on public.sale_recurring_cycles to authenticated;
+grant select on public.sale_recurring_cycles to authenticated;
 grant all on public.sale_recurring_cycles to service_role;
 grant all on public.stripe_events to service_role;
 
@@ -445,6 +445,26 @@ begin
       extract(day from (v_next_month + interval '1 month - 1 day'))::integer
     )
   );
+
+  select *
+  into v_cycle
+  from public.sale_recurring_cycles
+  where recurrence_id = v_recurrence.id
+    and period_start = v_period_start
+    and period_end = v_next_cycle_date - 1;
+
+  if found then
+    return v_cycle;
+  end if;
+
+  if v_recurrence.service_status not in ('pending', 'active') then
+    raise exception using errcode = '23514', message = 'recurrence state cannot generate cycles';
+  end if;
+
+  if v_recurrence.next_cycle_date is null
+     or v_period_start is distinct from v_recurrence.next_cycle_date then
+    raise exception using errcode = '23514', message = 'period start must match the next cycle date';
+  end if;
 
   insert into public.sale_recurring_cycles (
     recurrence_id,

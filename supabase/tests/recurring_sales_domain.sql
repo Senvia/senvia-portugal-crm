@@ -102,6 +102,435 @@ $$;
 
 do $$
 declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
+  v_recurrence_id uuid := '30000000-0000-0000-0000-000000000001';
+  v_cycle_id uuid;
+  v_probe_sale_id uuid := '20000000-0000-0000-0000-000000000004';
+  v_probe_recurrence_id uuid := '30000000-0000-0000-0000-000000000004';
+begin
+  select id into strict v_cycle_id
+  from public.sale_recurring_cycles
+  where recurrence_id = v_recurrence_id
+    and period_start = date '2026-01-31';
+
+  insert into public.sales (id, organization_id, total_value, status)
+  values (v_probe_sale_id, v_org_id, 54.00, 'pending');
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_owner_user_id,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+    )::text,
+    true
+  );
+  execute 'set local role authenticated';
+
+  -- Given: an authenticated member can read recurrence and cycle rows in their organization.
+  perform 1 from public.sale_recurrences where id = v_recurrence_id;
+  perform 1 from public.sale_recurring_cycles where id = v_cycle_id;
+
+  begin
+    insert into public.sale_recurrences (
+      id,
+      organization_id,
+      sale_id,
+      amount,
+      anchor_date,
+      service_status,
+      billing_status,
+      billing_provider,
+      next_cycle_date
+    ) values (
+      v_probe_recurrence_id,
+      v_org_id,
+      v_probe_sale_id,
+      54.00,
+      date '2026-01-31',
+      'active',
+      'current',
+      'manual',
+      date '2026-01-31'
+    );
+    raise exception 'authenticated direct recurrence insert was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    update public.sale_recurrences
+    set service_status = 'inactive', inactive_at = now()
+    where id = v_recurrence_id;
+    raise exception 'authenticated direct recurrence state update was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    update public.sale_recurrences
+    set stripe_subscription_id = 'sub_client_owned'
+    where id = v_recurrence_id;
+    raise exception 'authenticated Stripe-owned recurrence update was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    delete from public.sale_recurrences where id = v_recurrence_id;
+    raise exception 'authenticated direct recurrence delete was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    insert into public.sale_recurring_cycles (
+      recurrence_id,
+      sale_id,
+      organization_id,
+      period_start,
+      period_end,
+      due_date,
+      amount,
+      currency
+    ) values (
+      v_recurrence_id,
+      '20000000-0000-0000-0000-000000000001',
+      v_org_id,
+      date '2026-06-30',
+      date '2026-07-30',
+      date '2026-06-30',
+      54.00,
+      'EUR'
+    );
+    raise exception 'authenticated direct cycle insert was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    update public.sale_recurring_cycles
+    set status = 'paid', paid_at = now(), stripe_invoice_id = 'in_client_owned'
+    where id = v_cycle_id;
+    raise exception 'authenticated direct cycle update was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    delete from public.sale_recurring_cycles where id = v_cycle_id;
+    raise exception 'authenticated direct cycle delete was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  execute 'reset role';
+
+  -- Given: the server has marked a cycle paid and attached its Stripe invoice.
+  update public.sale_recurring_cycles
+  set status = 'paid', paid_at = now(), stripe_invoice_id = 'in_server_owned'
+  where id = v_cycle_id;
+
+  execute 'set local role authenticated';
+
+  begin
+    update public.sale_recurring_cycles
+    set status = 'pending', paid_at = null, stripe_invoice_id = null
+    where id = v_cycle_id;
+    raise exception 'authenticated paid-cycle regression was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    delete from public.sale_recurring_cycles where id = v_cycle_id;
+    raise exception 'authenticated paid-cycle delete was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  -- Then: legal RPC transitions remain callable by the authenticated owner.
+  perform public.transition_sale_recurrence(v_recurrence_id, 'pause');
+  perform public.transition_sale_recurrence(v_recurrence_id, 'resume');
+
+  execute 'reset role';
+
+  if not exists (
+    select 1
+    from public.sale_recurring_cycles
+    where id = v_cycle_id
+      and status = 'paid'
+      and stripe_invoice_id = 'in_server_owned'
+  ) then
+    raise exception 'denied authenticated paid-cycle mutation changed server-owned state';
+  end if;
+
+  update public.sale_recurring_cycles
+  set status = 'pending', paid_at = null, stripe_invoice_id = null
+  where id = v_cycle_id;
+end;
+$$;
+
+do $$
+declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
+  v_statuses text[] := array['paused', 'inactive', 'cancelled'];
+  v_status text;
+  v_index integer := 0;
+  v_sale_id uuid;
+  v_recurrence_id uuid;
+begin
+  -- Given: server-created recurrences in each stopped service state.
+  foreach v_status in array v_statuses loop
+    v_index := v_index + 1;
+    v_sale_id := ('20000000-0000-0000-0000-' || lpad((10 + v_index)::text, 12, '0'))::uuid;
+    v_recurrence_id := ('30000000-0000-0000-0000-' || lpad((10 + v_index)::text, 12, '0'))::uuid;
+
+    insert into public.sales (id, organization_id, total_value, status)
+    values (v_sale_id, v_org_id, 54.00, 'pending');
+
+    insert into public.sale_recurrences (
+      id,
+      organization_id,
+      sale_id,
+      amount,
+      anchor_date,
+      service_status,
+      billing_status,
+      billing_provider,
+      next_cycle_date
+    ) values (
+      v_recurrence_id,
+      v_org_id,
+      v_sale_id,
+      54.00,
+      date '2026-01-31',
+      v_status,
+      'not_started',
+      'manual',
+      date '2026-01-31'
+    );
+
+    perform set_config(
+      'request.jwt.claims',
+      jsonb_build_object(
+        'sub', v_owner_user_id,
+        'role', 'authenticated',
+        'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+      )::text,
+      true
+    );
+    execute 'set local role authenticated';
+
+    begin
+      perform public.create_recurring_cycle(v_recurrence_id, date '2026-01-31');
+      raise exception 'cycle creation for stopped recurrence % was accepted', v_status;
+    exception
+      when check_violation then
+        null;
+    end;
+
+    execute 'reset role';
+  end loop;
+
+  if exists (
+    select 1
+    from public.sale_recurring_cycles
+    where recurrence_id in (
+      '30000000-0000-0000-0000-000000000011',
+      '30000000-0000-0000-0000-000000000012',
+      '30000000-0000-0000-0000-000000000013'
+    )
+  ) then
+    raise exception 'stopped recurrence cycle was persisted despite rejection';
+  end if;
+end;
+$$;
+
+do $$
+declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
+  v_sale_id uuid := '20000000-0000-0000-0000-000000000020';
+  v_recurrence_id uuid := '30000000-0000-0000-0000-000000000020';
+  v_cycle_id uuid;
+begin
+  insert into public.sales (id, organization_id, total_value, status)
+  values (v_sale_id, v_org_id, 54.00, 'pending');
+
+  insert into public.sale_recurrences (
+    id,
+    organization_id,
+    sale_id,
+    amount,
+    anchor_date,
+    service_status,
+    billing_status,
+    billing_provider,
+    next_cycle_date
+  ) values (
+    v_recurrence_id,
+    v_org_id,
+    v_sale_id,
+    54.00,
+    date '2026-01-31',
+    'active',
+    'not_started',
+    'manual',
+    date '2026-01-31'
+  );
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_owner_user_id,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+    )::text,
+    true
+  );
+  execute 'set local role authenticated';
+
+  begin
+    perform public.create_recurring_cycle(v_recurrence_id, date '2027-12-31');
+    raise exception 'arbitrary future recurring period was accepted';
+  exception
+    when check_violation then
+      null;
+  end;
+
+  -- Then: the anchored period matching next_cycle_date remains legal for the owner.
+  select id into strict v_cycle_id
+  from public.create_recurring_cycle(v_recurrence_id, date '2026-01-31');
+
+  execute 'reset role';
+
+  if exists (
+    select 1
+    from public.sale_recurring_cycles
+    where recurrence_id = v_recurrence_id
+      and period_start = date '2027-12-31'
+  ) or not exists (
+    select 1
+    from public.sale_recurring_cycles
+    where id = v_cycle_id
+      and period_start = date '2026-01-31'
+  ) then
+    raise exception 'future-boundary or legal cycle outcome was not preserved';
+  end if;
+end;
+$$;
+
+do $$
+declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_sale_id uuid := '20000000-0000-0000-0000-000000000030';
+  v_recurrence_id uuid := '30000000-0000-0000-0000-000000000030';
+  v_cycle_id uuid := '50000000-0000-0000-0000-000000000030';
+begin
+  insert into public.sales (id, organization_id, total_value, status)
+  values (v_sale_id, v_org_id, 54.00, 'pending');
+
+  -- Given: a service-role server workflow that owns recurrence and cycle writes.
+  alter role service_role bypassrls;
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('role', 'service_role')::text,
+    true
+  );
+  execute 'set local role service_role';
+
+  insert into public.sale_recurrences (
+    id,
+    organization_id,
+    sale_id,
+    amount,
+    anchor_date,
+    service_status,
+    billing_status,
+    billing_provider,
+    next_cycle_date,
+    stripe_customer_id,
+    stripe_subscription_id
+  ) values (
+    v_recurrence_id,
+    v_org_id,
+    v_sale_id,
+    54.00,
+    date '2026-01-31',
+    'active',
+    'not_started',
+    'stripe',
+    date '2026-01-31',
+    'cus_service_role',
+    'sub_service_role'
+  );
+
+  insert into public.sale_recurring_cycles (
+    id,
+    recurrence_id,
+    sale_id,
+    organization_id,
+    period_start,
+    period_end,
+    due_date,
+    amount,
+    currency,
+    stripe_invoice_id
+  ) values (
+    v_cycle_id,
+    v_recurrence_id,
+    v_sale_id,
+    v_org_id,
+    date '2026-01-31',
+    date '2026-02-27',
+    date '2026-01-31',
+    54.00,
+    'EUR',
+    'in_service_role'
+  );
+
+  update public.sale_recurring_cycles
+  set status = 'paid', paid_at = now(), stripe_invoice_status = 'paid'
+  where id = v_cycle_id;
+
+  delete from public.sale_recurring_cycles where id = v_cycle_id;
+  delete from public.sale_recurrences where id = v_recurrence_id;
+
+  execute 'reset role';
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', '40000000-0000-0000-0000-000000000001'::uuid,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+    )::text,
+    true
+  );
+
+  if exists (
+    select 1 from public.sale_recurrences where id = v_recurrence_id
+  ) or exists (
+    select 1 from public.sale_recurring_cycles where id = v_cycle_id
+  ) then
+    raise exception 'service-role direct domain cleanup did not complete';
+  end if;
+end;
+$$;
+
+do $$
+declare
   v_recurrence_id uuid := '30000000-0000-0000-0000-000000000001';
   v_period_starts date[];
   v_last_cycle_date date;
@@ -307,6 +736,8 @@ begin
   end;
 
   -- Then: direct invalid status writes are rejected by table constraints.
+  execute 'reset role';
+
   begin
     update public.sale_recurrences
     set service_status = 'expired'
@@ -338,7 +769,6 @@ declare
   v_other_org_id uuid := '10000000-0000-0000-0000-000000000002';
   v_recurrence_id uuid := '30000000-0000-0000-0000-000000000001';
   v_visible_count integer;
-  v_updated_count integer;
 begin
   -- Given: two authenticated users in different organizations.
   execute 'reset role';
@@ -403,10 +833,15 @@ begin
   from public.sale_recurrences
   where id = v_recurrence_id;
 
-  update public.sale_recurrences
-  set amount = 999.00
-  where id = v_recurrence_id;
-  get diagnostics v_updated_count = row_count;
+  begin
+    update public.sale_recurrences
+    set amount = 999.00
+    where id = v_recurrence_id;
+    raise exception 'cross-organization direct recurrence update was accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 
   begin
     perform public.transition_sale_recurrence(v_recurrence_id, 'pause');
@@ -435,14 +870,44 @@ begin
   execute 'reset role';
 
   -- Then: no cross-organization row is visible or mutable.
-  if v_visible_count <> 0 or v_updated_count <> 0 then
-    raise exception 'RLS isolation failed: visible %, updated %',
-      v_visible_count, v_updated_count;
+  if v_visible_count <> 0 then
+    raise exception 'RLS isolation failed: visible %', v_visible_count;
   end if;
 end;
 $$;
 
 select jsonb_build_object(
+  'authenticated_recurrence_dml_denied',
+    not has_table_privilege('authenticated', 'public.sale_recurrences', 'INSERT')
+    and not has_table_privilege('authenticated', 'public.sale_recurrences', 'UPDATE')
+    and not has_table_privilege('authenticated', 'public.sale_recurrences', 'DELETE'),
+  'authenticated_cycle_dml_denied',
+    not has_table_privilege('authenticated', 'public.sale_recurring_cycles', 'INSERT')
+    and not has_table_privilege('authenticated', 'public.sale_recurring_cycles', 'UPDATE')
+    and not has_table_privilege('authenticated', 'public.sale_recurring_cycles', 'DELETE'),
+  'service_role_recurrence_dml_enabled',
+    has_table_privilege('service_role', 'public.sale_recurrences', 'INSERT')
+    and has_table_privilege('service_role', 'public.sale_recurrences', 'UPDATE')
+    and has_table_privilege('service_role', 'public.sale_recurrences', 'DELETE'),
+  'service_role_cycle_dml_enabled',
+    has_table_privilege('service_role', 'public.sale_recurring_cycles', 'INSERT')
+    and has_table_privilege('service_role', 'public.sale_recurring_cycles', 'UPDATE')
+    and has_table_privilege('service_role', 'public.sale_recurring_cycles', 'DELETE'),
+  'stopped_cycle_rows', (
+    select count(*)
+    from public.sale_recurring_cycles
+    where recurrence_id in (
+      '30000000-0000-0000-0000-000000000011',
+      '30000000-0000-0000-0000-000000000012',
+      '30000000-0000-0000-0000-000000000013'
+    )
+  ),
+  'future_cycle_rows', (
+    select count(*)
+    from public.sale_recurring_cycles
+    where recurrence_id = '30000000-0000-0000-0000-000000000020'
+      and period_start = date '2027-12-31'
+  ),
   'duplicate_cycle_rows', (
     select count(*)
     from public.sale_recurring_cycles
