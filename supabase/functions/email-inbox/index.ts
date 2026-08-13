@@ -1,10 +1,16 @@
-// email-inbox — CRUD for email inboxes (Chatwoot email channel via IMAP/SMTP).
-// Actions: create | update | delete
-// All credential handling stays server-side: passwords live in
-// messaging_channel_secrets (RLS on, zero policies) — NOT in metadata, which the
-// CRM reads from the browser. Ate 2026-08-13 estavam la, e chegavam la.
+// email-inbox — criar, alterar e apagar caixas de email. Ações: create | update | delete
+//
+// SEM CHATWOOT. A caixa é nossa de ponta a ponta: esta função guarda a
+// configuração, e o `email-gateway` (Node + ImapFlow, ao lado do Chatwoot mas
+// sem lhe tocar) liga por IMAP/SMTP direto ao servidor de correio e escreve em
+// email_folders / email_messages. O Chatwoot chegou a criar uma caixa espelho
+// aqui — não servia para nada: o cliente de email do CRM nunca leu de lá.
+//
+// As passwords vivem em `messaging_channel_secrets` (RLS ligado, zero
+// políticas), NÃO no metadata — que o CRM lê a partir do browser. Até
+// 2026-08-13 estavam lá, e chegavam lá.
 import {
-  corsHeaders, json, getConfig, authOrgAdmin, chatwootFetch, ensureChatwootAccount,
+  corsHeaders, json, getConfig, authOrgAdmin,
 } from '../_shared/multicanal.ts';
 
 interface EmailConfig {
@@ -13,22 +19,13 @@ interface EmailConfig {
   imap_port: number;
   imap_ssl: boolean;
   imap_login: string;
-  imap_password?: string; // optional on update — keep existing if blank
+  imap_password?: string; // opcional na alteração — em branco mantém a atual
   smtp_server: string;
   smtp_port: number;
   smtp_ssl: boolean;
   smtp_login: string;
-  smtp_password?: string; // optional on update — keep existing if blank
-  provider_key?: string;  // 'gmail' | 'outlook' | 'zoho' | 'custom' (UI hint only)
-}
-
-function parseChatwootError(text: string): string | null {
-  try {
-    const j = JSON.parse(text);
-    if (j?.message) return String(j.message);
-    if (j?.errors) return Object.values(j.errors as Record<string, string[]>).flat().join(', ');
-  } catch (_e) { /* ignore */ }
-  return null;
+  smtp_password?: string; // opcional na alteração — em branco mantém a atual
+  provider_key?: string;  // 'gmail' | 'outlook' | 'zoho' | 'custom' (só para a UI)
 }
 
 Deno.serve(async (req) => {
@@ -48,13 +45,10 @@ Deno.serve(async (req) => {
 
     const { data: orgData, error: orgErr } = await admin
       .from('organizations')
-      .select('id, name, chatwoot_account_id, chatwoot_account_token')
+      .select('id, name')
       .eq('id', organization_id)
       .single();
     if (!orgData || orgErr) return json({ error: 'Organização não encontrada' }, 404);
-
-    const { accountId, token } = await ensureChatwootAccount(admin, cfg, orgData);
-    const base = `/api/v1/accounts/${accountId}`;
 
     // ── CREATE ────────────────────────────────────────────────────────────────
     if (action === 'create') {
@@ -69,7 +63,7 @@ Deno.serve(async (req) => {
 
       const emailNorm = email_config.email_address.toLowerCase().trim();
 
-      // Duplicate check (same email address in this org)
+      // Já existe uma caixa com este endereço nesta organização?
       const { data: dup } = await admin
         .from('messaging_channels')
         .select('id')
@@ -79,56 +73,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (dup) return json({ error: 'Já existe uma caixa com este endereço de email nesta organização' }, 409);
 
-      // Create Chatwoot email inbox.
-      // Chatwoot's API uses imap_address / smtp_address (NOT imap_server/smtp_server).
-      // SSL/TLS (port 465) → smtp_ssl=true, smtp_starttls_auto=false.
-      // STARTTLS (port 587) → smtp_ssl=false, smtp_starttls_auto=true.
-      const smtpPort = Number(email_config.smtp_port) || 587;
-      const smtpSsl = email_config.smtp_ssl === true || smtpPort === 465;
-      const cwRes = await chatwootFetch(cfg, token, `${base}/inboxes`, 'POST', {
-        name: label.trim(),
-        channel: {
-          type: 'email',
-          email: emailNorm,
-          imap_login: (email_config.imap_login || emailNorm).trim(),
-          imap_password: email_config.imap_password,
-          imap_address: email_config.imap_server.trim(),
-          imap_port: Number(email_config.imap_port) || 993,
-          imap_enable_ssl: email_config.imap_ssl !== false,
-          imap_enabled: true,
-          smtp_login: (email_config.smtp_login || emailNorm).trim(),
-          smtp_password: email_config.smtp_password,
-          smtp_address: email_config.smtp_server.trim(),
-          smtp_port: smtpPort,
-          // Chatwoot column names: smtp_enable_ssl_tls (default false!) and
-          // smtp_enable_starttls_auto. Port 465 needs SSL/TLS on, STARTTLS off.
-          smtp_enable_ssl_tls: smtpSsl,
-          smtp_enable_starttls_auto: !smtpSsl,
-          smtp_domain: email_config.email_address.split('@')[1] || '',
-          smtp_authentication: 'login',
-          smtp_openssl_verify_mode: 'none',
-          smtp_enabled: true,
-        },
-      });
-
-      if (!cwRes.ok) {
-        const errText = await cwRes.text();
-        console.error('[email-inbox] create failed:', cwRes.status, errText);
-        const msg = parseChatwootError(errText);
-        return json({ error: msg ?? `Erro ao criar caixa no Chatwoot (${cwRes.status})` }, 502);
-      }
-
-      const cwInbox = await cwRes.json();
-      // Chatwoot wraps inbox in .payload on some versions
-      const chatwootInboxId = Number((cwInbox?.payload?.id ?? cwInbox?.id) || 0);
-      if (!chatwootInboxId) {
-        console.error('[email-inbox] no id in response:', JSON.stringify(cwInbox));
-        return json({ error: 'Chatwoot não devolveu ID da caixa criada' }, 502);
-      }
-
       // As passwords NÃO entram aqui. Este objeto é lido pelo CRM; tudo o que
-      // lhe puseres dentro chega ao browser de qualquer membro da organização.
-      // Elas vão para messaging_channel_secrets, logo a seguir.
+      // lhe puseres dentro chega ao browser de quem abrir as Definições.
       const metadata = {
         email_address: emailNorm,
         imap_server: email_config.imap_server.trim(),
@@ -149,23 +95,20 @@ Deno.serve(async (req) => {
           channel_type: 'email',
           provider: 'email',
           label: label.trim(),
-          chatwoot_inbox_id: chatwootInboxId,
           status: 'connected',
           metadata,
         })
         .select('id')
         .single();
 
-      if (dbErr) {
-        // Rollback Chatwoot inbox to avoid orphaned inboxes leaking on the account
-        console.error('[email-inbox] DB insert failed, rolling back CW inbox', chatwootInboxId, dbErr);
-        await chatwootFetch(cfg, token, `${base}/inboxes/${chatwootInboxId}`, 'DELETE').catch((_e) => {});
+      if (dbErr || !channel) {
+        console.error('[email-inbox] insert falhou:', dbErr);
         return json({ error: 'Erro ao guardar caixa na base de dados' }, 500);
       }
 
       // As credenciais, fora do alcance do browser. Sem elas o gateway não liga
-      // à caixa — por isso, se isto falhar, desfaz-se tudo em vez de deixar uma
-      // caixa que aparece na lista e nunca recebe email.
+      // à caixa — por isso, se isto falhar, desfaz-se a linha em vez de deixar
+      // uma caixa que aparece na lista e nunca recebe email.
       const { error: segredoErr } = await admin.from('messaging_channel_secrets').upsert({
         channel_id: channel.id,
         organization_id,
@@ -174,13 +117,12 @@ Deno.serve(async (req) => {
       }, { onConflict: 'channel_id' });
 
       if (segredoErr) {
-        console.error('[email-inbox] secrets insert failed, rolling back', segredoErr);
+        console.error('[email-inbox] credenciais falharam, a desfazer:', segredoErr);
         await admin.from('messaging_channels').delete().eq('id', channel.id);
-        await chatwootFetch(cfg, token, `${base}/inboxes/${chatwootInboxId}`, 'DELETE').catch((_e) => {});
         return json({ error: 'Erro ao guardar as credenciais da caixa' }, 500);
       }
 
-      return json({ ok: true, channel_id: channel.id, chatwoot_inbox_id: chatwootInboxId });
+      return json({ ok: true, channel_id: channel.id });
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────────
@@ -194,7 +136,7 @@ Deno.serve(async (req) => {
 
       const { data: ch } = await admin
         .from('messaging_channels')
-        .select('id, label, chatwoot_inbox_id, metadata')
+        .select('id, label, metadata')
         .eq('id', channel_id)
         .eq('organization_id', organization_id)
         .eq('channel_type', 'email')
@@ -203,18 +145,17 @@ Deno.serve(async (req) => {
 
       const existing = (ch.metadata as Record<string, unknown>) ?? {};
 
-      // As passwords atuais vêm do cofre, não do metadata. Um metadata antigo
-      // ainda pode tê-las (caixas criadas antes da mudança) — daí o recurso.
+      // As passwords atuais vêm do cofre. Um metadata antigo ainda pode tê-las
+      // (caixas criadas antes da mudança) — daí o recurso.
       const { data: segredo } = await admin
         .from('messaging_channel_secrets')
         .select('imap_password, smtp_password')
         .eq('channel_id', channel_id)
         .maybeSingle();
 
-      // Merge only fields explicitly provided; keep existing passwords if blank
       const newMeta: Record<string, unknown> = { ...existing };
-      // Se lá estiverem de uma versão anterior, saem agora — é este o momento
-      // em que a caixa deixa de as expor.
+      // Se lá estiverem de uma versão anterior, saem agora — é este o momento em
+      // que a caixa deixa de as ter no sítio errado.
       delete newMeta.imap_password;
       delete newMeta.smtp_password;
 
@@ -238,48 +179,11 @@ Deno.serve(async (req) => {
         if (ec.provider_key) newMeta.provider_key = ec.provider_key;
       }
 
-      // Update Chatwoot inbox (best-effort — log but don't fail).
-      // Chatwoot's API uses imap_address / smtp_address (NOT imap_server/smtp_server).
-      if (ch.chatwoot_inbox_id) {
-        const smtpPort = Number(newMeta.smtp_port) || 587;
-        const smtpSsl = newMeta.smtp_ssl === true || smtpPort === 465;
-        const cwBody: Record<string, unknown> = {};
-        if (label?.trim()) cwBody.name = label.trim();
-        cwBody.channel = {
-          email: newMeta.email_address,
-          imap_login: newMeta.imap_login,
-          imap_password: imapPass,
-          imap_address: newMeta.imap_server,
-          imap_port: newMeta.imap_port,
-          imap_enable_ssl: newMeta.imap_ssl,
-          imap_enabled: true,
-          smtp_login: newMeta.smtp_login,
-          smtp_password: smtpPass,
-          smtp_address: newMeta.smtp_server,
-          smtp_port: smtpPort,
-          // Chatwoot column names: smtp_enable_ssl_tls (default false!) and
-          // smtp_enable_starttls_auto. Port 465 needs SSL/TLS on, STARTTLS off.
-          smtp_enable_ssl_tls: smtpSsl,
-          smtp_enable_starttls_auto: !smtpSsl,
-          smtp_domain: String(newMeta.email_address ?? '').split('@')[1] || '',
-          smtp_authentication: 'login',
-          smtp_openssl_verify_mode: 'none',
-          smtp_enabled: true,
-        };
-        const cwRes = await chatwootFetch(cfg, token, `${base}/inboxes/${ch.chatwoot_inbox_id}`, 'PATCH', cwBody);
-        if (!cwRes.ok) {
-          const errText = await cwRes.text();
-          console.warn('[email-inbox] Chatwoot update warning:', cwRes.status, errText);
-        }
-      }
-
-      // As passwords vão para o cofre; o metadata fica só com o que a interface
-      // pode ver.
       const { error: segErr } = await admin.from('messaging_channel_secrets').upsert({
         channel_id, organization_id, imap_password: imapPass, smtp_password: smtpPass,
       }, { onConflict: 'channel_id' });
       if (segErr) {
-        console.error('[email-inbox] secrets update failed:', segErr);
+        console.error('[email-inbox] credenciais não guardadas:', segErr);
         return json({ error: 'Erro ao guardar as credenciais da caixa' }, 500);
       }
 
@@ -292,7 +196,7 @@ Deno.serve(async (req) => {
         .eq('id', channel_id)
         .eq('organization_id', organization_id);
       if (upErr) {
-        console.error('[email-inbox] DB update failed:', upErr);
+        console.error('[email-inbox] update falhou:', upErr);
         return json({ error: 'Erro ao atualizar a caixa' }, 500);
       }
 
@@ -306,28 +210,22 @@ Deno.serve(async (req) => {
 
       const { data: ch } = await admin
         .from('messaging_channels')
-        .select('id, chatwoot_inbox_id')
+        .select('id')
         .eq('id', channel_id)
         .eq('organization_id', organization_id)
         .eq('channel_type', 'email')
         .maybeSingle();
       if (!ch) return json({ error: 'Caixa não encontrada' }, 404);
 
-      // Delete from Chatwoot first (404 = already gone, 204 = success — both ok)
-      if (ch.chatwoot_inbox_id) {
-        const cwRes = await chatwootFetch(cfg, token, `${base}/inboxes/${ch.chatwoot_inbox_id}`, 'DELETE');
-        if (!cwRes.ok && cwRes.status !== 404 && cwRes.status !== 204) {
-          console.warn('[email-inbox] Chatwoot delete warning:', cwRes.status, '— continuing DB cleanup');
-        }
-      }
-
+      // As credenciais vão atrás por ON DELETE CASCADE; as pastas e mensagens
+      // também. Não fica nada a apontar para uma caixa que já não existe.
       const { error: delErr } = await admin
         .from('messaging_channels')
         .delete()
         .eq('id', channel_id)
         .eq('organization_id', organization_id);
       if (delErr) {
-        console.error('[email-inbox] DB delete failed:', delErr);
+        console.error('[email-inbox] delete falhou:', delErr);
         return json({ error: 'Erro ao eliminar a caixa' }, 500);
       }
 
@@ -337,7 +235,7 @@ Deno.serve(async (req) => {
     return json({ error: `Ação desconhecida: ${action}` }, 400);
 
   } catch (err) {
-    console.error('[email-inbox] unhandled error:', err);
+    console.error('[email-inbox] erro inesperado:', err);
     return json({ error: (err as Error).message || 'Erro interno' }, 500);
   }
 });

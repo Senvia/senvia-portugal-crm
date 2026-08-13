@@ -18,16 +18,21 @@ function ok(body: unknown = { ok: true }): Response {
 
 // Friendly preview for media messages.
 /**
- * Canais que ainda notificam por aqui.
+ * Canais que ainda notificam por aqui: NENHUM.
  *
- * Espelha `MESSAGING_CHANNELS` em src/lib/constants.ts, onde só o email está
- * ligado. O Instagram e o Messenger têm caminho próprio (meta-webhook) e nunca
- * devem notificar por esta via, senão o mesmo aviso saía duas vezes.
+ * Ficou vazio de propósito, e é o fim de linha desta função. Cada canal passou a
+ * ter caminho próprio:
  *
- * Se um dia o WhatsApp voltar, muda-se nos dois sítios — e um comentário em
- * cada um a apontar para o outro é o que evita voltar a ficar meio ligado.
+ *   Instagram / Messenger → meta-webhook (direto à Meta)
+ *   Email                 → gatilho na própria base de dados, sobre
+ *                           email_messages (ver notificar_email_novo)
+ *   WhatsApp              → fechado no produto
+ *
+ * O email era o último a passar por aqui, e isso obrigava o Chatwoot a manter
+ * uma segunda ligação IMAP à mesma caixa só para o aviso tocar. Quem escreve a
+ * mensagem é agora quem avisa.
  */
-const CANAIS_QUE_NOTIFICAM = new Set(["email"]);
+const CANAIS_QUE_NOTIFICAM = new Set<string>();
 
 const MEDIA_LABELS: Record<string, string> = {
   image: '📷 Imagem',
