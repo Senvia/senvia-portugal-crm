@@ -137,21 +137,6 @@ verify_jwt = false
 [functions.meta-capi-purchase]
 verify_jwt = false
 
-[functions.whatsapp-connect]
-verify_jwt = false
-
-[functions.whatsapp-status]
-verify_jwt = false
-
-[functions.whatsapp-disconnect]
-verify_jwt = false
-
-[functions.chatwoot-inbox]
-verify_jwt = false
-
-[functions.chatwoot-webhook]
-verify_jwt = false
-
 [functions.email-inbox]
 verify_jwt = false
 
@@ -159,15 +144,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-scheduled-messages]
-verify_jwt = false
-
-[functions.repair-whatsapp-wiring]
-verify_jwt = false
-
-[functions.whatsapp-keepalive]
-verify_jwt = false
-
-[functions.instagram-connect]
 verify_jwt = false
 
 # Callback do OAuth da Meta — chamada pelo browser do utilizador no fim do
@@ -193,3 +169,6 @@ verify_jwt = false
 
 [functions.transcribe-audio]
 verify_jwt = true
+
+[functions.chatwoot-export]
+verify_jwt = false
