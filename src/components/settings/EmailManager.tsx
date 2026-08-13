@@ -89,6 +89,11 @@ function EmailForm({ form, setForm, isEdit = false, error }: {
 }) {
   const update = (patch: Partial<EmailFormState>) => setForm({ ...form, ...patch });
 
+  // 465 = SSL implícito (SMTPS), sempre. 587 = STARTTLS, e aí o valor é escolha.
+  // O que se mostra tem de ser o que vai acontecer, não o que está gravado.
+  const portaSmtpImplicita = Number(form.smtp_port) === 465;
+  const smtpSslEfetivo = portaSmtpImplicita || form.smtp_ssl;
+
   return (
     <div className="space-y-8">
 
@@ -175,11 +180,27 @@ function EmailForm({ form, setForm, isEdit = false, error }: {
               <Label className="text-sm font-medium">Porta</Label>
               <Input type="number" value={form.smtp_port} onChange={(e) => update({ smtp_port: e.target.value })} />
             </div>
+            {/* A porta 465 é SSL implícito: não existe 465 sem SSL. O
+                interruptor deixava-se desligar nela, e ficava a mentir — a caixa
+                da Senvia tinha 465 com SSL a false e só funcionava porque o
+                gateway força SSL nessa porta.
+                A armadilha estava a seguir: quem mudasse para 587 a olhar para
+                o interruptor desligado partia o envio, porque na 587 o valor É
+                respeitado (e a 587 precisa de STARTTLS). */}
             <div className="flex flex-col items-center gap-1 pb-1">
               <Label className="text-xs text-muted-foreground">SSL</Label>
-              <Switch checked={form.smtp_ssl} onCheckedChange={(v) => update({ smtp_ssl: v })} />
+              <Switch
+                checked={smtpSslEfetivo}
+                disabled={portaSmtpImplicita}
+                onCheckedChange={(v) => update({ smtp_ssl: v })}
+              />
             </div>
           </div>
+          {portaSmtpImplicita && (
+            <p className="text-[11px] text-muted-foreground">
+              A porta 465 usa sempre SSL. Para escolher, muda para a porta 587 (STARTTLS).
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm font-medium flex items-center gap-1.5">
@@ -270,7 +291,9 @@ function EmailFullScreenEditor({
           imap_password: form.imap_password || undefined,
           smtp_server: form.smtp_server.trim(),
           smtp_port: Number(form.smtp_port) || 587,
-          smtp_ssl: form.smtp_ssl,
+          // Grava-se o que VAI acontecer: na 465 e sempre SSL. Guardar false
+          // numa 465 deixava a base de dados a dizer o contrario do real.
+          smtp_ssl: Number(form.smtp_port) === 465 || form.smtp_ssl,
           smtp_login: (form.smtp_login || form.email_address).trim(),
           smtp_password: form.smtp_password || undefined,
         },
@@ -290,7 +313,9 @@ function EmailFullScreenEditor({
           imap_password: form.imap_password,
           smtp_server: form.smtp_server.trim(),
           smtp_port: Number(form.smtp_port) || 587,
-          smtp_ssl: form.smtp_ssl,
+          // Grava-se o que VAI acontecer: na 465 e sempre SSL. Guardar false
+          // numa 465 deixava a base de dados a dizer o contrario do real.
+          smtp_ssl: Number(form.smtp_port) === 465 || form.smtp_ssl,
           smtp_login: (form.smtp_login || form.email_address).trim(),
           smtp_password: form.smtp_password,
         },
