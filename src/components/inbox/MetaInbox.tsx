@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -158,6 +159,25 @@ export function MetaInbox({
   );
 }
 
+/**
+ * Uma mensagem escrita pelo agente que a Meta ainda não confirmou.
+ *
+ * Antes, entre carregar em enviar e a mensagem aparecer, não havia nada: um
+ * botão a rodar e a conversa na mesma. A Meta demora porque vai BUSCAR o
+ * ficheiro ao nosso armazenamento antes de responder — e nesse silêncio o
+ * agente escreve outra vez.
+ */
+interface Pendente {
+  id: string;
+  texto?: string;
+  ficheiro?: File;
+  /** Endereço local, para mostrar a imagem ou ouvir o áudio sem esperar. */
+  previewUrl?: string;
+  tipo?: string;
+  replyToMid?: string | null;
+  erro?: string | null;
+}
+
 function MetaThread({
   conversation,
   channelType,
@@ -177,12 +197,31 @@ function MetaThread({
   // id, para mostrar a citação sem a ir procurar outra vez à lista.
   const [replyTo, setReplyTo] = useState<MetaMessage | null>(null);
   const [aGravar, setAGravar] = useState(false);
+  // Mensagens já escritas mas ainda não confirmadas pela Meta. Existem só aqui,
+  // no ecrã: quando a Meta confirma, a mensagem verdadeira vem da base de dados
+  // e esta desaparece.
+  const [pendentes, setPendentes] = useState<Pendente[]>([]);
+  // Espelho para a limpeza no desmontar: o efeito de limpeza corre uma vez só e
+  // veria a lista vazia do primeiro render.
+  const pendentesRef = useRef<Pendente[]>([]);
+  pendentesRef.current = pendentes;
+  const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingRef = useRef<number | null>(null);
 
   useEffect(() => { setDraft(''); setReplyTo(null); }, [conversation.id]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+  // Também desce quando a bolha pendente aparece — senão a mensagem que se
+  // acabou de escrever nascia fora do ecrã.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, pendentes.length]);
+
+  // Os endereços locais das pré-visualizações ficam presos à memória do
+  // browser até serem largados à mão.
+  useEffect(() => () => {
+    pendentesRef.current.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+  }, []);
 
   // A Meta só deixa responder até 24h depois da última mensagem DA PESSOA.
   // Mostrar isto antes de escrever evita perder uma resposta já redigida.
@@ -224,16 +263,74 @@ function MetaThread({
     act.mutate({ conversationId: conversation.id, action: 'typing_on' });
   };
 
+  /**
+   * Enviar (ou reenviar) uma mensagem que já está na conversa como pendente.
+   *
+   * A bolha só sai da lista de pendentes DEPOIS de a releitura trazer a
+   * mensagem verdadeira. Tirá-la mal a Meta responde deixava um buraco de
+   * meio segundo em que a mensagem não estava em lado nenhum — e é nesse
+   * buraco que o agente carrega em enviar outra vez.
+   */
+  const enviarPendente = async (item: Pendente) => {
+    setPendentes((ps) => ps.map((p) => (p.id === item.id ? { ...p, erro: null } : p)));
+    try {
+      if (item.ficheiro) {
+        await sendFile.mutateAsync({ conversationId: conversation.id, file: item.ficheiro });
+      } else {
+        await send.mutateAsync({
+          conversationId: conversation.id,
+          text: item.texto!,
+          replyToMid: item.replyToMid ?? null,
+        });
+      }
+      await queryClient.refetchQueries({ queryKey: ['meta-messages', conversation.id] });
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      setPendentes((ps) => ps.filter((p) => p.id !== item.id));
+    } catch (e) {
+      const msg = (e as Error).message;
+      setPendentes((ps) => ps.map((p) => (p.id === item.id ? { ...p, erro: msg } : p)));
+      // A bolha diz que falhou; o aviso diz porquê. O motivo da Meta costuma
+      // ser longo de mais para caber na conversa.
+      toast.error('Não foi enviada', { description: msg });
+    }
+  };
+
+  const descartar = (item: Pendente) => {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    setPendentes((ps) => ps.filter((p) => p.id !== item.id));
+  };
+
   const handleSend = () => {
     const text = draft.trim();
     if (!text) return;
-    send.mutate(
-      { conversationId: conversation.id, text, replyToMid: replyTo?.external_id ?? null },
-      {
-        onSuccess: () => { setDraft(''); setReplyTo(null); },
-        onError: (e) => toast.error('Não foi enviada', { description: (e as Error).message }),
-      },
-    );
+    // Limpa-se já a caixa de texto: a bolha passa a ser o sítio onde a mensagem
+    // vive, e é lá que se vê se foi ou não.
+    const item: Pendente = {
+      id: crypto.randomUUID(),
+      texto: text,
+      replyToMid: replyTo?.external_id ?? null,
+    };
+    setPendentes((ps) => [...ps, item]);
+    setDraft('');
+    setReplyTo(null);
+    void enviarPendente(item);
+  };
+
+  /** Anexo ou nota de voz: mostra-se logo, a partir do ficheiro local. */
+  const enviarFicheiro = (file: File) => {
+    const tipo = file.type.startsWith('image/') ? 'image'
+      : file.type.startsWith('video/') ? 'video'
+      : file.type.startsWith('audio/') ? 'audio'
+      : 'file';
+    const item: Pendente = {
+      id: crypto.randomUUID(),
+      ficheiro: file,
+      // Pré-visualização sem esperar pela Meta: o ficheiro já está aqui.
+      previewUrl: URL.createObjectURL(file),
+      tipo,
+    };
+    setPendentes((ps) => [...ps, item]);
+    void enviarPendente(item);
   };
 
   return (
@@ -347,6 +444,48 @@ function MetaThread({
             </div>
           ))
         )}
+
+        {/* Já escritas, ainda por confirmar. Ficam esbatidas até a Meta aceitar
+            — e se recusar, ficam com o que aconteceu e o que fazer a seguir. */}
+        {pendentes.map((p) => (
+          <div key={p.id} className="flex justify-end">
+            <div className={cn(
+              'max-w-[75%] rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground',
+              !p.erro && 'opacity-60',
+            )}>
+              {p.texto && <p className="whitespace-pre-wrap break-words">{p.texto}</p>}
+              {p.previewUrl && p.tipo === 'image' && (
+                <img src={p.previewUrl} alt="" className="mt-1 max-h-64 max-w-full rounded-lg" />
+              )}
+              {p.previewUrl && p.tipo === 'video' && (
+                <video src={p.previewUrl} controls className="mt-1 max-h-64 max-w-full rounded-lg" />
+              )}
+              {p.previewUrl && p.tipo === 'audio' && (
+                <audio src={p.previewUrl} controls className="mt-1 max-w-full" />
+              )}
+              {p.ficheiro && p.tipo === 'file' && (
+                <p className="mt-1 text-xs">{p.ficheiro.name}</p>
+              )}
+
+              {p.erro ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="font-medium">Não foi enviada</span>
+                  <button type="button" onClick={() => void enviarPendente(p)} className="underline">
+                    Tentar novamente
+                  </button>
+                  <button type="button" onClick={() => descartar(p)} className="underline opacity-80">
+                    Descartar
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-primary-foreground/70">
+                  <Loader2 className="h-3 w-3 animate-spin" /> A enviar…
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+
         <div ref={endRef} />
       </div>
 
@@ -395,22 +534,17 @@ function MetaThread({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
-                if (!f) return;
-                sendFile.mutate(
-                  { conversationId: conversation.id, file: f },
-                  { onError: (err) => toast.error('Anexo não enviado', { description: (err as Error).message }) },
-                );
+                if (f) enviarFicheiro(f);
               }}
             />
             <Button
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
-              title="Enviar imagem, vídeo ou PDF"
-              disabled={sendFile.isPending}
+              title={channelType === 'facebook' ? 'Enviar imagem, vídeo, áudio ou PDF' : 'Enviar imagem, vídeo ou áudio'}
               onClick={() => fileRef.current?.click()}
             >
-              {sendFile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              <Paperclip className="h-4 w-4" />
             </Button>
             <Textarea
               value={draft}
@@ -429,17 +563,13 @@ function MetaThread({
                 o gravador pelo botão de enviar, e a gravação era interrompida a
                 meio — enviando o pedaço já gravado. */}
             {draft.trim() && !aGravar ? (
-              <Button onClick={handleSend} disabled={send.isPending} size="icon" className="h-10 w-10 shrink-0">
-                {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <Button onClick={handleSend} size="icon" className="h-10 w-10 shrink-0">
+                <Send className="h-4 w-4" />
               </Button>
             ) : (
               <VoiceRecorder
-                disabled={sendFile.isPending}
                 onRecordingChange={setAGravar}
-                onRecorded={(file) => sendFile.mutate(
-                  { conversationId: conversation.id, file },
-                  { onError: (err) => toast.error('Áudio não enviado', { description: (err as Error).message }) },
-                )}
+                onRecorded={enviarFicheiro}
               />
             )}
           </div>
