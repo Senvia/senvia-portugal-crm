@@ -205,3 +205,8 @@ verify_jwt = false
 # resolve a organização a partir do produto, nunca do corpo do pedido.
 [functions.stripe-product-sync]
 verify_jwt = true
+
+# Chamada pelo CRM com sessao do utilizador. A organizacao vem da recorrencia,
+# nunca do corpo do pedido.
+[functions.stripe-sale-checkout]
+verify_jwt = true
