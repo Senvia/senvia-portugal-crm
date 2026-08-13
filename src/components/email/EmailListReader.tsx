@@ -248,6 +248,24 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   const { data: falhas = [] } = useEmailCommandFailures(channelId);
   const actions = useEmailActions(channelId, folderId);
 
+  // Falhas já vistas. Sem isto, o aviso reaparecia a cada recarga durante 24
+  // horas por causa de uma ação que já ninguém consegue repetir — que foi
+  // exatamente o que aconteceu.
+  const [dispensadas, setDispensadas] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('email-falhas-dispensadas-v1') || '[]'); } catch { return []; }
+  });
+  const dispensarFalhas = (ids: string[]) => setDispensadas((prev) => {
+    // Só se guardam as recentes: a lista não pode crescer para sempre, e uma
+    // falha de ontem já saiu da janela das 24h de qualquer forma.
+    const next = [...new Set([...prev, ...ids])].slice(-200);
+    localStorage.setItem('email-falhas-dispensadas-v1', JSON.stringify(next));
+    return next;
+  });
+  const falhasVisiveis = useMemo(
+    () => falhas.filter((f) => !dispensadas.includes(f.id)),
+    [falhas, dispensadas],
+  );
+
   // Detect if current folder is Rascunhos.
   const { data: folders = [] } = useEmailFolders(channelId);
   const isDraftsFolder = !!folderId && folders.find((f) => f.id === folderId)?.role === 'drafts';
@@ -276,9 +294,9 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   useEffect(() => {
     // Uma falha nova reconcilia tudo: não se sabe qual das pendentes falhou, e
     // mostrar de novo o que ficou por fazer é melhor do que esconder a mais.
-    if (falhas.length > 0 && actions.pendentes.size > 0) libertar([...actions.pendentes]);
+    if (falhasVisiveis.length > 0 && actions.pendentes.size > 0) libertar([...actions.pendentes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [falhas.length]);
+  }, [falhasVisiveis.length]);
   const { data: searchResults = [], isLoading: loadingSearch } = useEmailSearch(channelId, debounced);
   const { data: drafts = [], isLoading: loadingDrafts } = useEmailDrafts(isDraftsFolder ? channelId : null);
 
@@ -548,15 +566,26 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
           {/* Ações que ficaram por fazer. O aviso de falha era só um evento em
               tempo real — quem não estivesse a olhar nunca soube, e a lista já
               tinha removido a mensagem como se a ação tivesse resultado. */}
-          {falhas.length > 0 && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs">
+          {falhasVisiveis.length > 0 && (
+            <div className="relative rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 pr-8 text-xs">
+              {/* Dispensar. Um aviso que não se pode calar deixa de ser um aviso
+                  e passa a ser um estorvo — ficava ali um dia inteiro por causa
+                  de uma ação que já ninguém consegue repetir. */}
+              <button
+                type="button"
+                onClick={() => dispensarFalhas(falhasVisiveis.map((f) => f.id))}
+                title="Dispensar"
+                className="absolute right-1.5 top-1.5 rounded p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
               <p className="font-medium text-destructive">
-                {falhas.length === 1
+                {falhasVisiveis.length === 1
                   ? '1 ação de email não foi concluída'
-                  : `${falhas.length} ações de email não foram concluídas`}
+                  : `${falhasVisiveis.length} ações de email não foram concluídas`}
               </p>
               <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                {falhas.slice(0, 3).map((f) => (
+                {falhasVisiveis.slice(0, 3).map((f) => (
                   <li key={f.id} className="truncate">
                     {COMMAND_LABELS[f.type] ?? f.type}
                     {f.error ? ` — ${f.error}` : ''}

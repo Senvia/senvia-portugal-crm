@@ -183,7 +183,14 @@ export function useEmailCommandFailures(channelId: string | null) {
         .order('created_at', { ascending: false })
         .limit(20);
       if (error) throw error;
-      return (data || []) as EmailCommandFailure[];
+
+      // "Mensagem inexistente" num comando que servia para TIRAR a mensagem da
+      // pasta não é uma falha: o fim que se queria já aconteceu. É o que sai
+      // quando se carrega duas vezes, ou quando a mensagem foi apagada noutro
+      // lado. Avisar disto é assustar com uma coisa que correu bem.
+      const remocao = new Set(['delete', 'archive', 'spam', 'move']);
+      return ((data || []) as EmailCommandFailure[]).filter((f) =>
+        !(remocao.has(f.type) && /inexistente|not found|no such/i.test(f.error ?? '')));
     },
     enabled: !!channelId,
     refetchInterval: 60_000,

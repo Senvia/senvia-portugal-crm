@@ -4,6 +4,14 @@ import { useEmailFolders } from "@/hooks/useEmail";
 import { useMetaUnreadTotals } from "@/hooks/useMetaInbox";
 import { cn } from "@/lib/utils";
 
+// Pastas que NAO contam para o total da caixa.
+//
+// Enviados e rascunhos sao nossos. Lixo e spam sao mensagens que a pessoa ja
+// pos de lado — contar o lixo faz o distintivo pedir atencao para o que ja foi
+// descartado, e o numero nunca desce.
+const FORA_DO_TOTAL = new Set(['sent', 'drafts', 'trash', 'junk']);
+
+
 /**
  * Por ler de UMA caixa de email — as pastas trazem o contador já feito.
  *
@@ -14,7 +22,7 @@ function ContaEmail({ channelId, onCount }: { channelId: string; onCount: (n: nu
   const { data: folders = [] } = useEmailFolders(channelId);
   const total = folders
     // Enviados e rascunhos não contam: são nossos.
-    .filter((f) => f.role !== "sent" && f.role !== "drafts")
+    .filter((f) => !FORA_DO_TOTAL.has(f.role))
     .reduce((s, f) => s + (f.unread_count || 0), 0);
   useEffect(() => { onCount(total); }, [total, onCount]);
   return null;
