@@ -93,6 +93,10 @@ export function useUpdateChannelAssignment() {
       toast.error('Alteração não guardada', { description: (e as Error).message });
     },
     onSuccess: () => {
+      // Cada campo desta janela guarda-se sozinho, mal se mexe nele. Sem uma
+      // confirmação, mexer e não ver nada acontecer é indistinguível de estar
+      // partido — e era exatamente essa a queixa.
+      toast.success('Alteração guardada');
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
       queryClient.invalidateQueries({ queryKey: ['email-channels', organization?.id] });
     },

@@ -141,7 +141,13 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const { data: webhooks = [] } = useOrganizationWebhooks();
   const { data: channels = [] } = useMessagingChannels();
   const { data: org } = useOrganization();
-  const connectedChannels = channels.filter((c) => c.status === 'connected').length;
+  // Só conta o que está À VISTA. A lista de caixas filtra os canais desligados
+  // (o WhatsApp está "Brevemente"), mas o contador olhava para a tabela toda —
+  // e uma instância antiga de WhatsApp, ainda `connected` na base de dados,
+  // fazia o cartão dizer "4 ligadas" por cima de três caixas.
+  const connectedChannels = channels.filter(
+    (c) => c.status === 'connected' && isChannelEnabled(c.channel_type),
+  ).length;
 
   const {
     isLoadingIntegrations,
@@ -862,7 +868,13 @@ function EditCaixaModal({
               <Button
                 size="sm"
                 disabled={!labelDraft.trim() || labelDraft.trim() === (ch.label || '')}
-                onClick={() => updateAssign.mutate({ channelId: ch.id, label: labelDraft.trim() })}
+                // Guardar o nome fecha a janela. Ficar aberta depois de gravar
+                // não distinguia "guardou" de "não fez nada" — e o instinto é
+                // carregar outra vez.
+                onClick={() => updateAssign.mutate(
+                  { channelId: ch.id, label: labelDraft.trim() },
+                  { onSuccess: () => onOpenChange(false) },
+                )}
               >
                 Guardar
               </Button>
@@ -1160,7 +1172,11 @@ function InboxesManager() {
                       <RefreshCw className="h-3 w-3" /> Rotação
                     </span>
                   )}
-                  {groupsOn && (
+                  {/* "Grupos" é do WhatsApp. O sinal vem de `groups_enabled`
+                      estar ausente no metadata (que conta como ligado), por
+                      isso aparecia nas caixas de Instagram e Messenger — onde
+                      grupos nem existem, e o interruptor nem é mostrado. */}
+                  {groupsOn && ch.channel_type === 'whatsapp' && (
                     <span className="flex items-center gap-1 text-green-600">
                       <UsersRound className="h-3 w-3" /> Grupos
                     </span>
