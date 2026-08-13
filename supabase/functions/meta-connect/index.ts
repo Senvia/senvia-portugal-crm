@@ -400,30 +400,67 @@ Deno.serve(async (req) => {
     // outra caixa, subscrever só os campos desta apagava os dela — as reações
     // do Instagram deixavam de chegar sem erro nenhum. Por isso junta-se ao que
     // lá está.
+    //
+    // Os nomes NÃO são os mesmos nos dois: o Instagram usa `messaging_seen`
+    // para o "visto", o Messenger usa `message_reads`; e o referral é
+    // `messaging_referrals` (plural) na Página. Um nome errado faz a subscrição
+    // INTEIRA falhar — daí o plano B mais abaixo.
     const meus = wantsInstagram
-      ? ["messages", "messaging_postbacks", "message_reactions"]
-      : ["messages", "messaging_postbacks", "messaging_optins"];
+      ? ["messages", "messaging_postbacks", "message_reactions", "messaging_seen"]
+      : [
+        "messages",
+        "messaging_postbacks",
+        "messaging_optins",
+        // Faltava: sem isto o Messenger não recebia reação nenhuma.
+        "message_reactions",
+        "message_reads",
+        // De onde veio a conversa (anúncio, m.me?ref=).
+        "messaging_referrals",
+      ];
     const { data: mesmaPagina } = await admin.from("messaging_channels")
       .select("metadata").eq("metadata->>page_id", target.id);
     const jaSubscritos = (mesmaPagina ?? []).flatMap((c) =>
       String((c.metadata as { subscribed_fields?: string } | null)?.subscribed_fields ?? "")
         .split(",").filter(Boolean)
     );
-    const subFields = [...new Set([...meus, ...jaSubscritos])].join(",");
-    const subRes = await fetch(`${GRAPH}/${target.id}/subscribed_apps`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscribed_fields: subFields, access_token: target.access_token }),
-    });
-    const subJson = await subRes.json().catch(() => ({}));
-    if (!subRes.ok || subJson?.success === false) {
-      logError("subscrição da Página falhou", { status: subRes.status, subJson });
+    const subscrever = async (campos: string) => {
+      const res = await fetch(`${GRAPH}/${target.id}/subscribed_apps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscribed_fields: campos, access_token: target.access_token }),
+      });
+      const corpo = await res.json().catch(() => ({}));
+      return { ok: res.ok && corpo?.success !== false, status: res.status, corpo };
+    };
+
+    const desejados = [...new Set([...meus, ...jaSubscritos])].join(",");
+    let subFields = desejados;
+    let sub = await subscrever(desejados);
+
+    // Plano B: a Meta recusa a lista INTEIRA se um nome não existir para este
+    // tipo de conta — e os nomes mudam entre Instagram e Página. Sem isto, um
+    // campo secundário mal escrito impedia a ligação por completo. Vale mais
+    // ficar sem o "visto" do que sem a caixa.
+    if (!sub.ok) {
+      const minimos = wantsInstagram
+        ? "messages,messaging_postbacks,message_reactions"
+        : "messages,messaging_postbacks,message_reactions";
+      logError("subscrição completa recusada — a tentar o essencial", {
+        desejados, status: sub.status, erro: sub.corpo?.error?.message,
+      });
+      sub = await subscrever(minimos);
+      if (sub.ok) subFields = minimos;
+    }
+
+    if (!sub.ok) {
+      logError("subscrição da Página falhou", { status: sub.status, subJson: sub.corpo });
       return popupDone({
         error: `A Página foi autorizada mas não conseguimos subscrever as mensagens: ${
-          subJson?.error?.message ?? subRes.status
+          sub.corpo?.error?.message ?? sub.status
         }`,
       });
     }
+    log("Página subscrita", { pageId: target.id, subFields });
 
     const { data: novoCanal, error: insertErr } = await admin.from("messaging_channels").insert({
       organization_id: orgId,

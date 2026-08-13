@@ -320,17 +320,29 @@ Deno.serve(async (req) => {
             const pageToken = sec?.page_access_token;
             if (pageToken) {
               try {
-                // follower_count / is_verified_user / follows: qualificam o
-                // contacto sem custo nenhum — é o mesmo pedido.
+                // Os campos NÃO são os mesmos nos dois canais. `username`,
+                // `follower_count` e companhia só existem no Instagram — pedi-los
+                // a um PSID do Messenger faz a Graph API rejeitar o pedido
+                // INTEIRO ("nonexisting field"), e a conversa ficava com o
+                // número em vez do nome, sem se perceber porquê.
+                const campos = ehInstagram
+                  ? "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business"
+                  : "name,first_name,last_name,profile_pic";
                 const profRes = await fetch(
                   `https://graph.facebook.com/v21.0/${senderId}`
-                  + `?fields=name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business`
+                  + `?fields=${campos}`
                   + `&access_token=${encodeURIComponent(pageToken)}`,
                 );
                 const prof = await profRes.json();
                 if (profRes.ok && !prof?.error) {
                   await supabase.from("meta_conversations").update({
-                    contact_name: prof.username ? `@${prof.username}` : (prof.name ?? null),
+                    // No Messenger não há @: usa-se o nome, ou o primeiro e
+                    // último se a Meta só devolver esses.
+                    contact_name: prof.username
+                      ? `@${prof.username}`
+                      : (prof.name
+                        || [prof.first_name, prof.last_name].filter(Boolean).join(" ")
+                        || null),
                     // Atenção: este endereço é assinado e EXPIRA. Guarda-se para
                     // ter foto já; quando deixar de abrir, basta limpar o nome
                     // que o próximo webhook volta a pedir os dois.
