@@ -79,24 +79,34 @@ export function useMetaUnreadTotals() {
   });
 }
 
-/** Conversas de uma caixa, mais recentes primeiro. */
-export function useMetaConversations(channelId: string | null) {
+/**
+ * Conversas, mais recentes primeiro.
+ *
+ * Aceita uma caixa ou várias: com várias é a vista "Todas as conversas", que
+ * junta o Instagram e o Messenger numa lista só. O email fica de fora porque
+ * tem cliente próprio — pastas, rascunhos, anexos; não é uma lista de conversas.
+ */
+export function useMetaConversations(channelId: string | string[] | null) {
   const { organization } = useAuth();
+  const ids = channelId == null ? [] : (Array.isArray(channelId) ? channelId : [channelId]);
+  // A chave tem de ser estável: com um array por ordem diferente, o React Query
+  // via duas consultas distintas e recarregava a lista sem razão.
+  const chave = [...ids].sort().join(',');
 
   return useQuery({
-    queryKey: ['meta-conversations', organization?.id, channelId],
+    queryKey: ['meta-conversations', organization?.id, chave],
     queryFn: async (): Promise<MetaConversation[]> => {
-      if (!organization?.id || !channelId) return [];
+      if (!organization?.id || ids.length === 0) return [];
       const { data, error } = await db
         .from('meta_conversations')
         .select('id, channel_id, contact_ref, contact_name, contact_avatar_url, last_message, last_message_at, unread_count, status, window_expires_at')
         .eq('organization_id', organization.id)
-        .eq('channel_id', channelId)
+        .in('channel_id', ids)
         .order('last_message_at', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return (data || []) as MetaConversation[];
     },
-    enabled: !!organization?.id && !!channelId,
+    enabled: !!organization?.id && ids.length > 0,
     // As mensagens chegam por webhook, não por ação do utilizador — sem
     // sondagem a conversa só apareceria ao recarregar a página.
     refetchInterval: 15_000,

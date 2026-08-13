@@ -37,16 +37,25 @@ export default function Inbox() {
   const [emailChannelId, setEmailChannelId] = useState<string | null>(null);
   const [emailFolderId, setEmailFolderId] = useState<string | null>(null);
   const [metaChannelId, setMetaChannelId] = useState<string | null>(null);
+  // "Todas as conversas": Instagram e Messenger numa lista só. O email fica de
+  // fora de propósito — tem pastas, rascunhos e anexos, é um cliente próprio e
+  // não uma lista de conversas.
+  const [todasConversas, setTodasConversas] = useState(false);
   const [railSheetOpen, setRailSheetOpen] = useState(false);
+
+  const caixasMensagens = useMemo(
+    () => caixas.filter((c) => c.channel_type !== 'email'),
+    [caixas],
+  );
 
   // Abre a primeira caixa sozinha: com uma só, obrigar a escolhê-la é um passo
   // a mais para chegar ao mesmo sítio.
   useEffect(() => {
-    if (emailChannelId || metaChannelId || caixas.length === 0) return;
+    if (emailChannelId || metaChannelId || todasConversas || caixas.length === 0) return;
     const email = caixas.find((c) => c.channel_type === "email");
     if (email) setEmailChannelId(email.id);
     else setMetaChannelId(caixas[0].id);
-  }, [caixas, emailChannelId, metaChannelId]);
+  }, [caixas, emailChannelId, metaChannelId, todasConversas]);
 
   const aberta = useMemo(
     () => caixas.find((c) => c.id === (metaChannelId ?? emailChannelId)) ?? null,
@@ -54,19 +63,22 @@ export default function Inbox() {
   );
 
   const escolherMensagens = (ch: MessagingChannel) => {
+    setTodasConversas(false);
     setEmailChannelId(null);
     setMetaChannelId(ch.id);
     setRailSheetOpen(false);
   };
   const escolherEmail = (ch: MessagingChannel) => {
+    setTodasConversas(false);
     setMetaChannelId(null);
     setEmailChannelId(ch.id);
     setEmailFolderId(null);
     setRailSheetOpen(false);
   };
-  const limpar = () => {
+  const verTodas = () => {
     setEmailChannelId(null);
     setMetaChannelId(null);
+    setTodasConversas(true);
     setRailSheetOpen(false);
   };
 
@@ -74,10 +86,11 @@ export default function Inbox() {
     caixas,
     caixaFilter: null,
     metaChannelId,
+    todasConversas,
     unreadByInbox: undefined,
     emailChannelId,
     emailFolderId,
-    onSelectAll: limpar,
+    onSelectAll: verTodas,
     onSelectMessaging: escolherMensagens,
     onSelectEmail: escolherEmail,
     onSelectFolder: (fid: string) => { setEmailFolderId(fid); setRailSheetOpen(false); },
@@ -109,11 +122,19 @@ export default function Inbox() {
           </SheetContent>
         </Sheet>
 
-        {metaChannelId ? (
+        {todasConversas ? (
+          <MetaInbox
+            channelId={caixasMensagens.map((c) => c.id)}
+            channelLabel="as tuas contas"
+            caixas={caixasMensagens}
+            onOpenRail={() => setRailSheetOpen(true)}
+          />
+        ) : metaChannelId ? (
           <MetaInbox
             channelId={metaChannelId}
             channelLabel={aberta?.label ?? "esta caixa"}
             channelType={aberta?.channel_type}
+            caixas={caixasMensagens}
             onOpenRail={() => setRailSheetOpen(true)}
           />
         ) : emailChannelId ? (

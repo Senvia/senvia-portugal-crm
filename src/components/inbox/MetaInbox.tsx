@@ -26,15 +26,23 @@ export function MetaInbox({
   channelId,
   channelLabel,
   channelType,
+  caixas,
   onOpenRail,
 }: {
-  channelId: string;
+  /** Uma caixa, ou várias na vista "Todas as conversas". */
+  channelId: string | string[];
   channelLabel: string;
   /** 'instagram' ou 'facebook' — o Instagram só aceita uma reação. */
   channelType?: string;
+  /** Nome e tipo de cada caixa, para dizer de onde veio cada conversa. */
+  caixas?: Array<{ id: string; label: string | null; channel_type: string }>;
   onOpenRail?: () => void;
 }) {
   const { data: conversations = [], isLoading, isError, refetch } = useMetaConversations(channelId);
+  // Com várias caixas, cada linha tem de dizer a que caixa pertence — senão duas
+  // conversas de contas diferentes ficam indistinguíveis na mesma lista.
+  const varias = Array.isArray(channelId) && channelId.length > 1;
+  const caixaDe = (id: string) => caixas?.find((c) => c.id === id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const markRead = useMarkMetaRead();
@@ -126,6 +134,16 @@ export function MetaInbox({
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {c.last_message || 'Sem mensagens'}
                   </p>
+                  {varias && caixaDe(c.channel_id) && (
+                    <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground/80">
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ background: caixaDe(c.channel_id)!.channel_type === 'instagram' ? '#E4405F' : '#0084FF' }}
+                      />
+                      {caixaDe(c.channel_id)!.label
+                        || (caixaDe(c.channel_id)!.channel_type === 'instagram' ? 'Instagram' : 'Messenger')}
+                    </p>
+                  )}
                 </div>
                 {c.unread_count > 0 && (
                   <span className="mt-1 shrink-0 rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
@@ -145,7 +163,10 @@ export function MetaInbox({
           // aparecem por baixo do cabeçalho da nova durante um instante.
           key={selected.id}
           conversation={selected}
-          channelType={channelType}
+          // Na vista de várias caixas o tipo vem da conversa, não da página:
+          // reagir numa conversa de Messenger tem mais emojis do que numa de
+          // Instagram, e usar o tipo errado oferecia botões que iam falhar.
+          channelType={caixaDe(selected.channel_id)?.channel_type ?? channelType}
           onBack={() => setSelectedId(null)}
         />
       ) : (

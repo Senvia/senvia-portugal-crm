@@ -53,6 +53,7 @@ export function InboxCaixaRail({
   caixas,
   caixaFilter,
   metaChannelId,
+  todasConversas,
   unreadByInbox,
   emailChannelId,
   emailFolderId,
@@ -66,6 +67,8 @@ export function InboxCaixaRail({
   caixaFilter: number | null;
   /** Caixa de Instagram/Messenger aberta, se houver. */
   metaChannelId?: string | null;
+  /** Vista "Todas as conversas" ligada. */
+  todasConversas?: boolean;
   unreadByInbox?: Map<number, number>;
   emailChannelId: string | null;
   emailFolderId: string | null;
@@ -119,7 +122,7 @@ export function InboxCaixaRail({
   const visibleCaixas = caixas.filter((c) => isChannelEnabled(c.channel_type));
   const messaging = visibleCaixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
-  const allActive = !emailChannelId && !metaChannelId && caixaFilter === null;
+  const allActive = todasConversas === true;
   // As caixas da Meta não têm chatwoot_inbox_id — o contador delas vem das
   // nossas tabelas. Sem isto ficavam sempre a zero, e uma DM de Instagram não
   // dava sinal nenhum a quem não estivesse com essa caixa aberta.
