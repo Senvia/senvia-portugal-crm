@@ -215,3 +215,11 @@ verify_jwt = true
 # do webhook Connect (STRIPE_CONNECT_WEBHOOK_SECRET), verificada no corpo bruto.
 [functions.stripe-connected-webhook]
 verify_jwt = false
+
+# Crons financeiros. Autenticam-se no x-cron-secret contra um segredo do Vault
+# (isAuthorized em cada funcao), tal como o reconcile-stripe-payments.
+[functions.generate-recurring-sales]
+verify_jwt = false
+
+[functions.reconcile-connected-stripe]
+verify_jwt = false
