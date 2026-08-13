@@ -210,3 +210,8 @@ verify_jwt = true
 # nunca do corpo do pedido.
 [functions.stripe-sale-checkout]
 verify_jwt = true
+
+# Chamada pelo Stripe, nao por um utilizador nosso. Autentica-se pela assinatura
+# do webhook Connect (STRIPE_CONNECT_WEBHOOK_SECRET), verificada no corpo bruto.
+[functions.stripe-connected-webhook]
+verify_jwt = false

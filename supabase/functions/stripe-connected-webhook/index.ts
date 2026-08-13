@@ -1,0 +1,372 @@
+// Webhook das contas ligadas (Stripe Connect).
+//
+// Separado do stripe-webhook antigo de propósito: aquele trata as subscrições do
+// PRÓPRIO Senvia na nossa conta; este trata o dinheiro dos clientes das nossas
+// organizações, em contas que não são nossas. Segredos de assinatura diferentes,
+// contas diferentes, consequências diferentes.
+//
+// Regra que atravessa tudo: SERVIÇO e COBRANÇA são estados independentes. Um
+// pagamento falhado põe a cobrança em atraso e nunca desliga o serviço — quem
+// suspende um cliente é uma decisão de negócio tomada no CRM, não o efeito
+// automático de um cartão recusado.
+
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { serviceClient, stripeClient } from "../_shared/stripe-connect.ts";
+import {
+  billingStatusFromSubscription,
+  invoicePeriod,
+  isHandledEvent,
+  parseRecurringMetadata,
+  settlementAmounts,
+} from "../_shared/stripe-recurring.ts";
+
+const log = (step: string, details?: Record<string, unknown>) => {
+  console.log(`[STRIPE-CONNECTED-WEBHOOK] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
+};
+
+type Supabase = ReturnType<typeof serviceClient>;
+
+interface Identity {
+  organizationId: string;
+  saleId: string;
+  recurrenceId: string;
+}
+
+/**
+ * Confirma que a identidade da metadata pertence mesmo à conta que enviou o
+ * evento. Sem isto, uma organização podia gravar na metadata o id de outra e
+ * escrever ciclos e pagamentos na venda alheia.
+ */
+async function identityMatchesAccount(
+  supabase: Supabase,
+  identity: Identity,
+  account: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("stripe_connections")
+    .select("organization_id")
+    .eq("stripe_account_id", account)
+    .maybeSingle<{ organization_id: string }>();
+  return !!data && data.organization_id === identity.organizationId;
+}
+
+/** Cria (ou reaproveita) o ciclo desta fatura. Idempotente por stripe_invoice_id. */
+async function materializeInvoiceCycle(
+  supabase: Supabase,
+  invoice: Stripe.Invoice,
+  identity: Identity,
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("sale_recurring_cycles")
+    .select("id")
+    .eq("stripe_invoice_id", invoice.id)
+    .maybeSingle<{ id: string }>();
+  if (existing) return existing.id;
+
+  const period = invoicePeriod(invoice);
+  const amount = settlementAmounts(invoice).gross;
+  if (amount <= 0) return null;
+
+  // A fatura pode chegar depois de o ciclo já ter sido criado manualmente para
+  // o mesmo período: nesse caso adopta-se esse ciclo em vez de criar um segundo.
+  const { data: sameperiod } = await supabase
+    .from("sale_recurring_cycles")
+    .select("id, stripe_invoice_id")
+    .eq("recurrence_id", identity.recurrenceId)
+    .eq("period_start", period.periodStart)
+    .eq("period_end", period.periodEnd)
+    .maybeSingle<{ id: string; stripe_invoice_id: string | null }>();
+
+  if (sameperiod && !sameperiod.stripe_invoice_id) {
+    await supabase
+      .from("sale_recurring_cycles")
+      .update({ stripe_invoice_id: invoice.id, stripe_invoice_status: invoice.status ?? null })
+      .eq("id", sameperiod.id);
+    return sameperiod.id;
+  }
+  if (sameperiod) return sameperiod.id;
+
+  const { data: created, error } = await supabase
+    .from("sale_recurring_cycles")
+    .insert({
+      recurrence_id: identity.recurrenceId,
+      sale_id: identity.saleId,
+      organization_id: identity.organizationId,
+      period_start: period.periodStart,
+      period_end: period.periodEnd,
+      due_date: period.dueDate,
+      amount,
+      currency: "EUR",
+      status: "pending",
+      stripe_invoice_id: invoice.id,
+      stripe_invoice_status: invoice.status ?? null,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    log("falha a criar ciclo", { invoice: invoice.id, message: error.message });
+    return null;
+  }
+  return created?.id ?? null;
+}
+
+/** Marca o ciclo como pago e regista o pagamento pelo valor BRUTO. */
+async function settleInvoiceCycle(
+  supabase: Supabase,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+  identity: Identity,
+  account: string,
+): Promise<void> {
+  const cycleId = await materializeInvoiceCycle(supabase, invoice, identity);
+  if (!cycleId) return;
+
+  // A taxa só existe na balance transaction do charge; a fatura não a traz.
+  let balanceTransaction: { fee?: number | null; net?: number | null } | null = null;
+  const chargeId = typeof invoice.charge === "string" ? invoice.charge : invoice.charge?.id;
+  if (chargeId) {
+    try {
+      const charge = await stripe.charges.retrieve(
+        chargeId,
+        { expand: ["balance_transaction"] },
+        { stripeAccount: account },
+      );
+      const bt = charge.balance_transaction;
+      if (bt && typeof bt !== "string") balanceTransaction = { fee: bt.fee, net: bt.net };
+    } catch (err) {
+      log("balance transaction indisponível", {
+        message: err instanceof Error ? err.message : "desconhecido",
+      });
+    }
+  }
+
+  const { gross, fee, net } = settlementAmounts(invoice, balanceTransaction);
+  const paidAt = new Date((invoice.status_transitions?.paid_at ?? invoice.created) * 1000).toISOString();
+
+  await supabase
+    .from("sale_recurring_cycles")
+    .update({
+      status: "paid",
+      paid_at: paidAt,
+      stripe_invoice_status: invoice.status ?? null,
+      failure_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", cycleId);
+
+  // Um pagamento por ciclo: o índice único em recurring_cycle_id garante que uma
+  // reentrega do mesmo evento não duplica dinheiro.
+  const { data: already } = await supabase
+    .from("sale_payments")
+    .select("id")
+    .eq("recurring_cycle_id", cycleId)
+    .maybeSingle<{ id: string }>();
+
+  if (!already) {
+    const period = invoicePeriod(invoice);
+    const { error } = await supabase.from("sale_payments").insert({
+      organization_id: identity.organizationId,
+      sale_id: identity.saleId,
+      recurring_cycle_id: cycleId,
+      amount: gross,
+      payment_date: paidAt.slice(0, 10),
+      status: "paid",
+      payment_method: "card",
+      stripe_invoice_id: invoice.id,
+      stripe_gross_amount: gross,
+      stripe_fee_amount: fee,
+      stripe_net_amount: net,
+      billing_period_start: period.periodStart,
+      billing_period_end: period.periodEnd,
+      notes: `Stripe ${invoice.id} · bruto ${gross.toFixed(2)}€, taxa ${fee.toFixed(2)}€`,
+    });
+    // 23505 = corrida com outra entrega do mesmo evento; já está registado.
+    if (error && error.code !== "23505") {
+      log("falha a registar pagamento", { cycleId, message: error.message });
+    }
+  }
+
+  // A cobrança volta a 'current' apenas se não houver outro ciclo por pagar.
+  const { count } = await supabase
+    .from("sale_recurring_cycles")
+    .select("id", { count: "exact", head: true })
+    .eq("recurrence_id", identity.recurrenceId)
+    .in("status", ["pending", "failed"])
+    .lt("due_date", new Date().toISOString().slice(0, 10));
+
+  if ((count ?? 0) === 0) {
+    await supabase
+      .from("sale_recurrences")
+      .update({ billing_status: "current", updated_at: new Date().toISOString() })
+      .eq("id", identity.recurrenceId);
+  }
+
+  log("ciclo liquidado", { cycleId, gross, fee, net });
+}
+
+async function handleEvent(
+  supabase: Supabase,
+  stripe: Stripe,
+  event: Stripe.Event,
+  account: string,
+  identity: Identity,
+): Promise<void> {
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const subscriptionId =
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+      await supabase
+        .from("sale_recurrences")
+        .update({
+          stripe_subscription_id: subscriptionId ?? null,
+          stripe_customer_id:
+            typeof session.customer === "string" ? session.customer : session.customer?.id ?? null,
+          service_status: "active",
+          billing_status: "current",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", identity.recurrenceId);
+      return;
+    }
+
+    case "invoice.created":
+    case "invoice.finalized": {
+      await materializeInvoiceCycle(supabase, event.data.object as Stripe.Invoice, identity);
+      return;
+    }
+
+    case "invoice.paid":
+    case "invoice.payment_succeeded": {
+      await settleInvoiceCycle(supabase, stripe, event.data.object as Stripe.Invoice, identity, account);
+      return;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const cycleId = await materializeInvoiceCycle(supabase, invoice, identity);
+      if (cycleId) {
+        await supabase
+          .from("sale_recurring_cycles")
+          .update({
+            status: "failed",
+            failure_reason: "Pagamento recusado pelo Stripe",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", cycleId);
+      }
+      // Apenas cobrança. O serviço NÃO é tocado.
+      await supabase
+        .from("sale_recurrences")
+        .update({ billing_status: "past_due", updated_at: new Date().toISOString() })
+        .eq("id", identity.recurrenceId);
+      return;
+    }
+
+    case "customer.subscription.updated": {
+      const subscription = event.data.object as Stripe.Subscription;
+      const billing = billingStatusFromSubscription(subscription.status);
+      if (billing) {
+        await supabase
+          .from("sale_recurrences")
+          .update({ billing_status: billing, updated_at: new Date().toISOString() })
+          .eq("id", identity.recurrenceId);
+      }
+      return;
+    }
+
+    case "customer.subscription.deleted": {
+      // Estado terminal confirmado pelo Stripe: aqui sim o serviço termina.
+      await supabase
+        .from("sale_recurrences")
+        .update({
+          service_status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", identity.recurrenceId);
+      return;
+    }
+  }
+}
+
+serve(async (req) => {
+  const secret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET");
+  if (!secret) {
+    log("STRIPE_CONNECT_WEBHOOK_SECRET em falta — a recusar");
+    return new Response("not configured", { status: 500 });
+  }
+
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) return new Response("missing signature", { status: 400 });
+
+  // Corpo BRUTO: qualquer reserialização invalida a assinatura.
+  const raw = await req.text();
+  const stripe = stripeClient();
+
+  let event: Stripe.Event;
+  try {
+    event = await stripe.webhooks.constructEventAsync(raw, signature, secret);
+  } catch (err) {
+    log("assinatura inválida", { message: err instanceof Error ? err.message : "desconhecido" });
+    return new Response("invalid signature", { status: 400 });
+  }
+
+  const account = event.account;
+  if (!account) return new Response("ok", { status: 200 });
+
+  const supabase = serviceClient();
+  const object = event.data.object as { metadata?: Record<string, string> };
+  const parsed = parseRecurringMetadata(object.metadata);
+
+  if (!parsed.ok || !isHandledEvent(event.type)) {
+    // Devolve 200: não é um erro nosso, e um não-2xx faria o Stripe repetir
+    // indefinidamente um evento que nunca vamos tratar.
+    return new Response("ok", { status: 200 });
+  }
+
+  const identity = parsed.value;
+  if (!(await identityMatchesAccount(supabase, identity, account))) {
+    log("metadata de outra organização — recusado", { account });
+    return new Response("ok", { status: 200 });
+  }
+
+  // Livro de eventos: a chave única (stripe_event_id) é o que impede uma
+  // reentrega de processar o mesmo dinheiro duas vezes.
+  const { error: ledgerError } = await supabase.from("stripe_events").insert({
+    stripe_event_id: event.id,
+    stripe_account_id: account,
+    organization_id: identity.organizationId,
+    event_type: event.type,
+    livemode: event.livemode,
+    status: "processing",
+  });
+  if (ledgerError) {
+    if (ledgerError.code === "23505") {
+      log("evento repetido — ignorado", { event: event.id });
+      return new Response("ok", { status: 200 });
+    }
+    log("falha no livro de eventos", { message: ledgerError.message });
+    return new Response("ledger error", { status: 500 });
+  }
+
+  try {
+    await handleEvent(supabase, stripe, event, account, identity);
+    await supabase
+      .from("stripe_events")
+      .update({ status: "processed", processed_at: new Date().toISOString() })
+      .eq("stripe_event_id", event.id);
+    return new Response("ok", { status: 200 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "desconhecido";
+    log("falha a processar", { event: event.id, message });
+    await supabase
+      .from("stripe_events")
+      .update({ status: "failed", last_error: message })
+      .eq("stripe_event_id", event.id);
+    // 500 para o Stripe repetir: é uma falha nossa, e o evento traz dinheiro.
+    return new Response("processing error", { status: 500 });
+  }
+});
