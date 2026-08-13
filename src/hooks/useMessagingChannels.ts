@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { isChannelEnabled } from '@/lib/constants';
 
 export type ChannelStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -32,7 +33,20 @@ export interface MessagingChannel {
 // produto deixou de ligar canais de mensagens. Sobra o que serve as caixas de
 // EMAIL: listá-las e gerir quem as atende.
 
-// All messaging channels for the active organization.
+/**
+ * As caixas da organização — só as dos canais que o produto tem abertos.
+ *
+ * A filtragem é AQUI, e não em cada sítio que usa isto. Uma linha de um canal
+ * fechado continua na base de dados (não se apaga nada), mas para o CRM é como
+ * se não existisse: o que está desligado no produto não conta, não aparece e
+ * não notifica.
+ *
+ * Antes cada consumidor filtrava por sua conta, e os que se esqueciam deixavam
+ * o canal fechado aparecer à mesma — o contador dizia "4 ligadas" em cima de
+ * três caixas, o painel mostrava alertas de WhatsApp, e as conversas por ler do
+ * WhatsApp somavam no distintivo do menu. Uma sessão viva no Evolution é
+ * problema do Evolution; não tem que se ver do lado de cá.
+ */
 export function useMessagingChannels() {
   const { organization } = useAuth();
 
@@ -50,7 +64,8 @@ export function useMessagingChannels() {
         .order('created_at', { ascending: true, nullsFirst: true })
         .order('id', { ascending: true });
       if (error) throw error;
-      return (data || []) as MessagingChannel[];
+      return ((data || []) as MessagingChannel[])
+        .filter((c) => isChannelEnabled(c.channel_type));
     },
     enabled: !!organization?.id,
   });

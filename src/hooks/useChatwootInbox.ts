@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessagingChannels } from '@/hooks/useMessagingChannels';
 import { isActivityText } from '@/lib/activity-detection';
-import { MESSAGING_CHANNELS_ENABLED } from '@/lib/constants';
+import { MESSAGING_CHANNELS } from '@/lib/constants';
 import type {
   InboxConversation,
   InboxAttachment,
@@ -517,11 +517,19 @@ export function countUnreadConversations(
   conversations: InboxConversation[],
   excludeInboxIds?: Set<number>,
 ): number {
-  // Este contador é de MENSAGENS (o email é excluído por excludeInboxIds). Com
-  // os canais de mensagens desligados não há nada para contar — sem isto, o
-  // menu lateral continuava a mostrar um sino com não-lidas de WhatsApp que já
-  // não se conseguem abrir em lado nenhum.
-  if (!MESSAGING_CHANNELS_ENABLED) return 0;
+  // Este contador é de MENSAGENS que passam pelo CHATWOOT (o email é excluído
+  // por excludeInboxIds).
+  //
+  // A guarda era `MESSAGING_CHANNELS_ENABLED`, que é verdade se QUALQUER canal
+  // estiver aberto. Funcionou enquanto estavam todos fechados; no momento em
+  // que o Instagram e o Messenger foram abertos passou a ser verdade — e as
+  // não-lidas do WhatsApp voltaram a somar no menu, apesar de o WhatsApp
+  // continuar fechado e de não haver onde as abrir.
+  //
+  // O Instagram e o Messenger falam direto com a Meta e nunca chegam ao
+  // Chatwoot. Por isso o que conta aqui é só o WhatsApp: fechado ele, não há
+  // nada para contar.
+  if (!MESSAGING_CHANNELS.whatsapp) return 0;
   const muted = new Set(loadMutedIds());
   return conversations.filter(
     (c) =>

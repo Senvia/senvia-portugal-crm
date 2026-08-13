@@ -104,7 +104,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useInboxImmersiveStore } from "@/stores/useInboxImmersiveStore";
 import { cn, matchesSearch } from "@/lib/utils";
-import { INBOX_CONFIG, MESSAGING_CHANNELS_ENABLED, isChannelEnabled } from "@/lib/constants";
+import { INBOX_CONFIG, MESSAGING_CHANNELS_ENABLED } from "@/lib/constants";
 import { isActivityText, translateActivity } from "@/lib/activity-detection";
 import { firstName, formatListDate, waitingLabel } from "@/components/inbox/helpers";
 import { renderWhatsAppFormatting } from "@/components/inbox/MessageBubble";
@@ -1176,10 +1176,20 @@ export default function Inbox() {
   // Chatwoot e vinham na listagem na mesma — esconder a caixa nunca chegou,
   // porque as conversas não são pedidas por caixa. Sem isto, desligar um canal
   // deixava as conversas dele à vista.
-  const disabledInboxIds = useMemo(
+  // Lista de PERMITIDOS, não de proibidos.
+  //
+  // Era ao contrário: escondiam-se as conversas das caixas cujo canal estava
+  // fechado. Isso só funciona enquanto a linha do canal fechado estiver à mão —
+  // e `useMessagingChannels` passou a devolver só os canais abertos, o que
+  // esvaziava a lista de proibidos e trazia as conversas todas de volta.
+  //
+  // Assim é ao contrário e não depende disso: mostra-se o que vem de uma caixa
+  // que existe e está aberta. Uma conversa de um canal fechado — ou de uma
+  // caixa que já não temos — fica de fora por omissão, que é o lado seguro.
+  const messagingInboxIds = useMemo(
     () => new Set(
       channels
-        .filter((c) => !isChannelEnabled(c.channel_type) && c.chatwoot_inbox_id != null)
+        .filter((c) => c.channel_type !== 'email' && c.chatwoot_inbox_id != null)
         .map((c) => c.chatwoot_inbox_id as number),
     ),
     [channels],
@@ -1191,9 +1201,9 @@ export default function Inbox() {
     () => conversations.filter(
       (c) => c.contact_name !== "EvolutionAPI"
         && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id))
-        && !(c.inbox_id != null && disabledInboxIds.has(c.inbox_id)),
+        && c.inbox_id != null && messagingInboxIds.has(c.inbox_id),
     ),
-    [conversations, emailInboxIds, disabledInboxIds],
+    [conversations, emailInboxIds, messagingInboxIds],
   );
 
   const filtered = useMemo(() => {
