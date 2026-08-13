@@ -27,6 +27,64 @@ const logError = (s: string, d?: unknown) =>
 /** A janela de resposta da Meta: 24h desde a última mensagem DA PESSOA. */
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * O nome de quem escreveu, pela API de CONVERSAS.
+ *
+ * Existe porque a API de perfil (`GET /{psid}`) não serve toda a gente: com a
+ * app em Acesso Padrão, a Meta só devolve o perfil de quem tem cargo nela e
+ * responde `(#100) subcode 33` a todos os outros. Ou seja, os contactos de
+ * teste apareciam com nome e os clientes reais como um número de 17 dígitos.
+ *
+ * A API de conversas é outra porta e devolve o nome verdadeiro — confirmado
+ * contra a produção: o mesmo identificador que a de perfil recusou veio aqui
+ * como "Phillips Steven".
+ *
+ * Duas notas do que se aprendeu a testar isto:
+ *  - No Messenger, `participants` devolve o marcador "Usuário do Facebook"; é
+ *    `messages{from}` que traz o nome a sério. No Instagram servem os dois.
+ *  - `messages` vem da mais recente para trás e a mais recente pode ser NOSSA,
+ *    por isso procura-se a primeira cujo autor é mesmo a pessoa.
+ *
+ * A fotografia não tem equivalente: para quem a app não alcança, a Meta serve
+ * a silhueta genérica. Isso só a App Review resolve.
+ */
+async function nomePelaConversa(
+  pageId: string,
+  senderId: string,
+  ehInstagram: boolean,
+  token: string,
+): Promise<string | null> {
+  const url = new URL(`https://graph.facebook.com/v21.0/${pageId}/conversations`);
+  if (ehInstagram) url.searchParams.set("platform", "instagram");
+  url.searchParams.set("user_id", senderId);
+  url.searchParams.set("fields", "participants,messages.limit(10){from}");
+  url.searchParams.set("access_token", token);
+
+  const res = await fetch(url);
+  const body = await res.json();
+  if (!res.ok || body?.error) {
+    log("conversa sem nome disponível", { senderId, erro: body?.error?.message });
+    return null;
+  }
+
+  const conversa = body?.data?.[0];
+  if (!conversa) return null;
+
+  interface Autor { id?: string; name?: string; username?: string }
+
+  const daPessoa = (a: Autor | undefined) => a?.id === senderId;
+  const doAutor = (a: Autor | undefined) =>
+    a?.username ? `@${a.username}` : (a?.name ?? null);
+
+  const msg = (conversa.messages?.data ?? [] as Array<{ from?: Autor }>)
+    .find((m: { from?: Autor }) => daPessoa(m.from));
+  const pelaMensagem = doAutor(msg?.from);
+  if (pelaMensagem) return pelaMensagem;
+
+  const participante = (conversa.participants?.data ?? [] as Autor[]).find(daPessoa);
+  return doAutor(participante);
+}
+
 async function signatureValid(raw: string, header: string | null, secret: string): Promise<boolean> {
   if (!header?.startsWith("sha256=")) return false;
   const key = await crypto.subtle.importKey(
@@ -333,31 +391,53 @@ Deno.serve(async (req) => {
                   + `?fields=${campos}`
                   + `&access_token=${encodeURIComponent(pageToken)}`,
                 );
-                const prof = await profRes.json();
-                if (profRes.ok && !prof?.error) {
+                const prof = profRes.ok ? await profRes.json() : {};
+                const temPerfil = profRes.ok && !prof?.error;
+
+                // No Messenger não há @: usa-se o nome, ou o primeiro e último
+                // se a Meta só devolver esses.
+                let nome: string | null = temPerfil
+                  ? (prof.username
+                    ? `@${prof.username}`
+                    : (prof.name
+                      || [prof.first_name, prof.last_name].filter(Boolean).join(" ")
+                      || null))
+                  : null;
+
+                // Sem perfil, tenta-se a API de conversas. É o caso NORMAL para
+                // clientes reais enquanto a app não tiver a App Review: a API de
+                // perfil só serve quem tem cargo na app.
+                if (!nome) {
+                  nome = await nomePelaConversa(
+                    ehInstagram ? (channel.metadata as { page_id?: string } | null)?.page_id ?? pageId : pageId,
+                    senderId,
+                    ehInstagram,
+                    pageToken,
+                  ).catch(() => null);
+                }
+
+                if (nome || temPerfil) {
                   await supabase.from("meta_conversations").update({
-                    // No Messenger não há @: usa-se o nome, ou o primeiro e
-                    // último se a Meta só devolver esses.
-                    contact_name: prof.username
-                      ? `@${prof.username}`
-                      : (prof.name
-                        || [prof.first_name, prof.last_name].filter(Boolean).join(" ")
-                        || null),
+                    contact_name: nome,
                     // Atenção: este endereço é assinado e EXPIRA. Guarda-se para
                     // ter foto já; quando deixar de abrir, basta limpar o nome
                     // que o próximo webhook volta a pedir os dois.
-                    contact_avatar_url: prof.profile_pic ?? null,
+                    contact_avatar_url: temPerfil ? (prof.profile_pic ?? null) : null,
                     contact_meta: {
                       follower_count: prof.follower_count ?? null,
                       is_verified: prof.is_verified_user ?? null,
                       follows_us: prof.is_user_follow_business ?? null,
+                      // Sem perfil não há fotografia: a Meta serve a silhueta
+                      // genérica. Fica registado para a interface poder explicar
+                      // porquê em vez de mostrar um vazio.
+                      perfil_indisponivel: !temPerfil,
                     },
                   }).eq("id", conv.id);
-                  log("perfil obtido", { senderId, username: prof.username ?? prof.name });
+                  log("nome obtido", { senderId, nome, viaPerfil: temPerfil });
                 } else {
-                  // Acontece: contas com restrições de privacidade não expõem o
-                  // perfil. A conversa funciona à mesma, só sem nome.
-                  log("perfil indisponível", { senderId, erro: prof?.error?.message });
+                  // Nem a API de perfil nem a de conversas deram nome. Raro — a
+                  // conversa funciona à mesma, só sem ele.
+                  log("sem nome por nenhuma das vias", { senderId, erro: prof?.error?.message });
                 }
               } catch (e) {
                 log("falha a obter o perfil", { senderId, error: (e as Error).message });
