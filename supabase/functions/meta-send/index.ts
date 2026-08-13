@@ -42,6 +42,134 @@ const json = (body: unknown, status = 200) =>
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+/**
+ * Envio pelo WhatsApp Cloud API.
+ *
+ * O que muda em relação ao Instagram e ao Messenger, e porque é que justifica
+ * função própria:
+ *
+ *  - O endereço é `/{phone-number-id}/messages`, não `/{page-id}/messages`.
+ *  - Todo o corpo leva `messaging_product: "whatsapp"` e um `type` explícito.
+ *  - O destinatário é o NÚMERO (`to`), não um `recipient.id`.
+ *  - As reações levam o EMOJI a sério — ao contrário do Instagram, que só
+ *    aceita a palavra "love". Tirar a reação é mandar emoji vazio.
+ *  - Texto e anexo continuam a não poder ir juntos, mas o anexo aceita legenda
+ *    (`caption`), o que dá quase no mesmo.
+ *  - Não há indicador de "a escrever": a API não o expõe.
+ */
+// deno-lint-ignore no-explicit-any
+async function enviarWhatsApp(p: any): Promise<Response> {
+  const {
+    admin, conv, channel, token, numeroId,
+    text, temTexto, attachment_url, attachment_type, action,
+    message_external_id, reaction, reply_to_mid, userId,
+  } = p;
+
+  // "A escrever" e "visto" não existem nesta API. Devolve-se sucesso em vez de
+  // um erro: é a interface a pedir algo que este canal não tem, não uma falha.
+  if (action === "typing_on" || action === "typing_off") {
+    return json({ success: true, ignorado: "o WhatsApp não expõe o indicador de escrita" });
+  }
+
+  let corpo: Record<string, unknown>;
+
+  if (action === "mark_seen") {
+    if (!message_external_id) return json({ error: "message_external_id em falta" }, 400);
+    corpo = { messaging_product: "whatsapp", status: "read", message_id: message_external_id };
+  } else if (action === "react" || action === "unreact") {
+    if (!message_external_id) return json({ error: "message_external_id em falta" }, 400);
+    corpo = {
+      messaging_product: "whatsapp",
+      to: conv.contact_ref,
+      type: "reaction",
+      // Emoji vazio = retirar a reação. É assim que a API o diz.
+      reaction: { message_id: message_external_id, emoji: action === "react" ? (reaction || "❤️") : "" },
+    };
+  } else if (attachment_url) {
+    const tipo = ["image", "video", "audio", "document"].includes(String(attachment_type))
+      ? String(attachment_type) : "document";
+    corpo = {
+      messaging_product: "whatsapp",
+      to: conv.contact_ref,
+      type: tipo,
+      [tipo]: {
+        link: attachment_url,
+        // Só a imagem, o vídeo e o documento aceitam legenda.
+        ...(temTexto && tipo !== "audio" ? { caption: String(text) } : {}),
+      },
+      ...(reply_to_mid ? { context: { message_id: reply_to_mid } } : {}),
+    };
+  } else {
+    corpo = {
+      messaging_product: "whatsapp",
+      to: conv.contact_ref,
+      type: "text",
+      text: { body: String(text), preview_url: true },
+      ...(reply_to_mid ? { context: { message_id: reply_to_mid } } : {}),
+    };
+  }
+
+  const res = await fetch(`${GRAPH}/${numeroId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(corpo),
+  });
+  const resposta = await res.json().catch(() => ({}));
+
+  if (!res.ok || resposta?.error) {
+    logError("o WhatsApp recusou o envio", { status: res.status, resposta });
+    const e = resposta?.error;
+    // 131047 = passaram as 24h e só um modelo aprovado serve. É o erro mais
+    // comum desta API e o mais críptico — vale a pena traduzi-lo.
+    const msg = e?.code === 131047 || /24 hours|re-engagement/i.test(e?.message ?? "")
+      ? "Passaram mais de 24 horas desde a última mensagem desta pessoa. "
+        + "Fora desse prazo o WhatsApp só permite enviar um modelo aprovado pela Meta."
+      : (e?.message ?? `O WhatsApp recusou o envio (${res.status})`);
+    return json({ error: msg, code: e?.code ?? null }, 502);
+  }
+
+  if (action === "mark_seen") return json({ success: true });
+
+  if (action === "react" || action === "unreact") {
+    await admin.from("meta_messages").update({
+      reaction: action === "react" ? (reaction || "❤️") : null,
+      reaction_by: action === "react" ? "agent" : null,
+    })
+      .eq("conversation_id", conv.id)
+      .eq("external_id", message_external_id);
+    return json({ success: true });
+  }
+
+  const wamid = resposta?.messages?.[0]?.id ?? null;
+  const resumo = temTexto ? String(text) : `[${attachment_type || "anexo"}]`;
+
+  const { error: insErr } = await admin.from("meta_messages").insert({
+    organization_id: conv.organization_id,
+    conversation_id: conv.id,
+    external_id: wamid,
+    direction: "outgoing",
+    content: temTexto ? String(text) : null,
+    reply_to_external_id: reply_to_mid ?? null,
+    attachments: attachment_url ? [{ type: attachment_type || "document", url: attachment_url }] : [],
+    sent_by: userId,
+    sent_at: new Date().toISOString(),
+    // O estado real chega depois, por webhook: entregue, lida ou falhada.
+    delivery_status: "sent",
+  });
+  if (insErr) {
+    logError("ENTREGUE MAS NÃO GUARDADA", { conversa: conv.id, wamid, error: insErr.message });
+  }
+
+  await admin.from("meta_conversations").update({
+    last_message: resumo,
+    last_message_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq("id", conv.id);
+
+  log("WhatsApp enviado", { conversa: conv.id, canal: channel?.label });
+  return json({ success: true, stored: !insErr, message_id: wamid });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
@@ -131,10 +259,24 @@ Deno.serve(async (req) => {
       .select("page_access_token")
       .eq("channel_id", conv.channel_id)
       .maybeSingle();
-    const meta = (channel?.metadata ?? {}) as { page_id?: string };
+    const meta = (channel?.metadata ?? {}) as { page_id?: string; phone_number_id?: string };
     const pageToken = secret?.page_access_token;
-    if (!meta.page_id || !pageToken) {
+
+    // O WhatsApp é outro produto dentro da mesma API: outro id de origem, outro
+    // endereço e outra forma de corpo. Trata-se à parte para não encher o resto
+    // de condições.
+    const ehWhatsApp = channel?.channel_type === "whatsapp" && !!meta.phone_number_id;
+
+    if (!pageToken || (!meta.page_id && !meta.phone_number_id)) {
       return json({ error: "Canal sem credenciais — volta a ligar a conta." }, 400);
+    }
+
+    if (ehWhatsApp) {
+      return await enviarWhatsApp({
+        admin, conv, channel, token: pageToken, numeroId: meta.phone_number_id!,
+        text, temTexto, attachment_url, attachment_type, action,
+        message_external_id, reaction, reply_to_mid, userId: user.id,
+      });
     }
 
     // O corpo muda conforme o que se está a fazer. Texto e anexo NÃO podem ir

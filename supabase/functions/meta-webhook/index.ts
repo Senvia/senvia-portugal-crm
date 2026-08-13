@@ -102,6 +102,261 @@ async function signatureValid(raw: string, header: string | null, secret: string
   return diff === 0;
 }
 
+/**
+ * Mensagens, contactos e estados do WhatsApp Cloud API.
+ *
+ * Três diferenças que mudam o código, e não só o formato:
+ *
+ *  1. O NOME VEM NA MENSAGEM. `contacts[].profile.name` está logo aqui — não é
+ *     preciso o pedido extra de perfil que o Instagram e o Messenger obrigam, e
+ *     não há o problema de a Meta recusar o perfil de quem não tem cargo na app.
+ *  2. HÁ ESTADOS DE ENTREGA. `statuses[]` diz se a mensagem foi entregue, lida
+ *     ou falhou. Não são mensagens novas — anotam-se na que já lá está.
+ *  3. AS REAÇÕES SÃO EMOJI A SÉRIO, ao contrário do Instagram (que só aceita a
+ *     palavra "love").
+ */
+async function processarWhatsApp(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  body: any,
+): Promise<{ resultado: string; phoneNumberId: string | null; orgId: string | null }> {
+  let resultado = "sem_eventos";
+  let phoneNumberId: string | null = null;
+  let orgId: string | null = null;
+
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const value = change?.value;
+      if (!value) continue;
+
+      const numeroId = String(value?.metadata?.phone_number_id ?? "");
+      if (!numeroId) continue;
+      phoneNumberId = numeroId;
+
+      const { data: channel, error: canalErr } = await supabase
+        .from("messaging_channels")
+        .select("id, organization_id, channel_type, assigned_user_ids, label")
+        .eq("metadata->>phone_number_id", numeroId)
+        .eq("provider", "meta")
+        .limit(1)
+        .maybeSingle();
+      if (canalErr) logError("procura de canal WhatsApp falhou", { error: canalErr.message });
+
+      if (!channel) {
+        log("WhatsApp de um número que não temos ligado", { numeroId });
+        resultado = "sem_canal";
+        continue;
+      }
+      orgId = channel.organization_id;
+
+      // ── Estados de entrega ────────────────────────────────────────────────
+      for (const st of value.statuses ?? []) {
+        try {
+          const agora = st.timestamp ? new Date(Number(st.timestamp) * 1000).toISOString() : null;
+          const patch: Record<string, unknown> = { delivery_status: st.status };
+          if (st.status === "delivered") patch.delivered_at = agora;
+          if (st.status === "read") patch.read_at = agora;
+          if (st.status === "failed") {
+            const e = (st.errors ?? [])[0];
+            patch.delivery_error = e ? `${e.code ?? ""} ${e.title ?? e.message ?? ""}`.trim() : "falhou";
+          }
+          await supabase.from("meta_messages").update(patch)
+            .eq("organization_id", channel.organization_id)
+            .eq("external_id", st.id);
+        } catch (e) {
+          logError("estado não gravado", { error: (e as Error).message });
+        }
+      }
+      if ((value.statuses ?? []).length > 0) resultado = "estado";
+
+      // ── Mensagens recebidas ───────────────────────────────────────────────
+      const nomePorNumero = new Map<string, string>();
+      for (const c of value.contacts ?? []) {
+        if (c?.wa_id && c?.profile?.name) nomePorNumero.set(String(c.wa_id), String(c.profile.name));
+      }
+
+      for (const msg of value.messages ?? []) {
+        try {
+          const de = String(msg.from ?? "");
+          if (!de) continue;
+          const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
+
+          // Reação: não é mensagem nova, anota-se na mensagem reagida.
+          if (msg.type === "reaction" && msg.reaction?.message_id) {
+            await supabase.from("meta_messages").update({
+              reaction: msg.reaction.emoji || null,
+              reaction_by: msg.reaction.emoji ? "contact" : null,
+            })
+              .eq("organization_id", channel.organization_id)
+              .eq("external_id", msg.reaction.message_id);
+            resultado = "reacao";
+            continue;
+          }
+
+          const { texto, anexos } = conteudoWhatsApp(msg);
+          if (!texto && anexos.length === 0) continue;
+
+          const resumo = texto || `[${anexos[0]?.type ?? "anexo"}]`;
+          const janela = new Date(at.getTime() + REPLY_WINDOW_MS).toISOString();
+
+          const { data: existente } = await supabase
+            .from("meta_conversations")
+            .select("id, contact_name, last_message_at, window_expires_at")
+            .eq("channel_id", channel.id)
+            .eq("contact_ref", de)
+            .maybeSingle();
+
+          // O nome vem na própria mensagem — nada de pedido extra de perfil.
+          const nome = nomePorNumero.get(de) ?? existente?.contact_name ?? null;
+
+          let convId: string | null = null;
+          if (existente) {
+            const maisRecente = !existente.last_message_at
+              || new Date(existente.last_message_at) <= at;
+            const { data, error } = await supabase.from("meta_conversations").update({
+              ...(maisRecente ? { last_message: resumo, last_message_at: at.toISOString() } : {}),
+              window_expires_at: existente.window_expires_at && existente.window_expires_at > janela
+                ? existente.window_expires_at : janela,
+              ...(nome && !existente.contact_name ? { contact_name: nome } : {}),
+              status: "open",
+              updated_at: new Date().toISOString(),
+            }).eq("id", existente.id).select("id").single();
+            if (error) { logError("conversa não atualizada", { error: error.message }); continue; }
+            convId = data.id;
+          } else {
+            const { data, error } = await supabase.from("meta_conversations").insert({
+              organization_id: channel.organization_id,
+              channel_id: channel.id,
+              contact_ref: de,
+              contact_name: nome,
+              last_message: resumo,
+              last_message_at: at.toISOString(),
+              window_expires_at: janela,
+              status: "open",
+            }).select("id").single();
+            if (error) { logError("conversa não criada", { error: error.message }); continue; }
+            convId = data.id;
+          }
+
+          const { error: msgErr } = await supabase.from("meta_messages").insert({
+            organization_id: channel.organization_id,
+            conversation_id: convId,
+            external_id: msg.id ?? null,
+            direction: "incoming",
+            content: texto || null,
+            reply_to_external_id: msg.context?.id ?? null,
+            attachments: anexos,
+            sent_at: at.toISOString(),
+          });
+
+          // 23505 = repetição. Os webhooks são entregues pelo menos uma vez.
+          if (msgErr && (msgErr as { code?: string }).code !== "23505") {
+            logError("mensagem WhatsApp não gravada", { error: msgErr.message });
+            resultado = "erro";
+            continue;
+          }
+          if (msgErr) { resultado = "duplicada"; continue; }
+
+          await supabase.rpc("increment_meta_unread", { _conversation_id: convId })
+            .then(() => {}, () => {});
+
+          await notificar(supabase, channel, `💬 WhatsApp: ${nome || de}`, resumo, convId!);
+          log("WhatsApp guardado", { conversa: convId });
+          resultado = "guardada";
+        } catch (e) {
+          logError("mensagem WhatsApp ignorada por erro", { error: (e as Error).message });
+          resultado = "erro";
+        }
+      }
+    }
+  }
+
+  return { resultado, phoneNumberId, orgId };
+}
+
+/** Texto e anexos de uma mensagem do WhatsApp, por tipo. */
+// deno-lint-ignore no-explicit-any
+function conteudoWhatsApp(msg: any): { texto: string; anexos: Array<Record<string, unknown>> } {
+  const anexos: Array<Record<string, unknown>> = [];
+  let texto = "";
+
+  switch (msg.type) {
+    case "text":
+      texto = msg.text?.body ?? "";
+      break;
+    case "image": case "video": case "audio": case "document": case "sticker": {
+      const m = msg[msg.type] ?? {};
+      // Atenção: o WhatsApp NÃO manda o ficheiro, manda um id. Para o ver é
+      // preciso ir buscá-lo à Graph API com o token — e o endereço que ela
+      // devolve expira em minutos. Guarda-se o id; o download é a pedido.
+      anexos.push({ type: msg.type, media_id: m.id ?? null, url: null, mime: m.mime_type ?? null });
+      texto = m.caption ?? "";
+      break;
+    }
+    case "location":
+      anexos.push({
+        type: "location",
+        lat: msg.location?.latitude, lng: msg.location?.longitude,
+        url: msg.location?.latitude
+          ? `https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}`
+          : null,
+      });
+      texto = msg.location?.name ?? "";
+      break;
+    case "contacts":
+      anexos.push({ type: "contacts", url: null, dados: msg.contacts ?? [] });
+      texto = (msg.contacts ?? []).map((c: { name?: { formatted_name?: string } }) =>
+        c?.name?.formatted_name).filter(Boolean).join(", ");
+      break;
+    case "button":
+      // Resposta a um botão de um modelo.
+      texto = msg.button?.text ?? "";
+      break;
+    case "interactive":
+      texto = msg.interactive?.button_reply?.title
+        ?? msg.interactive?.list_reply?.title ?? "";
+      break;
+    default:
+      // Tipos que ainda não tratamos (encomendas, sistema). Fica registo de que
+      // chegou alguma coisa em vez de a mensagem desaparecer sem rasto.
+      texto = `[${msg.type ?? "mensagem"}]`;
+  }
+
+  return { texto, anexos };
+}
+
+/** Aviso no telemóvel. Falhar aqui não pode impedir a mensagem de ser gravada. */
+async function notificar(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  channel: { organization_id: string; assigned_user_ids?: string[] | null },
+  titulo: string,
+  corpo: string,
+  convId: string,
+): Promise<void> {
+  try {
+    const atendentes = Array.isArray(channel.assigned_user_ids) ? channel.assigned_user_ids : [];
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push-notification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({
+        organization_id: channel.organization_id,
+        title: titulo,
+        body: corpo.slice(0, 140),
+        url: "/inbox",
+        tag: `meta-${convId}`,
+        ...(atendentes.length > 0 ? { user_ids: atendentes } : {}),
+      }),
+    });
+  } catch (e) {
+    logError("falha a notificar", { error: (e as Error).message });
+  }
+}
+
 interface MetaMessaging {
   sender?: { id?: string };
   recipient?: { id?: string };
@@ -196,6 +451,22 @@ Deno.serve(async (req) => {
     // do Messenger na caixa do Instagram — ao acaso, conforme a ordem em que o
     // Postgres devolvesse as linhas.
     const ehInstagram = body.object === "instagram";
+
+    // O WhatsApp fala outra língua. Onde o Instagram e o Messenger mandam
+    // `entry[].messaging[]`, ele manda `entry[].changes[].value` — com as
+    // mensagens, os contactos e os estados de entrega em listas separadas.
+    // Tentar tratá-los no mesmo ciclo dava um emaranhado de condições; tem
+    // caminho próprio.
+    if (body.object === "whatsapp_business_account") {
+      const r = await processarWhatsApp(supabase, body);
+      await anotar({
+        outcome: r.resultado,
+        page_id: r.phoneNumberId,
+        organization_id: r.orgId,
+        body_head: raw.slice(0, 200).replace(/"body":"[^"]*"/g, '"body":"[removido]"'),
+      });
+      return new Response("EVENT_RECEIVED", { status: 200, headers: corsHeaders });
+    }
 
     for (const entry of body.entry ?? []) {
       // `messaging` no Messenger; o Instagram usa a mesma forma. `standby` é

@@ -172,6 +172,173 @@ interface MetaPage {
   instagram_business_account?: { id: string; username: string };
 }
 
+/**
+ * Liga uma conta de WhatsApp Business (Cloud API oficial).
+ *
+ * Não passa por Páginas do Facebook: o que se procura é a WABA — a conta de
+ * WhatsApp Business — e os números dela. Três passos que TÊM de acontecer todos,
+ * e cada um falha de maneira diferente:
+ *
+ *  1. Descobrir a WABA que o cliente acabou de autorizar.
+ *  2. Subscrever a nossa app aos webhooks dessa WABA. Sem isto a ligação fica
+ *     feita e não chega mensagem nenhuma — o mesmo erro silencioso que o
+ *     Instagram teve.
+ *  3. Registar o número na Cloud API. Com Coexistence o número continua na app
+ *     do cliente; sem este passo, não se consegue enviar.
+ *
+ * O token que se guarda é o do UTILIZADOR, não o de uma Página: no WhatsApp é
+ * ele que autoriza o envio em nome da conta.
+ */
+async function ligarWhatsApp(p: {
+  // deno-lint-ignore no-explicit-any
+  admin: any;
+  userToken: string;
+  orgId: string;
+  label?: string;
+  appId: string;
+  origem: string | null;
+  supabaseUrl: string;
+}): Promise<Response> {
+  const { admin, userToken, orgId, origem } = p;
+
+  // 1. Que contas de WhatsApp é que este utilizador nos deixou usar?
+  const wabaRes = await fetch(
+    `${GRAPH}/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name}`
+    + `&access_token=${encodeURIComponent(userToken)}`,
+  );
+  const wabaJson = await wabaRes.json();
+
+  // Caminho alternativo: em muitos casos o Embedded Signup devolve a WABA
+  // diretamente nas permissões concedidas, sem passar pelo negócio.
+  let wabaId: string | null = null;
+  let wabaNome: string | null = null;
+  for (const negocio of wabaJson?.data ?? []) {
+    const conta = negocio?.owned_whatsapp_business_accounts?.data?.[0];
+    if (conta?.id) { wabaId = String(conta.id); wabaNome = conta.name ?? negocio.name; break; }
+  }
+
+  if (!wabaId) {
+    const debug = await fetch(
+      `${GRAPH}/debug_token?input_token=${encodeURIComponent(userToken)}`
+      + `&access_token=${encodeURIComponent(userToken)}`,
+    ).then((r) => r.json()).catch(() => null);
+    const alvo = (debug?.data?.granular_scopes ?? [])
+      .find((g: { scope?: string }) => g.scope === "whatsapp_business_messaging");
+    wabaId = alvo?.target_ids?.[0] ?? null;
+  }
+
+  if (!wabaId) {
+    logError("nenhuma WABA encontrada", { resposta: wabaJson?.error?.message });
+    return popupDone({
+      error: "Não encontrámos nenhuma conta de WhatsApp Business associada. "
+        + "Confirma que concluíste todos os passos do assistente da Meta.",
+    }, origem);
+  }
+
+  // 2. Os números dessa conta.
+  const numRes = await fetch(
+    `${GRAPH}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating`
+    + `&access_token=${encodeURIComponent(userToken)}`,
+  );
+  const numJson = await numRes.json();
+  const numero = numJson?.data?.[0];
+
+  if (!numero?.id) {
+    return popupDone({
+      error: "A conta de WhatsApp não tem nenhum número associado. "
+        + "Adiciona um número no assistente da Meta e tenta outra vez.",
+    }, origem);
+  }
+
+  // Já ligado noutra organização? O webhook resolve por phone_number_id e
+  // devolve UMA linha — partilhar o número entre contas era entregar as
+  // mensagens de uma à outra.
+  const { data: noutra } = await admin.from("messaging_channels")
+    .select("id, organization_id")
+    .eq("metadata->>phone_number_id", String(numero.id))
+    .maybeSingle();
+  if (noutra && noutra.organization_id !== orgId) {
+    return popupDone({
+      error: "Este número já está ligado noutra conta do Senvia OS.",
+    }, origem);
+  }
+
+  // 3. Subscrever a WABA aos nossos webhooks. SEM ISTO não chega mensagem
+  // nenhuma, e a caixa fica para sempre vazia sem erro que o explique.
+  const subRes = await fetch(`${GRAPH}/${wabaId}/subscribed_apps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: userToken }),
+  });
+  const subJson = await subRes.json().catch(() => ({}));
+  if (!subRes.ok || subJson?.success === false) {
+    logError("subscrição da WABA falhou", { status: subRes.status, subJson });
+    return popupDone({
+      error: `A conta foi autorizada mas não conseguimos subscrever as mensagens: ${
+        subJson?.error?.message ?? subRes.status}`,
+    }, origem);
+  }
+
+  // 4. Registar o número na Cloud API. Com Coexistence pode já vir registado —
+  // nesse caso a Meta responde erro e ignora-se, porque o fim já está cumprido.
+  try {
+    const reg = await fetch(`${GRAPH}/${numero.id}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000", access_token: userToken }),
+    });
+    const regJson = await reg.json().catch(() => ({}));
+    if (!reg.ok) log("registo do número não necessário ou recusado", { erro: regJson?.error?.message });
+  } catch (e) {
+    log("registo do número falhou", { error: (e as Error).message });
+  }
+
+  const etiqueta = (p.label || numero.verified_name || numero.display_phone_number || "WhatsApp").trim();
+
+  const { data: canal, error: insErr } = await admin.from("messaging_channels").upsert({
+    organization_id: orgId,
+    channel_type: "whatsapp",
+    // 'meta' distingue-o das caixas antigas do Evolution, que ficam intactas.
+    provider: "meta",
+    status: "connected",
+    label: etiqueta,
+    phone_number: String(numero.display_phone_number ?? "").replace(/\D/g, "") || null,
+    metadata: {
+      phone_number_id: String(numero.id),
+      waba_id: wabaId,
+      waba_name: wabaNome,
+      display_phone_number: numero.display_phone_number ?? null,
+      verified_name: numero.verified_name ?? null,
+      quality_rating: numero.quality_rating ?? null,
+    },
+  }, { onConflict: "id" }).select("id").single();
+
+  if (insErr || !canal) {
+    logError("insert do canal WhatsApp falhou", { error: insErr?.message });
+    return popupDone({ error: "Erro ao guardar a caixa na base de dados." }, origem);
+  }
+
+  const { error: segErr } = await admin.from("messaging_channel_secrets").upsert({
+    channel_id: canal.id,
+    organization_id: orgId,
+    page_access_token: userToken,
+  }, { onConflict: "channel_id" });
+
+  if (segErr) {
+    logError("token do WhatsApp não guardado", { error: segErr.message });
+    await admin.from("messaging_channels").delete().eq("id", canal.id);
+    return popupDone({ error: "Erro ao guardar as credenciais. Tenta novamente." }, origem);
+  }
+
+  log("caixa de WhatsApp criada", { orgId, numero: numero.display_phone_number });
+  return popupDone({
+    success: true,
+    channel_type: "whatsapp",
+    label: etiqueta,
+    page_name: numero.display_phone_number ?? null,
+  }, origem);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -270,12 +437,23 @@ Deno.serve(async (req) => {
       }
       return jsonRes({ ok: true });
     }
-    const connect = body.connect === "messenger" ? "messenger" : "instagram";
+    // O WhatsApp entra pelo mesmo diálogo, com uma configuração própria no
+    // painel da Meta (Embedded Signup) — daí o config_id poder mudar.
+    const connect = ["messenger", "whatsapp"].includes(body.connect) ? body.connect : "instagram";
     const label = String(body.label ?? "").trim();
 
-    if (!appId || !appSecret || !configId) {
+    // O WhatsApp tem configuração PRÓPRIA no painel da Meta (o Embedded Signup
+    // é outro fluxo, com outras permissões). Usar a do Instagram aqui abria o
+    // diálogo errado e o cliente ligava a coisa errada.
+    const configDoCanal = connect === "whatsapp"
+      ? (Deno.env.get("WHATSAPP_LOGIN_CONFIG_ID") || "")
+      : configId;
+
+    if (!appId || !appSecret || !configDoCanal) {
       return jsonRes({
-        error: "Faltam FACEBOOK_APP_ID, FACEBOOK_APP_SECRET ou FACEBOOK_LOGIN_CONFIG_ID",
+        error: connect === "whatsapp"
+          ? "Falta WHATSAPP_LOGIN_CONFIG_ID — é a configuração de Embedded Signup do WhatsApp, criada no painel da Meta."
+          : "Faltam FACEBOOK_APP_ID, FACEBOOK_APP_SECRET ou FACEBOOK_LOGIN_CONFIG_ID",
       }, 500);
     }
 
@@ -290,9 +468,17 @@ Deno.serve(async (req) => {
     const dialog = `https://www.facebook.com/v21.0/dialog/oauth`
       + `?client_id=${encodeURIComponent(appId)}`
       + `&redirect_uri=${encodeURIComponent(redirectUri)}`
-      + `&config_id=${encodeURIComponent(configId)}`
+      + `&config_id=${encodeURIComponent(configDoCanal)}`
       + `&state=${encodeURIComponent(state)}`
-      + `&response_type=code`;
+      + `&response_type=code`
+      // Coexistence: deixa o cliente manter o número na app do WhatsApp Business
+      // e sincronizar os contactos e o histórico dos últimos 180 dias. Sem isto
+      // o número teria de ser apagado da app — que era a razão pela qual isto
+      // não se podia vender.
+      + (connect === "whatsapp" ? `&extras=${encodeURIComponent(JSON.stringify({
+        featureType: "whatsapp_business_app_onboarding",
+skip: false,
+      }))}` : "");
     return jsonRes({ url: dialog });
   }
 
@@ -382,9 +568,18 @@ Deno.serve(async (req) => {
       return popupDone({ error: "Pedido inválido — recomeça a ligação a partir do CRM." }, origemPopup);
     }
     const { orgId, connect } = state;
-    const wantsInstagram = connect !== "messenger";
-
     const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // O WhatsApp não passa por Páginas: o que se procura é a conta de WhatsApp
+    // Business (WABA) e os números dela. Caminho próprio.
+    if (connect === "whatsapp") {
+      return await ligarWhatsApp({
+        admin, userToken, orgId, label: state.label, appId: appId!,
+        origem: origemPopup, supabaseUrl: supabaseUrl!,
+      });
+    }
+
+    const wantsInstagram = connect !== "messenger";
     const channelType = wantsInstagram ? "instagram" : "facebook";
 
     // A Página tem de ter Instagram ligado quando é isso que se quer.
