@@ -227,3 +227,4 @@ verify_jwt = false
 # Relatorio read-only das vendas recorrentes. Nao escreve nada.
 [functions.audit-recurring-sales]
 verify_jwt = false
+
