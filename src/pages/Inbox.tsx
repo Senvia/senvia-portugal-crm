@@ -3221,6 +3221,7 @@ export default function Inbox() {
         <MetaInbox
           channelId={metaChannelId}
           channelLabel={visibleCaixas.find((c) => c.id === metaChannelId)?.label ?? 'esta caixa'}
+          channelType={visibleCaixas.find((c) => c.id === metaChannelId)?.channel_type ?? 'instagram'}
           onOpenRail={() => setRailSheetOpen(true)}
         />
       ) : emailChannelId ? (

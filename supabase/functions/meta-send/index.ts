@@ -21,6 +21,22 @@ const log = (s: string, d?: unknown) =>
 const logError = (s: string, d?: unknown) =>
   console.error(`[META-SEND] ERROR ${s}${d ? ` - ${JSON.stringify(d)}` : ""}`);
 
+/**
+ * O emoji que mostramos → a palavra que a Meta exige.
+ *
+ * A API não aceita emojis: `reaction: "❤️"` devolve o erro #100. E o Instagram
+ * só reconhece `love` — as outras seis existem só no Messenger.
+ */
+const REACOES_META: Record<string, string> = {
+  "❤️": "love",
+  "😂": "smile",
+  "😮": "wow",
+  "😢": "sad",
+  "😡": "angry",
+  "👍": "like",
+  "👎": "dislike",
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -128,13 +144,32 @@ Deno.serve(async (req) => {
       payload = { recipient: { id: conv.contact_ref }, sender_action: action };
     } else if (action === "react" || action === "unreact") {
       if (!message_external_id) return json({ error: "message_external_id em falta" }, 400);
-      payload = {
-        recipient: { id: conv.contact_ref },
-        sender_action: action,
-        payload: action === "react"
-          ? { message_id: message_external_id, reaction: reaction || "❤️" }
-          : { message_id: message_external_id },
-      };
+
+      if (action === "react") {
+        // A Meta quer uma PALAVRA, não o emoji. Mandar "❤️" dá erro #100.
+        const palavra = REACOES_META[String(reaction ?? "❤️")];
+        if (!palavra) {
+          return json({ error: "Reação não suportada pela Meta." }, 400);
+        }
+        // E no Instagram só existe uma: o coração. As outras são recusadas.
+        if (channel?.channel_type === "instagram" && palavra !== "love") {
+          return json({
+            error: "O Instagram só permite reagir com o coração. As outras reações "
+              + "existem no Messenger, não no Instagram.",
+          }, 400);
+        }
+        payload = {
+          recipient: { id: conv.contact_ref },
+          sender_action: "react",
+          payload: { message_id: message_external_id, reaction: palavra },
+        };
+      } else {
+        payload = {
+          recipient: { id: conv.contact_ref },
+          sender_action: "unreact",
+          payload: { message_id: message_external_id },
+        };
+      }
     } else if (attachment_url) {
       payload = {
         recipient: { id: conv.contact_ref },
@@ -143,17 +178,18 @@ Deno.serve(async (req) => {
             type: attachment_type || "file",
             payload: { url: attachment_url },
           },
-          ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
         },
+        // `reply_to` é IRMÃO de `message`, não vai lá dentro. Dentro, a Meta
+        // responde #100 "Invalid keys reply_to were found in param message" e a
+        // resposta simplesmente não sai.
+        ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
         messaging_type: "RESPONSE",
       };
     } else {
       payload = {
         recipient: { id: conv.contact_ref },
-        message: {
-          text: String(text),
-          ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
-        },
+        message: { text: String(text) },
+        ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
         messaging_type: "RESPONSE",
       };
     }

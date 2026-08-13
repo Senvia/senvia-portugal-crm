@@ -24,10 +24,13 @@ import {
 export function MetaInbox({
   channelId,
   channelLabel,
+  channelType,
   onOpenRail,
 }: {
   channelId: string;
   channelLabel: string;
+  /** 'instagram' ou 'facebook' — o Instagram só aceita uma reação. */
+  channelType?: string;
   onOpenRail?: () => void;
 }) {
   const { data: conversations = [], isLoading, isError, refetch } = useMetaConversations(channelId);
@@ -141,6 +144,7 @@ export function MetaInbox({
           // aparecem por baixo do cabeçalho da nova durante um instante.
           key={selected.id}
           conversation={selected}
+          channelType={channelType}
           onBack={() => setSelectedId(null)}
         />
       ) : (
@@ -156,9 +160,11 @@ export function MetaInbox({
 
 function MetaThread({
   conversation,
+  channelType,
   onBack,
 }: {
   conversation: MetaConversation;
+  channelType?: string;
   onBack: () => void;
 }) {
   const { data: messages = [], isLoading, isError, refetch } = useMetaMessages(conversation.id);
@@ -273,6 +279,7 @@ function MetaThread({
                 <>
                   <ReplyButton onClick={() => setReplyTo(m)} />
                   <ReactionPicker
+                    channelType={channelType}
                     current={m.reaction}
                     onPick={(emoji) => act.mutate({
                       conversationId: conversation.id,
@@ -325,6 +332,7 @@ function MetaThread({
               {m.direction === 'incoming' && m.external_id && (
                 <>
                   <ReactionPicker
+                    channelType={channelType}
                     current={m.reaction}
                     onPick={(emoji) => act.mutate({
                       conversationId: conversation.id,
@@ -378,7 +386,12 @@ function MetaThread({
               ref={fileRef}
               type="file"
               className="hidden"
-              accept="image/png,image/jpeg,video/*,application/pdf"
+              // A Meta documenta, para o Instagram, apenas imagem (PNG/JPEG),
+              // áudio e vídeo. O PDF é do Messenger — oferecê-lo no Instagram
+              // era um botão que dá erro da Meta depois de escolher o ficheiro.
+              accept={channelType === 'facebook'
+                ? 'image/png,image/jpeg,video/*,audio/*,application/pdf'
+                : 'image/png,image/jpeg,video/*,audio/*'}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
@@ -553,7 +566,11 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
 }
 
 /** As reações que o Instagram aceita na aplicação. */
-const REACOES = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+// O Instagram só reconhece UMA reação: o coração. Mostrar as outras seis era
+// oferecer seis botões dos quais cinco davam erro da Meta em cima da conversa.
+// No Messenger existem mesmo todas.
+const REACOES_MESSENGER = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+const REACOES_INSTAGRAM = ['❤️'];
 
 /**
  * Escolher (ou tirar) a reação a uma mensagem.
@@ -563,12 +580,15 @@ const REACOES = ['❤️', '😂', '😮', '😢', '😡', '👍'];
  */
 function ReactionPicker({
   current,
+  channelType,
   onPick,
 }: {
   current: string | null;
+  channelType?: string;
   onPick: (emoji: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const reacoes = channelType === 'facebook' ? REACOES_MESSENGER : REACOES_INSTAGRAM;
 
   return (
     <div className="relative shrink-0">
@@ -589,7 +609,7 @@ function ReactionPicker({
           {/* Fecha ao clicar fora, sem prender o clique dentro do seletor. */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 gap-0.5 rounded-full border bg-popover p-1 shadow-md">
-            {REACOES.map((e) => (
+            {reacoes.map((e) => (
               <button
                 key={e}
                 type="button"
