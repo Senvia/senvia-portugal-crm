@@ -63,6 +63,7 @@ const DataDeletion = lazy(() => import("./pages/DataDeletion"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Install = lazy(() => import("./pages/Install"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
+const MetaOAuthDone = lazy(() => import("./pages/MetaOAuthDone"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SystemAdminDashboard = lazy(() => import("./pages/system-admin/Dashboard"));
 const SystemAdminOrganizations = lazy(() => import("./pages/system-admin/Organizations"));
@@ -118,6 +119,9 @@ const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/install" element={<Install />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
+                {/* Fim do popup do login da Meta. Publico de proposito: o popup
+                    volta aqui vindo da Meta e nao pode cair no ecra de login. */}
+                <Route path="/oauth/meta" element={<MetaOAuthDone />} />
 
                 {/* Protected Routes (Persistent Layout) */}
                 <Route element={<ProtectedLayoutRoute />}>

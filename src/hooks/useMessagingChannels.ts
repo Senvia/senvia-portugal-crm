@@ -127,7 +127,13 @@ export function useConnectMetaChannel() {
       if (!organization?.id) throw new Error('Organização não encontrada');
 
       const { data, error } = await supabase.functions.invoke('meta-connect', {
-        body: { action: 'oauth_url', organization_id: organization.id, connect, label },
+        body: {
+          action: 'oauth_url', organization_id: organization.id, connect, label,
+          // Para onde o popup volta no fim. Vai assinado dentro do `state`, e é
+          // o que permite fechar a janela sozinha: a edge function não consegue
+          // servir HTML que o browser corra (a Supabase impõe text/plain).
+          origin: window.location.origin,
+        },
       });
       if (error) {
         // O invoke() só entrega "Edge Function returned a non-2xx status code" e
@@ -151,12 +157,12 @@ export function useConnectMetaChannel() {
 
       const result = await new Promise<{ channel_type?: string; label?: string; ig_username?: string | null } | null>(
         (resolve, reject) => {
-          // O postMessage é o caminho rápido, mas NÃO se pode depender dele: o
-          // Supabase serve a resposta do popup como text/plain, por isso o
-          // browser mostra o HTML como texto e nunca corre o script. Quando isso
-          // acontece só resta o fecho da janela — e fechar não distingue "ligou"
-          // de "desistiu". Por isso o fecho não decide nada: vai confirmar aos
-          // dados (abaixo) o que aconteceu de facto.
+          // O popup acaba em /oauth/meta, no NOSSO domínio, e é de lá que vem o
+          // postMessage — na edge function nunca corria, porque a Supabase serve
+          // tudo como text/plain e o browser mostrava o código em vez de o
+          // executar. Mesmo assim o fecho da janela continua a ser vigiado: se
+          // por alguma razão a mensagem não chegar, fechar não distingue "ligou"
+          // de "desistiu", e vai-se confirmar aos dados (abaixo).
           const timer = setInterval(() => {
             if (popup.closed) { cleanup(); resolve(null); }
           }, 700);

@@ -261,7 +261,16 @@ export function useSendMetaAttachment() {
         );
       }
 
-      const caminho = `meta/${organization?.id}/${conversationId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
+      // Sem organização não há caminho válido — e o erro que vinha da política
+      // do balde não dizia isso a ninguém.
+      if (!organization?.id) throw new Error('Organização não encontrada. Recarrega a página.');
+
+      // A ORGANIZAÇÃO TEM DE SER A PRIMEIRA PASTA. A política do balde faz
+      // `is_org_member(auth.uid(), (storage.foldername(name))[1]::uuid)`, ou
+      // seja converte o primeiro segmento para UUID. Começar por `meta/` fazia
+      // o Postgres rebentar com «invalid input syntax for type uuid: "meta"» —
+      // uma mensagem que não tem nada que ver com o que o utilizador fez.
+      const caminho = `${organization.id}/meta/${conversationId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
       const { error: upErr } = await supabase.storage
         .from('automation-media')
         .upload(caminho, file, { contentType: file.type, upsert: false });
