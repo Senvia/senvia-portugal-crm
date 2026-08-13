@@ -73,7 +73,7 @@ import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposal
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
-import { RecurringSection } from "./RecurringSection";
+import { RecurringSalePanel } from "./RecurringSalePanel";
 import { useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
@@ -883,20 +883,11 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </Card>
                     )}
 
-                    {/* Recurring Section */}
+                    {/* Painel por ciclo: o resumo antigo mostrava só a próxima
+                        renovação, sem histórico — não dava para ver que meses
+                        foram cobrados nem quais ficaram por liquidar. */}
                     {sale.has_recurring && organization && (
-                      <Card>
-                        <CardContent className="p-4">
-                          <RecurringSection
-                            saleId={sale.id}
-                            organizationId={organization.id}
-                            recurringValue={sale.recurring_value || 0}
-                            recurringStatus={sale.recurring_status}
-                            nextRenewalDate={sale.next_renewal_date}
-                            lastRenewalDate={sale.last_renewal_date}
-                          />
-                        </CardContent>
-                      </Card>
+                      <RecurringSalePanel saleId={sale.id} />
                     )}
 
                     {/* Activation History (telecom only) */}

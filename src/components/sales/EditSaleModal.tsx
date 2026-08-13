@@ -52,7 +52,7 @@ import {
 
 import type { SaleWithDetails } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
-import { RecurringSection } from "./RecurringSection";
+import { RecurringSalePanel } from "./RecurringSalePanel";
 import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
@@ -1091,20 +1091,12 @@ export function EditSaleModal({
                     </Card>
                   )}
 
-                  {/* Recurring Section */}
+                  {/* O painel por ciclo substitui o resumo antigo, que mostrava
+                      só a próxima renovação e escondia o histórico: não dava
+                      para ver que meses foram cobrados nem quais ficaram por
+                      liquidar. */}
                   {sale.has_recurring && organization && (
-                    <Card>
-                      <CardContent className="p-4">
-                        <RecurringSection
-                          saleId={sale.id}
-                          organizationId={organization.id}
-                          recurringValue={sale.recurring_value || 0}
-                          recurringStatus={sale.recurring_status || null}
-                          nextRenewalDate={sale.next_renewal_date || null}
-                          lastRenewalDate={sale.last_renewal_date || null}
-                        />
-                      </CardContent>
-                    </Card>
+                    <RecurringSalePanel saleId={sale.id} />
                   )}
                 </div>
 
