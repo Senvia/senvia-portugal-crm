@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +37,39 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
   const { organization, user } = useAuth();
   const qc = useQueryClient();
   const orgId = organization?.id;
+
+  /**
+   * Mensagens com uma ação destrutiva a caminho (apagar, arquivar, spam, mover).
+   *
+   * O que se passava sem isto: apagar retirava a mensagem da lista na hora, mas
+   * o gateway demora ~2 segundos a executar de facto. Qualquer releitura nesse
+   * intervalo — e há várias, o tempo real dispara a cada mudança na caixa —
+   * trazia a mensagem de volta, porque na base de dados ela ainda lá estava. A
+   * mensagem sumia, voltava, e sumia outra vez.
+   *
+   * Pior: nesse vaivém dava para carregar outra vez, e a segunda ordem chegava
+   * ao servidor de correio quando a mensagem já não existia — "mensagem
+   * inexistente".
+   *
+   * Este conjunto é a memória do que já foi pedido. Sobrevive às releituras: a
+   * mensagem fica escondida até desaparecer mesmo, e um segundo clique é
+   * ignorado em vez de virar uma segunda ordem.
+   */
+  const [pendentes, setPendentes] = useState<Set<string>>(new Set());
+
+  const marcarPendente = (id: string) =>
+    setPendentes((p) => (p.has(id) ? p : new Set(p).add(id)));
+
+  /** Liberta ids: ou porque a mensagem já desapareceu, ou porque a ação falhou. */
+  const libertar = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setPendentes((p) => {
+      let mudou = false;
+      const n = new Set(p);
+      for (const id of ids) if (n.delete(id)) mudou = true;
+      return mudou ? n : p;
+    });
+  }, []);
 
   const queue = async (type: string, payload: Record<string, unknown>) => {
     if (!orgId || !channelId) throw new Error('Caixa não selecionada');
@@ -99,13 +133,33 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
       Array.isArray(old) ? old.filter((m) => m.id !== messageId) : old);
   };
 
+  /**
+   * Ações que tiram a mensagem da pasta. Todas passam por aqui para terem o
+   * mesmo comportamento: um pedido por mensagem, e fica escondida até acabar.
+   */
+  const destrutiva = (tipo: string, id: string, extra: Record<string, unknown> = {}) => {
+    // Segundo clique enquanto o primeiro está a caminho: não é uma segunda
+    // ordem, é a mesma pessoa a duvidar que a primeira pegou.
+    if (pendentes.has(id)) return Promise.resolve();
+    marcarPendente(id);
+    removeFromList(id);
+    return queue(tipo, { messageId: id, ...extra }).catch((e) => {
+      // Se nem chegou a ser pedido, a mensagem volta já — esconder algo que
+      // ninguém vai apagar seria mentir ao contrário.
+      libertar([id]);
+      throw e;
+    });
+  };
+
   return {
+    pendentes,
+    libertar,
     setRead: (id: string, read: boolean) => { patchList(id, { seen: read }); return queue(read ? 'mark_read' : 'mark_unread', { messageId: id }); },
     setFlag: (id: string, on: boolean) => { patchList(id, { flagged: on }); return queue(on ? 'flag' : 'unflag', { messageId: id }); },
-    archive: (id: string) => { removeFromList(id); return queue('archive', { messageId: id }); },
-    spam: (id: string) => { removeFromList(id); return queue('spam', { messageId: id }); },
-    trash: (id: string) => { removeFromList(id); return queue('delete', { messageId: id }); },
-    move: (id: string, targetFolderId: string) => { removeFromList(id); return queue('move', { messageId: id, targetFolderId }); },
+    archive: (id: string) => destrutiva('archive', id),
+    spam: (id: string) => destrutiva('spam', id),
+    trash: (id: string) => destrutiva('delete', id),
+    move: (id: string, targetFolderId: string) => destrutiva('move', id, { targetFolderId }),
     markFolderRead: (targetFolderId: string) => { patchAll({ seen: true }); return queue('mark_folder_read', { folderId: targetFolderId }); },
     loadOlder: (targetFolderId: string, batch = 40) => queue('load_older', { folderId: targetFolderId, batch }),
     syncUnread: (targetFolderId: string) => queue('sync_unread', { folderId: targetFolderId }),

@@ -246,6 +246,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
   useEmailRealtime(channelId);
   const { data: falhas = [] } = useEmailCommandFailures(channelId);
+  const actions = useEmailActions(channelId, folderId);
 
   // Detect if current folder is Rascunhos.
   const { data: folders = [] } = useEmailFolders(channelId);
@@ -260,18 +261,40 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   const searching = debounced.trim().length >= 2;
 
   const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(isDraftsFolder ? null : folderId);
+
+  // Uma mensagem escondida deixa de o estar quando o servidor confirma: ou
+  // porque já não vem na lista (foi mesmo apagada), ou porque a ação falhou e
+  // ela tem de voltar a aparecer. Sem isto, uma ação que falhasse deixava a
+  // mensagem invisível até recarregar a página — e o email continuava na caixa.
+  const { libertar } = actions;
+  useEffect(() => {
+    const presentes = new Set(folderMessages.map((m) => m.id));
+    const sumiram = [...actions.pendentes].filter((id) => !presentes.has(id));
+    if (sumiram.length) libertar(sumiram);
+  }, [folderMessages, actions.pendentes, libertar]);
+
+  useEffect(() => {
+    // Uma falha nova reconcilia tudo: não se sabe qual das pendentes falhou, e
+    // mostrar de novo o que ficou por fazer é melhor do que esconder a mais.
+    if (falhas.length > 0 && actions.pendentes.size > 0) libertar([...actions.pendentes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [falhas.length]);
   const { data: searchResults = [], isLoading: loadingSearch } = useEmailSearch(channelId, debounced);
   const { data: drafts = [], isLoading: loadingDrafts } = useEmailDrafts(isDraftsFolder ? channelId : null);
 
   const unreadCount = folderMessages.filter((m) => !m.seen).length;
   const baseMessages = searching ? searchResults : folderMessages;
   const messages = useMemo(() => {
-    if (searching) return baseMessages;
+    if (searching) return baseMessages.filter((m) => !actions.pendentes.has(m.id));
     let list = baseMessages;
+    // As que ja foram mandadas apagar/arquivar ficam fora ate desaparecerem
+    // mesmo. Sem isto voltavam a aparecer a cada releitura durante os ~2s que
+    // o gateway leva a executar.
+    list = list.filter((m) => !actions.pendentes.has(m.id));
     if (unreadOnly) list = list.filter((m) => !m.seen);
     if (starredOnly) list = list.filter((m) => m.flagged);
     return list;
-  }, [baseMessages, searching, unreadOnly, starredOnly]);
+  }, [baseMessages, searching, unreadOnly, starredOnly, actions.pendentes]);
   // Threaded view (Gmail-style): group same-thread messages into one list row
   // showing the newest, with a "×N" count badge. Skipped for search results
   // (matches from different threads shouldn't hide inside a collapsed group).
@@ -293,7 +316,6 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
-  const actions = useEmailActions(channelId, folderId);
 
   // Multi-select ──────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
