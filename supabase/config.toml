@@ -193,3 +193,10 @@ verify_jwt = false
 
 [functions.transcribe-audio]
 verify_jwt = true
+
+# O callback do OAuth é uma navegação do browser vinda do Stripe, sem cabeçalho
+# Authorization — com verify_jwt ligado o Stripe apanharia 401 e a ligação nunca
+# se concluía. Em troca, a função autentica ela própria as acções status,
+# authorize e disconnect, e o callback é protegido pelo state de uso único.
+[functions.stripe-connect]
+verify_jwt = false
