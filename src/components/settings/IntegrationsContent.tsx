@@ -1049,7 +1049,7 @@ function InboxesManager() {
   // Ligação de Instagram/Messenger pela API oficial da Meta (Facebook Login for
   // Business). O arranque do WhatsApp por QR code saiu com a Evolution.
   const connectMeta = useConnectMetaChannel();
-  const startMetaConnect = (connect: 'instagram' | 'messenger') => {
+  const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
     setNewOpen(false);
     connectMeta.mutate(
@@ -1260,6 +1260,8 @@ function InboxesManager() {
                     if (c.type === 'email') { setAddEmailOpen(true); setNewOpen(false); return; }
                     if (c.type === 'instagram') { startMetaConnect('instagram'); return; }
                     if (c.type === 'facebook') { startMetaConnect('messenger'); return; }
+                    // Cloud API oficial da Meta — nao o Evolution, que saiu.
+                    if (c.type === 'whatsapp') { startMetaConnect('whatsapp'); return; }
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',

@@ -80,7 +80,12 @@ export function useMessagingChannels() {
           ...resto,
           metadata: metadata_public ?? null,
         }) as MessagingChannel)
-        .filter((c) => isChannelEnabled(c.channel_type));
+        .filter((c) => isChannelEnabled(c.channel_type))
+        // O WhatsApp voltou pela Cloud API oficial, mas as 12 caixas antigas do
+        // Evolution continuam na base de dados. Sem isto reapareciam todas ao
+        // abrir o canal — presas em "connecting", a contar para o total e a
+        // ressuscitar a confusão que se acabou de arrumar.
+        .filter((c) => !(c.channel_type === 'whatsapp' && c.provider !== 'meta'));
     },
     enabled: !!organization?.id,
   });
@@ -172,7 +177,7 @@ export function useConnectMetaChannel() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ connect, label }: { connect: 'instagram' | 'messenger'; label?: string }) => {
+    mutationFn: async ({ connect, label }: { connect: 'instagram' | 'messenger' | 'whatsapp'; label?: string }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
 
       const { data, error } = await supabase.functions.invoke('meta-connect', {
@@ -232,7 +237,8 @@ export function useConnectMetaChannel() {
       if (result) return result as { channel_type: string; label: string; ig_username?: string | null };
 
       // Janela fechada sem mensagem: a única fonte de verdade é a base de dados.
-      const wanted = connect === 'messenger' ? 'facebook' : 'instagram';
+      const wanted = connect === 'messenger' ? 'facebook'
+        : connect === 'whatsapp' ? 'whatsapp' : 'instagram';
       const { data: created } = await supabase
         .from('messaging_channels')
         .select('channel_type, label, metadata_public')

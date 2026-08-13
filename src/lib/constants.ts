@@ -55,12 +55,14 @@ export const INBOX_CONFIG = {
  * Os canais já ligados de um tipo fechado NÃO são apagados — apenas deixam de
  * ser listados. Reabrir é mudar aqui, e reaparecem.
  */
-// Nota: isto só governa a INTERFACE. As notificações do telemóvel são enviadas
-// pelo servidor, que nunca vê este ficheiro — a lista equivalente está em
-// supabase/functions/chatwoot-webhook/index.ts (CANAIS_QUE_NOTIFICAM). Desligar
-// um canal só aqui deixava-o invisível no CRM mas ainda a apitar no telemóvel.
+// Isto governa a INTERFACE. Cada canal notifica pelo seu próprio caminho no
+// servidor (meta-webhook para os três, gatilho na base de dados para o email),
+// por isso desligar um aqui já não deixa nada a apitar no telemóvel — o
+// chatwoot-webhook, que era a exceção, deixou de existir.
 export const MESSAGING_CHANNELS = {
-  whatsapp: false,
+  // Cloud API oficial da Meta. As caixas antigas do Evolution NÃO voltam com
+  // isto: são excluídas pelo `provider` em useMessagingChannels.
+  whatsapp: true,
   instagram: true,
   facebook: true,
 } as const;
