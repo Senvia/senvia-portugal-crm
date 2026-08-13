@@ -41,7 +41,30 @@ ALTER TABLE public.messaging_channels
 
 -- A parte que torna isto real: mesmo que alguém volte a escrever `select('*')`,
 -- o Postgres recusa. Não é uma convenção, é uma permissão.
-REVOKE SELECT (metadata) ON public.messaging_channels FROM authenticated, anon;
+--
+-- Atenção ao detalhe que não é óbvio: um `REVOKE SELECT (metadata)` sozinho NÃO
+-- funciona. Existe uma permissão de SELECT sobre a TABELA inteira, e essa cobre
+-- todas as colunas — a revogação por coluna não a desfaz. Tem de ser ao
+-- contrário: tirar a da tabela e devolver coluna a coluna, menos esta.
+DO $$
+DECLARE cols text;
+BEGIN
+  SELECT string_agg(quote_ident(column_name), ', ') INTO cols
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND table_name = 'messaging_channels'
+     AND column_name <> 'metadata';
+
+  REVOKE SELECT ON public.messaging_channels FROM authenticated, anon;
+  EXECUTE format('GRANT SELECT (%s) ON public.messaging_channels TO authenticated', cols);
+END $$;
+
+-- E o que já lá estava sai agora. Até aqui a password continuava gravada, só
+-- deixara de ser servida — o que não é a mesma coisa.
+UPDATE public.messaging_channels
+   SET metadata = (metadata - 'imap_password') - 'smtp_password'
+ WHERE channel_type = 'email'
+   AND (metadata ? 'imap_password' OR metadata ? 'smtp_password');
 
 -- ── 3. Quem atende a caixa é quem a lê ──────────────────────────────────────
 --

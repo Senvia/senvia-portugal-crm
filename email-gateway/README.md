@@ -71,3 +71,26 @@ docker run -d --name senvia-email-gateway --restart unless-stopped \
 Para o frontend/Edge Functions chegarem ao gateway, expor `:8730` num subdomínio
 HTTPS (ex.: `email-gw.senvia.pt`) via o nginx que já serve o Chatwoot. Custo
 extra de infra: 0 €.
+
+## Depois de 2026-08-13: as passwords mudaram de sítio
+
+`imap_password` e `smtp_password` deixaram de estar em `messaging_channels.metadata`
+e passaram para `messaging_channel_secrets` — o metadata era lido pelo CRM no
+browser, por isso a password da caixa de correio chegava a qualquer membro da
+organização.
+
+O `caixas.js` já lê do sítio novo, com recurso ao antigo enquanto houver caixas
+por migrar. **É preciso reconstruir e relançar o contentor** para apanhar a
+alteração:
+
+```bash
+cd email-gateway
+docker build -t senvia-email-gateway .
+docker rm -f senvia-email-gateway
+# (voltar a correr com as mesmas variáveis de ambiente de sempre)
+```
+
+Enquanto não relançares, o gateway antigo continua a funcionar: a password já
+não está no metadata, mas ele lê a tabela toda e o `COALESCE` do código novo é
+que faz a ponte — ou seja, o contentor **antigo** deixa de encontrar a password.
+Relança assim que puderes.
