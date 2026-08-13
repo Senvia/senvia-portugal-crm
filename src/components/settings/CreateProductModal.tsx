@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { RefreshCw } from 'lucide-react';
 import { useCreateProduct } from '@/hooks/useProducts';
+import { ProductStripeSync } from './ProductStripeSync';
 import type { Product } from '@/types/proposals';
 
 interface CreateProductModalProps {
@@ -148,9 +149,14 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
               />
             </div>
             {isRecurring && (
-              <p className="text-xs text-muted-foreground">
-                Este produto é cobrado mensalmente. Vendas com este produto terão opção de renovação.
-              </p>
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Este produto é cobrado mensalmente. Vendas com este produto terão opção de renovação.
+                </p>
+                {/* Sem productId ainda: o controlo explica que é preciso gravar
+                    primeiro, em vez de aparecer desligado sem motivo aparente. */}
+                <ProductStripeSync productId={null} isRecurring />
+              </>
             )}
           </div>
           <DialogFooter>

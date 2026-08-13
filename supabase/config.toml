@@ -200,3 +200,8 @@ verify_jwt = true
 # authorize e disconnect, e o callback é protegido pelo state de uso único.
 [functions.stripe-connect]
 verify_jwt = false
+
+# Chamada pelo CRM com sessão do utilizador. A função exige is_org_admin e
+# resolve a organização a partir do produto, nunca do corpo do pedido.
+[functions.stripe-product-sync]
+verify_jwt = true
