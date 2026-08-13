@@ -228,7 +228,9 @@ Deno.serve(async (req) => {
           const findChannel = async (col: "ig_account_id" | "page_id", tipo?: string) => {
             let q = supabase
               .from("messaging_channels")
-              .select("id, organization_id, channel_type, metadata")
+              // assigned_user_ids: quem atende esta caixa. Vazio = a organização
+              // toda. É o que decide a quem toca o telemóvel.
+              .select("id, organization_id, channel_type, metadata, assigned_user_ids, label")
               .eq(`metadata->>${col}`, pageId);
             if (tipo) q = q.eq("channel_type", tipo);
             const { data, error } = await q.limit(1).maybeSingle();
@@ -352,6 +354,9 @@ Deno.serve(async (req) => {
           }
 
           if (!conv) continue;
+          // Guardado à parte porque o bloco do perfil pode descobri-lo já a
+          // seguir, e o aviso no telemóvel deve dizer o nome, não o número.
+          let nomeContacto: string | null = conv.contact_name;
           if (emStandby) {
             // Outra app (a Caixa de Entrada da Meta, por exemplo) tem o controlo
             // desta conversa. Guarda-se a mensagem, mas responder daqui falha ou
@@ -433,6 +438,7 @@ Deno.serve(async (req) => {
                       perfil_indisponivel: !temPerfil,
                     },
                   }).eq("id", conv.id);
+                  nomeContacto = nome ?? nomeContacto;
                   log("nome obtido", { senderId, nome, viaPerfil: temPerfil });
                 } else {
                   // Nem a API de perfil nem a de conversas deram nome. Raro — a
@@ -474,6 +480,49 @@ Deno.serve(async (req) => {
                 // Sem a função, o contador fica na mesma — a mensagem é o que
                 // importa e já está guardada.
               });
+
+            // Aviso no telemóvel.
+            //
+            // Sem isto, uma DM chegava e NADA o dizia a ninguém: nem o menu, nem
+            // o telemóvel. A equipa só descobria abrindo a caixa. Numa caixa em
+            // que a janela de resposta são 24 horas, isso é a diferença entre
+            // responder e nunca mais poder responder.
+            //
+            // Depois do insert, de propósito: avisar de uma mensagem que não
+            // ficou guardada mandaria a pessoa abrir uma conversa onde não está
+            // nada. Falhar aqui não pode partir o webhook — a mensagem já está
+            // segura, e é isso que interessa.
+            try {
+              const quem = nomeContacto || "Novo contacto";
+              const titulo = channel.channel_type === "instagram"
+                ? `📷 Instagram: ${quem}`
+                : `💬 Messenger: ${quem}`;
+
+              // Só a quem atende esta caixa; vazia, toca a toda a organização.
+              const atendentes = Array.isArray(channel.assigned_user_ids)
+                ? channel.assigned_user_ids : [];
+
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push-notification`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  organization_id: channel.organization_id,
+                  title: titulo,
+                  body: resumo.slice(0, 140),
+                  url: "/inbox",
+                  // Um aviso por conversa: uma mensagem nova substitui a
+                  // anterior em vez de empilhar dez.
+                  tag: `meta-${conv.id}`,
+                  ...(atendentes.length > 0 ? { user_ids: atendentes } : {}),
+                }),
+              });
+            } catch (e) {
+              logError("falha a notificar", { conversa: conv.id, error: (e as Error).message });
+            }
+
             log("mensagem guardada", { canal: channel.channel_type, conversa: conv.id });
             resultado = "guardada";
           } else {
