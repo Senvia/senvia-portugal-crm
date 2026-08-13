@@ -69,6 +69,12 @@ serve(async (req) => {
         tools: toolsForModel,
         stream: false,
         temperature: 0,
+        // Sessão do agente no gateway. Deriva do contexto autenticado, nunca do
+        // corpo do pedido: se o cliente pudesse escolher este valor, escolhia o
+        // de outra pessoa e lia a conversa dela. Sem contexto (visitante sem
+        // organização) não há sessão persistente — melhor isso do que agrupar
+        // desconhecidos numa sessão partilhada.
+        user: ctx ? `org:${ctx.orgId}:user:${ctx.userId ?? "anon"}` : undefined,
       });
       const providerHeaders = { "x-otto-provider": provider, "x-otto-model": model };
 

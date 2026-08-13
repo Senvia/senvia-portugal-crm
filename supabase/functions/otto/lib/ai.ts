@@ -13,6 +13,11 @@ const DEFAULT_BASE =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
+// Agente Otto no gateway OpenClaw. O "modelo" é o próprio agente: a inteligência
+// e as instruções vivem lá, não aqui.
+const GATEWAY_BASE = "https://gw.senvia.pt/v1/chat/completions";
+const GATEWAY_MODEL = "openclaw/otto";
+
 export interface AIConfig {
   model: string;
   baseUrl: string;
@@ -34,13 +39,19 @@ function normalizeBase(url: string): string {
 }
 
 export function getAIConfigs(): AIConfigs {
+  // O agente OpenClaw é agora a cabeça do Otto. Basta ter GATEWAY_TOKEN
+  // configurado: a base e o modelo têm valores próprios, para o deploy não
+  // depender de acertar três secrets em simultâneo.
+  const gatewayToken = Deno.env.get("GATEWAY_TOKEN");
   const ottoKey = Deno.env.get("OTTO_API_KEY");
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  const apiKey = ottoKey || geminiKey || "";
-  if (!apiKey) throw new Error("Nenhuma chave de IA configurada (OTTO_API_KEY ou GEMINI_API_KEY).");
+  const apiKey = gatewayToken || ottoKey || geminiKey || "";
+  if (!apiKey) {
+    throw new Error("Nenhuma chave de IA configurada (GATEWAY_TOKEN, OTTO_API_KEY ou GEMINI_API_KEY).");
+  }
 
-  const ottoBase = Deno.env.get("OTTO_API_BASE");
-  const ottoModel = Deno.env.get("OTTO_MODEL");
+  const ottoBase = Deno.env.get("OTTO_API_BASE") || (gatewayToken ? GATEWAY_BASE : undefined);
+  const ottoModel = Deno.env.get("OTTO_MODEL") || (gatewayToken ? GATEWAY_MODEL : undefined);
 
   const primary: AIConfig = {
     model: ottoModel || DEFAULT_MODEL,
@@ -48,9 +59,10 @@ export function getAIConfigs(): AIConfigs {
     apiKey,
   };
 
-  // A distinct Gemini fallback only makes sense when an OTTO_* override is in play
-  // and we still have a Gemini key to fall back to.
-  const usingOverride = !!(ottoKey || ottoBase || ottoModel);
+  // O fallback para o Gemini só faz sentido quando há um override em jogo e
+  // ainda existe uma chave Gemini. Mantém-se de propósito: um token de gateway
+  // inválido não pode deixar o Otto mudo.
+  const usingOverride = !!(gatewayToken || ottoKey || ottoBase || ottoModel);
   const fallback: AIConfig | null = (usingOverride && geminiKey)
     ? { model: DEFAULT_MODEL, baseUrl: DEFAULT_BASE, apiKey: geminiKey }
     : null;
@@ -63,6 +75,17 @@ export interface ChatPayload {
   tools?: any[];
   stream?: boolean;
   temperature?: number;
+  /**
+   * Identificador estável da conversa, no formato `org:<id>:user:<id>`.
+   *
+   * O gateway OpenClaw usa este campo para manter a sessão do agente entre
+   * pedidos. Tem de ser estável por par organização+utilizador: se variar, o
+   * agente perde o fio à conversa a cada mensagem; se for partilhado, duas
+   * pessoas caem na mesma sessão e uma lê o contexto da outra.
+   *
+   * Nunca usar os prefixos reservados do gateway (`subagent:`, `cron:`, `acp:`).
+   */
+  user?: string;
 }
 
 export async function chatCompletion(cfg: AIConfig, payload: ChatPayload): Promise<Response> {
@@ -73,6 +96,7 @@ export async function chatCompletion(cfg: AIConfig, payload: ChatPayload): Promi
     temperature: payload.temperature ?? 0,
   };
   if (payload.tools && payload.tools.length > 0) body.tools = payload.tools;
+  if (payload.user) body.user = payload.user;
 
   return await fetch(cfg.baseUrl, {
     method: "POST",
