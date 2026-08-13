@@ -17,6 +17,18 @@ function ok(body: unknown = { ok: true }): Response {
 }
 
 // Friendly preview for media messages.
+/**
+ * Canais que ainda notificam por aqui.
+ *
+ * Espelha `MESSAGING_CHANNELS` em src/lib/constants.ts, onde só o email está
+ * ligado. O Instagram e o Messenger têm caminho próprio (meta-webhook) e nunca
+ * devem notificar por esta via, senão o mesmo aviso saía duas vezes.
+ *
+ * Se um dia o WhatsApp voltar, muda-se nos dois sítios — e um comentário em
+ * cada um a apontar para o outro é o que evita voltar a ficar meio ligado.
+ */
+const CANAIS_QUE_NOTIFICAM = new Set(["email"]);
+
 const MEDIA_LABELS: Record<string, string> = {
   image: '📷 Imagem',
   audio: '🎵 Mensagem de voz',
@@ -388,19 +400,26 @@ Deno.serve(async (req) => {
                 method: 'DELETE', headers: { apikey: evoKey },
               });
             } catch (e) { console.error('[flap-guard] instance delete failed', e); }
-            try {
-              await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-                body: JSON.stringify({
-                  organization_id: org.id,
-                  title: '⚠️ Caixa WhatsApp desligada',
-                  body: 'Uma caixa começou a falhar em ciclo e foi desligada automaticamente para proteger o sistema. Reconecte-a em Definições, Caixas de Entrada.',
-                  url: '/settings',
-                  tag: `flap-${channel.id}`,
-                }),
-              });
-            } catch (e) { console.error('[flap-guard] alert failed', e); }
+            // O aviso só sai se o canal ainda existir para o utilizador. Com o
+            // WhatsApp fora da Caixa de Entrada, isto era uma notificação a
+            // mandar reconectar uma caixa que já não aparece em lado nenhum —
+            // e as instâncias antigas, presas em "connecting", disparavam-na
+            // sozinhas, sem ninguém ter feito nada.
+            if (CANAIS_QUE_NOTIFICAM.has(channel.channel_type ?? 'whatsapp')) {
+              try {
+                await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+                  body: JSON.stringify({
+                    organization_id: org.id,
+                    title: '⚠️ Caixa WhatsApp desligada',
+                    body: 'Uma caixa começou a falhar em ciclo e foi desligada automaticamente para proteger o sistema. Reconecte-a em Definições, Caixas de Entrada.',
+                    url: '/settings',
+                    tag: `flap-${channel.id}`,
+                  }),
+                });
+              } catch (e) { console.error('[flap-guard] alert failed', e); }
+            }
           }
         } catch (e) {
           console.error('[flap-guard] failed', e);
@@ -562,6 +581,21 @@ Deno.serve(async (req) => {
       title = person ? `📱 WhatsApp: ${person} em ${senderName}` : `📱 WhatsApp: ${senderName}`;
     } else {
       title = `📱 WhatsApp: ${senderName}`;
+    }
+
+    // Canais desligados não notificam.
+    //
+    // O WhatsApp saiu da Caixa de Entrada (está "Brevemente" na interface) e o
+    // Instagram e o Messenger passaram a falar direto com a Meta — nenhum deles
+    // aparece por aqui. Mas o Chatwoot continua a entregar o que lhe chega, e o
+    // aviso saía na mesma: uma notificação no telemóvel a apontar para uma caixa
+    // que já não existe no CRM, e que não dá para abrir nem calar.
+    //
+    // A verificação tem de ser AQUI, no servidor. A lista de canais ativos vive
+    // em src/lib/constants.ts, que é código do browser — o webhook nunca a viu.
+    if (!CANAIS_QUE_NOTIFICAM.has(channelType)) {
+      console.log(`[chatwoot-webhook] canal desligado (${channelType}) — sem notificação`);
+      return ok();
     }
 
     // Reuse the existing push pipeline (VAPID web push to push_subscriptions).

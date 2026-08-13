@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 export type ChannelStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -70,12 +71,26 @@ export function useUpdateChannelAssignment() {
       if (vars.assigned_user_ids !== undefined) patch.assigned_user_ids = vars.assigned_user_ids;
       if (vars.rotate_enabled !== undefined) patch.rotate_enabled = vars.rotate_enabled;
       if (vars.color !== undefined) patch.color = vars.color;
-      const { error } = await supabase
+      // O `.select()` no fim é o que torna isto verificável. Sem ele, um UPDATE
+      // que o RLS não deixe passar devolve SUCESSO com zero linhas alteradas: o
+      // interruptor voltava atrás sozinho, a cor não pegava, e não havia erro
+      // nenhum a dizer porquê. Quem só é colaborador não pode mexer nas caixas
+      // (a política exige o papel de administrador) e ficava a olhar.
+      const { data, error } = await supabase
         .from('messaging_channels')
         .update(patch)
         .eq('id', vars.channelId)
-        .eq('organization_id', organization.id);
+        .eq('organization_id', organization.id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Não foi possível guardar: só os administradores podem alterar as caixas.',
+        );
+      }
+    },
+    onError: (e) => {
+      toast.error('Alteração não guardada', { description: (e as Error).message });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
