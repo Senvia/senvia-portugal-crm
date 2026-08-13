@@ -223,11 +223,11 @@ export function useAiTasksEnabled() {
       if (!organization?.id) return true;
       const { data } = await supabase
         .from('messaging_channels')
-        .select('metadata')
+        .select('metadata_public')
         .eq('organization_id', organization.id)
         .eq('channel_type', 'whatsapp')
         .maybeSingle();
-      return (data?.metadata as { ai_tasks_enabled?: boolean } | null)?.ai_tasks_enabled !== false;
+      return (data?.metadata_public as { ai_tasks_enabled?: boolean } | null)?.ai_tasks_enabled !== false;
     },
     enabled: !!organization?.id,
     staleTime: 5 * 60 * 1000,

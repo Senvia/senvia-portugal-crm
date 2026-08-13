@@ -56,7 +56,18 @@ export function useMessagingChannels() {
       if (!organization?.id) return [];
       const { data, error } = await supabase
         .from('messaging_channels')
-        .select('*')
+        // Colunas explícitas, e `metadata_public` em vez de `metadata`.
+        //
+        // O `metadata` cru tem as passwords de IMAP/SMTP e o token da Página; um
+        // `select('*')` descarregava-os para o browser de qualquer membro da
+        // organização. A coluna pública é o mesmo sem os segredos, e o Postgres
+        // já recusa a crua a quem não é o servidor — mesmo que alguém volte a
+        // escrever `*` aqui, não passa.
+        .select(
+          'id, organization_id, channel_type, provider, label, evolution_instance,'
+          + ' chatwoot_inbox_id, status, phone_number, assigned_user_ids, rotate_enabled,'
+          + ' color, created_at, updated_at, metadata_public',
+        )
         .eq('organization_id', organization.id)
         // Stable order: without it Postgres returns rows in physical/heap order,
         // which changes whenever a row is UPDATEd — making the cards jump around
@@ -64,7 +75,11 @@ export function useMessagingChannels() {
         .order('created_at', { ascending: true, nullsFirst: true })
         .order('id', { ascending: true });
       if (error) throw error;
-      return ((data || []) as MessagingChannel[])
+      return ((data || []) as unknown as Array<Record<string, unknown>>)
+        .map(({ metadata_public, ...resto }) => ({
+          ...resto,
+          metadata: metadata_public ?? null,
+        }) as MessagingChannel)
         .filter((c) => isChannelEnabled(c.channel_type));
     },
     enabled: !!organization?.id,
@@ -220,7 +235,7 @@ export function useConnectMetaChannel() {
       const wanted = connect === 'messenger' ? 'facebook' : 'instagram';
       const { data: created } = await supabase
         .from('messaging_channels')
-        .select('channel_type, label, metadata')
+        .select('channel_type, label, metadata_public')
         .eq('organization_id', organization.id)
         .eq('channel_type', wanted)
         .gte('created_at', before)
@@ -232,7 +247,7 @@ export function useConnectMetaChannel() {
       return {
         channel_type: created.channel_type,
         label: created.label ?? '',
-        ig_username: (created.metadata as { ig_username?: string } | null)?.ig_username ?? null,
+        ig_username: (created.metadata_public as { ig_username?: string } | null)?.ig_username ?? null,
       };
     },
     onSuccess: () => {

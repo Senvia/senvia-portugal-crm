@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
   useEmailFolders, useEmailMessages, useEmailMessage, useEmailRealtime,
-  useEmailSearch, useEmailDrafts,
+  useEmailSearch, useEmailDrafts, useEmailCommandFailures, COMMAND_LABELS,
   type EmailAttachment, type EmailDraft, type EmailMessage,
 } from '@/hooks/useEmail';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
@@ -30,7 +30,14 @@ const IMG_SRC_RE = /(<img\b[^>]*?\ssrc=)(["'])(.*?)\2/gi;
 // Standalone (non-global) check for "does this body have at least one remote
 // <img>" — used only to decide whether to show the unblock banner at all.
 function hasRemoteImage(html: string): boolean {
-  return /<img\b[^>]*\ssrc=["']https?:\/\//i.test(html);
+  // Não chega procurar `<img src>`: com a política de segurança a bloquear tudo
+  // o que vem de fora, um email que só rastreie por CSS (`background:url(...)`)
+  // também fica bloqueado — e sem isto não aparecia o botão para o desbloquear.
+  return /<img\b[^>]*\ssrc=["']https?:\/\//i.test(html)
+    || /url\(\s*["']?https?:\/\//i.test(html)
+    || /\bsrcset=["'][^"']*https?:\/\//i.test(html)
+    || /\bbackground=["']https?:\/\//i.test(html)
+    || /<video\b[^>]*\sposter=["']https?:\/\//i.test(html);
 }
 
 // HTML body in a sandboxed, auto-sized iframe (consistent fonts). Blocks remote
@@ -93,7 +100,23 @@ function EmailBody({
     } else {
       body = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><base target="_blank"><style>
+    // A política de segurança é o que fecha mesmo o rastreio.
+    //
+    // A reescrita acima só toca em `<img src>`. Um email pode ir buscar ao
+    // servidor do remetente por CSS (`background:url(...)`), por `srcset`, por
+    // `background=`, por `<video poster>` — e 188 dos 368 emails desta caixa
+    // têm blocos `<style>`. O aviso dizia "imagens bloqueadas" e o pixel de
+    // rastreio passava à mesma.
+    //
+    // Aqui é o browser que recusa TODAS as ligações para fora, sejam quais
+    // forem. Ao carregar em "Mostrar imagens" abre-se só o necessário.
+    const csp = imagesBlocked
+      ? "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+      : "default-src 'none'; img-src data: https:; style-src 'unsafe-inline' https:; font-src data: https:";
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <meta http-equiv="Content-Security-Policy" content="${csp}">
+      <base target="_blank"><style>
       *{box-sizing:border-box}
       body{margin:0;padding:0;font-family:${font};font-size:14px;line-height:1.6;color:#1a1a1a;word-break:break-word;overflow-wrap:break-word;${html ? '' : 'white-space:pre-wrap'}}
       a{color:#2563eb}img{max-width:100%;height:auto}
@@ -222,6 +245,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   // ───────────────────────────────────────────────────────────────────────────
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
   useEmailRealtime(channelId);
+  const { data: falhas = [] } = useEmailCommandFailures(channelId);
 
   // Detect if current folder is Rascunhos.
   const { data: folders = [] } = useEmailFolders(channelId);
@@ -497,6 +521,29 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                     ? `${messages.length} resultado(s)`
                     : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
               </span>
+            </div>
+          )}
+          {/* Ações que ficaram por fazer. O aviso de falha era só um evento em
+              tempo real — quem não estivesse a olhar nunca soube, e a lista já
+              tinha removido a mensagem como se a ação tivesse resultado. */}
+          {falhas.length > 0 && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs">
+              <p className="font-medium text-destructive">
+                {falhas.length === 1
+                  ? '1 ação de email não foi concluída'
+                  : `${falhas.length} ações de email não foram concluídas`}
+              </p>
+              <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                {falhas.slice(0, 3).map((f) => (
+                  <li key={f.id} className="truncate">
+                    {COMMAND_LABELS[f.type] ?? f.type}
+                    {f.error ? ` — ${f.error}` : ''}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-muted-foreground">
+                A caixa de correio não foi alterada. Tenta outra vez.
+              </p>
             </div>
           )}
           {!isDraftsFolder && (

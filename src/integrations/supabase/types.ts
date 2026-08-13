@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activation_objectives: {
@@ -4019,6 +3994,62 @@ export type Database = {
           },
         ]
       }
+      messaging_channel_secrets: {
+        Row: {
+          channel_id: string
+          imap_password: string | null
+          organization_id: string
+          page_access_token: string | null
+          smtp_password: string | null
+          updated_at: string
+        }
+        Insert: {
+          channel_id: string
+          imap_password?: string | null
+          organization_id: string
+          page_access_token?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Update: {
+          channel_id?: string
+          imap_password?: string | null
+          organization_id?: string
+          page_access_token?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_channel_secrets_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: true
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_channel_secrets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_channel_secrets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "messaging_channel_secrets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
       messaging_channels: {
         Row: {
           assigned_user_ids: string[]
@@ -4032,6 +4063,7 @@ export type Database = {
           id: string
           label: string | null
           metadata: Json | null
+          metadata_public: Json | null
           needs_repair: boolean
           organization_id: string
           phone_number: string | null
@@ -4053,6 +4085,7 @@ export type Database = {
           id?: string
           label?: string | null
           metadata?: Json | null
+          metadata_public?: Json | null
           needs_repair?: boolean
           organization_id: string
           phone_number?: string | null
@@ -4074,6 +4107,7 @@ export type Database = {
           id?: string
           label?: string | null
           metadata?: Json | null
+          metadata_public?: Json | null
           needs_repair?: boolean
           organization_id?: string
           phone_number?: string | null
@@ -4106,6 +4140,267 @@ export type Database = {
             referencedColumns: ["organization_id"]
           },
         ]
+      }
+      meta_conversations: {
+        Row: {
+          assigned_to: string | null
+          channel_id: string
+          client_id: string | null
+          contact_avatar_url: string | null
+          contact_meta: Json | null
+          contact_name: string | null
+          contact_ref: string
+          created_at: string
+          id: string
+          last_message: string | null
+          last_message_at: string | null
+          lead_id: string | null
+          organization_id: string
+          source_ref: Json | null
+          status: string
+          unread_count: number
+          updated_at: string
+          window_expires_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          channel_id: string
+          client_id?: string | null
+          contact_avatar_url?: string | null
+          contact_meta?: Json | null
+          contact_name?: string | null
+          contact_ref: string
+          created_at?: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          lead_id?: string | null
+          organization_id: string
+          source_ref?: Json | null
+          status?: string
+          unread_count?: number
+          updated_at?: string
+          window_expires_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          channel_id?: string
+          client_id?: string | null
+          contact_avatar_url?: string | null
+          contact_meta?: Json | null
+          contact_name?: string | null
+          contact_ref?: string
+          created_at?: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          lead_id?: string | null
+          organization_id?: string
+          source_ref?: Json | null
+          status?: string
+          unread_count?: number
+          updated_at?: string
+          window_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_conversations_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_conversations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "meta_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      meta_data_deletion_requests: {
+        Row: {
+          confirmation_code: string
+          created_at: string
+          deleted_conversations: number
+          deleted_messages: number
+          error: string | null
+          id: string
+          meta_user_id: string
+          payload: Json | null
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          confirmation_code: string
+          created_at?: string
+          deleted_conversations?: number
+          deleted_messages?: number
+          error?: string | null
+          id?: string
+          meta_user_id: string
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          confirmation_code?: string
+          created_at?: string
+          deleted_conversations?: number
+          deleted_messages?: number
+          error?: string | null
+          id?: string
+          meta_user_id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      meta_messages: {
+        Row: {
+          attachments: Json
+          content: string | null
+          conversation_id: string
+          created_at: string
+          direction: string
+          external_id: string | null
+          id: string
+          is_deleted: boolean
+          organization_id: string
+          reaction: string | null
+          reaction_by: string | null
+          reply_to_external_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+        }
+        Insert: {
+          attachments?: Json
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          direction: string
+          external_id?: string | null
+          id?: string
+          is_deleted?: boolean
+          organization_id: string
+          reaction?: string | null
+          reaction_by?: string | null
+          reply_to_external_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+        }
+        Update: {
+          attachments?: Json
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          external_id?: string | null
+          id?: string
+          is_deleted?: boolean
+          organization_id?: string
+          reaction?: string | null
+          reaction_by?: string | null
+          reply_to_external_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "meta_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_counts"
+            referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "meta_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "trial_activation_overview"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      meta_webhook_log: {
+        Row: {
+          body_head: string | null
+          id: string
+          method: string | null
+          note: string | null
+          organization_id: string | null
+          outcome: string | null
+          page_id: string | null
+          received_at: string
+          valid_sig: boolean | null
+        }
+        Insert: {
+          body_head?: string | null
+          id?: string
+          method?: string | null
+          note?: string | null
+          organization_id?: string | null
+          outcome?: string | null
+          page_id?: string | null
+          received_at?: string
+          valid_sig?: boolean | null
+        }
+        Update: {
+          body_head?: string | null
+          id?: string
+          method?: string | null
+          note?: string | null
+          organization_id?: string | null
+          outcome?: string | null
+          page_id?: string | null
+          received_at?: string
+          valid_sig?: boolean | null
+        }
+        Relationships: []
       }
       monthly_commitments: {
         Row: {
@@ -7514,6 +7809,10 @@ export type Database = {
             }[]
           }
       import_leads_bulk: { Args: { p_leads: Json }; Returns: Json }
+      increment_meta_unread: {
+        Args: { _conversation_id: string }
+        Returns: undefined
+      }
       internal_service_key: { Args: never; Returns: string }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
@@ -7524,6 +7823,10 @@ export type Database = {
         Returns: boolean
       }
       is_slug_available: { Args: { _slug: string }; Returns: boolean }
+      mark_meta_read: {
+        Args: { _conversation_id: string; _seen: number }
+        Returns: undefined
+      }
       mark_renewal_automation_run: {
         Args: { p_last_error?: string; p_run_id: string; p_status: string }
         Returns: undefined
@@ -7556,6 +7859,11 @@ export type Database = {
           }
         | { Args: { p_org_id: string }; Returns: number }
       parse_chargeback_amount: { Args: { p_value: string }; Returns: number }
+      pode_aceder_caixa: {
+        Args: { _channel_id: string; _user_id: string }
+        Returns: boolean
+      }
+      recent_signup_exists: { Args: { _phone: string }; Returns: boolean }
       search_clients_unaccent: {
         Args: { max_results?: number; org_id: string; search_term: string }
         Returns: {
@@ -7972,9 +8280,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["super_admin", "admin", "viewer", "salesperson"],

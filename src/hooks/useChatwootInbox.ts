@@ -1186,11 +1186,11 @@ export function useAutoReplyConfig() {
       if (!organization?.id) return DEFAULT_AUTO_REPLY;
       const { data } = await supabase
         .from('messaging_channels')
-        .select('metadata')
+        .select('metadata_public')
         .eq('organization_id', organization.id)
         .eq('channel_type', 'whatsapp')
         .maybeSingle();
-      const ar = (data?.metadata as { auto_reply?: Partial<AutoReplyConfig> } | null)?.auto_reply;
+      const ar = (data?.metadata_public as { auto_reply?: Partial<AutoReplyConfig> } | null)?.auto_reply;
       return { ...DEFAULT_AUTO_REPLY, ...(ar ?? {}) };
     },
     enabled: !!organization?.id,
