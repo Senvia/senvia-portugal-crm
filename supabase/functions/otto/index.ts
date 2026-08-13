@@ -13,6 +13,7 @@ import { loadContext } from "./lib/context.ts";
 import { buildSystemPrompt } from "./lib/prompts.ts";
 import { getAIConfigs, chatCompletionResilient } from "./lib/ai.ts";
 import { ALL_TOOLS, getToolsForModel, canUseTool, runTool } from "./lib/tools/registry.ts";
+import { loadIdentity, identityPrompt, markPresented } from "./lib/identity.ts";
 
 const MAX_ITERATIONS = 5;
 
@@ -59,8 +60,25 @@ serve(async (req) => {
       blockedLabels = [...blocked];
     }
 
-    const systemContent = buildSystemPrompt(ctx, { hasDataAccess, blockedLabels });
+    // Quem está do outro lado, e se já nos apresentámos. Vem da base de dados,
+    // não da conversa: a conversa desaparece ao recarregar a página e ele
+    // voltava a apresentar-se a quem já o conhece.
+    const identity = (ctx && ctx.userId)
+      ? await loadIdentity(ctx.supabaseAdmin, ctx.orgId, ctx.userId)
+      : { contactId: null, name: null, shouldIntroduce: false };
+
+    const systemContent = [
+      buildSystemPrompt(ctx, { hasDataAccess, blockedLabels }),
+      identityPrompt(identity),
+    ].join("\n\n");
     let conversationMessages: any[] = [{ role: "system", content: systemContent }, ...messages];
+
+    // Marca antes de responder. Se marcássemos só depois de a resposta chegar
+    // ao cliente, uma falha de rede a meio deixava a apresentação por marcar e
+    // ele apresentava-se de novo na mensagem seguinte.
+    if (identity.shouldIntroduce && ctx) {
+      await markPresented(ctx.supabaseAdmin, identity.contactId);
+    }
 
     // ── Tool-calling loop ──
     for (let i = 0; i < MAX_ITERATIONS; i++) {
