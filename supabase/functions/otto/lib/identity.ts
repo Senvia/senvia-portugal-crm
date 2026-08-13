@@ -137,9 +137,10 @@ export function identityPrompt(identity: OttoIdentity, now: Date = new Date()): 
   if (identity.shouldIntroduce) {
     const hello = identity.name ? `Olá ${identity.name}, ${greeting(now)}` : `Olá, ${greeting(now)}`;
     lines.push(
-      `É a primeira vez que esta pessoa fala contigo. Começa a resposta por te`,
-      `apresentares, uma só vez: "${hello}, chamo-me Otto, sou assistente do SENVIA OS`,
-      `e vou ajudar com as suas questões." Depois responde ao que foi perguntado.`,
+      `É a primeira vez que esta pessoa fala contigo. Começa a resposta exatamente`,
+      `com esta frase e NADA mais: "${hello}, chamo-me Otto, sou assistente do SENVIA OS`,
+      `e vou ajudar com as suas questões." Não acrescentes menu, lista de capacidades`,
+      `nem perguntas extra. Uma só frase, e páras.`,
     );
   } else {
     lines.push(
