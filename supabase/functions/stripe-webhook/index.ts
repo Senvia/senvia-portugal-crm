@@ -651,13 +651,23 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       if (recurrence && periodStart && periodEnd) {
         // O due_date tem de caber dentro do período (constraint da tabela).
         const due = paymentDate < periodStart ? periodStart : paymentDate > periodEnd ? periodEnd : paymentDate;
-        const { data: existingCycle } = await supabase
+        // Procura por vizinhança, não por igualdade exacta: o ciclo que o cron
+        // cria (30/ago–29/set) e o período da fatura Stripe (30/ago–30/set)
+        // diferem tipicamente um dia, e a igualdade exacta criava um segundo
+        // ciclo para a mesma competência — um pago e um pendente para sempre.
+        const windowStart = new Date(new Date(periodStart).getTime() - 15 * 86_400_000)
+          .toISOString().slice(0, 10);
+        const windowEnd = new Date(new Date(periodStart).getTime() + 15 * 86_400_000)
+          .toISOString().slice(0, 10);
+        const { data: nearCycles } = await supabase
           .from("sale_recurring_cycles")
           .select("id")
           .eq("recurrence_id", recurrence.id)
-          .eq("period_start", periodStart)
-          .eq("period_end", periodEnd)
-          .maybeSingle();
+          .gte("period_start", windowStart)
+          .lte("period_start", windowEnd)
+          .order("period_start", { ascending: true })
+          .limit(1);
+        const existingCycle = nearCycles?.[0] ?? null;
 
         if (existingCycle) {
           cycleId = existingCycle.id;
