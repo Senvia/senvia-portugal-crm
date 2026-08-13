@@ -109,7 +109,7 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
       {/* Avatar */}
       <div
         className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center overflow-hidden ${
-          isUser ? "bg-primary text-primary-foreground" : ""
+          isUser ? "bg-gradient-to-br from-cyan-500 to-teal-600 text-white" : ""
         }`}
       >
         {isUser ? <User className="w-3.5 h-3.5" /> : <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />}
@@ -120,7 +120,9 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
         <div
           className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
             isUser
-              ? "bg-primary text-primary-foreground rounded-tr-md"
+              // Ciano/petrol em vez do azul do CRM: distingue a conversa com o
+              // Otto do resto da aplicação, sem sair da linguagem visual.
+              ? "bg-gradient-to-r from-cyan-600 to-teal-600 text-white rounded-tr-md shadow-[0_8px_24px_-4px_rgba(0,195,255,0.35)]"
               : "bg-muted text-foreground rounded-tl-md"
           }`}
         >
