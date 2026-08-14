@@ -590,7 +590,16 @@ Deno.serve(async (req) => {
           error: "Falta FACEBOOK_APP_ID ou WHATSAPP_LOGIN_CONFIG_ID nos segredos.",
         }, 500);
       }
-      return jsonRes({ app_id: appId, config_id: cfg, graph_version: "v21.0" });
+      // `es_version` é a versão do Cadastro Incorporado e NÃO é o mesmo que a
+      // versão do Graph. Vai daqui, e não fixa no browser, para se poder subir
+      // sem publicar frontend — foi tê-la em falta que partiu a troca do código.
+      return jsonRes({
+        app_id: appId,
+        config_id: cfg,
+        graph_version: "v24.0",
+        es_version: "v3",
+        feature_type: "whatsapp_business_app_onboarding",
+      });
     }
 
     /**
@@ -614,46 +623,54 @@ Deno.serve(async (req) => {
       // Troca do código pelo token. Server-to-server, com o App Secret — é por
       // isto que o código não serve de nada a quem o intercete.
       //
-      // A forma DOCUMENTADA (GET com client_id + client_secret + code, sem mais
-      // nada) foi recusada com "make sure your redirect_uri is identical" — o
-      // que significa que o código veio preso a um redirect_uri que o diálogo
-      // usou por dentro e nós não vemos. Não se sabe a priori qual, por isso
-      // tentam-se os candidatos por ordem e REGISTA-SE qual funcionou, para um
-      // dia isto voltar a ser uma chamada só. Uma validação falhada não consome
-      // o código, e tudo isto corre dentro dos 30 segundos de vida dele.
-      const candidatos: Array<{ nome: string; uri: string | null }> = [
-        { nome: "sem redirect_uri (forma documentada)", uri: null },
-        { nome: "redirect_uri vazio (forma antiga do SDK)", uri: "" },
-        // A página que lançou o FB.login — se o SDK prendeu o código à origem.
-        ...(body.page_url ? [{ nome: "página que lançou o login", uri: String(body.page_url) }] : []),
-        ...(body.page_origin ? [{ nome: "origem da página", uri: String(body.page_origin) }] : []),
-        // O redirect registado na app — se a configuração o usou por omissão.
-        { nome: "redirect registado da app", uri: redirectUri },
+      // `redirect_uri` VAZIO é a forma certa para códigos vindos do SDK, e é
+      // literalmente o que a app de referência da Meta faz (o `redirectUri` do
+      // publicConfig dela é a string vazia). Houve uma fase em que se tentaram
+      // cinco variantes porque a Meta recusava tudo com "make sure your
+      // redirect_uri is identical" — mensagem que MENTE: o subcódigo dizia
+      // 36008, ou seja, o código já tinha sido gasto pelo próprio SDK antes de
+      // cá chegar. Corrigiu-se na origem (ver `useWhatsAppSignup`), e as
+      // variantes saíram: cada tentativa extra arrisca gastar o código e só
+      // enche o registo de ruído.
+      const formas: Array<{ nome: string; uri: string | null }> = [
+        { nome: "redirect_uri vazio (forma do SDK)", uri: "" },
+        { nome: "sem redirect_uri", uri: null },
       ];
 
       let tJson: { access_token?: string; error?: { message?: string } } = {};
-      const recusas: string[] = [];
-      for (const c of candidatos) {
+      let recusa = "";
+      for (const f of formas) {
         const url = `${GRAPH}/oauth/access_token`
           + `?client_id=${encodeURIComponent(appId)}`
           + `&client_secret=${encodeURIComponent(appSecret)}`
-          + (c.uri === null ? "" : `&redirect_uri=${encodeURIComponent(c.uri)}`)
+          + (f.uri === null ? "" : `&redirect_uri=${encodeURIComponent(f.uri)}`)
           + `&code=${encodeURIComponent(code)}`;
         const r = await fetch(url);
         const j = await r.json().catch(() => ({}));
         if (j.access_token) {
           tJson = j;
-          log("troca do código conseguida", { forma: c.nome });
+          log("troca do código conseguida", { forma: f.nome });
           break;
         }
-        recusas.push(`${c.nome}: ${j?.error?.message ?? r.status}`);
+        const sub = Number(j?.error?.error_subcode ?? 0);
+        // A frase da Meta é a mesma para causas diferentes; o subcódigo é que
+        // as separa. Traduzir aqui poupa a próxima pessoa a horas no painel.
+        const leitura = sub === 36008
+          ? "o código já tinha sido usado — o SDK trocou-o antes de nós (configuração do login incompleta)"
+          : sub === 36007
+          ? "o código expirou — passaram mais de 30 segundos entre o assistente e esta chamada"
+          : j?.error?.message ?? String(r.status);
+        recusa = `${leitura} [forma=${f.nome} code=${j?.error?.code ?? "?"} sub=${sub || "-"}`
+          + ` trace=${j?.error?.fbtrace_id ?? "-"}]`;
+        logError("troca do código recusada", { recusa });
+        // Expirado ou já usado não melhora com outra forma — não insistir.
+        if (sub === 36007 || sub === 36008) break;
       }
 
       if (!tJson.access_token) {
-        logError("troca do código falhou em todas as formas", { recusas });
+        logError("troca do código falhou", { recusa });
         return jsonRes({
-          error: (recusas[0] ?? "Falha ao obter o token")
-            + " — repete a ligação: o código só vale 30 segundos e uma vez.",
+          error: (recusa || "Falha ao obter o token") + " — volta a tentar a ligação.",
         }, 502);
       }
 

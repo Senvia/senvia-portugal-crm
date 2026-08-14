@@ -38,7 +38,14 @@ declare global {
 
 /** Carrega o SDK uma vez e devolve quando estiver pronto a usar. */
 function carregarSdk(appId: string, versao: string): Promise<void> {
-  if (window.FB) return Promise.resolve();
+  // Já carregado: volta a inicializar em vez de sair já. O `versao` vem do
+  // servidor e pode ter mudado desde que a página abriu — sem isto, quem tem o
+  // separador aberto continua a lançar o diálogo na versão velha e a ligação
+  // falha por um motivo que já foi corrigido.
+  if (window.FB) {
+    window.FB.init({ appId, autoLogAppEvents: true, xfbml: false, version: versao });
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     window.fbAsyncInit = () => {
       window.FB!.init({ appId, autoLogAppEvents: true, xfbml: false, version: versao });
@@ -75,8 +82,9 @@ export function useWhatsAppSignup() {
         } catch { /* corpo não era JSON */ }
         throw new Error(detail || (pErr as Error).message);
       }
-      const { app_id, config_id, graph_version } = params as {
+      const { app_id, config_id, graph_version, es_version, feature_type } = params as {
         app_id: string; config_id: string; graph_version: string;
+        es_version?: string; feature_type?: string;
       };
 
       await carregarSdk(app_id, graph_version);
@@ -101,7 +109,27 @@ export function useWhatsAppSignup() {
         const code = await new Promise<string>((resolve, reject) => {
           window.FB!.login(
             (r) => {
-              const c = r?.authResponse?.code;
+              // Diagnóstico deliberado, fica: distingue na hora as duas causas
+              // possíveis de "Error validating verification code".
+              //
+              // Um login de BUSINESS (configuração aplicada) devolve SÓ o
+              // `code`. Se vierem `accessToken`/`signedRequest` ao lado, a
+              // configuração NÃO foi aplicada e este é um code de login
+              // clássico — preso ao redirect interno do SDK, que NUNCA valida
+              // server-side, com qualquer redirect_uri. Trocá-lo é inútil;
+              // mais vale dizer já o que está mal.
+              console.log('[whatsapp-signup] authResponse:', JSON.stringify(r?.authResponse ?? r));
+              const ar = (r?.authResponse ?? {}) as Record<string, unknown>;
+              const c = ar.code as string | undefined;
+              if (c && (ar.accessToken || ar.signedRequest)) {
+                reject(new Error(
+                  'A Meta correu um login clássico em vez do Cadastro Incorporado, e já '
+                  + 'gastou o código — o servidor nunca o conseguiria trocar. Quase sempre é '
+                  + `a configuração ${config_id} não aceitar a versão "${es_version ?? 'v3'}" `
+                  + 'do Cadastro Incorporado.',
+                ));
+                return;
+              }
               if (c) resolve(c);
               else reject(new Error('Ligação cancelada — o assistente foi fechado antes do fim.'));
             },
@@ -112,12 +140,21 @@ export function useWhatsAppSignup() {
               // server-to-server — que é o que mantém o segredo no servidor —
               // deixa de ser possível.
               override_default_response_type: true,
+              // Estas chaves são as MESMAS, pela mesma ordem, da app de
+              // referência da Meta (`ClientDashboard.tsx`, `computeEsConfig`).
+              // Não é preciosismo: sem `version` o diálogo corre numa variante
+              // antiga que ignora o `override_default_response_type`, o SDK
+              // troca o código sozinho para montar o `accessToken`, e quando o
+              // servidor o vai trocar já está gasto — Meta responde
+              // "redirect_uri is identical" com o subcódigo 36008, que é o que
+              // realmente conta. Custou horas a descobrir; não tirar daqui.
               extras: {
-                setup: {},
+                sessionInfoVersion: '3',
+                version: es_version ?? 'v3',
                 // Coexistence: o cliente mantém o número na app do WhatsApp
                 // Business e traz os contactos e 180 dias de histórico.
-                featureType: 'whatsapp_business_app_onboarding',
-                sessionInfoVersion: '3',
+                featureType: feature_type ?? 'whatsapp_business_app_onboarding',
+                features: null,
               },
             },
           );
@@ -142,11 +179,6 @@ export function useWhatsAppSignup() {
             // das permissões do token, e pergunta se houver mais do que uma.
             waba_id: sessao?.waba_id ?? null,
             phone_number_id: sessao?.phone_number_id ?? null,
-            // De onde o login foi lançado. O código pode vir preso a um
-            // redirect_uri interno do SDK, e o servidor precisa dos candidatos
-            // para descobrir qual — ver a troca em meta-connect.
-            page_url: window.location.origin + window.location.pathname,
-            page_origin: window.location.origin + '/',
             label,
           },
         });
