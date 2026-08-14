@@ -831,37 +831,28 @@ Deno.serve(async (req) => {
       { orgId, connect, label, origem, t: String(Date.now()) },
       appSecret,
     );
-    // O WhatsApp NÃO entra pelo diálogo genérico de OAuth.
+    // TODOS os canais entram pelo mesmo diálogo de OAuth, incluindo o WhatsApp.
     //
-    // Foi este o erro: com `facebook.com/dialog/oauth` a pessoa autoriza a app,
-    // mas nunca passa pelo assistente que cria a conta de WhatsApp Business,
-    // adiciona o número e o verifica. O resultado é uma autorização válida sobre
-    // um número que ficou a meio — `status: DISCONNECTED`, `ON_PREMISE`,
-    // `NOT_VERIFIED` — e a Meta nunca chega a enviar mensagem nenhuma.
+    // Houve uma versão que mandava o WhatsApp para o endereço do Cadastro
+    // Incorporado alojado pela Meta (`business.facebook.com/messaging/whatsapp/
+    // onboard/`), porque só ele corre o assistente que cria a conta, adiciona o
+    // número e o verifica. Não presta como entrada direta: abre, mostra o ecrã
+    // inicial, abre um SEGUNDO popup de login por cima, e nunca redireciona de
+    // volta para o `redirect_uri` — zero pedidos chegam a esta função. Aquele
+    // endereço é para ser lançado pelo SDK da Meta, e o SDK também não serve
+    // (devolve o código já gasto — ver `useMessagingChannels`).
     //
-    // O Embedded Signup tem endereço próprio, alojado pela Meta, e é ele que
-    // corre o assistente todo.
-    const dialog = connect === "whatsapp"
-      ? `https://business.facebook.com/messaging/whatsapp/onboard/`
-        + `?app_id=${encodeURIComponent(appId)}`
-        + `&config_id=${encodeURIComponent(configDoCanal)}`
-        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
-        + `&response_type=code`
-        + `&state=${encodeURIComponent(state)}`
-        + `&extras=${encodeURIComponent(JSON.stringify({
-          // Coexistence: o cliente mantém o número na app do WhatsApp Business
-          // e sincroniza contactos e 180 dias de histórico. Sem isto o número
-          // teria de sair da app — que é a razão pela qual isto não se vendia.
-          featureType: "whatsapp_business_app_onboarding",
-          // A versão da informação de sessão que a Meta devolve no fim.
-          sessionInfoVersion: "3",
-        }))}`
-      : `https://www.facebook.com/v21.0/dialog/oauth`
-        + `?client_id=${encodeURIComponent(appId)}`
-        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
-        + `&config_id=${encodeURIComponent(configDoCanal)}`
-        + `&state=${encodeURIComponent(state)}`
-        + `&response_type=code`;
+    // O diálogo simples volta sempre, e foi ele que criou as caixas que existem.
+    // A contrapartida honesta: ele NÃO corre o assistente de criação. Serve
+    // quem já tem o número no WhatsApp Business — que é o caso dos 98% que
+    // querem espelhar o telemóvel no CRM. Quem ainda não tem conta cria-a no
+    // Meta Business e volta aqui.
+    const dialog = `https://www.facebook.com/v21.0/dialog/oauth`
+      + `?client_id=${encodeURIComponent(appId)}`
+      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      + `&config_id=${encodeURIComponent(configDoCanal)}`
+      + `&state=${encodeURIComponent(state)}`
+      + `&response_type=code`;
     return jsonRes({ url: dialog });
   }
 
