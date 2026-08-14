@@ -4,26 +4,48 @@
 import nodemailer from 'nodemailer';
 import { q } from './db.js';
 
+// As passwords vivem em `messaging_channel_secrets`, não no metadata.
+//
+// Estavam em `messaging_channels.metadata`, que o CRM lia com `select('*')` —
+// ou seja, a password da caixa de correio da empresa era descarregada para o
+// browser de qualquer membro da organização. Saíram para uma tabela com RLS e
+// zero políticas: só o service_role e este gateway (que liga por Postgres
+// direto) lá chegam.
+//
+// O `COALESCE` com o metadata é a rede de segurança da transição: enquanto uma
+// caixa antiga ainda não tiver sido copiada para o cofre, continua a funcionar
+// em vez de deixar de receber email em silêncio.
+const SELECT_CAIXA = `
+  SELECT c.id, c.organization_id, c.label, c.metadata,
+         COALESCE(s.imap_password, c.metadata->>'imap_password') AS imap_password,
+         COALESCE(s.smtp_password, c.metadata->>'smtp_password') AS smtp_password
+    FROM messaging_channels c
+    LEFT JOIN messaging_channel_secrets s ON s.channel_id = c.id
+   WHERE c.channel_type='email'`;
+
+const paraCaixa = (r) => ({
+  id: r.id,
+  organization_id: r.organization_id,
+  label: r.label,
+  meta: {
+    ...(r.metadata || {}),
+    imap_password: r.imap_password,
+    smtp_password: r.smtp_password,
+  },
+});
+
 // All email caixas of all orgs, with their connection metadata.
 export async function getEmailCaixas() {
-  const rows = await q(
-    `SELECT id, organization_id, label, metadata
-       FROM messaging_channels
-      WHERE channel_type='email'`,
-  );
+  const rows = await q(SELECT_CAIXA);
   return rows
-    .map((r) => ({ id: r.id, organization_id: r.organization_id, label: r.label, meta: r.metadata || {} }))
+    .map(paraCaixa)
     .filter((c) => c.meta.imap_server && c.meta.imap_password);
 }
 
 export async function getEmailCaixa(channelId) {
-  const [r] = await q(
-    `SELECT id, organization_id, label, metadata
-       FROM messaging_channels WHERE id=$1 AND channel_type='email'`,
-    [channelId],
-  );
+  const [r] = await q(`${SELECT_CAIXA} AND c.id=$1`, [channelId]);
   if (!r) return null;
-  return { id: r.id, organization_id: r.organization_id, label: r.label, meta: r.metadata || {} };
+  return paraCaixa(r);
 }
 
 // ImapFlow config for a caixa.

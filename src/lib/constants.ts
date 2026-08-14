@@ -55,6 +55,10 @@ export const INBOX_CONFIG = {
  * Os canais já ligados de um tipo fechado NÃO são apagados — apenas deixam de
  * ser listados. Reabrir é mudar aqui, e reaparecem.
  */
+// Nota: isto só governa a INTERFACE. As notificações do telemóvel são enviadas
+// pelo servidor, que nunca vê este ficheiro — a lista equivalente está em
+// supabase/functions/chatwoot-webhook/index.ts (CANAIS_QUE_NOTIFICAM). Desligar
+// um canal só aqui deixava-o invisível no CRM mas ainda a apitar no telemóvel.
 export const MESSAGING_CHANNELS = {
   whatsapp: false,
   instagram: true,

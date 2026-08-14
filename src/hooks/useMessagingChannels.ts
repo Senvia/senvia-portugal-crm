@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { isChannelEnabled } from '@/lib/constants';
 
 export type ChannelStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -31,7 +33,20 @@ export interface MessagingChannel {
 // produto deixou de ligar canais de mensagens. Sobra o que serve as caixas de
 // EMAIL: listá-las e gerir quem as atende.
 
-// All messaging channels for the active organization.
+/**
+ * As caixas da organização — só as dos canais que o produto tem abertos.
+ *
+ * A filtragem é AQUI, e não em cada sítio que usa isto. Uma linha de um canal
+ * fechado continua na base de dados (não se apaga nada), mas para o CRM é como
+ * se não existisse: o que está desligado no produto não conta, não aparece e
+ * não notifica.
+ *
+ * Antes cada consumidor filtrava por sua conta, e os que se esqueciam deixavam
+ * o canal fechado aparecer à mesma — o contador dizia "4 ligadas" em cima de
+ * três caixas, o painel mostrava alertas de WhatsApp, e as conversas por ler do
+ * WhatsApp somavam no distintivo do menu. Uma sessão viva no Evolution é
+ * problema do Evolution; não tem que se ver do lado de cá.
+ */
 export function useMessagingChannels() {
   const { organization } = useAuth();
 
@@ -41,7 +56,18 @@ export function useMessagingChannels() {
       if (!organization?.id) return [];
       const { data, error } = await supabase
         .from('messaging_channels')
-        .select('*')
+        // Colunas explícitas, e `metadata_public` em vez de `metadata`.
+        //
+        // O `metadata` cru tem as passwords de IMAP/SMTP e o token da Página; um
+        // `select('*')` descarregava-os para o browser de qualquer membro da
+        // organização. A coluna pública é o mesmo sem os segredos, e o Postgres
+        // já recusa a crua a quem não é o servidor — mesmo que alguém volte a
+        // escrever `*` aqui, não passa.
+        .select(
+          'id, organization_id, channel_type, provider, label, evolution_instance,'
+          + ' chatwoot_inbox_id, status, phone_number, assigned_user_ids, rotate_enabled,'
+          + ' color, created_at, updated_at, metadata_public',
+        )
         .eq('organization_id', organization.id)
         // Stable order: without it Postgres returns rows in physical/heap order,
         // which changes whenever a row is UPDATEd — making the cards jump around
@@ -49,7 +75,12 @@ export function useMessagingChannels() {
         .order('created_at', { ascending: true, nullsFirst: true })
         .order('id', { ascending: true });
       if (error) throw error;
-      return (data || []) as MessagingChannel[];
+      return ((data || []) as unknown as Array<Record<string, unknown>>)
+        .map(({ metadata_public, ...resto }) => ({
+          ...resto,
+          metadata: metadata_public ?? null,
+        }) as MessagingChannel)
+        .filter((c) => isChannelEnabled(c.channel_type));
     },
     enabled: !!organization?.id,
   });
@@ -70,14 +101,32 @@ export function useUpdateChannelAssignment() {
       if (vars.assigned_user_ids !== undefined) patch.assigned_user_ids = vars.assigned_user_ids;
       if (vars.rotate_enabled !== undefined) patch.rotate_enabled = vars.rotate_enabled;
       if (vars.color !== undefined) patch.color = vars.color;
-      const { error } = await supabase
+      // O `.select()` no fim é o que torna isto verificável. Sem ele, um UPDATE
+      // que o RLS não deixe passar devolve SUCESSO com zero linhas alteradas: o
+      // interruptor voltava atrás sozinho, a cor não pegava, e não havia erro
+      // nenhum a dizer porquê. Quem só é colaborador não pode mexer nas caixas
+      // (a política exige o papel de administrador) e ficava a olhar.
+      const { data, error } = await supabase
         .from('messaging_channels')
         .update(patch)
         .eq('id', vars.channelId)
-        .eq('organization_id', organization.id);
+        .eq('organization_id', organization.id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Não foi possível guardar: só os administradores podem alterar as caixas.',
+        );
+      }
+    },
+    onError: (e) => {
+      toast.error('Alteração não guardada', { description: (e as Error).message });
     },
     onSuccess: () => {
+      // Cada campo desta janela guarda-se sozinho, mal se mexe nele. Sem uma
+      // confirmação, mexer e não ver nada acontecer é indistinguível de estar
+      // partido — e era exatamente essa a queixa.
+      toast.success('Alteração guardada');
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
       queryClient.invalidateQueries({ queryKey: ['email-channels', organization?.id] });
     },
@@ -127,7 +176,13 @@ export function useConnectMetaChannel() {
       if (!organization?.id) throw new Error('Organização não encontrada');
 
       const { data, error } = await supabase.functions.invoke('meta-connect', {
-        body: { action: 'oauth_url', organization_id: organization.id, connect, label },
+        body: {
+          action: 'oauth_url', organization_id: organization.id, connect, label,
+          // Para onde o popup volta no fim. Vai assinado dentro do `state`, e é
+          // o que permite fechar a janela sozinha: a edge function não consegue
+          // servir HTML que o browser corra (a Supabase impõe text/plain).
+          origin: window.location.origin,
+        },
       });
       if (error) {
         // O invoke() só entrega "Edge Function returned a non-2xx status code" e
@@ -151,12 +206,12 @@ export function useConnectMetaChannel() {
 
       const result = await new Promise<{ channel_type?: string; label?: string; ig_username?: string | null } | null>(
         (resolve, reject) => {
-          // O postMessage é o caminho rápido, mas NÃO se pode depender dele: o
-          // Supabase serve a resposta do popup como text/plain, por isso o
-          // browser mostra o HTML como texto e nunca corre o script. Quando isso
-          // acontece só resta o fecho da janela — e fechar não distingue "ligou"
-          // de "desistiu". Por isso o fecho não decide nada: vai confirmar aos
-          // dados (abaixo) o que aconteceu de facto.
+          // O popup acaba em /oauth/meta, no NOSSO domínio, e é de lá que vem o
+          // postMessage — na edge function nunca corria, porque a Supabase serve
+          // tudo como text/plain e o browser mostrava o código em vez de o
+          // executar. Mesmo assim o fecho da janela continua a ser vigiado: se
+          // por alguma razão a mensagem não chegar, fechar não distingue "ligou"
+          // de "desistiu", e vai-se confirmar aos dados (abaixo).
           const timer = setInterval(() => {
             if (popup.closed) { cleanup(); resolve(null); }
           }, 700);
@@ -180,7 +235,7 @@ export function useConnectMetaChannel() {
       const wanted = connect === 'messenger' ? 'facebook' : 'instagram';
       const { data: created } = await supabase
         .from('messaging_channels')
-        .select('channel_type, label, metadata')
+        .select('channel_type, label, metadata_public')
         .eq('organization_id', organization.id)
         .eq('channel_type', wanted)
         .gte('created_at', before)
@@ -192,7 +247,7 @@ export function useConnectMetaChannel() {
       return {
         channel_type: created.channel_type,
         label: created.label ?? '',
-        ig_username: (created.metadata as { ig_username?: string } | null)?.ig_username ?? null,
+        ig_username: (created.metadata_public as { ig_username?: string } | null)?.ig_username ?? null,
       };
     },
     onSuccess: () => {

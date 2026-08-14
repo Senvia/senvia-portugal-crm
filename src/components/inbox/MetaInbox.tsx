@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MessageCircle, Send, PanelLeft, Clock } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,7 +11,8 @@ import { formatRelativeTime, formatDateTime } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   useMetaConversations, useMetaMessages, useSendMetaMessage, useMarkMetaRead,
-  type MetaConversation,
+  useMetaAction, useSendMetaAttachment,
+  type MetaConversation, type MetaMessage,
 } from '@/hooks/useMetaInbox';
 
 /**
@@ -23,13 +25,16 @@ import {
 export function MetaInbox({
   channelId,
   channelLabel,
+  channelType,
   onOpenRail,
 }: {
   channelId: string;
   channelLabel: string;
+  /** 'instagram' ou 'facebook' — o Instagram só aceita uma reação. */
+  channelType?: string;
   onOpenRail?: () => void;
 }) {
-  const { data: conversations = [], isLoading } = useMetaConversations(channelId);
+  const { data: conversations = [], isLoading, isError, refetch } = useMetaConversations(channelId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const markRead = useMarkMetaRead();
@@ -49,7 +54,7 @@ export function MetaInbox({
 
   const openConversation = (c: MetaConversation) => {
     setSelectedId(c.id);
-    if (c.unread_count > 0) markRead.mutate(c.id);
+    if (c.unread_count > 0) markRead.mutate({ conversationId: c.id, seen: c.unread_count });
   };
 
   return (
@@ -78,6 +83,18 @@ export function MetaInbox({
             <div className="space-y-2 p-3">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
             </div>
+          ) : isError ? (
+            /* Uma falha de leitura NÃO pode aparecer como "ainda sem conversas":
+               o agente lê isso como "este cliente não escreveu nada" e a verdade
+               é que não conseguimos ir buscar o que ele escreveu. */
+            <div className="flex flex-col items-center gap-3 p-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Não foi possível carregar as conversas.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={MessageCircle}
@@ -94,6 +111,7 @@ export function MetaInbox({
                   selectedId === c.id && 'bg-primary/5',
                 )}
               >
+                <ContactAvatar name={c.contact_name} url={c.contact_avatar_url} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-foreground">
@@ -123,7 +141,11 @@ export function MetaInbox({
       {/* Conversa */}
       {selected ? (
         <MetaThread
+          // Sem `key`, o rascunho e a resposta citada da conversa anterior ainda
+          // aparecem por baixo do cabeçalho da nova durante um instante.
+          key={selected.id}
           conversation={selected}
+          channelType={channelType}
           onBack={() => setSelectedId(null)}
         />
       ) : (
@@ -137,42 +159,185 @@ export function MetaInbox({
   );
 }
 
+/**
+ * Uma mensagem escrita pelo agente que a Meta ainda não confirmou.
+ *
+ * Antes, entre carregar em enviar e a mensagem aparecer, não havia nada: um
+ * botão a rodar e a conversa na mesma. A Meta demora porque vai BUSCAR o
+ * ficheiro ao nosso armazenamento antes de responder — e nesse silêncio o
+ * agente escreve outra vez.
+ */
+interface Pendente {
+  id: string;
+  texto?: string;
+  ficheiro?: File;
+  /** Endereço local, para mostrar a imagem ou ouvir o áudio sem esperar. */
+  previewUrl?: string;
+  tipo?: string;
+  replyToMid?: string | null;
+  erro?: string | null;
+}
+
 function MetaThread({
   conversation,
+  channelType,
   onBack,
 }: {
   conversation: MetaConversation;
+  channelType?: string;
   onBack: () => void;
 }) {
-  const { data: messages = [], isLoading } = useMetaMessages(conversation.id);
+  const { data: messages = [], isLoading, isError, refetch } = useMetaMessages(conversation.id);
   const send = useSendMetaMessage();
+  const markRead = useMarkMetaRead();
+  const act = useMetaAction();
+  const sendFile = useSendMetaAttachment();
   const [draft, setDraft] = useState('');
+  // Mensagem a que se está a responder. Guarda-se a mensagem inteira, não só o
+  // id, para mostrar a citação sem a ir procurar outra vez à lista.
+  const [replyTo, setReplyTo] = useState<MetaMessage | null>(null);
+  const [aGravar, setAGravar] = useState(false);
+  // Mensagens já escritas mas ainda não confirmadas pela Meta. Existem só aqui,
+  // no ecrã: quando a Meta confirma, a mensagem verdadeira vem da base de dados
+  // e esta desaparece.
+  const [pendentes, setPendentes] = useState<Pendente[]>([]);
+  // Espelho para a limpeza no desmontar: o efeito de limpeza corre uma vez só e
+  // veria a lista vazia do primeiro render.
+  const pendentesRef = useRef<Pendente[]>([]);
+  pendentesRef.current = pendentes;
+  const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const typingRef = useRef<number | null>(null);
 
-  useEffect(() => { setDraft(''); }, [conversation.id]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+  useEffect(() => { setDraft(''); setReplyTo(null); }, [conversation.id]);
+  // Também desce quando a bolha pendente aparece — senão a mensagem que se
+  // acabou de escrever nascia fora do ecrã.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, pendentes.length]);
+
+  // Os endereços locais das pré-visualizações ficam presos à memória do
+  // browser até serem largados à mão.
+  useEffect(() => () => {
+    pendentesRef.current.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+  }, []);
 
   // A Meta só deixa responder até 24h depois da última mensagem DA PESSOA.
   // Mostrar isto antes de escrever evita perder uma resposta já redigida.
   const windowExpired = !!conversation.window_expires_at
     && new Date(conversation.window_expires_at) < new Date();
 
+  // "Visto" ao abrir a conversa — é o que a pessoa do outro lado espera ver.
+  //
+  // Fora da janela das 24h a Meta recusa, e a recusa vinha como erro não tratado
+  // sempre que se abria uma conversa antiga. Não se pede o que já se sabe que
+  // vai ser negado.
+  useEffect(() => {
+    if (windowExpired) return;
+    act.mutate({ conversationId: conversation.id, action: 'mark_seen' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id]);
+
+  // Mensagens que cheguem com a conversa ABERTA também contam como lidas. Sem
+  // isto, o contador subia na conversa que o agente está literalmente a ler, e
+  // só descia ao sair e voltar a entrar.
+  useEffect(() => {
+    if (conversation.unread_count > 0) {
+      markRead.mutate({ conversationId: conversation.id, seen: conversation.unread_count });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, conversation.unread_count]);
+
+  /**
+   * "A escrever…" no Instagram da pessoa.
+   *
+   * Estrangulado a um envio por 3 segundos: a cada tecla seria uma chamada à
+   * Meta por caractere, o que arde o limite de pedidos sem acrescentar nada —
+   * o indicador dela dura alguns segundos de qualquer forma.
+   */
+  const sinalizarEscrita = () => {
+    const agora = Date.now();
+    if (typingRef.current && agora - typingRef.current < 3000) return;
+    typingRef.current = agora;
+    act.mutate({ conversationId: conversation.id, action: 'typing_on' });
+  };
+
+  /**
+   * Enviar (ou reenviar) uma mensagem que já está na conversa como pendente.
+   *
+   * A bolha só sai da lista de pendentes DEPOIS de a releitura trazer a
+   * mensagem verdadeira. Tirá-la mal a Meta responde deixava um buraco de
+   * meio segundo em que a mensagem não estava em lado nenhum — e é nesse
+   * buraco que o agente carrega em enviar outra vez.
+   */
+  const enviarPendente = async (item: Pendente) => {
+    setPendentes((ps) => ps.map((p) => (p.id === item.id ? { ...p, erro: null } : p)));
+    try {
+      if (item.ficheiro) {
+        await sendFile.mutateAsync({ conversationId: conversation.id, file: item.ficheiro });
+      } else {
+        await send.mutateAsync({
+          conversationId: conversation.id,
+          text: item.texto!,
+          replyToMid: item.replyToMid ?? null,
+        });
+      }
+      await queryClient.refetchQueries({ queryKey: ['meta-messages', conversation.id] });
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      setPendentes((ps) => ps.filter((p) => p.id !== item.id));
+    } catch (e) {
+      const msg = (e as Error).message;
+      setPendentes((ps) => ps.map((p) => (p.id === item.id ? { ...p, erro: msg } : p)));
+      // A bolha diz que falhou; o aviso diz porquê. O motivo da Meta costuma
+      // ser longo de mais para caber na conversa.
+      toast.error('Não foi enviada', { description: msg });
+    }
+  };
+
+  const descartar = (item: Pendente) => {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    setPendentes((ps) => ps.filter((p) => p.id !== item.id));
+  };
+
   const handleSend = () => {
     const text = draft.trim();
     if (!text) return;
-    send.mutate(
-      { conversationId: conversation.id, text },
-      {
-        onSuccess: () => setDraft(''),
-        onError: (e) => toast.error('Não foi enviada', { description: (e as Error).message }),
-      },
-    );
+    // Limpa-se já a caixa de texto: a bolha passa a ser o sítio onde a mensagem
+    // vive, e é lá que se vê se foi ou não.
+    const item: Pendente = {
+      id: crypto.randomUUID(),
+      texto: text,
+      replyToMid: replyTo?.external_id ?? null,
+    };
+    setPendentes((ps) => [...ps, item]);
+    setDraft('');
+    setReplyTo(null);
+    void enviarPendente(item);
+  };
+
+  /** Anexo ou nota de voz: mostra-se logo, a partir do ficheiro local. */
+  const enviarFicheiro = (file: File) => {
+    const tipo = file.type.startsWith('image/') ? 'image'
+      : file.type.startsWith('video/') ? 'video'
+      : file.type.startsWith('audio/') ? 'audio'
+      : 'file';
+    const item: Pendente = {
+      id: crypto.randomUUID(),
+      ficheiro: file,
+      // Pré-visualização sem esperar pela Meta: o ficheiro já está aqui.
+      previewUrl: URL.createObjectURL(file),
+      tipo,
+    };
+    setPendentes((ps) => [...ps, item]);
+    void enviarPendente(item);
   };
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b p-3">
         <Button variant="ghost" size="sm" className="md:hidden" onClick={onBack}>Voltar</Button>
+        <ContactAvatar name={conversation.contact_name} url={conversation.contact_avatar_url} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {conversation.contact_name || conversation.contact_ref}
@@ -189,35 +354,138 @@ function MetaThread({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
         {isLoading ? (
           [...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-2/3 rounded-lg" />)
+        ) : isError ? (
+          /* "Sem mensagens" quando a leitura falhou é enganar o agente: ele
+             responde a partir de uma conversa que julga vazia. */
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Não foi possível carregar as mensagens desta conversa.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : messages.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground">Sem mensagens nesta conversa.</p>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className={cn('flex', m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+            <div key={m.id} className={cn('group/msg flex items-center gap-1', m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+              {/* Reagir. Só faz sentido em mensagens que a Meta conhece pelo id
+                  — sem external_id não há a que reagir do lado dela. */}
+              {m.direction === 'outgoing' && m.external_id && (
+                <>
+                  <ReplyButton onClick={() => setReplyTo(m)} />
+                  <ReactionPicker
+                    channelType={channelType}
+                    current={m.reaction}
+                    onPick={(emoji) => act.mutate({
+                      conversationId: conversation.id,
+                      action: emoji ? 'react' : 'unreact',
+                      messageExternalId: m.external_id,
+                      reaction: emoji ?? undefined,
+                    })}
+                  />
+                </>
+              )}
               <div className={cn(
-                'max-w-[75%] rounded-2xl px-3 py-2 text-sm',
+                'relative max-w-[75%] rounded-2xl px-3 py-2 text-sm',
                 m.direction === 'outgoing'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground',
               )}>
-                {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-                {m.attachments?.map((a, i) => (
-                  a.url
-                    ? <a key={i} href={a.url} target="_blank" rel="noreferrer" className="block text-xs underline">
-                        {a.type === 'image' ? 'Imagem' : a.type === 'video' ? 'Vídeo' : 'Anexo'}
-                      </a>
-                    : <span key={i} className="text-xs opacity-70">[{a.type}]</span>
-                ))}
+                {/* Citação da mensagem respondida, como no Instagram. */}
+                {m.reply_to_external_id && (
+                  <QuotedMessage
+                    original={messages.find((o) => o.external_id === m.reply_to_external_id) ?? null}
+                    outgoing={m.direction === 'outgoing'}
+                  />
+                )}
+                {m.is_deleted ? (
+                  // A pessoa retirou a mensagem. Continuar a mostrá-la seria
+                  // responder a algo que ela já não vê do lado dela.
+                  <p className="italic opacity-70">Mensagem apagada</p>
+                ) : (
+                  <>
+                    {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+                    {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
+                  </>
+                )}
                 <p className={cn(
                   'mt-0.5 text-[10px]',
                   m.direction === 'outgoing' ? 'text-primary-foreground/70' : 'text-muted-foreground',
                 )}>
-                  {formatRelativeTime(m.created_at)}
+                  {formatRelativeTime(m.sent_at ?? m.created_at)}
                 </p>
+                {m.reaction && (
+                  // Colada ao canto inferior, como no Instagram.
+                  <span
+                    title={m.reaction_by === 'agent' ? 'Reagiste a esta mensagem' : 'Reação do contacto'}
+                    className="absolute -bottom-2 -right-1 rounded-full border bg-background px-1 text-xs shadow-sm"
+                  >
+                    {m.reaction}
+                  </span>
+                )}
               </div>
+              {m.direction === 'incoming' && m.external_id && (
+                <>
+                  <ReactionPicker
+                    channelType={channelType}
+                    current={m.reaction}
+                    onPick={(emoji) => act.mutate({
+                      conversationId: conversation.id,
+                      action: emoji ? 'react' : 'unreact',
+                      messageExternalId: m.external_id,
+                      reaction: emoji ?? undefined,
+                    })}
+                  />
+                  <ReplyButton onClick={() => setReplyTo(m)} />
+                </>
+              )}
             </div>
           ))
         )}
+
+        {/* Já escritas, ainda por confirmar. Ficam esbatidas até a Meta aceitar
+            — e se recusar, ficam com o que aconteceu e o que fazer a seguir. */}
+        {pendentes.map((p) => (
+          <div key={p.id} className="flex justify-end">
+            <div className={cn(
+              'max-w-[75%] rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground',
+              !p.erro && 'opacity-60',
+            )}>
+              {p.texto && <p className="whitespace-pre-wrap break-words">{p.texto}</p>}
+              {p.previewUrl && p.tipo === 'image' && (
+                <img src={p.previewUrl} alt="" className="mt-1 max-h-64 max-w-full rounded-lg" />
+              )}
+              {p.previewUrl && p.tipo === 'video' && (
+                <video src={p.previewUrl} controls className="mt-1 max-h-64 max-w-full rounded-lg" />
+              )}
+              {p.previewUrl && p.tipo === 'audio' && (
+                <audio src={p.previewUrl} controls className="mt-1 max-w-full" />
+              )}
+              {p.ficheiro && p.tipo === 'file' && (
+                <p className="mt-1 text-xs">{p.ficheiro.name}</p>
+              )}
+
+              {p.erro ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="font-medium">Não foi enviada</span>
+                  <button type="button" onClick={() => void enviarPendente(p)} className="underline">
+                    Tentar novamente
+                  </button>
+                  <button type="button" onClick={() => descartar(p)} className="underline opacity-80">
+                    Descartar
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-primary-foreground/70">
+                  <Loader2 className="h-3 w-3 animate-spin" /> A enviar…
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+
         <div ref={endRef} />
       </div>
 
@@ -231,10 +499,56 @@ function MetaThread({
             nova mensagem.
           </p>
         ) : (
+          <div className="space-y-2">
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted/60 px-2 py-1.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-primary">
+                  Responder a {replyTo.direction === 'outgoing' ? 'ti' : (conversation.contact_name || 'contacto')}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {replyTo.content || `[${replyTo.attachments?.[0]?.type ?? 'anexo'}]`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyTo(null)}
+                title="Cancelar resposta"
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <div className="flex items-end gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              // A Meta documenta, para o Instagram, apenas imagem (PNG/JPEG),
+              // áudio e vídeo. O PDF é do Messenger — oferecê-lo no Instagram
+              // era um botão que dá erro da Meta depois de escolher o ficheiro.
+              accept={channelType === 'facebook'
+                ? 'image/png,image/jpeg,video/*,audio/*,application/pdf'
+                : 'image/png,image/jpeg,video/*,audio/*'}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) enviarFicheiro(f);
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              title={channelType === 'facebook' ? 'Enviar imagem, vídeo, áudio ou PDF' : 'Enviar imagem, vídeo ou áudio'}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <Textarea
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { setDraft(e.target.value); sinalizarEscrita(); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
@@ -242,12 +556,428 @@ function MetaThread({
               rows={1}
               className="max-h-32 min-h-[40px] resize-none"
             />
-            <Button onClick={handleSend} disabled={!draft.trim() || send.isPending} size="icon" className="h-10 w-10 shrink-0">
-              {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
+            {/* Como no Instagram: sem texto escrito, o botão grava voz; com
+                texto, envia. Um só lugar para "responder", em vez de tratar a
+                voz como se fosse um ficheiro qualquer. */}
+            {/* `&& !aGravar`: escrever uma letra a meio de uma gravação trocava
+                o gravador pelo botão de enviar, e a gravação era interrompida a
+                meio — enviando o pedaço já gravado. */}
+            {draft.trim() && !aGravar ? (
+              <Button onClick={handleSend} size="icon" className="h-10 w-10 shrink-0">
+                <Send className="h-4 w-4" />
+              </Button>
+            ) : (
+              <VoiceRecorder
+                onRecordingChange={setAGravar}
+                onRecorded={enviarFicheiro}
+              />
+            )}
+          </div>
           </div>
         )}
       </footer>
     </section>
+  );
+}
+
+/**
+ * Foto do contacto, com as iniciais como recurso.
+ *
+ * O endereço da foto vem assinado pela Meta e EXPIRA — por isso o onError não é
+ * decoração: quando o link caduca, a imagem falha e sem isto ficava um quadrado
+ * partido. Cai nas iniciais, que funcionam sempre.
+ */
+function ContactAvatar({ name, url }: { name: string | null; url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const label = (name ?? '').replace(/^@/, '');
+  const initials = label
+    ? label.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')
+    : '?';
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={label || 'Contacto'}
+        onError={() => setFailed(true)}
+        className="h-9 w-9 shrink-0 rounded-full object-cover"
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+      {initials}
+    </span>
+  );
+}
+
+/**
+ * Extrai o tipo e o código de uma publicação/Reel do Instagram.
+ *
+ * O tipo importa: o incorporador usava sempre `/reel/`, e uma FOTO partilhada
+ * ficava com um endereço de reel — uma caixa em branco de 560px.
+ */
+function instagramCode(url: string): { seg: string; code: string } | null {
+  const m = url.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  return { seg: m[1] === 'reels' ? 'reel' : m[1], code: m[2] };
+}
+
+/**
+ * Desenha o anexo conforme o que ele é.
+ *
+ * A Meta manda tipos diferentes e antes tratava-os todos como "Anexo" com um
+ * link — obrigando a sair do CRM para ver uma imagem que já vinha pronta a
+ * mostrar.
+ *
+ * Reels e publicações partilhadas não vêm com ficheiro: vêm com o endereço do
+ * post. Para esses usa-se o incorporador público do Instagram, que não precisa
+ * de API nem de permissões — mas só funciona com contas/publicações públicas,
+ * por isso há sempre o link por baixo.
+ *
+ * Nota sobre imagens e vídeos: os endereços do CDN da Meta são assinados e
+ * EXPIRAM. Enquanto a conversa é recente mostram-se; mais tarde deixam de
+ * abrir, e por isso o link fica sempre disponível como alternativa.
+ */
+function Attachment({ type, url }: { type: string; url: string | null }) {
+  const [broken, setBroken] = useState(false);
+  if (!url) return <span className="text-xs opacity-70">[{type}]</span>;
+
+  const ig = instagramCode(url);
+  // `share` foi retirado pela Meta em fevereiro de 2026 e substituído por
+  // `ig_post`. Sem o novo nome, uma publicação partilhada caía no ramo genérico
+  // e aparecia como "Anexo" com um link.
+  const isShare = type === 'ig_reel' || type === 'ig_post' || type === 'share' || !!ig;
+
+  if (isShare && ig && !broken) {
+    return <InstagramEmbed seg={ig.seg} code={ig.code} url={url} onBroken={() => setBroken(true)} />;
+  }
+
+  if (type === 'image' && !broken) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="mt-1 block">
+        <img
+          src={url}
+          alt="Imagem recebida"
+          onError={() => setBroken(true)}
+          className="max-h-64 max-w-full rounded-lg object-cover"
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+
+  if ((type === 'video' || type === 'audio') && !broken) {
+    const Tag = type === 'video' ? 'video' : 'audio';
+    return (
+      <Tag
+        src={url}
+        controls
+        onError={() => setBroken(true)}
+        className={cn('mt-1 max-w-full rounded-lg', type === 'video' && 'max-h-64')}
+      />
+    );
+  }
+
+  const rotulo = type === 'image' ? 'Imagem'
+    : type === 'video' ? 'Vídeo'
+    : type === 'audio' ? 'Áudio'
+    : type === 'story_mention' ? 'Menção em story'
+    : type === 'story_reply' ? 'Resposta a um story'
+    : isShare ? 'Publicação do Instagram'
+    : 'Anexo';
+
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs underline">
+      {rotulo}{broken ? ' (já não abre aqui)' : ''}
+    </a>
+  );
+}
+
+/** As reações que o Instagram aceita na aplicação. */
+// O Instagram só reconhece UMA reação: o coração. Mostrar as outras seis era
+// oferecer seis botões dos quais cinco davam erro da Meta em cima da conversa.
+// No Messenger existem mesmo todas.
+const REACOES_MESSENGER = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+const REACOES_INSTAGRAM = ['❤️'];
+
+/**
+ * Escolher (ou tirar) a reação a uma mensagem.
+ *
+ * Aparece ao passar o rato — colar seis emojis a cada linha da conversa
+ * tornaria a leitura impossível.
+ */
+function ReactionPicker({
+  current,
+  channelType,
+  onPick,
+}: {
+  current: string | null;
+  channelType?: string;
+  onPick: (emoji: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const reacoes = channelType === 'facebook' ? REACOES_MESSENGER : REACOES_INSTAGRAM;
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Reagir"
+        className={cn(
+          'rounded-full p-1 text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground',
+          open ? 'opacity-100' : 'opacity-0 group-hover/msg:opacity-100',
+        )}
+      >
+        <SmilePlus className="h-3.5 w-3.5" />
+      </button>
+
+      {open && (
+        <>
+          {/* Fecha ao clicar fora, sem prender o clique dentro do seletor. */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 gap-0.5 rounded-full border bg-popover p-1 shadow-md">
+            {reacoes.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => { onPick(current === e ? null : e); setOpen(false); }}
+                className={cn(
+                  'rounded-full px-1 text-base leading-none transition-transform hover:scale-125',
+                  current === e && 'bg-accent',
+                )}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Publicação do Instagram incorporada, sem barra de scroll.
+ *
+ * Uma altura fixa nunca serve: o incorporador traz cabeçalho, vídeo e legenda, e
+ * cada publicação tem um tamanho diferente — foi por isso que 400px cortava o
+ * Reel e 9:16 continuava a deixar scroll.
+ *
+ * O próprio Instagram resolve isto: a página incorporada envia à janela-mãe a
+ * altura de que precisa, com `{"type":"MEASURE","details":{"height":N}}`. É o
+ * mecanismo que o script oficial deles usa para redimensionar. Ouve-se essa
+ * mensagem e ajusta-se — assim cabe sempre, seja qual for a publicação.
+ */
+function InstagramEmbed({
+  seg,
+  code,
+  url,
+  onBroken,
+}: {
+  seg: string;
+  code: string;
+  url: string;
+  onBroken: () => void;
+}) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  // Altura inicial só para não saltar antes de a medição chegar.
+  const [height, setHeight] = useState(560);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('instagram.com')) return;
+      // Só mensagens deste iframe: a conversa pode ter vários incorporados.
+      if (frameRef.current && event.source !== frameRef.current.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const h = Number(data?.details?.height);
+        if (data?.type === 'MEASURE' && Number.isFinite(h) && h > 0) setHeight(Math.ceil(h));
+      } catch { /* nem tudo o que o Instagram envia é a medição */ }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  return (
+    <div className="mt-1 overflow-hidden rounded-lg bg-background">
+      <iframe
+        ref={frameRef}
+        src={`https://www.instagram.com/${seg}/${code}/embed`}
+        title="Publicação do Instagram"
+        style={{ height }}
+        // scrolling="no" evita a barra no intervalo entre montar e medir.
+        scrolling="no"
+        className="w-full max-w-[340px] border-0"
+        loading="lazy"
+        allowFullScreen
+        onError={onBroken}
+      />
+      <a href={url} target="_blank" rel="noreferrer" className="block px-2 py-1 text-[11px] underline opacity-80">
+        Abrir no Instagram
+      </a>
+    </div>
+  );
+}
+
+/**
+ * Gravar uma mensagem de voz e enviá-la.
+ *
+ * Sobre o formato: o MediaRecorder de cada browser grava no que lhe apetece, e a
+ * Meta só aceita alguns. Tenta-se por ordem de compatibilidade (MP4/AAC primeiro,
+ * que é o mais universal; OGG e WEBM a seguir) em vez de assumir um — o Safari
+ * não grava WEBM e o Chrome não grava MP4 em todas as versões.
+ */
+const FORMATOS_AUDIO = [
+  { mime: 'audio/mp4', ext: 'm4a' },
+  { mime: 'audio/ogg;codecs=opus', ext: 'ogg' },
+  { mime: 'audio/webm;codecs=opus', ext: 'webm' },
+  { mime: 'audio/webm', ext: 'webm' },
+];
+
+function VoiceRecorder({
+  onRecorded,
+  onRecordingChange,
+  disabled,
+}: {
+  onRecorded: (file: File) => void;
+  onRecordingChange?: (a: boolean) => void;
+  disabled?: boolean;
+}) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const tickRef = useRef<number | null>(null);
+
+  // Largar o microfone e o contador se o componente sair a meio de uma gravação
+  // — senão o browser fica com a luz do micro acesa indefinidamente.
+  //
+  // O buffer é limpo PRIMEIRO. Parar as pistas do stream faz o MediaRecorder
+  // disparar `onstop`, e o `onstop` envia: sem esta linha, desmontar a meio de
+  // uma gravação mandava ao cliente meio áudio que ninguém pediu, sem sequer
+  // aparecer na conversa.
+  useEffect(() => () => {
+    if (tickRef.current) window.clearInterval(tickRef.current);
+    chunksRef.current = [];
+    recRef.current?.stream.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  const começar = async () => {
+    const formato = FORMATOS_AUDIO.find((f) => MediaRecorder.isTypeSupported(f.mime));
+    if (!formato) {
+      toast.error('O teu browser não permite gravar áudio.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream, { mimeType: formato.mime });
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: formato.mime });
+        // Gravações de menos de um segundo são quase sempre um toque acidental.
+        if (blob.size > 1000) {
+          onRecorded(new File([blob], `voz-${Date.now()}.${formato.ext}`, { type: formato.mime }));
+        }
+      };
+      rec.start();
+      recRef.current = rec;
+      setRecording(true);
+      onRecordingChange?.(true);
+      setSeconds(0);
+      tickRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    } catch {
+      toast.error('Sem acesso ao microfone', {
+        description: 'Autoriza o microfone para este site nas definições do browser.',
+      });
+    }
+  };
+
+  const parar = (enviar: boolean) => {
+    if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null; }
+    const rec = recRef.current;
+    if (!rec) return;
+    // Cancelar: limpa o que foi gravado ANTES de parar, para o onstop não enviar.
+    if (!enviar) chunksRef.current = [];
+    rec.stop();
+    recRef.current = null;
+    setRecording(false);
+    onRecordingChange?.(false);
+  };
+
+  if (recording) {
+    return (
+      <div className="flex h-10 shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-2">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+        <span className="text-xs font-medium tabular-nums text-destructive">
+          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        </span>
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="Cancelar" onClick={() => parar(false)}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="icon" className="h-7 w-7" title="Enviar" onClick={() => parar(true)}>
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-10 w-10 shrink-0"
+      title="Gravar mensagem de voz"
+      disabled={disabled}
+      onClick={começar}
+    >
+      <Mic className="h-4 w-4" />
+    </Button>
+  );
+}
+
+/** Botão de responder a uma mensagem. Aparece ao passar o rato, como o de reagir. */
+function ReplyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Responder a esta mensagem"
+      className="shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/msg:opacity-100"
+    >
+      <Reply className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+/**
+ * A mensagem citada dentro da bolha.
+ *
+ * `original` pode vir nulo: responde-se a mensagens antigas que já não estão
+ * carregadas na conversa, e a citação não pode desaparecer só por isso — mostra
+ * que houve uma resposta, mesmo sem conseguir mostrar a quê.
+ */
+function QuotedMessage({
+  original,
+  outgoing,
+}: {
+  original: MetaMessage | null;
+  outgoing: boolean;
+}) {
+  return (
+    <div className={cn(
+      'mb-1 border-l-2 pl-2 text-xs',
+      outgoing ? 'border-primary-foreground/40 text-primary-foreground/75' : 'border-primary/40 text-muted-foreground',
+    )}>
+      {original
+        ? <p className="line-clamp-2 break-words">
+            {original.content || `[${original.attachments?.[0]?.type ?? 'anexo'}]`}
+          </p>
+        : <p className="italic opacity-70">mensagem anterior</p>}
+    </div>
   );
 }

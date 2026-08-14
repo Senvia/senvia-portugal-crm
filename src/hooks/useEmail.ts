@@ -107,7 +107,7 @@ export function useEmailMessages(folderId: string | null) {
 // the folder counts and message lists for this caixa without a manual reload.
 // Command types surfaced with a friendly pt-PT label when they fail — everything
 // else falls back to a generic "ação" so a new command type never crashes this.
-const COMMAND_LABELS: Record<string, string> = {
+export const COMMAND_LABELS: Record<string, string> = {
   send: 'Enviar email',
   archive: 'Arquivar', spam: 'Marcar como spam', delete: 'Apagar', move: 'Mover',
   mark_read: 'Marcar como lida', mark_unread: 'Marcar como não lida',
@@ -149,6 +149,45 @@ export function useEmailRealtime(channelId: string | null) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [channelId, qc, toast]);
+}
+
+export interface EmailCommandFailure {
+  id: string;
+  type: string;
+  error: string | null;
+  created_at: string;
+}
+
+/**
+ * Ações de email que falharam e ninguém viu.
+ *
+ * O aviso de falha era só um evento em tempo real: se não estivesses com o CRM
+ * aberto no instante exato, desaparecia sem deixar rasto. E a interface já tinha
+ * removido a mensagem da lista de forma otimista — ficavas a pensar que
+ * arquivaste um email que continua na caixa.
+ *
+ * Isto é a lista do que ficou por fazer, que se pode ver a qualquer hora.
+ */
+export function useEmailCommandFailures(channelId: string | null) {
+  return useQuery({
+    queryKey: ['email-command-failures', channelId],
+    queryFn: async (): Promise<EmailCommandFailure[]> => {
+      if (!channelId) return [];
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await db
+        .from('email_commands')
+        .select('id, type, error, created_at')
+        .eq('channel_id', channelId)
+        .eq('status', 'error')
+        .gte('created_at', desde)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data || []) as EmailCommandFailure[];
+    },
+    enabled: !!channelId,
+    refetchInterval: 60_000,
+  });
 }
 
 export interface RecipientSuggestion {

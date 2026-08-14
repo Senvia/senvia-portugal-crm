@@ -40,7 +40,15 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
   const queue = async (type: string, payload: Record<string, unknown>) => {
     if (!orgId || !channelId) throw new Error('Caixa não selecionada');
     const { error } = await db.from('email_commands').insert({
-      organization_id: orgId, channel_id: channelId, type, payload,
+      organization_id: orgId,
+      channel_id: channelId,
+      type,
+      payload,
+      // Quem pediu a ação. A coluna já existia e nunca era preenchida: os 135
+      // comandos em produção — incluindo 5 ENVIOS de email em nome da empresa —
+      // tinham autor nulo. Não havia como saber quem tinha escrito o quê a
+      // partir da morada da empresa.
+      created_by: user?.id ?? null,
     });
     if (error) throw error;
   };

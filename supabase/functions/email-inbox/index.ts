@@ -1,7 +1,8 @@
 // email-inbox — CRUD for email inboxes (Chatwoot email channel via IMAP/SMTP).
 // Actions: create | update | delete
-// All credential handling stays server-side; passwords are stored in metadata JSONB
-// (protected by RLS) and never returned to the browser.
+// All credential handling stays server-side: passwords live in
+// messaging_channel_secrets (RLS on, zero policies) — NOT in metadata, which the
+// CRM reads from the browser. Ate 2026-08-13 estavam la, e chegavam la.
 import {
   corsHeaders, json, getConfig, authOrgAdmin, chatwootFetch, ensureChatwootAccount,
 } from '../_shared/multicanal.ts';
@@ -125,18 +126,19 @@ Deno.serve(async (req) => {
         return json({ error: 'Chatwoot não devolveu ID da caixa criada' }, 502);
       }
 
+      // As passwords NÃO entram aqui. Este objeto é lido pelo CRM; tudo o que
+      // lhe puseres dentro chega ao browser de qualquer membro da organização.
+      // Elas vão para messaging_channel_secrets, logo a seguir.
       const metadata = {
         email_address: emailNorm,
         imap_server: email_config.imap_server.trim(),
         imap_port: Number(email_config.imap_port) || 993,
         imap_ssl: email_config.imap_ssl !== false,
         imap_login: (email_config.imap_login || emailNorm).trim(),
-        imap_password: email_config.imap_password,
         smtp_server: email_config.smtp_server.trim(),
         smtp_port: Number(email_config.smtp_port) || 587,
         smtp_ssl: email_config.smtp_ssl === true,
         smtp_login: (email_config.smtp_login || emailNorm).trim(),
-        smtp_password: email_config.smtp_password,
         provider_key: email_config.provider_key || 'custom',
       };
 
@@ -159,6 +161,23 @@ Deno.serve(async (req) => {
         console.error('[email-inbox] DB insert failed, rolling back CW inbox', chatwootInboxId, dbErr);
         await chatwootFetch(cfg, token, `${base}/inboxes/${chatwootInboxId}`, 'DELETE').catch((_e) => {});
         return json({ error: 'Erro ao guardar caixa na base de dados' }, 500);
+      }
+
+      // As credenciais, fora do alcance do browser. Sem elas o gateway não liga
+      // à caixa — por isso, se isto falhar, desfaz-se tudo em vez de deixar uma
+      // caixa que aparece na lista e nunca recebe email.
+      const { error: segredoErr } = await admin.from('messaging_channel_secrets').upsert({
+        channel_id: channel.id,
+        organization_id,
+        imap_password: email_config.imap_password,
+        smtp_password: email_config.smtp_password,
+      }, { onConflict: 'channel_id' });
+
+      if (segredoErr) {
+        console.error('[email-inbox] secrets insert failed, rolling back', segredoErr);
+        await admin.from('messaging_channels').delete().eq('id', channel.id);
+        await chatwootFetch(cfg, token, `${base}/inboxes/${chatwootInboxId}`, 'DELETE').catch((_e) => {});
+        return json({ error: 'Erro ao guardar as credenciais da caixa' }, 500);
       }
 
       return json({ ok: true, channel_id: channel.id, chatwoot_inbox_id: chatwootInboxId });
@@ -184,8 +203,24 @@ Deno.serve(async (req) => {
 
       const existing = (ch.metadata as Record<string, unknown>) ?? {};
 
+      // As passwords atuais vêm do cofre, não do metadata. Um metadata antigo
+      // ainda pode tê-las (caixas criadas antes da mudança) — daí o recurso.
+      const { data: segredo } = await admin
+        .from('messaging_channel_secrets')
+        .select('imap_password, smtp_password')
+        .eq('channel_id', channel_id)
+        .maybeSingle();
+
       // Merge only fields explicitly provided; keep existing passwords if blank
       const newMeta: Record<string, unknown> = { ...existing };
+      // Se lá estiverem de uma versão anterior, saem agora — é este o momento
+      // em que a caixa deixa de as expor.
+      delete newMeta.imap_password;
+      delete newMeta.smtp_password;
+
+      let imapPass = segredo?.imap_password ?? (existing.imap_password as string | undefined) ?? null;
+      let smtpPass = segredo?.smtp_password ?? (existing.smtp_password as string | undefined) ?? null;
+
       if (email_config) {
         const ec = email_config;
         if (ec.email_address) newMeta.email_address = ec.email_address.toLowerCase().trim();
@@ -193,12 +228,13 @@ Deno.serve(async (req) => {
         if (ec.imap_port) newMeta.imap_port = Number(ec.imap_port);
         if (ec.imap_ssl !== undefined) newMeta.imap_ssl = ec.imap_ssl;
         if (ec.imap_login) newMeta.imap_login = ec.imap_login.trim();
-        if (ec.imap_password) newMeta.imap_password = ec.imap_password;
+        // Em branco = manter a atual, que é o que a interface promete.
+        if (ec.imap_password) imapPass = ec.imap_password;
         if (ec.smtp_server) newMeta.smtp_server = ec.smtp_server.trim();
         if (ec.smtp_port) newMeta.smtp_port = Number(ec.smtp_port);
         if (ec.smtp_ssl !== undefined) newMeta.smtp_ssl = ec.smtp_ssl;
         if (ec.smtp_login) newMeta.smtp_login = ec.smtp_login.trim();
-        if (ec.smtp_password) newMeta.smtp_password = ec.smtp_password;
+        if (ec.smtp_password) smtpPass = ec.smtp_password;
         if (ec.provider_key) newMeta.provider_key = ec.provider_key;
       }
 
@@ -212,13 +248,13 @@ Deno.serve(async (req) => {
         cwBody.channel = {
           email: newMeta.email_address,
           imap_login: newMeta.imap_login,
-          imap_password: newMeta.imap_password,
+          imap_password: imapPass,
           imap_address: newMeta.imap_server,
           imap_port: newMeta.imap_port,
           imap_enable_ssl: newMeta.imap_ssl,
           imap_enabled: true,
           smtp_login: newMeta.smtp_login,
-          smtp_password: newMeta.smtp_password,
+          smtp_password: smtpPass,
           smtp_address: newMeta.smtp_server,
           smtp_port: smtpPort,
           // Chatwoot column names: smtp_enable_ssl_tls (default false!) and
@@ -235,6 +271,16 @@ Deno.serve(async (req) => {
           const errText = await cwRes.text();
           console.warn('[email-inbox] Chatwoot update warning:', cwRes.status, errText);
         }
+      }
+
+      // As passwords vão para o cofre; o metadata fica só com o que a interface
+      // pode ver.
+      const { error: segErr } = await admin.from('messaging_channel_secrets').upsert({
+        channel_id, organization_id, imap_password: imapPass, smtp_password: smtpPass,
+      }, { onConflict: 'channel_id' });
+      if (segErr) {
+        console.error('[email-inbox] secrets update failed:', segErr);
+        return json({ error: 'Erro ao guardar as credenciais da caixa' }, 500);
       }
 
       const patch: Record<string, unknown> = { metadata: newMeta };

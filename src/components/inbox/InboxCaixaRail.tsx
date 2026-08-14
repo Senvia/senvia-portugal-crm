@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
 import { EmailFolderList } from '@/components/email/EmailFolderList';
 import { useEmailFolders } from '@/hooks/useEmail';
+import { useMetaUnreadTotals } from '@/hooks/useMetaInbox';
 
 function EmailChannelBadge({ channelId }: { channelId: string }) {
   const { data: folders = [] } = useEmailFolders(channelId);
@@ -43,6 +44,7 @@ function CountBadge({ n, active }: { n: number; active?: boolean }) {
 export function InboxCaixaRail({
   caixas,
   caixaFilter,
+  metaChannelId,
   unreadByInbox,
   emailChannelId,
   emailFolderId,
@@ -54,6 +56,8 @@ export function InboxCaixaRail({
 }: {
   caixas: MessagingChannel[];
   caixaFilter: number | null;
+  /** Caixa de Instagram/Messenger aberta, se houver. */
+  metaChannelId?: string | null;
   unreadByInbox?: Map<number, number>;
   emailChannelId: string | null;
   emailFolderId: string | null;
@@ -64,6 +68,7 @@ export function InboxCaixaRail({
   // Override the root layout (e.g. to render full-width inside a mobile Sheet).
   className?: string;
 }) {
+  const { data: metaUnread } = useMetaUnreadTotals();
   const [hidden, setHidden] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('inbox-rail-hidden-v1') || '[]'); } catch { return []; }
   });
@@ -106,9 +111,14 @@ export function InboxCaixaRail({
   const visibleCaixas = caixas.filter((c) => isChannelEnabled(c.channel_type));
   const messaging = visibleCaixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
   const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
-  const allActive = !emailChannelId && caixaFilter === null;
+  const allActive = !emailChannelId && !metaChannelId && caixaFilter === null;
+  // As caixas da Meta não têm chatwoot_inbox_id — o contador delas vem das
+  // nossas tabelas. Sem isto ficavam sempre a zero, e uma DM de Instagram não
+  // dava sinal nenhum a quem não estivesse com essa caixa aberta.
   const unreadFor = (ch: MessagingChannel) =>
-    ch.chatwoot_inbox_id != null ? (unreadByInbox?.get(ch.chatwoot_inbox_id) ?? 0) : 0;
+    ch.provider === 'meta'
+      ? (metaUnread?.[ch.id] ?? 0)
+      : ch.chatwoot_inbox_id != null ? (unreadByInbox?.get(ch.chatwoot_inbox_id) ?? 0) : 0;
   const totalUnread = messaging.reduce((s, ch) => s + unreadFor(ch), 0);
 
   return (
@@ -163,7 +173,13 @@ export function InboxCaixaRail({
         )}
 
         {messaging.map((ch) => {
-          const active = !emailChannelId && caixaFilter === ch.chatwoot_inbox_id;
+          // Uma caixa da Meta identifica-se pelo id dela, não pelo do Chatwoot.
+          // Comparar `caixaFilter === ch.chatwoot_inbox_id` dava `null === null`
+          // em TODAS as caixas de Instagram ao mesmo tempo — e ficavam todas
+          // acesas, incluindo "Todas as conversas".
+          const active = ch.provider === 'meta'
+            ? metaChannelId === ch.id
+            : !emailChannelId && !metaChannelId && caixaFilter === ch.chatwoot_inbox_id;
           return (
             <button
               key={ch.id}

@@ -80,14 +80,21 @@ export interface EmailChannelUpdate {
   };
 }
 
-// Strip passwords from metadata before exposing to components.
-// Passwords live in the DB (RLS-protected) but must never reach the browser.
-function stripPasswords(ch: Record<string, unknown>): EmailChannel {
-  const meta = (ch.metadata as Record<string, unknown> | null) ?? null;
-  const cleanMeta = meta
-    ? Object.fromEntries(Object.entries(meta).filter(([k]) => !k.endsWith('_password')))
-    : null;
-  return { ...(ch as unknown as EmailChannel), metadata: cleanMeta as EmailChannel['metadata'] };
+/**
+ * Passa `metadata_public` para `metadata`, que é o nome que os componentes usam.
+ *
+ * Isto era um `stripPasswords` que filtrava as chaves acabadas em `_password`
+ * — mas corria sobre uma resposta que JÁ tinha as passwords lá dentro. Limpava
+ * o objeto em memória depois de ele ter atravessado a rede: no separador Network
+ * do browser, e na cache do React Query, elas estavam. Agora nunca são enviadas,
+ * e não há nada para limpar.
+ */
+function comMetadataPublico(ch: Record<string, unknown>): EmailChannel {
+  const { metadata_public, ...resto } = ch;
+  return {
+    ...(resto as unknown as EmailChannel),
+    metadata: (metadata_public ?? null) as EmailChannel['metadata'],
+  };
 }
 
 export function useEmailChannels() {
@@ -98,12 +105,20 @@ export function useEmailChannels() {
       if (!organization?.id) return [];
       const { data, error } = await supabase
         .from('messaging_channels')
-        .select('*')
+        // `metadata_public` é o metadata sem as passwords. O `stripPasswords`
+        // abaixo limpava-as DEPOIS de o browser as ter recebido — apareciam no
+        // separador Network e na cache antes de serem escondidas. Esconder na
+        // interface nunca foi o mesmo que não enviar.
+        .select(
+          'id, organization_id, channel_type, provider, label, chatwoot_inbox_id,'
+          + ' status, assigned_user_ids, rotate_enabled, color, created_at, updated_at,'
+          + ' metadata_public',
+        )
         .eq('organization_id', organization.id)
         .eq('channel_type', 'email')
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data || []).map(stripPasswords);
+      return (data || []).map((r) => comMetadataPublico(r as unknown as Record<string, unknown>));
     },
     enabled: !!organization?.id,
   });

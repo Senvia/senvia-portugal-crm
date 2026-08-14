@@ -21,6 +21,22 @@ const log = (s: string, d?: unknown) =>
 const logError = (s: string, d?: unknown) =>
   console.error(`[META-SEND] ERROR ${s}${d ? ` - ${JSON.stringify(d)}` : ""}`);
 
+/**
+ * O emoji que mostramos → a palavra que a Meta exige.
+ *
+ * A API não aceita emojis: `reaction: "❤️"` devolve o erro #100. E o Instagram
+ * só reconhece `love` — as outras seis existem só no Messenger.
+ */
+const REACOES_META: Record<string, string> = {
+  "❤️": "love",
+  "😂": "smile",
+  "😮": "wow",
+  "😢": "sad",
+  "😡": "angry",
+  "👍": "like",
+  "👎": "dislike",
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -43,9 +59,26 @@ Deno.serve(async (req) => {
     const { data: { user } } = await admin.auth.getUser(bearer);
     if (!user) return json({ error: "Sessão inválida" }, 401);
 
-    const { conversation_id, text } = await req.json().catch(() => ({}));
-    if (!conversation_id || !String(text ?? "").trim()) {
-      return json({ error: "conversation_id e text são obrigatórios" }, 400);
+    const {
+      conversation_id, text,
+      // Anexo por URL (a Meta vai buscá-lo, por isso tem de ser público).
+      attachment_url, attachment_type,
+      // "react" / "unreact" / "typing_on" / "typing_off" / "mark_seen"
+      action, message_external_id, reaction,
+      // Responder A uma mensagem concreta (o `mid` dela, do lado da Meta).
+      reply_to_mid,
+    } = await req.json().catch(() => ({}));
+
+    const temTexto = !!String(text ?? "").trim();
+    if (!conversation_id) return json({ error: "conversation_id é obrigatório" }, 400);
+    if (!temTexto && !attachment_url && !action) {
+      return json({ error: "Nada para enviar" }, 400);
+    }
+    // Limite da Meta: 1000 bytes, não 1000 caracteres — acentos contam a dobrar.
+    if (temTexto && new TextEncoder().encode(String(text)).length > 1000) {
+      return json({
+        error: "A mensagem excede o limite de 1000 bytes do Instagram. Divide-a em duas.",
+      }, 400);
     }
 
     const { data: conv } = await admin
@@ -57,13 +90,24 @@ Deno.serve(async (req) => {
 
     // Membro da organização da conversa? O RLS protege as leituras do cliente,
     // mas aqui corremos como service_role — a verificação é nossa.
-    const { data: isMember } = await admin.rpc("is_org_member", {
-      _user_id: user.id, _organization_id: conv.organization_id,
+    //
+    // O parâmetro chama-se `_org_id` (não `_organization_id`): com o nome errado
+    // o Postgres não encontra a função, o `data` vem nulo, e a resposta seria um
+    // "Sem acesso a esta conversa" a toda a gente — um 403 a mentir sobre a causa.
+    const { data: isMember, error: memberErr } = await admin.rpc("is_org_member", {
+      _user_id: user.id, _org_id: conv.organization_id,
     });
+    if (memberErr) {
+      logError("verificação de membro falhou", { error: memberErr.message });
+      return json({ error: "Não foi possível verificar o acesso" }, 500);
+    }
     if (!isMember) return json({ error: "Sem acesso a esta conversa" }, 403);
 
     // A janela das 24h. Verificada aqui para dar uma resposta que se entende.
-    if (conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
+    // As ações de sinalização (a escrever, visto) não contam como mensagem, por
+    // isso não são bloqueadas por ela.
+    const acaoSinal = action === "typing_on" || action === "typing_off" || action === "mark_seen";
+    if (!acaoSinal && conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
       return json({
         error: "Passaram mais de 24 horas desde a última mensagem desta pessoa. "
           + "A Meta só permite responder dentro desse prazo — só é possível "
@@ -72,25 +116,88 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    // O canal TEM de pertencer à mesma organização da conversa. Sem este filtro,
+    // um membro podia alterar o channel_id da sua conversa (o RLS só verifica o
+    // organization_id) e passar a enviar pela Página de outra organização.
     const { data: channel } = await admin
       .from("messaging_channels")
       .select("metadata, channel_type")
       .eq("id", conv.channel_id)
+      .eq("organization_id", conv.organization_id)
       .maybeSingle();
-    const meta = (channel?.metadata ?? {}) as { page_id?: string; page_access_token?: string };
-    if (!meta.page_id || !meta.page_access_token) {
+    // O token vive fora do metadata: aquela tabela é legível por qualquer membro.
+    const { data: secret } = await admin
+      .from("messaging_channel_secrets")
+      .select("page_access_token")
+      .eq("channel_id", conv.channel_id)
+      .maybeSingle();
+    const meta = (channel?.metadata ?? {}) as { page_id?: string };
+    const pageToken = secret?.page_access_token;
+    if (!meta.page_id || !pageToken) {
       return json({ error: "Canal sem credenciais — volta a ligar a conta." }, 400);
+    }
+
+    // O corpo muda conforme o que se está a fazer. Texto e anexo NÃO podem ir
+    // na mesma mensagem — é limitação da Meta, não escolha nossa.
+    let payload: Record<string, unknown>;
+    if (acaoSinal) {
+      payload = { recipient: { id: conv.contact_ref }, sender_action: action };
+    } else if (action === "react" || action === "unreact") {
+      if (!message_external_id) return json({ error: "message_external_id em falta" }, 400);
+
+      if (action === "react") {
+        // A Meta quer uma PALAVRA, não o emoji. Mandar "❤️" dá erro #100.
+        const palavra = REACOES_META[String(reaction ?? "❤️")];
+        if (!palavra) {
+          return json({ error: "Reação não suportada pela Meta." }, 400);
+        }
+        // E no Instagram só existe uma: o coração. As outras são recusadas.
+        if (channel?.channel_type === "instagram" && palavra !== "love") {
+          return json({
+            error: "O Instagram só permite reagir com o coração. As outras reações "
+              + "existem no Messenger, não no Instagram.",
+          }, 400);
+        }
+        payload = {
+          recipient: { id: conv.contact_ref },
+          sender_action: "react",
+          payload: { message_id: message_external_id, reaction: palavra },
+        };
+      } else {
+        payload = {
+          recipient: { id: conv.contact_ref },
+          sender_action: "unreact",
+          payload: { message_id: message_external_id },
+        };
+      }
+    } else if (attachment_url) {
+      payload = {
+        recipient: { id: conv.contact_ref },
+        message: {
+          attachment: {
+            type: attachment_type || "file",
+            payload: { url: attachment_url },
+          },
+        },
+        // `reply_to` é IRMÃO de `message`, não vai lá dentro. Dentro, a Meta
+        // responde #100 "Invalid keys reply_to were found in param message" e a
+        // resposta simplesmente não sai.
+        ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
+        messaging_type: "RESPONSE",
+      };
+    } else {
+      payload = {
+        recipient: { id: conv.contact_ref },
+        message: { text: String(text) },
+        ...(reply_to_mid ? { reply_to: { mid: reply_to_mid } } : {}),
+        messaging_type: "RESPONSE",
+      };
     }
 
     const res = await fetch(`${GRAPH}/${meta.page_id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient: { id: conv.contact_ref },
-        message: { text: String(text) },
-        messaging_type: "RESPONSE",
-        access_token: meta.page_access_token,
-      }),
+      body: JSON.stringify({ ...payload, access_token: pageToken }),
     });
     const body = await res.json().catch(() => ({}));
 
@@ -101,24 +208,66 @@ Deno.serve(async (req) => {
       }, 502);
     }
 
+    // Sinalizações (a escrever / visto) não são mensagens: não se guardam nem
+    // mexem na conversa. Gravá-las poluiria a thread com linhas vazias.
+    if (acaoSinal) {
+      return json({ success: true });
+    }
+
+    // Reações não são mensagens novas — anotam-se na mensagem reagida.
+    if (action === "react" || action === "unreact") {
+      await admin.from("meta_messages")
+        .update({
+          reaction: action === "react" ? (reaction || "❤️") : null,
+          reaction_by: action === "react" ? "agent" : null,
+        })
+        .eq("conversation_id", conv.id)
+        .eq("external_id", message_external_id);
+      log("reação registada", { conversa: conv.id, action });
+      return json({ success: true });
+    }
+
+    const resumo = temTexto
+      ? String(text)
+      : `[${attachment_type || "anexo"}]`;
+
     // Guarda a mensagem enviada, para aparecer na conversa como qualquer outra.
-    await admin.from("meta_messages").insert({
+    //
+    // O erro deste insert É verificado. Neste ponto a Meta já entregou a
+    // mensagem ao cliente: se a gravação falhar em silêncio, respondemos
+    // `success` ao CRM, o rascunho é limpo, e fica uma mensagem que o cliente
+    // recebeu e que não existe em lado nenhum do sistema — o agente reescreve-a.
+    const { error: insertErr } = await admin.from("meta_messages").insert({
       organization_id: conv.organization_id,
       conversation_id: conv.id,
       external_id: body?.message_id ?? null,
       direction: "outgoing",
-      content: String(text),
+      content: temTexto ? String(text) : null,
+      reply_to_external_id: reply_to_mid ?? null,
+      attachments: attachment_url
+        ? [{ type: attachment_type || "file", url: attachment_url }]
+        : [],
       sent_by: user.id,
+      sent_at: new Date().toISOString(),
     });
 
-    await admin.from("meta_conversations").update({
-      last_message: String(text),
+    if (insertErr) {
+      logError("ENTREGUE MAS NÃO GUARDADA", {
+        conversa: conv.id, message_id: body?.message_id, error: insertErr.message,
+      });
+    }
+
+    const { error: convErr } = await admin.from("meta_conversations").update({
+      last_message: resumo,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", conv.id);
+    if (convErr) logError("falha a atualizar a conversa", { error: convErr.message });
 
     log("mensagem enviada", { conversa: conv.id, canal: channel?.channel_type });
-    return json({ success: true, message_id: body?.message_id ?? null });
+    // `stored: false` diz ao CRM que a mensagem foi mesmo entregue mas não ficou
+    // registada — é a diferença entre "reenvia" e "não reenvies, já foi".
+    return json({ success: true, stored: !insertErr, message_id: body?.message_id ?? null });
   } catch (e) {
     logError("erro inesperado", { error: (e as Error).message });
     return json({ error: (e as Error).message }, 500);

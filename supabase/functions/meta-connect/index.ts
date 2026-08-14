@@ -50,11 +50,52 @@ async function signState(data: Record<string, string>, secret: string): Promise<
   return `${payload}.${await hmac(payload, secret)}`;
 }
 
+/** Um `state` só vale 15 minutos: é o tempo de fazer o login, não mais. */
+const STATE_TTL_MS = 15 * 60 * 1000;
+
 async function readState(state: string, secret: string): Promise<Record<string, string> | null> {
   const [payload, sig] = state.split(".", 2);
   if (!payload || !sig) return null;
   if (await hmac(payload, secret) !== sig) return null;
-  try { return JSON.parse(atob(payload)); } catch { return null; }
+  let data: Record<string, string>;
+  try { data = JSON.parse(atob(payload)); } catch { return null; }
+  // Sem prazo, um `state` capturado uma vez servia para sempre.
+  const t = Number(data.t ?? 0);
+  if (!t || Date.now() - t > STATE_TTL_MS) return null;
+  return data;
+}
+
+/**
+ * Quem está a chamar, e pertence mesmo a esta organização?
+ *
+ * Esta função corre com `verify_jwt = false` — tem de ser, o callback do OAuth
+ * chega pelo browser sem sessão. Mas o POST vem do CRM e TEM de ser verificado
+ * aqui dentro: sem isto, um pedido sem autenticação nenhuma devolvia um link de
+ * OAuth assinado para qualquer organização, e bastava fazer a vítima clicar nele
+ * para lhe injetar uma caixa na conta.
+ */
+async function membroDaOrg(
+  req: Request,
+  orgId: string,
+  admin: ReturnType<typeof createClient>,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!bearer) return { ok: false, status: 401, error: "Não autorizado" };
+
+  const { data: { user } } = await admin.auth.getUser(bearer);
+  if (!user) return { ok: false, status: 401, error: "Sessão inválida" };
+
+  // O parâmetro chama-se `_org_id` — com o nome errado o Postgres não encontra a
+  // função e toda a gente levava um 403 a mentir sobre a causa.
+  const { data: isMember, error } = await admin.rpc("is_org_member", {
+    _user_id: user.id, _org_id: orgId,
+  });
+  if (error) {
+    logError("verificação de membro falhou", { error: error.message });
+    return { ok: false, status: 500, error: "Não foi possível verificar o acesso" };
+  }
+  if (!isMember) return { ok: false, status: 403, error: "Sem acesso a esta organização" };
+  return { ok: true };
 }
 
 // ── página de resultado ─────────────────────────────────────────────────────
@@ -79,14 +120,48 @@ function page(title: string, bodyHtml: string, ok = true): Response {
   );
 }
 
-/** Fecha o popup e avisa a janela que o abriu. */
-function popupDone(payload: Record<string, unknown>): Response {
+/**
+ * Só se aceita voltar para um endereço com ar de origem, e nada mais: sem
+ * caminho, sem query. O valor vem assinado dentro do `state`, mas uma validação
+ * a mais custa uma linha e fecha a porta a um redirecionamento inventado.
+ */
+function origemValida(origem: string | undefined): string | null {
+  if (!origem) return null;
+  try {
+    const u = new URL(origem);
+    if (u.protocol !== "https:" && u.hostname !== "localhost") return null;
+    return u.origin;
+  } catch { return null; }
+}
+
+/**
+ * Fecha o popup e avisa a janela que o abriu.
+ *
+ * Não devolve HTML: a Supabase serve TUDO como `text/plain` com
+ * `X-Content-Type-Options: nosniff`, ignorando o Content-Type que aqui se
+ * definisse. O browser mostrava o código-fonte ao utilizador e a janela ficava
+ * aberta para ele fechar à mão.
+ *
+ * Por isso manda-se o popup de volta ao domínio do CRM, onde o HTML é HTML e a
+ * página `/oauth/meta` faz o postMessage e o `window.close()`. O resultado vai
+ * no fragmento (`#`), que não chega ao servidor nem aos registos de acesso.
+ */
+function popupDone(payload: Record<string, unknown>, origem?: string | null): Response {
+  const destino = origemValida(origem ?? undefined);
+  const dados = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+
+  if (destino) {
+    return Response.redirect(`${destino}/oauth/meta#${dados}`, 302);
+  }
+
+  // Sem origem de confiança (ligação antiga, ou arranque manual): já não se
+  // tenta correr script nenhum — em text/plain nunca correria. Uma frase que se
+  // lê é melhor do que código à vista.
   return new Response(
-    `<!doctype html><meta charset="utf-8"><body><script>
-      window.opener?.postMessage(${JSON.stringify({ type: "meta-oauth", ...payload })},'*');
-      window.close();
-    </script><p style="font-family:system-ui">Podes fechar esta janela.</p></body>`,
-    { headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } },
+    payload.error
+      ? `Não foi possível ligar: ${payload.error}\n\nFecha esta janela e tenta outra vez no CRM.`
+      : "Ligação concluída. Já podes fechar esta janela e voltar ao CRM.",
+    { headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" } },
   );
 }
 
@@ -141,6 +216,16 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     const orgId = String(body.organization_id ?? "");
+    const jsonRes = (b: unknown, status = 200) =>
+      new Response(JSON.stringify(b), {
+        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
+    if (!orgId) return jsonRes({ error: "organization_id em falta" }, 400);
+
+    const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const acesso = await membroDaOrg(req, orgId, admin);
+    if (!acesso.ok) return jsonRes({ error: acesso.error }, acesso.status);
 
     // Desligar: avisa a Meta para parar de enviar webhooks desta Página. Sem
     // isto ela continua a entregar mensagens de uma caixa que já não existe, e
@@ -149,20 +234,30 @@ Deno.serve(async (req) => {
     // subscrição.
     if (body.action === "disconnect") {
       const channelId = String(body.channel_id ?? "");
-      if (!orgId || !channelId) {
-        return new Response(JSON.stringify({ error: "organization_id ou channel_id em falta" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      if (!channelId) return jsonRes({ error: "channel_id em falta" }, 400);
+
       const { data: ch } = await admin.from("messaging_channels")
         .select("metadata").eq("id", channelId).eq("organization_id", orgId).maybeSingle();
-      const meta = (ch?.metadata ?? {}) as { page_id?: string; page_access_token?: string };
+      const meta = (ch?.metadata ?? {}) as { page_id?: string };
+      const { data: sec } = await admin.from("messaging_channel_secrets")
+        .select("page_access_token").eq("channel_id", channelId).maybeSingle();
 
-      if (meta.page_id && meta.page_access_token) {
+      // A subscrição é da PÁGINA, não da caixa. A mesma Página pode estar ligada
+      // duas vezes — Instagram e Messenger são caixas separadas. Cancelar aqui
+      // sem verificar matava a outra caixa em silêncio.
+      let outrasCaixas = 0;
+      if (meta.page_id) {
+        const { count } = await admin.from("messaging_channels")
+          .select("id", { count: "exact", head: true })
+          .eq("metadata->>page_id", meta.page_id)
+          .neq("id", channelId);
+        outrasCaixas = count ?? 0;
+      }
+
+      if (meta.page_id && sec?.page_access_token && outrasCaixas === 0) {
         try {
           await fetch(
-            `${GRAPH}/${meta.page_id}/subscribed_apps?access_token=${encodeURIComponent(meta.page_access_token)}`,
+            `${GRAPH}/${meta.page_id}/subscribed_apps?access_token=${encodeURIComponent(sec.page_access_token)}`,
             { method: "DELETE" },
           );
           log("subscrição removida", { pageId: meta.page_id });
@@ -170,35 +265,35 @@ Deno.serve(async (req) => {
           // Melhor esforço: a caixa vai ser apagada de qualquer forma.
           logError("falha a remover a subscrição", { error: (e as Error).message });
         }
+      } else if (outrasCaixas > 0) {
+        log("subscrição mantida — a Página ainda serve outra caixa", { pageId: meta.page_id, outrasCaixas });
       }
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonRes({ ok: true });
     }
     const connect = body.connect === "messenger" ? "messenger" : "instagram";
     const label = String(body.label ?? "").trim();
 
     if (!appId || !appSecret || !configId) {
-      return new Response(JSON.stringify({
+      return jsonRes({
         error: "Faltam FACEBOOK_APP_ID, FACEBOOK_APP_SECRET ou FACEBOOK_LOGIN_CONFIG_ID",
-      }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (!orgId) {
-      return new Response(JSON.stringify({ error: "organization_id em falta" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }, 500);
     }
 
-    const state = await signState({ orgId, connect, label, t: String(Date.now()) }, appSecret);
+    // A origem do CRM viaja DENTRO do state assinado. É para lá que o popup
+    // volta no fim — a edge function não consegue servir HTML que corra.
+    const origem = origemValida(String(body.origin ?? "")) ?? "";
+
+    const state = await signState(
+      { orgId, connect, label, origem, t: String(Date.now()) },
+      appSecret,
+    );
     const dialog = `https://www.facebook.com/v21.0/dialog/oauth`
       + `?client_id=${encodeURIComponent(appId)}`
       + `&redirect_uri=${encodeURIComponent(redirectUri)}`
       + `&config_id=${encodeURIComponent(configId)}`
       + `&state=${encodeURIComponent(state)}`
       + `&response_type=code`;
-    return new Response(JSON.stringify({ url: dialog }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonRes({ url: dialog });
   }
 
   // ── GET: callback do OAuth ────────────────────────────────────────────────
@@ -206,10 +301,16 @@ Deno.serve(async (req) => {
   const stateRaw = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error_description") ?? url.searchParams.get("error");
 
+  // Lê-se o state já aqui, e não só lá em baixo: é dele que sai a origem para
+  // onde o popup volta, e ele é preciso mesmo nos caminhos de erro — senão uma
+  // recusa deixava a janela aberta com texto solto, que é a queixa de origem.
+  const stateCedo = stateRaw && appSecret ? await readState(stateRaw, appSecret) : null;
+  const origemPopup = stateCedo?.origem ?? null;
+
   if (oauthError) {
     const msg = oauthError.replace(/[<>]/g, "");
     return stateRaw
-      ? popupDone({ error: msg })
+      ? popupDone({ error: msg }, origemPopup)
       : page("Ligação recusada", `<h1>Ligação recusada <span class="tag">erro</span></h1><p><code>${msg}</code></p>`, false);
   }
 
@@ -237,7 +338,7 @@ Deno.serve(async (req) => {
     if (!tokenRes.ok || !tokenJson.access_token) {
       logError("troca de código falhou", tokenJson);
       const msg = "Falha ao trocar o código pelo token";
-      return stateRaw ? popupDone({ error: msg }) : page("Erro", `
+      return stateRaw ? popupDone({ error: msg }, origemPopup) : page("Erro", `
         <h1>${msg} <span class="tag">erro</span></h1>
         <pre><code>${JSON.stringify(tokenJson, null, 2).replace(/[<>]/g, "")}</code></pre>`, false);
     }
@@ -274,37 +375,64 @@ Deno.serve(async (req) => {
     }
 
     // ── Com state: ligar mesmo ────────────────────────────────────────────
-    const state = await readState(stateRaw, appSecret);
+    // Já foi lido e verificado lá em cima — não se assina duas vezes o mesmo.
+    const state = stateCedo;
     if (!state?.orgId) {
       logError("state inválido ou adulterado");
-      return popupDone({ error: "Pedido inválido — recomeça a ligação a partir do CRM." });
+      return popupDone({ error: "Pedido inválido — recomeça a ligação a partir do CRM." }, origemPopup);
     }
     const { orgId, connect } = state;
     const wantsInstagram = connect !== "messenger";
 
+    const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const channelType = wantsInstagram ? "instagram" : "facebook";
+
     // A Página tem de ter Instagram ligado quando é isso que se quer.
-    const candidates = wantsInstagram ? pages.filter((p) => p.instagram_business_account) : pages;
-    if (candidates.length === 0) {
+    const elegiveis = wantsInstagram ? pages.filter((p) => p.instagram_business_account) : pages;
+    if (elegiveis.length === 0) {
       const nomes = pages.map((p) => p.name).join(", ") || "nenhuma";
       return popupDone({
-        error: wantsInstagram
-          ? `Nenhuma das tuas Páginas (${nomes}) tem uma conta de Instagram Business ligada. Liga-a em facebook.com → Página → Definições → Instagram.`
-          : "Não foi encontrada nenhuma Página do Facebook na tua conta.",
-      });
+        error: pages.length === 0
+          // Sem Páginas nenhumas o problema quase nunca é o Instagram: é a app
+          // ainda estar em Acesso Padrão, e a Meta devolve uma lista vazia a
+          // quem não tem cargo nela. Dizer "liga o Instagram" mandava a pessoa
+          // mexer nas definições erradas.
+          ? "A Meta não devolveu nenhuma Página para esta conta. Confirma que tens um cargo de administrador numa Página do Facebook e que a autorizaste no ecrã anterior."
+          : `Nenhuma das tuas Páginas (${nomes}) tem uma conta de Instagram Business ligada. Liga-a em facebook.com → Página → Definições → Instagram.`,
+      }, origemPopup);
     }
-    // Uma Página escolhe-se sozinha; com várias, a primeira — e o CRM permite
-    // repetir para ligar as outras (cada uma vira uma caixa própria).
+
+    // Já ligadas? Tirar da lista em vez de rejeitar — senão, com várias Páginas,
+    // a escolha caía sempre na mesma e as outras nunca chegavam a ser ligáveis.
+    const { data: jaLigadas } = await admin.from("messaging_channels")
+      .select("metadata").eq("organization_id", orgId).eq("channel_type", channelType);
+    const ligadas = new Set(
+      (jaLigadas ?? []).map((c) => (c.metadata as { page_id?: string } | null)?.page_id).filter(Boolean),
+    );
+    const candidates = elegiveis.filter((p) => !ligadas.has(p.id));
+    if (candidates.length === 0) {
+      return popupDone({
+        error: elegiveis.length === 1
+          ? `Esta Página já está ligada como caixa de ${wantsInstagram ? "Instagram" : "Messenger"}.`
+          : "Todas as tuas Páginas já estão ligadas a caixas desta organização.",
+      }, origemPopup);
+    }
+
+    // Uma Página escolhe-se sozinha; com várias, a primeira ainda não ligada —
+    // e repetir a ligação apanha a seguinte.
     const target = candidates[0];
 
-    const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-    // Já ligada? Evita duplicar a caixa para a mesma Página.
-    const channelType = wantsInstagram ? "instagram" : "facebook";
-    const { data: existing } = await admin.from("messaging_channels")
-      .select("id").eq("organization_id", orgId).eq("channel_type", channelType)
-      .eq("metadata->>page_id", target.id).maybeSingle();
-    if (existing) {
-      return popupDone({ error: `Esta Página já está ligada como caixa de ${wantsInstagram ? "Instagram" : "Messenger"}.` });
+    // A mesma Página noutra organização entrega as mensagens dela a quem a
+    // ligou primeiro: o webhook resolve por page_id e devolve UMA linha. Duas
+    // organizações a partilhar a Página é isolamento partido, não um aviso.
+    const { data: noutraOrg } = await admin.from("messaging_channels")
+      .select("id").eq("channel_type", channelType)
+      .eq("metadata->>page_id", target.id).neq("organization_id", orgId).maybeSingle();
+    if (noutraOrg) {
+      return popupDone({
+        error: "Esta Página já está ligada noutra conta do Senvia OS. "
+          + "Desliga-a lá primeiro, ou fala connosco para a transferirmos.",
+      }, origemPopup);
     }
 
     const defaultLabel = wantsInstagram
@@ -315,25 +443,74 @@ Deno.serve(async (req) => {
     // Subscrever a Página aos nossos webhooks. SEM ISTO a Meta não envia
     // mensagem nenhuma — a ligação fica feita e a caixa aparece vazia para
     // sempre, sem erro nenhum a explicar porquê.
-    const subFields = wantsInstagram
-      ? "messages,messaging_postbacks,message_reactions"
-      : "messages,messaging_postbacks,messaging_optins";
-    const subRes = await fetch(`${GRAPH}/${target.id}/subscribed_apps`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscribed_fields: subFields, access_token: target.access_token }),
-    });
-    const subJson = await subRes.json().catch(() => ({}));
-    if (!subRes.ok || subJson?.success === false) {
-      logError("subscrição da Página falhou", { status: subRes.status, subJson });
-      return popupDone({
-        error: `A Página foi autorizada mas não conseguimos subscrever as mensagens: ${
-          subJson?.error?.message ?? subRes.status
-        }`,
+    //
+    // Os campos são SUBSTITUÍDOS, não somados: se a mesma Página já servir a
+    // outra caixa, subscrever só os campos desta apagava os dela — as reações
+    // do Instagram deixavam de chegar sem erro nenhum. Por isso junta-se ao que
+    // lá está.
+    //
+    // Os nomes NÃO são os mesmos nos dois: o Instagram usa `messaging_seen`
+    // para o "visto", o Messenger usa `message_reads`; e o referral é
+    // `messaging_referrals` (plural) na Página. Um nome errado faz a subscrição
+    // INTEIRA falhar — daí o plano B mais abaixo.
+    const meus = wantsInstagram
+      ? ["messages", "messaging_postbacks", "message_reactions", "messaging_seen"]
+      : [
+        "messages",
+        "messaging_postbacks",
+        "messaging_optins",
+        // Faltava: sem isto o Messenger não recebia reação nenhuma.
+        "message_reactions",
+        "message_reads",
+        // De onde veio a conversa (anúncio, m.me?ref=).
+        "messaging_referrals",
+      ];
+    const { data: mesmaPagina } = await admin.from("messaging_channels")
+      .select("metadata").eq("metadata->>page_id", target.id);
+    const jaSubscritos = (mesmaPagina ?? []).flatMap((c) =>
+      String((c.metadata as { subscribed_fields?: string } | null)?.subscribed_fields ?? "")
+        .split(",").filter(Boolean)
+    );
+    const subscrever = async (campos: string) => {
+      const res = await fetch(`${GRAPH}/${target.id}/subscribed_apps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscribed_fields: campos, access_token: target.access_token }),
       });
+      const corpo = await res.json().catch(() => ({}));
+      return { ok: res.ok && corpo?.success !== false, status: res.status, corpo };
+    };
+
+    const desejados = [...new Set([...meus, ...jaSubscritos])].join(",");
+    let subFields = desejados;
+    let sub = await subscrever(desejados);
+
+    // Plano B: a Meta recusa a lista INTEIRA se um nome não existir para este
+    // tipo de conta — e os nomes mudam entre Instagram e Página. Sem isto, um
+    // campo secundário mal escrito impedia a ligação por completo. Vale mais
+    // ficar sem o "visto" do que sem a caixa.
+    if (!sub.ok) {
+      const minimos = wantsInstagram
+        ? "messages,messaging_postbacks,message_reactions"
+        : "messages,messaging_postbacks,message_reactions";
+      logError("subscrição completa recusada — a tentar o essencial", {
+        desejados, status: sub.status, erro: sub.corpo?.error?.message,
+      });
+      sub = await subscrever(minimos);
+      if (sub.ok) subFields = minimos;
     }
 
-    const { error: insertErr } = await admin.from("messaging_channels").insert({
+    if (!sub.ok) {
+      logError("subscrição da Página falhou", { status: sub.status, subJson: sub.corpo });
+      return popupDone({
+        error: `A Página foi autorizada mas não conseguimos subscrever as mensagens: ${
+          sub.corpo?.error?.message ?? sub.status
+        }`,
+      }, origemPopup);
+    }
+    log("Página subscrita", { pageId: target.id, subFields });
+
+    const { data: novoCanal, error: insertErr } = await admin.from("messaging_channels").insert({
       organization_id: orgId,
       channel_type: channelType,
       provider: "meta",
@@ -342,18 +519,32 @@ Deno.serve(async (req) => {
       metadata: {
         page_id: target.id,
         page_name: target.name,
-        // Token da Página: é com ele que se responde. Sem expiração, desde que
-        // a pessoa não retire a autorização à app.
-        page_access_token: target.access_token,
         ig_account_id: target.instagram_business_account?.id ?? null,
         ig_username: target.instagram_business_account?.username ?? null,
         subscribed_fields: subFields,
       },
-    });
+    }).select("id").single();
 
-    if (insertErr) {
-      logError("insert falhou", { error: insertErr.message });
-      return popupDone({ error: "Erro ao guardar a caixa na base de dados." });
+    if (insertErr || !novoCanal) {
+      logError("insert falhou", { error: insertErr?.message });
+      return popupDone({ error: "Erro ao guardar a caixa na base de dados." }, origemPopup);
+    }
+
+    // O token da Página vai para uma tabela à parte, com RLS e ZERO políticas:
+    // só o service_role lá chega. Em `metadata` ficava legível por qualquer
+    // membro da organização — e com ele qualquer pessoa lê e escreve DMs em
+    // nome da empresa, para sempre, sem passar pelo CRM.
+    const { error: segredoErr } = await admin.from("messaging_channel_secrets").upsert({
+      channel_id: novoCanal.id,
+      organization_id: orgId,
+      page_access_token: target.access_token,
+    }, { onConflict: "channel_id" });
+
+    if (segredoErr) {
+      // Sem token não se envia nada — mais vale não deixar a caixa meia-feita.
+      logError("falha a guardar o token", { error: segredoErr.message });
+      await admin.from("messaging_channels").delete().eq("id", novoCanal.id);
+      return popupDone({ error: "Erro ao guardar as credenciais da Página. Tenta novamente." }, origemPopup);
     }
 
     log("caixa criada", { orgId, channelType, page: target.name });
@@ -364,11 +555,11 @@ Deno.serve(async (req) => {
       ig_username: target.instagram_business_account?.username ?? null,
       page_name: target.name,
       remaining: candidates.length - 1,
-    });
+    }, origemPopup);
   } catch (e) {
     logError("erro inesperado", { error: (e as Error).message });
     return stateRaw
-      ? popupDone({ error: (e as Error).message })
+      ? popupDone({ error: (e as Error).message }, origemPopup)
       : page("Erro", `<h1>Erro <span class="tag">erro</span></h1><p><code>${(e as Error).message.replace(/[<>]/g, "")}</code></p>`, false);
   }
 });
