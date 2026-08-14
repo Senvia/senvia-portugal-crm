@@ -219,6 +219,9 @@ async function ligarWhatsApp(p: {
   // Senvia, sem nada para escolher.
   const wabas: Array<{ id: string; nome: string | null }> = [];
   const porque: string[] = [];
+  // Ids de negócio que a autorização abrange. Servem de ponte quando o
+  // `/me/businesses` é recusado — ver o passo 3.
+  const negocios: string[] = [];
 
   // 1. O caminho documentado: perguntar ao `debug_token` que contas é que esta
   //    autorização abrange.
@@ -235,10 +238,26 @@ async function ligarWhatsApp(p: {
     ).then((r) => r.json());
 
     const escopos = debug?.data?.granular_scopes ?? [];
+    // O que a Meta devolveu mesmo, e não a nossa leitura dela. Sem isto, um
+    // "não encontrámos nada" é indistinguível de "não soubemos procurar".
+    log("debug_token do WhatsApp", {
+      escopos: escopos.map((g: { scope?: string; target_ids?: string[] }) =>
+        `${g.scope}=[${(g.target_ids ?? []).join(",")}]`),
+      concedidas: debug?.data?.scopes ?? null,
+    });
+
     for (const nome of ["whatsapp_business_management", "whatsapp_business_messaging"]) {
       const alvo = escopos.find((g: { scope?: string }) => g.scope === nome);
       for (const id of alvo?.target_ids ?? []) {
         if (!wabas.some((w) => w.id === String(id))) wabas.push({ id: String(id), nome: null });
+      }
+    }
+    // Os negócios vêm no mesmo sítio. Guardam-se mesmo quando já há contas: são
+    // eles que dão os NOMES, e uma lista de ids sem nome não se escolhe.
+    for (const nome of ["business_management", "whatsapp_business_management"]) {
+      const alvo = escopos.find((g: { scope?: string }) => g.scope === nome);
+      for (const id of alvo?.target_ids ?? []) {
+        if (!negocios.includes(String(id))) negocios.push(String(id));
       }
     }
     if (wabas.length === 0) {
@@ -273,6 +292,35 @@ async function ligarWhatsApp(p: {
     }
   } catch (e) {
     porque.push(`negócios: ${(e as Error).message}`);
+  }
+
+  // 3. Negócio a negócio, pelos ids que o `debug_token` já nos deu.
+  //
+  //    O passo 2 pede `/me/businesses`, que precisa de `business_management`
+  //    sobre a CONTA toda. Quem autoriza só o WhatsApp não dá isso, e a Meta
+  //    responde `(#100) Missing Permission` — que soa a "não tens acesso a
+  //    nada" quando na verdade é "não podes LISTAR". Perguntar por um negócio
+  //    concreto, cujo id já veio na autorização, é um pedido diferente e passa.
+  for (const negId of negocios) {
+    if (wabas.some((w) => w.nome)) break;
+    for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
+      try {
+        const res = await fetch(
+          `${GRAPH}/${encodeURIComponent(negId)}/${edge}?fields=id,name`
+          + `&access_token=${encodeURIComponent(userToken)}`,
+        );
+        const json = await res.json();
+        if (json?.error) { porque.push(`${edge}: ${json.error.message}`); continue; }
+        for (const c of json?.data ?? []) {
+          if (!c?.id) continue;
+          const ja = wabas.find((w) => w.id === String(c.id));
+          if (ja) ja.nome = ja.nome ?? (c.name ?? null);
+          else wabas.push({ id: String(c.id), nome: c.name ?? null });
+        }
+      } catch (e) {
+        porque.push(`${edge}: ${(e as Error).message}`);
+      }
+    }
   }
 
   if (wabas.length === 0) {
@@ -478,6 +526,88 @@ Deno.serve(async (req) => {
   if (url.searchParams.get("action") === "deauthorize") {
     log("desautorização recebida");
     return new Response(JSON.stringify({ ok: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // ── Autoexame: o que a configuração do WhatsApp declara ───────────────────
+  //
+  // Existe para responder a uma pergunta sem obrigar ninguém a testar às
+  // cegas: a configuração do Login for Business declara ativos de WhatsApp?
+  // Se não declarar, o diálogo concede as permissões mas NUNCA mostra a lista
+  // de contas — e é isso que dá `target_ids: []`, por muito que se force a
+  // re-seleção.
+  //
+  // Nada sai na resposta: o resultado vai só para o registo. Assim isto pode
+  // ser chamado por qualquer pessoa sem expor a configuração nem os segredos.
+  if (url.searchParams.get("action") === "autoexame") {
+    const cfgWa = Deno.env.get("WHATSAPP_LOGIN_CONFIG_ID") || "";
+    const appToken = `${appId}|${appSecret}`;
+    const ver = async (nome: string, endereco: string) => {
+      try {
+        const r = await fetch(endereco);
+        const t = await r.text();
+        log(`autoexame: ${nome}`, { estado: r.status, corpo: t.slice(0, 700) });
+      } catch (e) {
+        logError(`autoexame: ${nome}`, { erro: (e as Error).message });
+      }
+    };
+
+    log("autoexame começou", {
+      temAppId: !!appId,
+      temAppSecret: !!appSecret,
+      temConfigWhatsApp: !!cfgWa,
+      temConfigGeral: !!configId,
+      configWhatsAppIgualAoGeral: !!cfgWa && cfgWa === configId,
+    });
+
+    if (cfgWa && appId && appSecret) {
+      await ver(
+        "configuração do WhatsApp (campos por omissão)",
+        `${GRAPH}/${encodeURIComponent(cfgWa)}?access_token=${encodeURIComponent(appToken)}`,
+      );
+      // Os nomes dos campos não estão documentados de forma estável; pedem-se
+      // os plausíveis e fica-se com os que a Meta aceitar.
+      await ver(
+        "configuração do WhatsApp (campos explícitos)",
+        `${GRAPH}/${encodeURIComponent(cfgWa)}`
+        + `?fields=id,name,config_type,login_variation,permissions,asset_types,business_asset_types`
+        + `&access_token=${encodeURIComponent(appToken)}`,
+      );
+      // A lista de configurações da app: diz quantas há e de que tipo, o que
+      // por si só revela se estamos a usar a errada.
+      await ver(
+        "configurações da app",
+        `${GRAPH}/${encodeURIComponent(appId)}?fields=id,name,config_ids`
+        + `&access_token=${encodeURIComponent(appToken)}`,
+      );
+      // O próprio diálogo, sem seguir redirecionamentos: se a Meta recusar os
+      // parâmetros (incluindo `auth_type=rerequest` junto de `config_id`),
+      // responde com uma página de erro em vez de mandar para o login.
+      const dialogo = `https://www.facebook.com/v21.0/dialog/oauth`
+        + `?client_id=${encodeURIComponent(appId)}`
+        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+        + `&config_id=${encodeURIComponent(cfgWa)}`
+        + `&state=exame`
+        + `&auth_type=rerequest`
+        + `&response_type=code`;
+      try {
+        const r = await fetch(dialogo, { redirect: "manual" });
+        const t = await r.text();
+        const erro = /Não é possível carregar|Cannot Load|error|Erro/i.test(t)
+          ? t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 500)
+          : null;
+        log("autoexame: diálogo com auth_type=rerequest", {
+          estado: r.status,
+          para: r.headers.get("location")?.slice(0, 200) ?? null,
+          possivelErro: erro,
+        });
+      } catch (e) {
+        logError("autoexame: diálogo", { erro: (e as Error).message });
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, ver: "os detalhes ficaram no registo" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -852,6 +982,15 @@ Deno.serve(async (req) => {
       + `&redirect_uri=${encodeURIComponent(redirectUri)}`
       + `&config_id=${encodeURIComponent(configDoCanal)}`
       + `&state=${encodeURIComponent(state)}`
+      // Obriga a Meta a voltar a perguntar QUE contas partilhar.
+      //
+      // Sem isto, quem já autorizou a app uma vez recebe o atalho "continuar
+      // com as configurações anteriores", que RE-CONCEDE a escolha antiga sem
+      // a mostrar. Se essa escolha estava vazia, fica vazia para sempre: as
+      // permissões chegam cá com `target_ids: []` e nós dizemos "não tem conta
+      // de WhatsApp" a alguém que tem. Foi exatamente isto que aconteceu, e
+      // desligar a app nas Integrações Comerciais não chegou para limpar.
+      + `&auth_type=rerequest`
       + `&response_type=code`;
     return jsonRes({ url: dialog });
   }
