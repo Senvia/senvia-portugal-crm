@@ -21,7 +21,6 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useWhatsAppSignup } from '@/hooks/useWhatsAppSignup';
 import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
@@ -1070,29 +1069,15 @@ function InboxesManager() {
   // Login for Business). O arranque do WhatsApp por QR code saiu com a Evolution.
   const connectMeta = useConnectMetaChannel();
   const finishChoice = useFinishMetaChoice();
-  // O WhatsApp tem caminho proprio: o assistente da Meta so funciona lancado
-  // pelo SDK dela, nao por um window.open como o Instagram e o Messenger.
-  const whatsappSignup = useWhatsAppSignup();
+  // O WhatsApp segue o MESMO caminho do Instagram e do Messenger: popup para o
+  // endereço do assistente e volta pelo callback. Houve uma versão que o lançava
+  // pelo SDK da Meta (`FB.login`), porque a documentação diz que o Cadastro
+  // Incorporado só funciona assim. Não funciona: o SDK guarda o `authResponse`
+  // em cache e devolve o MESMO código a cada clique — e um código de OAuth só
+  // vale uma vez, por isso a troca falhava sempre com o subcódigo 36008. O
+  // popup criou caixas à primeira; o SDK nunca criou nenhuma.
   // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
   const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
-  const startWhatsApp = () => {
-    if (blockIfAtLimit()) { setNewOpen(false); return; }
-    setNewOpen(false);
-    whatsappSignup.mutate(
-      { label: newLabel.trim() || undefined },
-      {
-        onSuccess: (d) => {
-          setNewLabel('');
-          toast({ title: 'WhatsApp ligado', description: `${d.label} conectado` });
-        },
-        onError: (err) => toast({
-          title: 'Não foi possível ligar',
-          description: (err as Error).message,
-          variant: 'destructive',
-        }),
-      },
-    );
-  };
 
   const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
@@ -1373,7 +1358,7 @@ function InboxesManager() {
                     if (c.type === 'instagram') { startMetaConnect('instagram'); return; }
                     if (c.type === 'facebook') { startMetaConnect('messenger'); return; }
                     // Cloud API oficial da Meta — nao o Evolution, que saiu.
-                    if (c.type === 'whatsapp') { startWhatsApp(); return; }
+                    if (c.type === 'whatsapp') { startMetaConnect('whatsapp'); return; }
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',
