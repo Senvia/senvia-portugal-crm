@@ -228,3 +228,7 @@ verify_jwt = false
 [functions.audit-recurring-sales]
 verify_jwt = false
 
+
+# Reparacao conservadora dos dados recorrentes. DRY-RUN por omissao.
+[functions.repair-recurring-sales]
+verify_jwt = false
