@@ -613,14 +613,43 @@ Deno.serve(async (req) => {
 
       // Troca do código pelo token. Server-to-server, com o App Secret — é por
       // isto que o código não serve de nada a quem o intercete.
-      const tRes = await fetch(`${GRAPH}/oauth/access_token`
-        + `?client_id=${encodeURIComponent(appId)}`
-        + `&client_secret=${encodeURIComponent(appSecret)}`
-        + `&code=${encodeURIComponent(code)}`);
-      const tJson = await tRes.json();
-      if (!tRes.ok || !tJson.access_token) {
-        logError("troca do código falhou", tJson);
-        return jsonRes({ error: tJson?.error?.message ?? "Falha ao obter o token" }, 502);
+      //
+      // ATENÇÃO à forma: um código gerado pelo SDK JavaScript NÃO é trocado como
+      // um código vindo de um redirect. Sem `redirect_uri` no diálogo, a troca
+      // é um POST com `grant_type: authorization_code` — mandá-lo como o do
+      // fluxo por redirect faz a Meta responder "make sure your redirect_uri is
+      // identical", sobre um redirect_uri que nunca existiu. E há códigos de
+      // versões do SDK que ainda exigem a forma antiga com redirect_uri VAZIO,
+      // por isso tenta-se essa como recurso antes de desistir.
+      let tJson: { access_token?: string; error?: { message?: string } } = {};
+      const tRes = await fetch(`${GRAPH}/oauth/access_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: appId,
+          client_secret: appSecret,
+          code,
+          grant_type: "authorization_code",
+        }),
+      });
+      tJson = await tRes.json().catch(() => ({}));
+
+      if (!tJson.access_token) {
+        const t2 = await fetch(`${GRAPH}/oauth/access_token`
+          + `?client_id=${encodeURIComponent(appId)}`
+          + `&client_secret=${encodeURIComponent(appSecret)}`
+          + `&redirect_uri=`
+          + `&code=${encodeURIComponent(code)}`);
+        const j2 = await t2.json().catch(() => ({}));
+        if (j2.access_token) tJson = j2;
+        else logError("troca do código falhou nas duas formas", { primeira: tJson?.error?.message, segunda: j2?.error?.message });
+      }
+
+      if (!tJson.access_token) {
+        return jsonRes({
+          error: (tJson?.error?.message ?? "Falha ao obter o token")
+            + " — repete a ligação: o código só vale 30 segundos e uma vez.",
+        }, 502);
       }
 
       // O assistente nem sempre nos diz qual a conta — a mensagem da sessão e o
