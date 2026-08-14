@@ -1072,10 +1072,18 @@ function InboxesManager() {
   // O WhatsApp segue o MESMO caminho do Instagram e do Messenger: popup para o
   // endereço do assistente e volta pelo callback. Houve uma versão que o lançava
   // pelo SDK da Meta (`FB.login`), porque a documentação diz que o Cadastro
-  // Incorporado só funciona assim. Não funciona: o SDK guarda o `authResponse`
-  // em cache e devolve o MESMO código a cada clique — e um código de OAuth só
-  // vale uma vez, por isso a troca falhava sempre com o subcódigo 36008. O
-  // popup criou caixas à primeira; o SDK nunca criou nenhuma.
+  // Incorporado só funciona assim. Não funciona aqui: a troca do código falha
+  // sempre com o subcódigo 36008, a falha genérica de validação da Meta. A
+  // causa não é conhecida — há uma thread na comunidade dela com exatamente o
+  // mesmo caso (v21.0, por `config_id`), por resolver.
+  //
+  // Já se escreveu aqui que "o SDK guarda o código em cache". É FALSO, e vale
+  // a pena registá-lo: no `sdk.js` a cache está atrás de
+  // `!e.params.config_id`, ou seja, passar `config_id` desliga-a. Essa leitura
+  // errada custou horas a investigar o lado errado.
+  //
+  // O que fica é o que se mediu: o popup criou caixas; o SDK nunca criou
+  // nenhuma.
   // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
   const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
 

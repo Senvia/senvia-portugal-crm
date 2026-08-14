@@ -325,12 +325,46 @@ async function ligarWhatsApp(p: {
 
   if (wabas.length === 0) {
     logError("nenhuma WABA encontrada", { porque });
+
+    // Repor o consentimento no estado de primeira autorização.
+    //
+    // Uma autorização com as permissões concedidas e `target_ids: []` é um
+    // consentimento GUARDADO com a lista de contas vazia. Enquanto ele existir,
+    // a Meta volta a concedê-lo tal e qual a cada login — e nenhuma quantidade
+    // de parâmetros no diálogo o desfaz (o `auth_type=rerequest` foi tentado e
+    // não mexeu). Revogar apaga-o, e o login seguinte volta a ser um primeiro
+    // login, que é o estado em que isto funcionou.
+    //
+    // Revogam-se as permissões UMA A UMA, não `DELETE /me/permissions`: essa
+    // apagaria a autorização toda, incluindo a que sustenta as caixas de
+    // Instagram e Messenger que estão a funcionar. O problema é do WhatsApp;
+    // o estrago não tem de ser.
+    const limpas: string[] = [];
+    for (const perm of [
+      "whatsapp_business_management",
+      "whatsapp_business_messaging",
+      "whatsapp_business_manage_events",
+    ]) {
+      try {
+        const r = await fetch(
+          `${GRAPH}/me/permissions/${perm}?access_token=${encodeURIComponent(userToken)}`,
+          { method: "DELETE" },
+        );
+        const j = await r.json().catch(() => ({}));
+        limpas.push(`${perm}: ${j?.success === true ? "revogada" : (j?.error?.message ?? r.status)}`);
+      } catch (e) {
+        limpas.push(`${perm}: ${(e as Error).message}`);
+      }
+    }
+    log("consentimento do WhatsApp revogado para forçar primeira autorização", { limpas });
     return resp({
       // O motivo vai na mensagem: sem ele, "não encontrámos nada" manda a
       // pessoa repetir o assistente às cegas.
-      error: "Não encontrámos nenhuma conta de WhatsApp Business nesta autorização. "
-        + (porque.length ? `Motivo: ${porque.join(" | ")}. ` : "")
-        + "Confirma que escolheste (ou criaste) uma conta de WhatsApp Business no assistente da Meta.",
+      error: "A autorização veio sem nenhuma conta de WhatsApp associada — era um "
+        + "consentimento antigo, guardado vazio, que a Meta repetia a cada tentativa. "
+        + "Acabei de o apagar. LIGA OUTRA VEZ: agora vai ser tratado como uma "
+        + "primeira autorização e deve aparecer-te a lista de contas para escolher. "
+        + (porque.length ? `(Detalhe técnico: ${porque.join(" | ")}.)` : ""),
     });
   }
 
@@ -581,6 +615,32 @@ Deno.serve(async (req) => {
         `${GRAPH}/${encodeURIComponent(appId)}?fields=id,name,config_ids`
         + `&access_token=${encodeURIComponent(appToken)}`,
       );
+      // Os campos de webhook que a app subscreve. É aqui que se vê se o
+      // `history` está lá — sem ele a Meta NUNCA envia o histórico da
+      // Coexistence, e a caixa fica ligada mas vazia, sem erro nenhum.
+      try {
+        const r = await fetch(
+          `${GRAPH}/${encodeURIComponent(appId)}/subscriptions`
+          + `?access_token=${encodeURIComponent(appToken)}`,
+        );
+        const j = await r.json();
+        const wa = (j?.data ?? []).find((o: { object?: string }) =>
+          o.object === "whatsapp_business_account");
+        const campos = (wa?.fields ?? []).map((f: { name?: string }) => f.name);
+        log("campos de webhook do WhatsApp", {
+          subscrito: !!wa,
+          activo: wa?.active ?? null,
+          campos,
+          // Os três que a Coexistence exige. Sem eles a caixa liga e fica
+          // vazia, sem erro nenhum que o explique.
+          temHistory: campos.includes("history"),
+          temEchoes: campos.includes("smb_message_echoes"),
+          temAppState: campos.includes("smb_app_state_sync"),
+          temMessages: campos.includes("messages"),
+        });
+      } catch (e) {
+        logError("campos de webhook do WhatsApp", { erro: (e as Error).message });
+      }
       // O próprio diálogo, sem seguir redirecionamentos: se a Meta recusar os
       // parâmetros (incluindo `auth_type=rerequest` junto de `config_id`),
       // responde com uma página de erro em vez de mandar para o login.
@@ -785,8 +845,14 @@ Deno.serve(async (req) => {
         const sub = Number(j?.error?.error_subcode ?? 0);
         // A frase da Meta é a mesma para causas diferentes; o subcódigo é que
         // as separa. Traduzir aqui poupa a próxima pessoa a horas no painel.
-        const leitura = sub === 36008
-          ? "o código já tinha sido usado — o SDK trocou-o antes de nós (configuração do login incompleta)"
+        // CUIDADO com o 36008: NÃO é "código já usado" — esse é o 36009. O
+        // 36008 é a falha de validação genérica, e traduzi-lo por "já usado"
+        // mandou-nos investigar caches do SDK durante horas. Fica sem tradução
+        // inventada: o que se sabe é o que a Meta diz.
+        const leitura = sub === 36009
+          ? "o código já tinha sido usado"
+          : sub === 36008
+          ? "a Meta recusou o código sem dizer porquê (36008 é a falha genérica de validação)"
           : sub === 36007
           ? "o código expirou — passaram mais de 30 segundos entre o assistente e esta chamada"
           : j?.error?.message ?? String(r.status);
@@ -794,7 +860,7 @@ Deno.serve(async (req) => {
           + ` trace=${j?.error?.fbtrace_id ?? "-"}]`;
         logError("troca do código recusada", { recusa });
         // Expirado ou já usado não melhora com outra forma — não insistir.
-        if (sub === 36007 || sub === 36008) break;
+        if (sub === 36007 || sub === 36009) break;
       }
 
       if (!tJson.access_token) {
@@ -982,16 +1048,25 @@ Deno.serve(async (req) => {
       + `&redirect_uri=${encodeURIComponent(redirectUri)}`
       + `&config_id=${encodeURIComponent(configDoCanal)}`
       + `&state=${encodeURIComponent(state)}`
-      // Obriga a Meta a voltar a perguntar QUE contas partilhar.
+      + `&response_type=code`
+      // NÃO TIRAR ISTO. É o `extras` que faz o diálogo correr o Cadastro
+      // Incorporado — o passo onde a pessoa ESCOLHE a conta de WhatsApp. Sem
+      // ele a Meta concede as permissões sobre coisa nenhuma e o `debug_token`
+      // devolve `target_ids: []`, que parece "esta pessoa não tem WhatsApp".
       //
-      // Sem isto, quem já autorizou a app uma vez recebe o atalho "continuar
-      // com as configurações anteriores", que RE-CONCEDE a escolha antiga sem
-      // a mostrar. Se essa escolha estava vazia, fica vazia para sempre: as
-      // permissões chegam cá com `target_ids: []` e nós dizemos "não tem conta
-      // de WhatsApp" a alguém que tem. Foi exatamente isto que aconteceu, e
-      // desligar a app nas Integrações Comerciais não chegou para limpar.
-      + `&auth_type=rerequest`
-      + `&response_type=code`;
+      // Já foi apagado uma vez, sem intenção, ao reverter o endereço do
+      // assistente alojado: o `extras` viajava na mesma expressão e saiu com
+      // ele. Custou uma tarde inteira a encontrar, porque o sintoma aponta
+      // para permissões e a causa está aqui.
+      //
+      // `featureType` sozinho, sem mais campos: é esta a forma que criou
+      // caixas. Coexistence — o número fica na app do WhatsApp Business e
+      // traz os contactos e 180 dias de histórico.
+      + (connect === "whatsapp"
+        ? `&extras=${encodeURIComponent(JSON.stringify({
+          featureType: "whatsapp_business_app_onboarding",
+        }))}`
+        : "");
     return jsonRes({ url: dialog });
   }
 
