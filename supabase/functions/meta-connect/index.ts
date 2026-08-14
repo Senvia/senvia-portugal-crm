@@ -620,19 +620,37 @@ Deno.serve(async (req) => {
       { orgId, connect, label, origem, t: String(Date.now()) },
       appSecret,
     );
-    const dialog = `https://www.facebook.com/v21.0/dialog/oauth`
-      + `?client_id=${encodeURIComponent(appId)}`
-      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
-      + `&config_id=${encodeURIComponent(configDoCanal)}`
-      + `&state=${encodeURIComponent(state)}`
-      + `&response_type=code`
-      // Coexistence: deixa o cliente manter o número na app do WhatsApp Business
-      // e sincronizar os contactos e o histórico dos últimos 180 dias. Sem isto
-      // o número teria de ser apagado da app — que era a razão pela qual isto
-      // não se podia vender.
-      + (connect === "whatsapp"
-        ? `&extras=${encodeURIComponent(JSON.stringify({ featureType: "whatsapp_business_app_onboarding" }))}`
-        : "");
+    // O WhatsApp NÃO entra pelo diálogo genérico de OAuth.
+    //
+    // Foi este o erro: com `facebook.com/dialog/oauth` a pessoa autoriza a app,
+    // mas nunca passa pelo assistente que cria a conta de WhatsApp Business,
+    // adiciona o número e o verifica. O resultado é uma autorização válida sobre
+    // um número que ficou a meio — `status: DISCONNECTED`, `ON_PREMISE`,
+    // `NOT_VERIFIED` — e a Meta nunca chega a enviar mensagem nenhuma.
+    //
+    // O Embedded Signup tem endereço próprio, alojado pela Meta, e é ele que
+    // corre o assistente todo.
+    const dialog = connect === "whatsapp"
+      ? `https://business.facebook.com/messaging/whatsapp/onboard/`
+        + `?app_id=${encodeURIComponent(appId)}`
+        + `&config_id=${encodeURIComponent(configDoCanal)}`
+        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+        + `&response_type=code`
+        + `&state=${encodeURIComponent(state)}`
+        + `&extras=${encodeURIComponent(JSON.stringify({
+          // Coexistence: o cliente mantém o número na app do WhatsApp Business
+          // e sincroniza contactos e 180 dias de histórico. Sem isto o número
+          // teria de sair da app — que é a razão pela qual isto não se vendia.
+          featureType: "whatsapp_business_app_onboarding",
+          // A versão da informação de sessão que a Meta devolve no fim.
+          sessionInfoVersion: "3",
+        }))}`
+      : `https://www.facebook.com/v21.0/dialog/oauth`
+        + `?client_id=${encodeURIComponent(appId)}`
+        + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+        + `&config_id=${encodeURIComponent(configDoCanal)}`
+        + `&state=${encodeURIComponent(state)}`
+        + `&response_type=code`;
     return jsonRes({ url: dialog });
   }
 

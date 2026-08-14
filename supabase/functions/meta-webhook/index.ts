@@ -150,6 +150,62 @@ async function processarWhatsApp(
       }
       orgId = channel.organization_id;
 
+      // ── Coexistence ───────────────────────────────────────────────────────
+      //
+      // O cliente mantém o número na app do WhatsApp Business e o CRM espelha.
+      // São estes três campos que fazem o espelho funcionar — sem eles a
+      // Coexistence liga-se e não serve de nada:
+      //
+      //   history            → as conversas antigas (até 180 dias)
+      //   smb_message_echoes → o que o DONO escreve pelo telemóvel
+      //   smb_app_state_sync → os contactos
+      //
+      // O do meio é o que mais importa: sem ele o CRM via só o que entra, e a
+      // conversa ficava com metade do diálogo — as respostas dadas no telemóvel
+      // não apareciam em lado nenhum.
+      if (change.field === "history" || change.field === "smb_message_echoes") {
+        const doTelemovel = change.field === "smb_message_echoes";
+        for (const fio of value.messages ?? value.history ?? []) {
+          // O `history` vem agrupado por conversa; os ecos vêm soltos.
+          const lista = fio?.messages ?? [fio];
+          for (const msg of lista) {
+            try {
+              await guardarWhatsApp(supabase, channel, msg, {
+                // Num eco, `from` somos NÓS: o contacto é o destinatário.
+                contraparte: doTelemovel && msg.from === value?.metadata?.display_phone_number
+                  ? String(msg.to ?? "")
+                  : String(msg.from ?? msg.to ?? ""),
+                saida: doTelemovel && msg.from === value?.metadata?.display_phone_number,
+                // Histórico não notifica: são mensagens de há dias, e avisar
+                // delas seria tocar o telemóvel centenas de vezes de uma vez.
+                notificar: false,
+                nomes: new Map(),
+              });
+            } catch (e) {
+              logError("mensagem de coexistência ignorada", { error: (e as Error).message });
+            }
+          }
+        }
+        resultado = change.field;
+        continue;
+      }
+
+      if (change.field === "smb_app_state_sync") {
+        // Contactos: só o nome interessa, para a conversa deixar de ser um número.
+        for (const c of value.state_sync ?? []) {
+          const numero = String(c?.contact?.phone_number ?? c?.phone_number ?? "");
+          const nome = c?.contact?.full_name ?? c?.full_name ?? null;
+          if (!numero || !nome) continue;
+          await supabase.from("meta_conversations")
+            .update({ contact_name: nome })
+            .eq("channel_id", channel.id)
+            .eq("contact_ref", numero)
+            .is("contact_name", null);
+        }
+        resultado = "contactos";
+        continue;
+      }
+
       // ── Estados de entrega ────────────────────────────────────────────────
       for (const st of value.statuses ?? []) {
         try {
@@ -180,7 +236,6 @@ async function processarWhatsApp(
         try {
           const de = String(msg.from ?? "");
           if (!de) continue;
-          const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
 
           // Reação: não é mensagem nova, anota-se na mensagem reagida.
           if (msg.type === "reaction" && msg.reaction?.message_id) {
@@ -194,76 +249,12 @@ async function processarWhatsApp(
             continue;
           }
 
-          const { texto, anexos } = conteudoWhatsApp(msg);
-          if (!texto && anexos.length === 0) continue;
-
-          const resumo = texto || `[${anexos[0]?.type ?? "anexo"}]`;
-          const janela = new Date(at.getTime() + REPLY_WINDOW_MS).toISOString();
-
-          const { data: existente } = await supabase
-            .from("meta_conversations")
-            .select("id, contact_name, last_message_at, window_expires_at")
-            .eq("channel_id", channel.id)
-            .eq("contact_ref", de)
-            .maybeSingle();
-
-          // O nome vem na própria mensagem — nada de pedido extra de perfil.
-          const nome = nomePorNumero.get(de) ?? existente?.contact_name ?? null;
-
-          let convId: string | null = null;
-          if (existente) {
-            const maisRecente = !existente.last_message_at
-              || new Date(existente.last_message_at) <= at;
-            const { data, error } = await supabase.from("meta_conversations").update({
-              ...(maisRecente ? { last_message: resumo, last_message_at: at.toISOString() } : {}),
-              window_expires_at: existente.window_expires_at && existente.window_expires_at > janela
-                ? existente.window_expires_at : janela,
-              ...(nome && !existente.contact_name ? { contact_name: nome } : {}),
-              status: "open",
-              updated_at: new Date().toISOString(),
-            }).eq("id", existente.id).select("id").single();
-            if (error) { logError("conversa não atualizada", { error: error.message }); continue; }
-            convId = data.id;
-          } else {
-            const { data, error } = await supabase.from("meta_conversations").insert({
-              organization_id: channel.organization_id,
-              channel_id: channel.id,
-              contact_ref: de,
-              contact_name: nome,
-              last_message: resumo,
-              last_message_at: at.toISOString(),
-              window_expires_at: janela,
-              status: "open",
-            }).select("id").single();
-            if (error) { logError("conversa não criada", { error: error.message }); continue; }
-            convId = data.id;
-          }
-
-          const { error: msgErr } = await supabase.from("meta_messages").insert({
-            organization_id: channel.organization_id,
-            conversation_id: convId,
-            external_id: msg.id ?? null,
-            direction: "incoming",
-            content: texto || null,
-            reply_to_external_id: msg.context?.id ?? null,
-            attachments: anexos,
-            sent_at: at.toISOString(),
+          resultado = await guardarWhatsApp(supabase, channel, msg, {
+            contraparte: de,
+            saida: false,
+            notificar: true,
+            nomes: nomePorNumero,
           });
-
-          // 23505 = repetição. Os webhooks são entregues pelo menos uma vez.
-          if (msgErr && (msgErr as { code?: string }).code !== "23505") {
-            logError("mensagem WhatsApp não gravada", { error: msgErr.message });
-            resultado = "erro";
-            continue;
-          }
-          if (msgErr) { resultado = "duplicada"; continue; }
-
-          await supabase.rpc("increment_meta_unread", { _conversation_id: convId })
-            .then(() => {}, () => {});
-
-          await notificar(supabase, channel, `💬 WhatsApp: ${nome || de}`, resumo, convId!);
-          log("WhatsApp guardado", { conversa: convId });
-          resultado = "guardada";
         } catch (e) {
           logError("mensagem WhatsApp ignorada por erro", { error: (e as Error).message });
           resultado = "erro";
@@ -273,6 +264,117 @@ async function processarWhatsApp(
   }
 
   return { resultado, phoneNumberId, orgId };
+}
+
+/**
+ * Guarda uma mensagem de WhatsApp na conversa certa.
+ *
+ * Serve os três caminhos — o que entra agora, o histórico dos 180 dias, e os
+ * ecos do que o dono escreve pelo telemóvel — porque a diferença entre eles é
+ * só de QUEM é a contraparte e se notifica. Ter isto escrito uma vez é o que
+ * evita que o espelho e o tempo real se comportem de maneira diferente.
+ */
+async function guardarWhatsApp(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  channel: { id: string; organization_id: string; assigned_user_ids?: string[] | null },
+  // deno-lint-ignore no-explicit-any
+  msg: any,
+  opts: {
+    /** O outro lado da conversa — nunca nós. */
+    contraparte: string;
+    /** A mensagem foi escrita por nós (eco do telemóvel)? */
+    saida: boolean;
+    notificar: boolean;
+    nomes: Map<string, string>;
+  },
+): Promise<string> {
+  const { contraparte, saida } = opts;
+  if (!contraparte) return "sem_contraparte";
+
+  const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
+  const { texto, anexos } = conteudoWhatsApp(msg);
+  if (!texto && anexos.length === 0) return "vazia";
+
+  const resumo = texto || `[${anexos[0]?.type ?? "anexo"}]`;
+  const janela = new Date(at.getTime() + REPLY_WINDOW_MS).toISOString();
+
+  const { data: existente } = await supabase
+    .from("meta_conversations")
+    .select("id, contact_name, last_message_at, window_expires_at")
+    .eq("channel_id", channel.id)
+    .eq("contact_ref", contraparte)
+    .maybeSingle();
+
+  // O nome vem na própria mensagem — nada de pedido extra de perfil.
+  const nome = opts.nomes.get(contraparte) ?? existente?.contact_name ?? null;
+
+  let convId: string;
+  if (existente) {
+    const maisRecente = !existente.last_message_at
+      || new Date(existente.last_message_at) <= at;
+    const { data, error } = await supabase.from("meta_conversations").update({
+      ...(maisRecente ? { last_message: resumo, last_message_at: at.toISOString() } : {}),
+      // Só uma mensagem DA PESSOA reabre a janela de 24h. Um eco nosso não —
+      // responder não compra mais tempo, e fingir que sim deixava o compositor
+      // aberto para um envio que a Meta ia recusar.
+      ...(saida ? {} : {
+        window_expires_at: existente.window_expires_at && existente.window_expires_at > janela
+          ? existente.window_expires_at : janela,
+      }),
+      ...(nome && !existente.contact_name ? { contact_name: nome } : {}),
+      status: "open",
+      updated_at: new Date().toISOString(),
+    }).eq("id", existente.id).select("id").single();
+    if (error) { logError("conversa não atualizada", { error: error.message }); return "erro"; }
+    convId = data.id;
+  } else {
+    const { data, error } = await supabase.from("meta_conversations").insert({
+      organization_id: channel.organization_id,
+      channel_id: channel.id,
+      contact_ref: contraparte,
+      contact_name: nome,
+      last_message: resumo,
+      last_message_at: at.toISOString(),
+      window_expires_at: saida ? null : janela,
+      status: "open",
+    }).select("id").single();
+    if (error) { logError("conversa não criada", { error: error.message }); return "erro"; }
+    convId = data.id;
+  }
+
+  const { error: msgErr } = await supabase.from("meta_messages").insert({
+    organization_id: channel.organization_id,
+    conversation_id: convId,
+    external_id: msg.id ?? null,
+    direction: saida ? "outgoing" : "incoming",
+    content: texto || null,
+    reply_to_external_id: msg.context?.id ?? null,
+    attachments: anexos,
+    sent_at: at.toISOString(),
+    // Um eco já foi entregue — foi enviado pelo telemóvel, não por nós.
+    ...(saida ? { delivery_status: "sent" } : {}),
+  });
+
+  // 23505 = repetição. Os webhooks são entregues pelo menos uma vez, e o
+  // histórico traz mensagens que já cá estão — repetir é o esperado, não erro.
+  if (msgErr && (msgErr as { code?: string }).code !== "23505") {
+    logError("mensagem WhatsApp não gravada", { error: msgErr.message });
+    return "erro";
+  }
+  if (msgErr) return "duplicada";
+
+  // Só o que ENTRA conta por ler. Marcar como não lida uma mensagem que o
+  // próprio dono escreveu era pedir-lhe atenção para o que ele acabou de dizer.
+  if (!saida) {
+    await supabase.rpc("increment_meta_unread", { _conversation_id: convId })
+      .then(() => {}, () => {});
+    if (opts.notificar) {
+      await notificar(supabase, channel, `💬 WhatsApp: ${nome || contraparte}`, resumo, convId);
+    }
+  }
+
+  return "guardada";
 }
 
 /** Texto e anexos de uma mensagem do WhatsApp, por tipo. */
