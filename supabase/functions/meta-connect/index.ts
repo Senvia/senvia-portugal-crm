@@ -509,6 +509,67 @@ Deno.serve(async (req) => {
     // o webhook regista-as como "página que não temos ligada" para sempre.
     // A linha em si é apagada pelo CRM (RLS da organização) — aqui é só a
     // subscrição.
+    /**
+     * Ligar um número de WhatsApp SEM o assistente.
+     *
+     * Porque existe: o Embedded Signup serve para os CLIENTES ligarem as contas
+     * deles, e depende de App Review, estatuto de Tech Provider e de um conjunto
+     * de definições no painel da Meta. Para ligar o número da PRÓPRIA empresa
+     * nada disso é preciso — basta um token de utilizador do sistema.
+     *
+     * O token vem de `WHATSAPP_SYSTEM_TOKEN`, um segredo do Supabase que o dono
+     * define no painel. Nunca passa pelo browser nem por uma conversa: só os
+     * dois identificadores, que não são segredos.
+     */
+    if (body.action === "whatsapp_manual") {
+      const numeroId = String(body.phone_number_id ?? "");
+      const wabaId = String(body.waba_id ?? "");
+      if (!numeroId || !wabaId) {
+        return jsonRes({ error: "phone_number_id e waba_id são obrigatórios" }, 400);
+      }
+
+      const token = Deno.env.get("WHATSAPP_SYSTEM_TOKEN");
+      if (!token) {
+        return jsonRes({
+          error: "Falta o segredo WHATSAPP_SYSTEM_TOKEN no Supabase. "
+            + "Cria um token de utilizador do sistema no painel da Meta e guarda-o lá.",
+        }, 500);
+      }
+
+      // O token serve mesmo para este número? Sem esta verificação, um id
+      // errado criava uma caixa que nunca receberia nada — e só se descobria
+      // dias depois, ao estranhar o silêncio.
+      const vRes = await fetch(`${GRAPH}/${numeroId}`
+        + `?fields=display_phone_number,verified_name,quality_rating,platform_type,status`
+        + `&access_token=${encodeURIComponent(token)}`);
+      const num = await vRes.json();
+      if (!vRes.ok || num?.error) {
+        return jsonRes({
+          error: `A Meta não reconhece este número com esse token: ${
+            num?.error?.message ?? vRes.status}`,
+        }, 400);
+      }
+
+      const { data: dono } = await admin.from("messaging_channels")
+        .select("id, organization_id").eq("metadata->>phone_number_id", numeroId).maybeSingle();
+      if (dono && dono.organization_id !== orgId) {
+        return jsonRes({ error: "Este número já está ligado noutra conta do Senvia OS." }, 409);
+      }
+
+      return await criarCaixaWhatsApp({
+        admin, userToken: token, orgId, label: body.label ?? null,
+        origem: null, comoJson: true,
+        numero: {
+          phone_number_id: numeroId,
+          waba_id: wabaId,
+          waba_name: body.waba_name ?? null,
+          display_phone_number: num?.display_phone_number ?? null,
+          verified_name: num?.verified_name ?? null,
+          quality_rating: num?.quality_rating ?? null,
+        },
+      });
+    }
+
     // O que o browser precisa para abrir o assistente do WhatsApp pelo SDK.
     // Nem o id da app nem o da configuração são segredos — vão no URL do
     // diálogo de qualquer maneira.
