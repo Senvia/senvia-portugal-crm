@@ -263,17 +263,59 @@ export function useConnectMetaChannel() {
 
       const before = new Date().toISOString();
 
+      // A caixa é criada pela edge function no fim do assistente. É a única
+      // fonte de verdade que não depende de vermos a janela.
+      const wanted = connect === 'messenger' ? 'facebook'
+        : connect === 'whatsapp' ? 'whatsapp' : 'instagram';
+      const procurarCaixa = async () => {
+        const { data: criada } = await supabase
+          .from('messaging_channels')
+          .select('channel_type, label, metadata_public')
+          .eq('organization_id', organization.id)
+          .eq('channel_type', wanted)
+          .gte('created_at', before)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!criada) return null;
+        return {
+          channel_type: criada.channel_type,
+          label: criada.label ?? '',
+          ig_username: (criada.metadata_public as { ig_username?: string } | null)?.ig_username ?? null,
+        } as MetaConnectResult;
+      };
+
       const result = await new Promise<MetaConnectResult | null>(
         (resolve, reject) => {
           // O popup acaba em /oauth/meta, no NOSSO domínio, e é de lá que vem o
           // postMessage — na edge function nunca corria, porque a Supabase serve
           // tudo como text/plain e o browser mostrava o código em vez de o
-          // executar. Mesmo assim o fecho da janela continua a ser vigiado: se
-          // por alguma razão a mensagem não chegar, fechar não distingue "ligou"
-          // de "desistiu", e vai-se confirmar aos dados (abaixo).
-          const timer = setInterval(() => {
-            if (popup.closed) { cleanup(); resolve(null); }
-          }, 700);
+          // executar.
+          //
+          // `popup.closed` só é de confiar enquanto a janela for nossa. O
+          // assistente do WhatsApp vive em business.facebook.com, que define
+          // Cross-Origin-Opener-Policy: o browser corta-nos a referência e
+          // `closed` passa a dar true DE IMEDIATO, com o assistente aberto à
+          // frente da pessoa. Era isto que fazia aparecer "a janela foi fechada
+          // antes do fim" antes sequer de haver alguma coisa para fechar.
+          // Ninguém desiste em dois segundos: se `closed` aparecer aí, não foi
+          // uma pessoa — foi o browser, e a partir daí só os dados contam.
+          const inicio = Date.now();
+          let cortada = false;
+          const timer = setInterval(async () => {
+            const decorrido = Date.now() - inicio;
+            if (popup.closed && !cortada) {
+              if (decorrido < 2500) cortada = true;
+              else { cleanup(); resolve(null); return; }
+            }
+            if (!cortada) return;
+            const caixa = await procurarCaixa();
+            if (caixa) { cleanup(); resolve(caixa); return; }
+            // Sem referência à janela não há como distinguir "ainda a preencher"
+            // de "desistiu". Espera-se o tempo de um assistente com verificação
+            // por SMS e desiste-se com uma mensagem honesta.
+            if (decorrido > 8 * 60_000) { cleanup(); resolve(null); }
+          }, 1500);
           const onMessage = (event: MessageEvent) => {
             if (event.data?.type !== 'meta-oauth') return;
             cleanup();
@@ -291,25 +333,9 @@ export function useConnectMetaChannel() {
       // Pode vir "ligado" ou "escolhe qual" — quem chama decide o que mostrar.
       if (result) return result;
 
-      // Janela fechada sem mensagem: a única fonte de verdade é a base de dados.
-      const wanted = connect === 'messenger' ? 'facebook'
-        : connect === 'whatsapp' ? 'whatsapp' : 'instagram';
-      const { data: created } = await supabase
-        .from('messaging_channels')
-        .select('channel_type, label, metadata_public')
-        .eq('organization_id', organization.id)
-        .eq('channel_type', wanted)
-        .gte('created_at', before)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!created) throw new Error('Ligação não concluída — a janela foi fechada antes do fim.');
-      return {
-        channel_type: created.channel_type,
-        label: created.label ?? '',
-        ig_username: (created.metadata_public as { ig_username?: string } | null)?.ig_username ?? null,
-      };
+      const criada = await procurarCaixa();
+      if (!criada) throw new Error('Ligação não concluída — o assistente da Meta não chegou ao fim.');
+      return criada;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
