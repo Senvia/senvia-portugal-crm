@@ -201,6 +201,15 @@ async function ligarWhatsApp(p: {
   supabaseUrl: string;
 }): Promise<Response> {
   const { admin, userToken, orgId, origem } = p;
+  const emJson = p.comoJson === true;
+  // Quando vem do assistente pelo SDK a resposta e um fetch, nao um popup.
+  const resp = (payload: Record<string, unknown>, status = 200) =>
+    emJson
+      ? new Response(JSON.stringify(payload), {
+        status: payload.error ? (status === 200 ? 400 : status) : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+      : popupDone(payload, origem);
 
   // TODAS as contas a que esta autorização dá acesso, não a primeira.
   //
@@ -268,13 +277,13 @@ async function ligarWhatsApp(p: {
 
   if (wabas.length === 0) {
     logError("nenhuma WABA encontrada", { porque });
-    return popupDone({
+    return resp({
       // O motivo vai na mensagem: sem ele, "não encontrámos nada" manda a
       // pessoa repetir o assistente às cegas.
       error: "Não encontrámos nenhuma conta de WhatsApp Business nesta autorização. "
         + (porque.length ? `Motivo: ${porque.join(" | ")}. ` : "")
         + "Confirma que escolheste (ou criaste) uma conta de WhatsApp Business no assistente da Meta.",
-    }, origem);
+    });
   }
 
   // Os números de TODAS as contas, cada um com a conta a que pertence — é o que
@@ -305,10 +314,10 @@ async function ligarWhatsApp(p: {
   }
 
   if (numeros.length === 0) {
-    return popupDone({
+    return resp({
       error: "A conta de WhatsApp não tem nenhum número associado. "
         + "Adiciona um número no assistente da Meta e tenta outra vez.",
-    }, origem);
+    });
   }
 
   // Mais do que um: PERGUNTA-SE. O token fica no servidor e o browser leva só um
@@ -326,19 +335,20 @@ async function ligarWhatsApp(p: {
 
     if (pendErr || !pendente) {
       logError("não foi possível guardar a escolha", { error: pendErr?.message });
-      return popupDone({ error: "Erro ao preparar a escolha da conta." }, origem);
+      return resp({ error: "Erro ao preparar a escolha da conta." }, origem);
     }
 
-    return popupDone({
+    return resp({
       needs_choice: true,
       connect: "whatsapp",
       pending_id: pendente.id,
       options: numeros,
-    }, origem);
+    });
   }
 
   return await criarCaixaWhatsApp({
     admin, userToken, orgId, label: p.label, origem, numero: numeros[0],
+    comoJson: emJson,
   });
 }
 
@@ -598,9 +608,7 @@ Deno.serve(async (req) => {
       const code = String(body.code ?? "");
       const wabaId = String(body.waba_id ?? "");
       const numeroId = String(body.phone_number_id ?? "");
-      if (!code || !wabaId || !numeroId) {
-        return jsonRes({ error: "code, waba_id ou phone_number_id em falta" }, 400);
-      }
+      if (!code) return jsonRes({ error: "code em falta" }, 400);
       if (!appId || !appSecret) return jsonRes({ error: "App da Meta mal configurada" }, 500);
 
       // Troca do código pelo token. Server-to-server, com o App Secret — é por
@@ -613,6 +621,19 @@ Deno.serve(async (req) => {
       if (!tRes.ok || !tJson.access_token) {
         logError("troca do código falhou", tJson);
         return jsonRes({ error: tJson?.error?.message ?? "Falha ao obter o token" }, 502);
+      }
+
+      // O assistente nem sempre nos diz qual a conta — a mensagem da sessão e o
+      // código chegam por caminhos diferentes e a primeira pode perder-se. Em
+      // vez de falhar uma ligação que correu bem, descobre-se pelo token; e se
+      // houver mais do que uma conta, PERGUNTA-SE.
+      if (!wabaId || !numeroId) {
+        log("assistente sem ids — a descobrir pelo token");
+        return await ligarWhatsApp({
+          admin, userToken: tJson.access_token, orgId, label: body.label,
+          appId: appId!, appSecret: appSecret!,
+          origem: null, supabaseUrl: supabaseUrl!, comoJson: true,
+        });
       }
 
       const { data: dados } = await admin

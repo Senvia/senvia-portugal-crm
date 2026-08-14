@@ -88,7 +88,11 @@ export function useWhatsAppSignup() {
         if (!String(ev.origin).endsWith('facebook.com')) return;
         try {
           const d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-          if (d?.type === 'WA_EMBEDDED_SIGNUP' && d?.data) sessao = d.data as SessaoWhatsApp;
+          if (d?.type !== 'WA_EMBEDDED_SIGNUP') return;
+          // Os ids tanto vêm dentro de `data` como no próprio objeto, conforme
+          // a versão. Aceitam-se os dois em vez de exigir uma forma exata.
+          const c = (d.data ?? d) as SessaoWhatsApp;
+          if (c?.waba_id || c?.phone_number_id) sessao = { ...(sessao ?? {}), ...c };
         } catch { /* nem tudo o que a Meta envia é a sessão */ }
       };
       window.addEventListener('message', ouvir);
@@ -119,11 +123,12 @@ export function useWhatsAppSignup() {
           );
         });
 
-        if (!sessao?.waba_id || !sessao?.phone_number_id) {
-          throw new Error(
-            'O assistente terminou sem indicar a conta. Confirma que escolheste uma conta '
-            + 'de WhatsApp Business e um número antes de fechar a janela.',
-          );
+        // A mensagem da sessão e o código chegam por caminhos diferentes e não
+        // têm ordem garantida. Se o código veio primeiro, dá-se um instante à
+        // mensagem antes de desistir — desistir já era falhar uma ligação que
+        // afinal correu bem.
+        for (let i = 0; i < 20 && !sessao?.waba_id; i++) {
+          await new Promise((r) => setTimeout(r, 150));
         }
 
         // 3. O servidor troca o código por token e cria a caixa. O token nunca
@@ -133,8 +138,10 @@ export function useWhatsAppSignup() {
             action: 'whatsapp_signup',
             organization_id: organization.id,
             code,
-            waba_id: sessao.waba_id,
-            phone_number_id: sessao.phone_number_id,
+            // Podem vir vazios: nesse caso o servidor descobre a conta a partir
+            // das permissões do token, e pergunta se houver mais do que uma.
+            waba_id: sessao?.waba_id ?? null,
+            phone_number_id: sessao?.phone_number_id ?? null,
             label,
           },
         });
