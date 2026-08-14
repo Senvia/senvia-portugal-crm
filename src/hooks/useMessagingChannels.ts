@@ -172,6 +172,60 @@ export function useUpdateChannelGroups() {
  * popup é preciso porque a Meta recusa ser embebida em iframe, e sair da página
  * perderia o estado do CRM.
  */
+/** Um número de WhatsApp entre os quais escolher. */
+export interface OpcaoNumero {
+  phone_number_id: string;
+  waba_id: string;
+  waba_name: string | null;
+  display_phone_number: string | null;
+  verified_name: string | null;
+  quality_rating: string | null;
+}
+
+/**
+ * O que a ligação devolve.
+ *
+ * Pode acabar de duas maneiras: ligada, ou à espera de escolha. A segunda existe
+ * porque uma autorização pode abranger VÁRIAS contas — e escolher a primeira
+ * sozinho ligou a conta de um cliente à caixa da agência.
+ */
+export type MetaConnectResult =
+  | { channel_type: string; label: string; ig_username?: string | null; needs_choice?: false }
+  | { needs_choice: true; connect: string; pending_id: string; options: OpcaoNumero[] };
+
+/** Conclui uma ligação depois de escolhido o número. */
+export function useFinishMetaChoice() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ pendingId, phoneNumberId }: { pendingId: string; phoneNumberId: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('meta-connect', {
+        body: {
+          action: 'finish_choice',
+          organization_id: organization.id,
+          pending_id: pendingId,
+          phone_number_id: phoneNumberId,
+        },
+      });
+      if (error) {
+        let detail = '';
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.error ?? '';
+        } catch { /* corpo não era JSON */ }
+        throw new Error(detail || (error as Error).message);
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data as { channel_type: string; label: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
 export function useConnectMetaChannel() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
@@ -209,7 +263,7 @@ export function useConnectMetaChannel() {
 
       const before = new Date().toISOString();
 
-      const result = await new Promise<{ channel_type?: string; label?: string; ig_username?: string | null } | null>(
+      const result = await new Promise<MetaConnectResult | null>(
         (resolve, reject) => {
           // O popup acaba em /oauth/meta, no NOSSO domínio, e é de lá que vem o
           // postMessage — na edge function nunca corria, porque a Supabase serve
@@ -234,7 +288,8 @@ export function useConnectMetaChannel() {
         },
       );
 
-      if (result) return result as { channel_type: string; label: string; ig_username?: string | null };
+      // Pode vir "ligado" ou "escolhe qual" — quem chama decide o que mostrar.
+      if (result) return result;
 
       // Janela fechada sem mensagem: a única fonte de verdade é a base de dados.
       const wanted = connect === 'messenger' ? 'facebook'

@@ -21,7 +21,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
@@ -1065,9 +1065,12 @@ function InboxesManager() {
     return true;
   };
 
-  // Ligação de Instagram/Messenger pela API oficial da Meta (Facebook Login for
-  // Business). O arranque do WhatsApp por QR code saiu com a Evolution.
+  // Ligação de Instagram/Messenger/WhatsApp pela API oficial da Meta (Facebook
+  // Login for Business). O arranque do WhatsApp por QR code saiu com a Evolution.
   const connectMeta = useConnectMetaChannel();
+  const finishChoice = useFinishMetaChoice();
+  // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
+  const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
   const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
     setNewOpen(false);
@@ -1076,8 +1079,20 @@ function InboxesManager() {
       {
         onSuccess: (data) => {
           setNewLabel('');
+
+          // A autorização abrange mais do que uma conta: PERGUNTA-SE qual.
+          // Escolher a primeira sozinho foi o que ligou a conta de um cliente
+          // à caixa da agência.
+          // `in` em vez de `data.needs_choice`: o TypeScript só estreita o tipo
+          // pela presença da chave, porque a outra variante tem-na opcional.
+          if ('pending_id' in data) {
+            setEscolha({ pendingId: data.pending_id, opcoes: data.options });
+            return;
+          }
+
+          const nome = { instagram: 'Instagram', messenger: 'Messenger', whatsapp: 'WhatsApp' }[connect];
           toast({
-            title: connect === 'instagram' ? 'Instagram ligado' : 'Messenger ligado',
+            title: `${nome} ligado`,
             description: data.ig_username ? `@${data.ig_username} conectado` : `${data.label} conectado`,
           });
         },
@@ -1257,6 +1272,61 @@ function InboxesManager() {
       )}
       {/* Add email modal */}
       <AddEmailModal open={addEmailOpen} onOpenChange={setAddEmailOpen} />
+
+      {/* Escolher a conta, quando a autorização abrange mais do que uma.
+          Sem isto ligava-se a primeira que a Meta devolvesse — e numa agência,
+          que tem acesso ao Business Manager dos clientes, essa pode ser a de um
+          cliente. */}
+      <Dialog open={!!escolha} onOpenChange={(o) => !o && setEscolha(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Qual número queres ligar?</DialogTitle>
+            <DialogDescription>
+              A tua autorização dá acesso a {escolha?.opcoes.length} números. Escolhe o
+              que vai receber e responder no Senvia OS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {escolha?.opcoes.map((o) => (
+              <button
+                key={o.phone_number_id}
+                type="button"
+                disabled={finishChoice.isPending}
+                onClick={() => finishChoice.mutate(
+                  { pendingId: escolha.pendingId, phoneNumberId: o.phone_number_id },
+                  {
+                    onSuccess: (d) => {
+                      setEscolha(null);
+                      toast({ title: 'WhatsApp ligado', description: `${d.label} conectado` });
+                    },
+                    onError: (e) => toast({
+                      title: 'Não foi possível ligar',
+                      description: (e as Error).message,
+                      variant: 'destructive',
+                    }),
+                  },
+                )}
+                className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/50 disabled:opacity-50"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/10">
+                  <WhatsAppIcon className="h-5 w-5 text-[#25D366]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {o.verified_name || o.display_phone_number || o.phone_number_id}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {o.display_phone_number}
+                    {/* O nome da conta é o que distingue "a minha" da "do cliente". */}
+                    {o.waba_name ? ` · ${o.waba_name}` : ''}
+                  </p>
+                </div>
+                {finishChoice.isPending && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* New caixa dialog */}
       <Dialog open={newOpen} onOpenChange={setNewOpen}>

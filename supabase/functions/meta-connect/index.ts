@@ -202,8 +202,13 @@ async function ligarWhatsApp(p: {
 }): Promise<Response> {
   const { admin, userToken, orgId, origem } = p;
 
-  let wabaId: string | null = null;
-  let wabaNome: string | null = null;
+  // TODAS as contas a que esta autorização dá acesso, não a primeira.
+  //
+  // Isto ligava `data[0]` às cegas. Numa agência — que tem acesso ao Business
+  // Manager dos clientes — a primeira que a Meta devolve pode ser a de um
+  // CLIENTE. Foi o que aconteceu: ligou-se a conta da Delta Capital à caixa da
+  // Senvia, sem nada para escolher.
+  const wabas: Array<{ id: string; nome: string | null }> = [];
   const porque: string[] = [];
 
   // 1. O caminho documentado: perguntar ao `debug_token` que contas é que esta
@@ -223,9 +228,11 @@ async function ligarWhatsApp(p: {
     const escopos = debug?.data?.granular_scopes ?? [];
     for (const nome of ["whatsapp_business_management", "whatsapp_business_messaging"]) {
       const alvo = escopos.find((g: { scope?: string }) => g.scope === nome);
-      if (alvo?.target_ids?.length) { wabaId = String(alvo.target_ids[0]); break; }
+      for (const id of alvo?.target_ids ?? []) {
+        if (!wabas.some((w) => w.id === String(id))) wabas.push({ id: String(id), nome: null });
+      }
     }
-    if (!wabaId) {
+    if (wabas.length === 0) {
       porque.push(`autorização sem conta associada (${
         escopos.map((g: { scope?: string }) => g.scope).join(", ") || "sem permissões"})`);
     }
@@ -233,64 +240,137 @@ async function ligarWhatsApp(p: {
     porque.push(`debug_token: ${(e as Error).message}`);
   }
 
-  // 2. Pelos negócios do utilizador — apanha tanto as contas próprias como as
-  //    que lhe foram partilhadas por um cliente.
-  if (!wabaId) {
-    try {
-      const res = await fetch(
-        `${GRAPH}/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name},`
-        + `client_whatsapp_business_accounts{id,name}`
-        + `&access_token=${encodeURIComponent(userToken)}`,
-      );
-      const json = await res.json();
-      if (json?.error) porque.push(`negócios: ${json.error.message}`);
-      for (const neg of json?.data ?? []) {
-        const conta = neg?.owned_whatsapp_business_accounts?.data?.[0]
-          ?? neg?.client_whatsapp_business_accounts?.data?.[0];
-        if (conta?.id) { wabaId = String(conta.id); wabaNome = conta.name ?? neg.name; break; }
+  // 2. Pelos negócios do utilizador — apanha as contas próprias E as que lhe
+  //    foram partilhadas por um cliente. Junta-se tudo; a escolha é dele.
+  try {
+    const res = await fetch(
+      `${GRAPH}/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name},`
+      + `client_whatsapp_business_accounts{id,name}`
+      + `&access_token=${encodeURIComponent(userToken)}`,
+    );
+    const json = await res.json();
+    if (json?.error) porque.push(`negócios: ${json.error.message}`);
+    for (const neg of json?.data ?? []) {
+      const contas = [
+        ...(neg?.owned_whatsapp_business_accounts?.data ?? []),
+        ...(neg?.client_whatsapp_business_accounts?.data ?? []),
+      ];
+      for (const c of contas) {
+        if (!c?.id) continue;
+        const ja = wabas.find((w) => w.id === String(c.id));
+        if (ja) ja.nome = ja.nome ?? (c.name ?? neg.name ?? null);
+        else wabas.push({ id: String(c.id), nome: c.name ?? neg.name ?? null });
       }
-    } catch (e) {
-      porque.push(`negócios: ${(e as Error).message}`);
     }
+  } catch (e) {
+    porque.push(`negócios: ${(e as Error).message}`);
   }
 
-  if (!wabaId) {
+  if (wabas.length === 0) {
     logError("nenhuma WABA encontrada", { porque });
     return popupDone({
       // O motivo vai na mensagem: sem ele, "não encontrámos nada" manda a
-      // pessoa repetir o assistente às cegas — que foi o que aconteceu.
+      // pessoa repetir o assistente às cegas.
       error: "Não encontrámos nenhuma conta de WhatsApp Business nesta autorização. "
         + (porque.length ? `Motivo: ${porque.join(" | ")}. ` : "")
         + "Confirma que escolheste (ou criaste) uma conta de WhatsApp Business no assistente da Meta.",
     }, origem);
   }
 
-  // 2. Os números dessa conta.
-  const numRes = await fetch(
-    `${GRAPH}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating`
-    + `&access_token=${encodeURIComponent(userToken)}`,
-  );
-  const numJson = await numRes.json();
-  const numero = numJson?.data?.[0];
+  // Os números de TODAS as contas, cada um com a conta a que pertence — é o que
+  // permite mostrar "Delta Capital · +351 96588…" e não um número solto.
+  const numeros: Array<Record<string, unknown>> = [];
+  for (const w of wabas) {
+    try {
+      const r = await fetch(
+        `${GRAPH}/${w.id}/phone_numbers`
+        + `?fields=id,display_phone_number,verified_name,quality_rating`
+        + `&access_token=${encodeURIComponent(userToken)}`,
+      );
+      const j = await r.json();
+      for (const n of j?.data ?? []) {
+        if (!n?.id) continue;
+        numeros.push({
+          phone_number_id: String(n.id),
+          waba_id: w.id,
+          waba_name: w.nome,
+          display_phone_number: n.display_phone_number ?? null,
+          verified_name: n.verified_name ?? null,
+          quality_rating: n.quality_rating ?? null,
+        });
+      }
+    } catch (e) {
+      porque.push(`números de ${w.id}: ${(e as Error).message}`);
+    }
+  }
 
-  if (!numero?.id) {
+  if (numeros.length === 0) {
     return popupDone({
       error: "A conta de WhatsApp não tem nenhum número associado. "
         + "Adiciona um número no assistente da Meta e tenta outra vez.",
     }, origem);
   }
 
+  // Mais do que um: PERGUNTA-SE. O token fica no servidor e o browser leva só um
+  // identificador — nunca a credencial.
+  if (numeros.length > 1) {
+    const { data: pendente, error: pendErr } = await admin
+      .from("meta_pending_connections")
+      .insert({
+        organization_id: orgId,
+        connect: "whatsapp",
+        label: p.label ?? null,
+        user_token: userToken,
+        options: numeros,
+      }).select("id").single();
+
+    if (pendErr || !pendente) {
+      logError("não foi possível guardar a escolha", { error: pendErr?.message });
+      return popupDone({ error: "Erro ao preparar a escolha da conta." }, origem);
+    }
+
+    return popupDone({
+      needs_choice: true,
+      connect: "whatsapp",
+      pending_id: pendente.id,
+      options: numeros,
+    }, origem);
+  }
+
+  return await criarCaixaWhatsApp({
+    admin, userToken, orgId, label: p.label, origem, numero: numeros[0],
+  });
+}
+
+/** Cria a caixa para um número já escolhido. */
+// deno-lint-ignore no-explicit-any
+async function criarCaixaWhatsApp(p: any): Promise<Response> {
+  const { admin, userToken, orgId, origem } = p;
+  const numero = p.numero as Record<string, string>;
+  const wabaId = numero.waba_id;
+
+  // Esta função serve dois chamadores: o callback do OAuth (que responde ao
+  // POPUP, com redirecionamento) e a escolha feita no CRM (que responde ao
+  // FETCH, com JSON). Mesma lógica, duas formas de responder.
+  const responder = (payload: Record<string, unknown>, status = 200) =>
+    p.comoJson
+      ? new Response(JSON.stringify(payload), {
+        status: payload.error ? (status === 200 ? 400 : status) : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+      : popupDone(payload, origem);
+
   // Já ligado noutra organização? O webhook resolve por phone_number_id e
   // devolve UMA linha — partilhar o número entre contas era entregar as
   // mensagens de uma à outra.
   const { data: noutra } = await admin.from("messaging_channels")
     .select("id, organization_id")
-    .eq("metadata->>phone_number_id", String(numero.id))
+    .eq("metadata->>phone_number_id", String(numero.phone_number_id))
     .maybeSingle();
   if (noutra && noutra.organization_id !== orgId) {
-    return popupDone({
+    return responder({
       error: "Este número já está ligado noutra conta do Senvia OS.",
-    }, origem);
+    });
   }
 
   // 3. Subscrever a WABA aos nossos webhooks. SEM ISTO não chega mensagem
@@ -303,16 +383,16 @@ async function ligarWhatsApp(p: {
   const subJson = await subRes.json().catch(() => ({}));
   if (!subRes.ok || subJson?.success === false) {
     logError("subscrição da WABA falhou", { status: subRes.status, subJson });
-    return popupDone({
+    return responder({
       error: `A conta foi autorizada mas não conseguimos subscrever as mensagens: ${
         subJson?.error?.message ?? subRes.status}`,
-    }, origem);
+    });
   }
 
   // 4. Registar o número na Cloud API. Com Coexistence pode já vir registado —
   // nesse caso a Meta responde erro e ignora-se, porque o fim já está cumprido.
   try {
-    const reg = await fetch(`${GRAPH}/${numero.id}/register`, {
+    const reg = await fetch(`${GRAPH}/${numero.phone_number_id}/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000", access_token: userToken }),
@@ -334,18 +414,18 @@ async function ligarWhatsApp(p: {
     label: etiqueta,
     phone_number: String(numero.display_phone_number ?? "").replace(/\D/g, "") || null,
     metadata: {
-      phone_number_id: String(numero.id),
+      phone_number_id: String(numero.phone_number_id),
       waba_id: wabaId,
-      waba_name: wabaNome,
+      waba_name: numero.waba_name ?? null,
       display_phone_number: numero.display_phone_number ?? null,
       verified_name: numero.verified_name ?? null,
       quality_rating: numero.quality_rating ?? null,
     },
-  }, { onConflict: "id" }).select("id").single();
+  }).select("id").single();
 
   if (insErr || !canal) {
     logError("insert do canal WhatsApp falhou", { error: insErr?.message });
-    return popupDone({ error: "Erro ao guardar a caixa na base de dados." }, origem);
+    return responder({ error: "Erro ao guardar a caixa na base de dados." });
   }
 
   const { error: segErr } = await admin.from("messaging_channel_secrets").upsert({
@@ -357,16 +437,16 @@ async function ligarWhatsApp(p: {
   if (segErr) {
     logError("token do WhatsApp não guardado", { error: segErr.message });
     await admin.from("messaging_channels").delete().eq("id", canal.id);
-    return popupDone({ error: "Erro ao guardar as credenciais. Tenta novamente." }, origem);
+    return responder({ error: "Erro ao guardar as credenciais. Tenta novamente." });
   }
 
   log("caixa de WhatsApp criada", { orgId, numero: numero.display_phone_number });
-  return popupDone({
+  return responder({
     success: true,
     channel_type: "whatsapp",
     label: etiqueta,
     page_name: numero.display_phone_number ?? null,
-  }, origem);
+  });
 }
 
 Deno.serve(async (req) => {
@@ -429,41 +509,86 @@ Deno.serve(async (req) => {
     // o webhook regista-as como "página que não temos ligada" para sempre.
     // A linha em si é apagada pelo CRM (RLS da organização) — aqui é só a
     // subscrição.
+    // Concluir uma ligação que ficou à espera de escolha. O token está guardado
+    // no servidor; daqui só vem o identificador da escolha e o número escolhido.
+    if (body.action === "finish_choice") {
+      const pendingId = String(body.pending_id ?? "");
+      const escolhido = String(body.phone_number_id ?? "");
+      if (!pendingId || !escolhido) {
+        return jsonRes({ error: "pending_id ou phone_number_id em falta" }, 400);
+      }
+
+      const { data: pend } = await admin
+        .from("meta_pending_connections")
+        .select("id, organization_id, user_token, options, label, expires_at")
+        .eq("id", pendingId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+
+      if (!pend) return jsonRes({ error: "Escolha não encontrada. Recomeça a ligação." }, 404);
+      if (new Date(pend.expires_at) < new Date()) {
+        await admin.from("meta_pending_connections").delete().eq("id", pend.id);
+        return jsonRes({ error: "A escolha expirou. Recomeça a ligação." }, 410);
+      }
+
+      // O número TEM de vir da lista que nós guardámos. Aceitar um número
+      // qualquer daqui deixava ligar uma conta que a autorização não cobre.
+      const numero = (pend.options as Array<Record<string, unknown>>)
+        .find((o) => String(o.phone_number_id) === escolhido);
+      if (!numero) return jsonRes({ error: "Esse número não faz parte desta autorização." }, 400);
+
+      const r = await criarCaixaWhatsApp({
+        admin, userToken: pend.user_token, orgId,
+        label: pend.label, origem: null, numero, comoJson: true,
+      });
+
+      // Concluída ou falhada, a linha sai: é um token guardado a menos.
+      await admin.from("meta_pending_connections").delete().eq("id", pend.id);
+      return r;
+    }
+
     if (body.action === "disconnect") {
       const channelId = String(body.channel_id ?? "");
       if (!channelId) return jsonRes({ error: "channel_id em falta" }, 400);
 
       const { data: ch } = await admin.from("messaging_channels")
-        .select("metadata").eq("id", channelId).eq("organization_id", orgId).maybeSingle();
-      const meta = (ch?.metadata ?? {}) as { page_id?: string };
+        .select("metadata, channel_type").eq("id", channelId).eq("organization_id", orgId).maybeSingle();
+      const meta = (ch?.metadata ?? {}) as { page_id?: string; waba_id?: string };
       const { data: sec } = await admin.from("messaging_channel_secrets")
         .select("page_access_token").eq("channel_id", channelId).maybeSingle();
 
-      // A subscrição é da PÁGINA, não da caixa. A mesma Página pode estar ligada
-      // duas vezes — Instagram e Messenger são caixas separadas. Cancelar aqui
-      // sem verificar matava a outra caixa em silêncio.
+      // A subscrição é da PÁGINA (ou, no WhatsApp, da CONTA), não da caixa. A
+      // mesma Página pode estar ligada duas vezes — Instagram e Messenger são
+      // caixas separadas. Cancelar sem verificar matava a outra em silêncio.
+      //
+      // O WhatsApp não tem `page_id`: subscreve-se a WABA. Sem este ramo,
+      // apagar a caixa deixava a Meta a continuar a mandar-nos as mensagens
+      // dessa conta para sempre — sem caixa para as receber.
+      const alvoId = meta.page_id ?? meta.waba_id ?? null;
+      const campo = meta.page_id ? "page_id" : "waba_id";
+
       let outrasCaixas = 0;
-      if (meta.page_id) {
+      if (alvoId) {
         const { count } = await admin.from("messaging_channels")
           .select("id", { count: "exact", head: true })
-          .eq("metadata->>page_id", meta.page_id)
+          .eq(`metadata->>${campo}`, alvoId)
           .neq("id", channelId);
         outrasCaixas = count ?? 0;
       }
 
-      if (meta.page_id && sec?.page_access_token && outrasCaixas === 0) {
+      if (alvoId && sec?.page_access_token && outrasCaixas === 0) {
         try {
           await fetch(
-            `${GRAPH}/${meta.page_id}/subscribed_apps?access_token=${encodeURIComponent(sec.page_access_token)}`,
+            `${GRAPH}/${alvoId}/subscribed_apps?access_token=${encodeURIComponent(sec.page_access_token)}`,
             { method: "DELETE" },
           );
-          log("subscrição removida", { pageId: meta.page_id });
+          log("subscrição removida", { [campo]: alvoId });
         } catch (e) {
           // Melhor esforço: a caixa vai ser apagada de qualquer forma.
           logError("falha a remover a subscrição", { error: (e as Error).message });
         }
       } else if (outrasCaixas > 0) {
-        log("subscrição mantida — a Página ainda serve outra caixa", { pageId: meta.page_id, outrasCaixas });
+        log("subscrição mantida — a conta ainda serve outra caixa", { [campo]: alvoId, outrasCaixas });
       }
       return jsonRes({ ok: true });
     }
