@@ -53,6 +53,12 @@ interface PaymentRow {
   billing_period_end: string | null;
 }
 
+interface SubscriptionLine {
+  priceId: string;
+  quantity: number;
+  unitAmount: number;
+}
+
 interface Action {
   saleId: string;
   paymentId: string;
@@ -238,6 +244,82 @@ serve(async (req) => {
                 .update({ recurring_cycle_id: cycleId })
                 .eq("id", payment.id);
             }
+          }
+        }
+      }
+
+      // ── 3b. Itens da venda, a partir da subscrição real ───────────────────
+      // Sem isto a venda mostra um valor e mais nada: ninguém sabe QUE serviços
+      // o cliente está a pagar. Os itens vêm da subscrição no Stripe, traduzidos
+      // pelo catálogo sincronizado — nunca adivinhados.
+      if (subscriptionId) {
+        const { count: itemCount } = await supabase
+          .from("sale_items")
+          .select("id", { count: "exact", head: true })
+          .eq("sale_id", payment.sale_id);
+
+        if ((itemCount ?? 0) === 0) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            const lines: SubscriptionLine[] = sub.items.data
+              .filter((item: Stripe.SubscriptionItem) => item.price?.id && item.price.unit_amount != null)
+              .map((item: Stripe.SubscriptionItem) => ({
+                priceId: item.price.id,
+                quantity: item.quantity ?? 1,
+                unitAmount: (item.price.unit_amount ?? 0) / 100,
+              }));
+
+            // O nome do produto vem junto: sale_items exige `name` e `total`, e
+            // sem eles o insert falha em silêncio e a venda fica sem itens.
+            const { data: mappings } = await supabase
+              .from("stripe_product_mappings")
+              .select("product_id, stripe_price_id, products(name)")
+              .eq("organization_id", payment.organization_id)
+              .in("stripe_price_id", lines.map((l: SubscriptionLine) => l.priceId));
+            const productByPrice = new Map<string, { id: string; name: string }>(
+              ((mappings ?? []) as Array<{ product_id: string; stripe_price_id: string; products?: { name?: string } | null }>)
+                .map((m) => [m.stripe_price_id, { id: m.product_id, name: m.products?.name ?? "Serviço" }]),
+            );
+
+            const rows = lines
+              .filter((l: SubscriptionLine) => productByPrice.has(l.priceId))
+              .map((l: SubscriptionLine) => {
+                const product = productByPrice.get(l.priceId) as { id: string; name: string };
+                return {
+                  sale_id: payment.sale_id,
+                  product_id: product.id,
+                  name: product.name,
+                  quantity: l.quantity,
+                  unit_price: l.unitAmount,
+                  total: round2(l.unitAmount * l.quantity),
+                };
+              });
+
+            const unmapped = lines.filter((l: SubscriptionLine) => !productByPrice.has(l.priceId));
+            for (const l of unmapped) {
+              undecided.push({
+                saleId: payment.sale_id,
+                reason: `preço ${l.priceId} da subscrição não está no catálogo sincronizado`,
+              });
+            }
+
+            if (rows.length > 0) {
+              planned.push({
+                saleId: payment.sale_id,
+                paymentId: payment.id,
+                kind: "itens_da_venda_criados",
+                detail: rows.map((r: { quantity: number; unit_price: number }) => `${r.quantity}× ${r.unit_price.toFixed(2)}€`).join(" + "),
+              });
+              if (apply) {
+                const { error: itemsErr } = await supabase.from("sale_items").insert(rows);
+                if (itemsErr) log("falha a criar itens", { message: itemsErr.message });
+              }
+            }
+          } catch (e) {
+            undecided.push({
+              saleId: payment.sale_id,
+              reason: `subscrição ${subscriptionId} inacessível para derivar itens`,
+            });
           }
         }
       }

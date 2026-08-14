@@ -58,6 +58,72 @@ function invoicePaymentIds(inv: any): { chargeId: string | null; piId: string | 
   return { chargeId, piId };
 }
 
+/**
+ * Reescreve os itens de uma venda a partir dos itens da subscrição.
+ *
+ * Substitui em vez de acrescentar: se um cliente reduzir de dois Extra Users
+ * para um, acrescentar deixava lá o registo antigo e a venda passava a mostrar
+ * mais do que ele paga. A subscrição é a verdade; a venda é o espelho.
+ *
+ * Preços sem produto no catálogo sincronizado são ignorados — nunca inventados.
+ * Se nenhum item puder ser traduzido, os antigos ficam intactos: é melhor uma
+ * lista desactualizada do que uma venda vazia.
+ */
+async function syncSaleItemsFromSubscription(supabase: any, saleId: string, sub: any): Promise<void> {
+  try {
+    const lines = (sub?.items?.data ?? [])
+      .filter((item: any) => item?.price?.id && item.price.unit_amount != null)
+      .map((item: any) => ({
+        priceId: item.price.id as string,
+        quantity: item.quantity || 1,
+        unitAmount: item.price.unit_amount / 100,
+      }));
+    if (lines.length === 0) return;
+
+    const { data: mappings } = await supabase
+      .from("stripe_product_mappings")
+      .select("product_id, stripe_price_id, products(name)")
+      .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+      .in("stripe_price_id", lines.map((l: any) => l.priceId));
+
+    const byPrice = new Map<string, { id: string; name: string }>(
+      (mappings ?? []).map((m: any) => [
+        m.stripe_price_id,
+        { id: m.product_id, name: m.products?.name ?? "Serviço" },
+      ]),
+    );
+
+    const rows = lines
+      .filter((l: any) => byPrice.has(l.priceId))
+      .map((l: any) => {
+        const product = byPrice.get(l.priceId) as { id: string; name: string };
+        return {
+          sale_id: saleId,
+          product_id: product.id,
+          name: product.name,
+          quantity: l.quantity,
+          unit_price: l.unitAmount,
+          total: Math.round(l.unitAmount * l.quantity * 100) / 100,
+        };
+      });
+
+    if (rows.length === 0) {
+      logStep("subscription.updated: nenhum preço mapeado, itens mantidos", { saleId });
+      return;
+    }
+
+    await supabase.from("sale_items").delete().eq("sale_id", saleId);
+    const { error } = await supabase.from("sale_items").insert(rows);
+    if (error) {
+      logError("subscription.updated: sale_items sync failed", { saleId, error: error.message });
+    } else {
+      logStep("subscription.updated: sale_items synced", { saleId, itens: rows.length });
+    }
+  } catch (e) {
+    logError("subscription.updated: sale_items sync threw", { saleId, error: (e as Error).message });
+  }
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -179,16 +245,25 @@ serve(async (req) => {
                   return sum;
                 }, 0);
                 if (recurringTotal > 0) {
-                  const { error: syncErr } = await supabase
+                  const { data: syncedSales, error: syncErr } = await supabase
                     .from("sales")
                     .update({ recurring_value: recurringTotal })
                     .eq("client_org_id", clientOrgId)
                     .eq("recurring_status", "active")
-                    .eq("organization_id", SENVIA_AGENCY_ORG_ID);
+                    .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+                    .select("id");
                   if (syncErr) {
                     logStep("subscription.updated: recurring_value sync error", { error: syncErr.message });
                   } else {
                     logStep("subscription.updated: recurring_value synced", { clientOrgId, recurringTotal });
+                  }
+
+                  // Os ITENS têm de acompanhar o valor. Sincronizar só o total
+                  // deixava a venda a dizer 59€ sem mostrar que são dois Extra
+                  // Users — quem abre a venda vê um número e não sabe o que o
+                  // cliente está a pagar.
+                  for (const saleRow of syncedSales ?? []) {
+                    await syncSaleItemsFromSubscription(supabase, saleRow.id, sub);
                   }
                 }
               }
@@ -442,23 +517,33 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         // sincronizado. Um preço sem mapeamento não inventa produto nenhum —
         // fica só no total.
         if (sale && subItems.length > 0) {
+          // O nome vem junto: sale_items exige `name` e `total`. Sem eles o
+          // insert falha em silêncio e a venda nasce sem itens — ninguém fica a
+          // saber que serviços o cliente está a pagar.
           const { data: mappings } = await supabase
             .from("stripe_product_mappings")
-            .select("product_id, stripe_price_id")
+            .select("product_id, stripe_price_id, products(name)")
             .eq("organization_id", SENVIA_AGENCY_ORG_ID)
             .in("stripe_price_id", subItems.map((i) => i.priceId));
-          const productByPrice = new Map(
-            (mappings ?? []).map((m: any) => [m.stripe_price_id, m.product_id]),
+          const productByPrice = new Map<string, { id: string; name: string }>(
+            (mappings ?? []).map((m: any) => [
+              m.stripe_price_id,
+              { id: m.product_id, name: m.products?.name ?? "Serviço" },
+            ]),
           );
           const items = subItems
             .filter((i) => productByPrice.has(i.priceId))
-            .map((i) => ({
-              organization_id: SENVIA_AGENCY_ORG_ID,
-              sale_id: sale.id,
-              product_id: productByPrice.get(i.priceId),
-              quantity: i.quantity,
-              unit_price: i.unitAmount,
-            }));
+            .map((i) => {
+              const product = productByPrice.get(i.priceId) as { id: string; name: string };
+              return {
+                sale_id: sale.id,
+                product_id: product.id,
+                name: product.name,
+                quantity: i.quantity,
+                unit_price: i.unitAmount,
+                total: Math.round(i.unitAmount * i.quantity * 100) / 100,
+              };
+            });
           if (items.length > 0) {
             const { error: itemsErr } = await supabase.from("sale_items").insert(items);
             if (itemsErr) logError("invoice.paid: sale_items insert failed", { error: itemsErr.message });
@@ -530,7 +615,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
           const { error: insertErr } = await supabase
             .from("stripe_commission_records")
             .insert({
-              organization_id: SENVIA_AGENCY_ORG_ID,
               sale_id: sale.id,
               user_id: sale.created_by,
               client_org_id: clientOrgId,
@@ -620,7 +704,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         const { data: createdRec } = await supabase
           .from("sale_recurrences")
           .insert({
-            organization_id: SENVIA_AGENCY_ORG_ID,
             sale_id: sale.id,
             amount: recurringTotal > 0 ? recurringTotal : amount,
             anchor_date: periodStart || paymentDate,
@@ -708,7 +791,6 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     const { error: paymentErr } = await supabase
       .from("sale_payments")
       .insert({
-        organization_id: SENVIA_AGENCY_ORG_ID,
         sale_id: sale.id,
         // O BRUTO é o que o cliente pagou e o que abate à dívida da venda.
         // Registar o líquido (como era) deixava cada venda com o valor da taxa

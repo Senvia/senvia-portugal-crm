@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AdminTableSkeleton } from "@/components/system-admin/AdminShell";
 import { classifyOrg, BUCKET_META, since, until, type OrgBucket } from "@/components/system-admin/orgStatus";
+import { ManageSeatsDialog } from "./ManageSeatsDialog";
 
 interface Organization {
   id: string;
@@ -94,6 +95,7 @@ export function OrganizationsTable({
   adminInfo = {},
 }: OrganizationsTableProps) {
   const [query, setQuery] = useState("");
+  const [seatsDialog, setSeatsDialog] = useState<{ id: string; name: string; seats: number } | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -281,14 +283,33 @@ export function OrganizationsTable({
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell text-right">
-                        {org.extra_seats && org.extra_seats > 0 ? (
-                          <span className="inline-flex items-center gap-0.5 rounded bg-cyan-500/10 px-1.5 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400">
-                            +{org.extra_seats} ({org.extra_seats * 5}€)
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
+                      <TableCell
+                        className="hidden xl:table-cell text-right"
+                        // A linha inteira navega para a organização; sem isto,
+                        // clicar em "gerir lugares" saltava para lá em vez de
+                        // abrir o diálogo.
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-cyan-500/20"
+                          title="Gerir utilizadores extra"
+                          onClick={() =>
+                            setSeatsDialog({
+                              id: org.id,
+                              name: org.name,
+                              seats: org.extra_seats ?? 0,
+                            })
+                          }
+                        >
+                          {org.extra_seats && org.extra_seats > 0 ? (
+                            <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-cyan-600 dark:text-cyan-400">
+                              +{org.extra_seats} ({org.extra_seats * 5}€)
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">+ lugares</span>
+                          )}
+                        </button>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
                         {org.member_count}
@@ -307,6 +328,16 @@ export function OrganizationsTable({
           </div>
         )}
       </div>
+
+      {seatsDialog && (
+        <ManageSeatsDialog
+          open={!!seatsDialog}
+          onOpenChange={(open) => !open && setSeatsDialog(null)}
+          organizationId={seatsDialog.id}
+          organizationName={seatsDialog.name}
+          currentSeats={seatsDialog.seats}
+        />
+      )}
     </div>
   );
 }

@@ -47,28 +47,61 @@ serve(async (req) => {
     let orgId: string | null = body.organization_id ?? null;
 
     if (orgId) {
-      // Verify super admin
-      const { data: memberData } = await supabase
-        .from("organization_members")
+      // Duas vias legítimas para gerir lugares de uma organização: ser super
+      // admin da plataforma, ou ser administrador dessa própria organização.
+      //
+      // Antes só existia a segunda, apesar do comentário prometer a primeira —
+      // e como a agência NÃO é membro das organizações dos seus clientes, o
+      // caminho que existia para o super admin devolvia sempre 403. Gerir
+      // lugares de um cliente a partir do CRM era impossível.
+      const { data: isSuperAdmin } = await supabase
+        .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
-        .eq("organization_id", orgId)
-        .single();
+        .eq("role", "super_admin")
+        .maybeSingle();
 
-      if (!memberData || memberData.role !== "admin") {
-        return new Response(
-          JSON.stringify({ error: "Apenas administradores podem gerir utilizadores extra" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (!isSuperAdmin) {
+        const { data: memberData } = await supabase
+          .from("organization_members")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("organization_id", orgId)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (!memberData || memberData.role !== "admin") {
+          return new Response(
+            JSON.stringify({ error: "Apenas administradores podem gerir utilizadores extra" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     } else {
-      // Use the user's current org from their profile
+      // A organização do próprio utilizador. `profiles` identifica-se por `id`,
+      // não por `user_id` — a coluna nem existe, por isso esta consulta falhava
+      // sempre e até um cliente a comprar lugares para si próprio apanhava
+      // "Organização não encontrada".
       const { data: profile } = await supabase
         .from("profiles")
         .select("organization_id")
-        .eq("user_id", user.id)
-        .single();
+        .eq("id", user.id)
+        .maybeSingle();
       orgId = profile?.organization_id ?? null;
+
+      // Um utilizador pode pertencer a várias organizações e o perfil aponta
+      // apenas para uma. Se não houver, usa-se a filiação activa.
+      if (!orgId) {
+        const { data: membership } = await supabase
+          .from("organization_members")
+          .select("organization_id")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .order("joined_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        orgId = membership?.organization_id ?? null;
+      }
     }
 
     if (!orgId) {
