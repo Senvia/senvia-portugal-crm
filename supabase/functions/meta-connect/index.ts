@@ -196,42 +196,72 @@ async function ligarWhatsApp(p: {
   orgId: string;
   label?: string;
   appId: string;
+  appSecret: string;
   origem: string | null;
   supabaseUrl: string;
 }): Promise<Response> {
   const { admin, userToken, orgId, origem } = p;
 
-  // 1. Que contas de WhatsApp é que este utilizador nos deixou usar?
-  const wabaRes = await fetch(
-    `${GRAPH}/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name}`
-    + `&access_token=${encodeURIComponent(userToken)}`,
-  );
-  const wabaJson = await wabaRes.json();
-
-  // Caminho alternativo: em muitos casos o Embedded Signup devolve a WABA
-  // diretamente nas permissões concedidas, sem passar pelo negócio.
   let wabaId: string | null = null;
   let wabaNome: string | null = null;
-  for (const negocio of wabaJson?.data ?? []) {
-    const conta = negocio?.owned_whatsapp_business_accounts?.data?.[0];
-    if (conta?.id) { wabaId = String(conta.id); wabaNome = conta.name ?? negocio.name; break; }
-  }
+  const porque: string[] = [];
 
-  if (!wabaId) {
+  // 1. O caminho documentado: perguntar ao `debug_token` que contas é que esta
+  //    autorização abrange.
+  //
+  //    ATENÇÃO ao `access_token` deste pedido: tem de ser o token da APP
+  //    (`app-id|app-secret`), NÃO o do utilizador. Com o do utilizador a Meta
+  //    responde 200 com os campos em branco — sem `granular_scopes` — e ficava
+  //    a parecer que a conta não existia. Foi o que aconteceu à primeira.
+  try {
+    const appToken = `${p.appId}|${p.appSecret}`;
     const debug = await fetch(
       `${GRAPH}/debug_token?input_token=${encodeURIComponent(userToken)}`
-      + `&access_token=${encodeURIComponent(userToken)}`,
-    ).then((r) => r.json()).catch(() => null);
-    const alvo = (debug?.data?.granular_scopes ?? [])
-      .find((g: { scope?: string }) => g.scope === "whatsapp_business_messaging");
-    wabaId = alvo?.target_ids?.[0] ?? null;
+      + `&access_token=${encodeURIComponent(appToken)}`,
+    ).then((r) => r.json());
+
+    const escopos = debug?.data?.granular_scopes ?? [];
+    for (const nome of ["whatsapp_business_management", "whatsapp_business_messaging"]) {
+      const alvo = escopos.find((g: { scope?: string }) => g.scope === nome);
+      if (alvo?.target_ids?.length) { wabaId = String(alvo.target_ids[0]); break; }
+    }
+    if (!wabaId) {
+      porque.push(`autorização sem conta associada (${
+        escopos.map((g: { scope?: string }) => g.scope).join(", ") || "sem permissões"})`);
+    }
+  } catch (e) {
+    porque.push(`debug_token: ${(e as Error).message}`);
+  }
+
+  // 2. Pelos negócios do utilizador — apanha tanto as contas próprias como as
+  //    que lhe foram partilhadas por um cliente.
+  if (!wabaId) {
+    try {
+      const res = await fetch(
+        `${GRAPH}/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name},`
+        + `client_whatsapp_business_accounts{id,name}`
+        + `&access_token=${encodeURIComponent(userToken)}`,
+      );
+      const json = await res.json();
+      if (json?.error) porque.push(`negócios: ${json.error.message}`);
+      for (const neg of json?.data ?? []) {
+        const conta = neg?.owned_whatsapp_business_accounts?.data?.[0]
+          ?? neg?.client_whatsapp_business_accounts?.data?.[0];
+        if (conta?.id) { wabaId = String(conta.id); wabaNome = conta.name ?? neg.name; break; }
+      }
+    } catch (e) {
+      porque.push(`negócios: ${(e as Error).message}`);
+    }
   }
 
   if (!wabaId) {
-    logError("nenhuma WABA encontrada", { resposta: wabaJson?.error?.message });
+    logError("nenhuma WABA encontrada", { porque });
     return popupDone({
-      error: "Não encontrámos nenhuma conta de WhatsApp Business associada. "
-        + "Confirma que concluíste todos os passos do assistente da Meta.",
+      // O motivo vai na mensagem: sem ele, "não encontrámos nada" manda a
+      // pessoa repetir o assistente às cegas — que foi o que aconteceu.
+      error: "Não encontrámos nenhuma conta de WhatsApp Business nesta autorização. "
+        + (porque.length ? `Motivo: ${porque.join(" | ")}. ` : "")
+        + "Confirma que escolheste (ou criaste) uma conta de WhatsApp Business no assistente da Meta.",
     }, origem);
   }
 
@@ -573,7 +603,8 @@ Deno.serve(async (req) => {
     // Business (WABA) e os números dela. Caminho próprio.
     if (connect === "whatsapp") {
       return await ligarWhatsApp({
-        admin, userToken, orgId, label: state.label, appId: appId!,
+        admin, userToken, orgId, label: state.label,
+        appId: appId!, appSecret: appSecret!,
         origem: origemPopup, supabaseUrl: supabaseUrl!,
       });
     }
