@@ -475,10 +475,9 @@ Deno.serve(async (req) => {
       // e sincronizar os contactos e o histórico dos últimos 180 dias. Sem isto
       // o número teria de ser apagado da app — que era a razão pela qual isto
       // não se podia vender.
-      + (connect === "whatsapp" ? `&extras=${encodeURIComponent(JSON.stringify({
-        featureType: "whatsapp_business_app_onboarding",
-skip: false,
-      }))}` : "");
+      + (connect === "whatsapp"
+        ? `&extras=${encodeURIComponent(JSON.stringify({ featureType: "whatsapp_business_app_onboarding" }))}`
+        : "");
     return jsonRes({ url: dialog });
   }
 
