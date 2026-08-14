@@ -481,6 +481,43 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
     });
   }
 
+  // 3b. Pedir a sincronização da Coexistence: contactos e histórico.
+  //
+  // ISTO NÃO ACONTECE SOZINHO. Durante horas assumiu-se que a Meta enviava o
+  // histórico por iniciativa dela depois do assistente — não envia. É preciso
+  // pedir, e há uma JANELA DE 24 HORAS a contar da ligação; passada, a única
+  // saída é desligar o número e refazer tudo.
+  //
+  // Falhar aqui não invalida a caixa: as mensagens novas continuam a chegar
+  // pelo webhook. Por isso regista-se e segue-se, em vez de abortar.
+  for (const tipo of ["smb_app_state_sync", "history"]) {
+    try {
+      const r = await fetch(
+        `${GRAPH}/${numero.phone_number_id}/smb_app_data`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // `messaging_product` é obrigatório e a Meta só o diz depois de
+          // recusar: "missing : 'messaging_product'". Não vem na documentação
+          // do endpoint.
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            sync_type: tipo,
+            access_token: userToken,
+          }),
+        },
+      );
+      const j = await r.json().catch(() => ({}));
+      log(`sincronização da Coexistence pedida (${tipo})`, {
+        estado: r.status,
+        ok: j?.success ?? null,
+        erro: j?.error?.message ?? null,
+      });
+    } catch (e) {
+      logError(`sincronização da Coexistence (${tipo})`, { erro: (e as Error).message });
+    }
+  }
+
   // 4. Registar o número na Cloud API. Com Coexistence pode já vir registado —
   // nesse caso a Meta responde erro e ignora-se, porque o fim já está cumprido.
   try {
@@ -497,7 +534,7 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
 
   const etiqueta = (p.label || numero.verified_name || numero.display_phone_number || "WhatsApp").trim();
 
-  const { data: canal, error: insErr } = await admin.from("messaging_channels").upsert({
+  const campos = {
     organization_id: orgId,
     channel_type: "whatsapp",
     // 'meta' distingue-o das caixas antigas do Evolution, que ficam intactas.
@@ -513,7 +550,27 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
       verified_name: numero.verified_name ?? null,
       quality_rating: numero.quality_rating ?? null,
     },
-  }).select("id").single();
+  };
+
+  // Repetir a ligação do MESMO número tem de atualizar a caixa, não criar
+  // outra. Isto acontece a sério: a ativação da Coexistence só fica completa
+  // depois do passo no telemóvel, e até lá a pessoa liga várias vezes. Sem
+  // isto ficava com uma caixa por tentativa e teria de apagar — e apagar aqui
+  // é definitivo, leva as conversas atrás.
+  const { data: jaExiste } = await admin.from("messaging_channels")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("channel_type", "whatsapp")
+    .eq("metadata->>phone_number_id", String(numero.phone_number_id))
+    .maybeSingle();
+
+  const { data: canal, error: insErr } = jaExiste
+    ? await admin.from("messaging_channels")
+      .update(campos).eq("id", jaExiste.id).select("id").single()
+    : await admin.from("messaging_channels")
+      .insert(campos).select("id").single();
+
+  if (jaExiste) log("caixa de WhatsApp já existia — atualizada", { canal: jaExiste.id });
 
   if (insErr || !canal) {
     logError("insert do canal WhatsApp falhou", { error: insErr?.message });
@@ -528,7 +585,10 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
 
   if (segErr) {
     logError("token do WhatsApp não guardado", { error: segErr.message });
-    await admin.from("messaging_channels").delete().eq("id", canal.id);
+    // Só se apaga o que se acabou de criar. Se a caixa já existia, ela fica —
+    // apagá-la levaria as conversas antigas atrás por causa de uma falha a
+    // gravar um token.
+    if (!jaExiste) await admin.from("messaging_channels").delete().eq("id", canal.id);
     return responder({ error: "Erro ao guardar as credenciais. Tenta novamente." });
   }
 
@@ -667,7 +727,79 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, ver: "os detalhes ficaram no registo" }), {
+    // Exame de UMA caixa já ligada, com o token dela: diz se a Meta considera
+    // o número operacional e se a nossa app está mesmo subscrita à WABA. Sem
+    // isto, "não chega mensagem" é indistinguível de "chega e perde-se".
+    const canalId = url.searchParams.get("canal");
+    const saida: Array<Record<string, unknown>> = [];
+    if (canalId) {
+      const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: canal } = await admin.from("messaging_channels")
+        .select("id, metadata_public").eq("id", canalId).maybeSingle();
+      const { data: seg } = await admin.from("messaging_channel_secrets")
+        .select("page_access_token").eq("channel_id", canalId).maybeSingle();
+      const meta = (canal?.metadata_public ?? {}) as Record<string, string>;
+      if (seg?.page_access_token && meta.phone_number_id) {
+        await ver(
+          "estado do número",
+          `${GRAPH}/${encodeURIComponent(meta.phone_number_id)}`
+          + `?fields=id,display_phone_number,verified_name,status,name_status,`
+          + `quality_rating,platform_type,code_verification_status,`
+          // `is_on_biz_app` é o campo que diz se o número está mesmo emparelhado
+          // com a app do telemóvel. É ELE que separa "ligado" de "a espelhar".
+          + `is_on_biz_app,is_official_business_account`
+          + `&access_token=${encodeURIComponent(seg.page_access_token)}`,
+        );
+
+        // Voltar a pedir a sincronização de uma caixa já ligada. Serve para
+        // caixas criadas antes de este pedido existir, e vale enquanto a
+        // janela de 24 horas não fechar.
+        if (url.searchParams.get("sincronizar") === "1") {
+          for (const tipo of ["smb_app_state_sync", "history"]) {
+            try {
+              const r = await fetch(
+                `${GRAPH}/${encodeURIComponent(meta.phone_number_id)}/smb_app_data`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    messaging_product: "whatsapp",
+                    sync_type: tipo,
+                    access_token: seg.page_access_token,
+                  }),
+                },
+              );
+              const t = await r.text();
+              log(`sincronização manual (${tipo})`, { estado: r.status, corpo: t.slice(0, 500) });
+              // Também vai na resposta: o registo desta conta chega com vários
+              // minutos de atraso, e a janela da Coexistence é de 24 horas —
+              // esperar pelo registo para saber se resultou é tempo que não há.
+              saida.push({ tipo, estado: r.status, corpo: t.slice(0, 400) });
+            } catch (e) {
+              saida.push({ tipo, erro: (e as Error).message });
+            }
+          }
+        }
+        // O estado do número também volta na resposta, pela mesma razão.
+        try {
+          const r = await fetch(
+            `${GRAPH}/${encodeURIComponent(meta.phone_number_id)}`
+            + `?fields=status,platform_type,is_on_biz_app,code_verification_status`
+            + `&access_token=${encodeURIComponent(seg.page_access_token)}`,
+          );
+          saida.push({ tipo: "estado", corpo: (await r.text()).slice(0, 400) });
+        } catch { /* o registo fica com o detalhe */ }
+        await ver(
+          "apps subscritas na WABA",
+          `${GRAPH}/${encodeURIComponent(meta.waba_id)}/subscribed_apps`
+          + `?access_token=${encodeURIComponent(seg.page_access_token)}`,
+        );
+      } else {
+        logError("exame da caixa", { temToken: !!seg?.page_access_token, meta });
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, saida }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -1059,11 +1191,22 @@ Deno.serve(async (req) => {
       // ele. Custou uma tarde inteira a encontrar, porque o sintoma aponta
       // para permissões e a causa está aqui.
       //
-      // `featureType` sozinho, sem mais campos: é esta a forma que criou
-      // caixas. Coexistence — o número fica na app do WhatsApp Business e
-      // traz os contactos e 180 dias de histórico.
+      // Coexistence — o número fica na app do WhatsApp Business e traz os
+      // contactos e 180 dias de histórico.
+      //
+      // Só `featureType` chegou para a Meta partilhar a conta (os target_ids
+      // deixaram de vir vazios), mas NÃO para mostrar o passo do código QR que
+      // emparelha o telemóvel — e sem esse passo o número fica
+      // `ON_PREMISE`/`DISCONNECTED` e não chega mensagem nenhuma.
+      //
+      // Estes três campos são os da app de referência da Meta
+      // (`ClientDashboard.tsx`, `computeEsConfig`). Nada aqui é inventado: já
+      // se partiu isto uma vez com um campo imaginado, e o sintoma foi voltar
+      // a `target_ids: []`. Se isso acontecer, o suspeito é esta linha.
       + (connect === "whatsapp"
         ? `&extras=${encodeURIComponent(JSON.stringify({
+          sessionInfoVersion: "3",
+          version: "v3",
           featureType: "whatsapp_business_app_onboarding",
         }))}`
         : "");
