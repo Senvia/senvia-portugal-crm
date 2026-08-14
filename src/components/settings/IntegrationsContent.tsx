@@ -21,6 +21,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
+import { useWhatsAppSignup } from '@/hooks/useWhatsAppSignup';
 import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
@@ -1069,8 +1070,30 @@ function InboxesManager() {
   // Login for Business). O arranque do WhatsApp por QR code saiu com a Evolution.
   const connectMeta = useConnectMetaChannel();
   const finishChoice = useFinishMetaChoice();
+  // O WhatsApp tem caminho proprio: o assistente da Meta so funciona lancado
+  // pelo SDK dela, nao por um window.open como o Instagram e o Messenger.
+  const whatsappSignup = useWhatsAppSignup();
   // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
   const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
+  const startWhatsApp = () => {
+    if (blockIfAtLimit()) { setNewOpen(false); return; }
+    setNewOpen(false);
+    whatsappSignup.mutate(
+      { label: newLabel.trim() || undefined },
+      {
+        onSuccess: (d) => {
+          setNewLabel('');
+          toast({ title: 'WhatsApp ligado', description: `${d.label} conectado` });
+        },
+        onError: (err) => toast({
+          title: 'Não foi possível ligar',
+          description: (err as Error).message,
+          variant: 'destructive',
+        }),
+      },
+    );
+  };
+
   const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
     setNewOpen(false);
@@ -1350,7 +1373,7 @@ function InboxesManager() {
                     if (c.type === 'instagram') { startMetaConnect('instagram'); return; }
                     if (c.type === 'facebook') { startMetaConnect('messenger'); return; }
                     // Cloud API oficial da Meta — nao o Evolution, que saiu.
-                    if (c.type === 'whatsapp') { startMetaConnect('whatsapp'); return; }
+                    if (c.type === 'whatsapp') { startWhatsApp(); return; }
                   }}
                   className={cn(
                     'flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all',

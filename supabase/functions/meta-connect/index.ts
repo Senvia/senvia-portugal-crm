@@ -509,6 +509,84 @@ Deno.serve(async (req) => {
     // o webhook regista-as como "página que não temos ligada" para sempre.
     // A linha em si é apagada pelo CRM (RLS da organização) — aqui é só a
     // subscrição.
+    // O que o browser precisa para abrir o assistente do WhatsApp pelo SDK.
+    // Nem o id da app nem o da configuração são segredos — vão no URL do
+    // diálogo de qualquer maneira.
+    if (body.action === "whatsapp_params") {
+      const cfg = Deno.env.get("WHATSAPP_LOGIN_CONFIG_ID") || "";
+      if (!appId || !cfg) {
+        return jsonRes({
+          error: "Falta FACEBOOK_APP_ID ou WHATSAPP_LOGIN_CONFIG_ID nos segredos.",
+        }, 500);
+      }
+      return jsonRes({ app_id: appId, config_id: cfg, graph_version: "v21.0" });
+    }
+
+    /**
+     * Concluir o assistente do WhatsApp.
+     *
+     * O SDK devolve TRÊS coisas: o código (para trocar por token), o `waba_id` e
+     * o `phone_number_id` — os dois últimos vindos do próprio assistente, da
+     * conta que a pessoa escolheu lá dentro.
+     *
+     * É isso que torna esta via melhor do que a anterior: já não se adivinha a
+     * conta a partir das permissões do token. Foi essa adivinha que ligou a
+     * conta de um cliente à caixa da agência.
+     */
+    if (body.action === "whatsapp_signup") {
+      const code = String(body.code ?? "");
+      const wabaId = String(body.waba_id ?? "");
+      const numeroId = String(body.phone_number_id ?? "");
+      if (!code || !wabaId || !numeroId) {
+        return jsonRes({ error: "code, waba_id ou phone_number_id em falta" }, 400);
+      }
+      if (!appId || !appSecret) return jsonRes({ error: "App da Meta mal configurada" }, 500);
+
+      // Troca do código pelo token. Server-to-server, com o App Secret — é por
+      // isto que o código não serve de nada a quem o intercete.
+      const tRes = await fetch(`${GRAPH}/oauth/access_token`
+        + `?client_id=${encodeURIComponent(appId)}`
+        + `&client_secret=${encodeURIComponent(appSecret)}`
+        + `&code=${encodeURIComponent(code)}`);
+      const tJson = await tRes.json();
+      if (!tRes.ok || !tJson.access_token) {
+        logError("troca do código falhou", tJson);
+        return jsonRes({ error: tJson?.error?.message ?? "Falha ao obter o token" }, 502);
+      }
+
+      const { data: dados } = await admin
+        .from("messaging_channels")
+        .select("id, organization_id")
+        .eq("metadata->>phone_number_id", numeroId)
+        .maybeSingle();
+      if (dados && dados.organization_id !== orgId) {
+        return jsonRes({ error: "Este número já está ligado noutra conta do Senvia OS." }, 409);
+      }
+
+      // Os detalhes do número, para a caixa ter nome em vez de um id.
+      const nRes = await fetch(`${GRAPH}/${numeroId}`
+        + `?fields=display_phone_number,verified_name,quality_rating,platform_type`
+        + `&access_token=${encodeURIComponent(tJson.access_token)}`);
+      const num = await nRes.json().catch(() => ({}));
+
+      return await criarCaixaWhatsApp({
+        admin,
+        userToken: tJson.access_token,
+        orgId,
+        label: body.label ?? null,
+        origem: null,
+        comoJson: true,
+        numero: {
+          phone_number_id: numeroId,
+          waba_id: wabaId,
+          waba_name: body.waba_name ?? null,
+          display_phone_number: num?.display_phone_number ?? null,
+          verified_name: num?.verified_name ?? null,
+          quality_rating: num?.quality_rating ?? null,
+        },
+      });
+    }
+
     // Concluir uma ligação que ficou à espera de escolha. O token está guardado
     // no servidor; daqui só vem o identificador da escolha e o número escolhido.
     if (body.action === "finish_choice") {
