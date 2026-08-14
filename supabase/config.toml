@@ -172,3 +172,42 @@ verify_jwt = true
 
 [functions.chatwoot-export]
 verify_jwt = false
+
+# O callback do OAuth é uma navegação do browser vinda do Stripe, sem cabeçalho
+# Authorization — com verify_jwt ligado o Stripe apanharia 401 e a ligação nunca
+# se concluía. Em troca, a função autentica ela própria as acções status,
+# authorize e disconnect, e o callback é protegido pelo state de uso único.
+[functions.stripe-connect]
+verify_jwt = false
+
+# Chamada pelo CRM com sessão do utilizador. A função exige is_org_admin e
+# resolve a organização a partir do produto, nunca do corpo do pedido.
+[functions.stripe-product-sync]
+verify_jwt = true
+
+# Chamada pelo CRM com sessao do utilizador. A organizacao vem da recorrencia,
+# nunca do corpo do pedido.
+[functions.stripe-sale-checkout]
+verify_jwt = true
+
+# Chamada pelo Stripe, nao por um utilizador nosso. Autentica-se pela assinatura
+# do webhook Connect (STRIPE_CONNECT_WEBHOOK_SECRET), verificada no corpo bruto.
+[functions.stripe-connected-webhook]
+verify_jwt = false
+
+# Crons financeiros. Autenticam-se no x-cron-secret contra um segredo do Vault
+# (isAuthorized em cada funcao), tal como o reconcile-stripe-payments.
+[functions.generate-recurring-sales]
+verify_jwt = false
+
+[functions.reconcile-connected-stripe]
+verify_jwt = false
+
+# Relatorio read-only das vendas recorrentes. Nao escreve nada.
+[functions.audit-recurring-sales]
+verify_jwt = false
+
+
+# Reparacao conservadora dos dados recorrentes. DRY-RUN por omissao.
+[functions.repair-recurring-sales]
+verify_jwt = false

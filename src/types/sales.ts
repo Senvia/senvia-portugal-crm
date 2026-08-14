@@ -5,6 +5,46 @@ export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type ProposalType = 'energia' | 'servicos';
 export type ModeloServico = 'transacional' | 'saas';
 
+export type ServiceStatus = 'pending' | 'active' | 'paused' | 'inactive' | 'cancelled';
+export type BillingStatus = 'not_started' | 'current' | 'past_due' | 'uncollectible';
+export type BillingProvider = 'manual' | 'stripe';
+export type CycleStatus = 'pending' | 'paid' | 'failed' | 'void';
+
+export const SERVICE_STATUS_LABELS: Record<ServiceStatus, string> = {
+  pending: 'Pendente',
+  active: 'Ativo',
+  paused: 'Pausado',
+  inactive: 'Inativo',
+  cancelled: 'Cancelado',
+};
+
+export const SERVICE_STATUS_COLORS: Record<ServiceStatus, string> = {
+  pending: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+  active: 'bg-green-500/20 text-green-500 border-green-500/30',
+  paused: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+  inactive: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  cancelled: 'bg-red-500/20 text-red-500 border-red-500/30',
+};
+
+export const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
+  not_started: 'Por iniciar',
+  current: 'Em dia',
+  past_due: 'Em atraso',
+  uncollectible: 'Incobrável',
+};
+
+export const BILLING_STATUS_COLORS: Record<BillingStatus, string> = {
+  not_started: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+  current: 'bg-green-500/20 text-green-500 border-green-500/30',
+  past_due: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+  uncollectible: 'bg-red-500/20 text-red-500 border-red-500/30',
+};
+
+export const BILLING_PROVIDER_LABELS: Record<BillingProvider, string> = {
+  manual: 'Manual',
+  stripe: 'Stripe',
+};
+
 export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
   in_progress: 'Em Progresso',
   fulfilled: 'Entregue',
@@ -146,6 +186,11 @@ export interface Sale {
   next_renewal_date: string | null;
   last_renewal_date: string | null;
 
+  recurrence?: SaleRecurrenceSummary | null;
+  recurring_product_ids?: readonly string[];
+  recurring_products?: readonly SaleProductReference[];
+  billing_summary?: SaleBillingSummary | null;
+
   // Data de Ativação
   activation_date?: string | null;
 
@@ -159,6 +204,50 @@ export interface Sale {
   invoice_pdf_url?: string | null;
   credit_note_id?: number | null;
   credit_note_reference?: string | null;
+}
+
+export interface SaleProductReference {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface SaleRecurrenceSummary {
+  readonly id: string;
+  readonly amount: number;
+  readonly service_status: ServiceStatus;
+  readonly billing_status: BillingStatus;
+  readonly billing_provider: BillingProvider;
+  readonly next_cycle_date: string | null;
+  readonly last_cycle_date: string | null;
+  readonly current_cycle: SaleCycleSummary | null;
+}
+
+export interface SaleCycleSummary {
+  readonly id: string;
+  readonly period_start: string;
+  readonly period_end: string;
+  readonly due_date: string;
+  readonly amount: number;
+  readonly status: CycleStatus;
+}
+
+export interface SaleBillingSummary {
+  readonly status: BillingStatus;
+  readonly provider: BillingProvider;
+  readonly current_cycle_status: CycleStatus | null;
+  readonly outstanding_amount: number;
+  readonly paid_amount: number;
+}
+
+export interface ActivePaidTrafficSaleRecord {
+  readonly sale_id: string;
+  readonly organization_id: string;
+  readonly recurrence_id: string;
+  readonly amount: number;
+  readonly service_status: ServiceStatus;
+  readonly billing_status: BillingStatus;
+  readonly billing_provider: BillingProvider;
+  readonly product_ids: readonly string[];
 }
 
 export interface SaleWithDetails extends Sale {

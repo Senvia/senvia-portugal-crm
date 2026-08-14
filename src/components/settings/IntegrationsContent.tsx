@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StripeIntegrationCard } from "@/components/settings/StripeIntegrationCard";
+import { useStripeConnection } from "@/hooks/useStripeConnection";
 import { MESSAGING_CHANNELS, CHANNEL_COMING_SOON_LABEL, isChannelEnabled } from "@/lib/constants";
 import { LucideIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -74,7 +76,7 @@ interface IntegrationsContentProps {
   updateProfileIsPending: boolean;
 }
 
-type IntegrationKey = 'webhook' | 'webhook_inbound' | 'inboxes' | 'brevo' | 'invoicexpress' | 'keyinvoice' | 'meta';
+type IntegrationKey = 'webhook' | 'webhook_inbound' | 'inboxes' | 'brevo' | 'invoicexpress' | 'keyinvoice' | 'meta' | 'stripe';
 
 interface IntegrationDef {
   key: IntegrationKey;
@@ -85,7 +87,7 @@ interface IntegrationDef {
   group: string;
 }
 
-const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Faturação eletrónica'] as const;
+const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Pagamentos', 'Faturação eletrónica'] as const;
 
 const integrations: IntegrationDef[] = [
   { key: 'inboxes', icon: Inbox, title: 'Caixas de Entrada', description: 'WhatsApp, Instagram, Facebook, Email e mais', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
@@ -93,6 +95,7 @@ const integrations: IntegrationDef[] = [
   { key: 'meta', icon: Target, title: 'Meta Ads (Conversões)', description: 'Avisar o Facebook/Instagram Ads quando um lead converte', toggleKey: 'meta', group: 'Marketing' },
   { key: 'webhook', icon: Webhook, title: 'Webhook de Saída', description: 'Notificar sistemas externos (Make, Zapier, n8n)', toggleKey: 'webhook', group: 'Automações' },
   { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads (Facebook, Zapier, Make)', toggleKey: 'webhook_inbound', group: 'Automações' },
+  { key: 'stripe', icon: CreditCard, title: 'Stripe', description: 'Cobrar subscrições recorrentes na conta da sua empresa', toggleKey: 'stripe', group: 'Pagamentos' },
   { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação eletrónica' },
   { key: 'keyinvoice', icon: Receipt, title: 'KeyInvoice', description: 'Faturação via API 5.0', toggleKey: 'keyinvoice', group: 'Faturação eletrónica' },
 ];
@@ -148,6 +151,10 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const connectedChannels = channels.filter(
     (c) => c.status === 'connected' && isChannelEnabled(c.channel_type),
   ).length;
+  // Só para o crachá do catálogo. A lógica da integração vive inteira em
+  // StripeIntegrationCard; o antigo integrations_enabled.stripe não é fonte de
+  // verdade nenhuma — quem manda é existir (ou não) uma conta ligada.
+  const { connection: stripeConnection } = useStripeConnection();
 
   const {
     isLoadingIntegrations,
@@ -170,6 +177,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
       case 'keyinvoice': return !!keyinvoiceApiKey;
       case 'meta': return !!(org as { meta_conversions_api_token?: string } | null)?.meta_conversions_api_token;
+      case 'stripe': return stripeConnection.connected;
     }
   };
 
@@ -180,6 +188,16 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">{connectedChannels} {connectedChannels === 1 ? 'ligada' : 'ligadas'}</Badge>;
       }
       return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border text-[10px]">Nenhuma ligada</Badge>;
+    }
+    // Stripe não tem interruptor: ou há uma conta ligada, ou não há.
+    if (key === 'stripe') {
+      if (stripeConnection.status === 'restricted') {
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">Com restrições</Badge>;
+      }
+      if (stripeConnection.connected) {
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">Ligado</Badge>;
+      }
+      return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border text-[10px]">Não ligado</Badge>;
     }
     if (integrationsEnabled[key] === false) {
       return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border text-[10px]">Desativado</Badge>;
@@ -247,7 +265,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         </div>
         <div className="flex items-center gap-2">
           {getBadge(active, isConfigured(active))}
-          {active !== 'inboxes' && active !== 'meta' && (
+          {active !== 'inboxes' && active !== 'meta' && active !== 'stripe' && (
             <Switch
               checked={active === 'keyinvoice' ? integrationsEnabled.keyinvoice === true : integrationsEnabled[active] !== false}
               onCheckedChange={(checked) => onToggleIntegration(active, checked)}
@@ -266,6 +284,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
           {active === 'webhook' && <WebhooksManager />}
           {active === 'webhook_inbound' && <InboundWebhookSection />}
           {active === 'inboxes' && <InboxesManager />}
+          {active === 'stripe' && <StripeIntegrationCard />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}

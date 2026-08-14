@@ -9,6 +9,7 @@ import { RefreshCw } from 'lucide-react';
 import { useUpdateProduct } from '@/hooks/useProducts';
 import { useOrganization } from '@/hooks/useOrganization';
 import { ProductImageGallery } from './ProductImageGallery';
+import { ProductStripeSync } from './ProductStripeSync';
 import type { Product } from '@/types/proposals';
 
 interface EditProductModalProps {
@@ -168,6 +169,10 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
                 Este produto é cobrado mensalmente. Vendas com este produto terão opção de renovação.
               </p>
             )}
+            {/* Usa o is_recurring GRAVADO, não o do formulário: sincronizar um
+                produto que ainda não foi guardado como recorrente faria a edge
+                function recusar com "o produto não é recorrente". */}
+            <ProductStripeSync productId={product.id} isRecurring={product.is_recurring} />
           </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="edit-active">Produto ativo</Label>

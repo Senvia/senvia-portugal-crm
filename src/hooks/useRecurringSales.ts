@@ -1,23 +1,51 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { addDays } from "date-fns";
 import { toast } from "sonner";
-import { addDays, addMonths } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { RecurringStatus } from "@/types/sales";
 
+interface RecurringCycleSummary {
+  readonly id: string;
+  readonly period_start: string;
+  readonly period_end: string;
+  readonly due_date: string;
+  readonly amount: number;
+  readonly status: string;
+}
+
 interface RecurringSaleWithClient {
-  id: string;
-  code: string;
-  client_id: string | null;
-  recurring_value: number;
-  recurring_status: RecurringStatus;
-  next_renewal_date: string;
-  last_renewal_date: string | null;
-  organization_id: string;
-  client?: {
-    id: string;
-    name: string;
+  readonly id: string;
+  readonly recurrence_id: string;
+  readonly code: string;
+  readonly client_id: string | null;
+  readonly recurring_value: number;
+  readonly recurring_status: RecurringStatus;
+  readonly next_renewal_date: string;
+  readonly last_renewal_date: string | null;
+  readonly organization_id: string;
+  readonly current_cycle: RecurringCycleSummary | null;
+  readonly client?: {
+    readonly id: string;
+    readonly name: string;
   } | null;
+}
+
+interface RenewSaleInput {
+  readonly saleId: string;
+  readonly organizationId: string;
+  readonly amount: number;
+  readonly paymentMethod?: string;
+}
+
+class RecurrenceActionError extends Error {
+  constructor(
+    readonly action: "renew" | "cancel",
+    readonly saleId: string,
+  ) {
+    super(`Recurrence ${action} is unavailable for sale ${saleId}`);
+    this.name = "RecurrenceActionError";
+  }
 }
 
 export function useRecurringSales() {
@@ -28,29 +56,64 @@ export function useRecurringSales() {
     queryFn: async (): Promise<RecurringSaleWithClient[]> => {
       if (!organization?.id) return [];
 
-      const soon = addDays(new Date(), 7).toISOString().split('T')[0];
-
+      const soon = addDays(new Date(), 7).toISOString().split("T")[0];
       const { data, error } = await supabase
-        .from("sales")
+        .from("sale_recurrences")
         .select(`
           id,
-          code,
-          client_id,
-          recurring_value,
-          recurring_status,
-          next_renewal_date,
-          last_renewal_date,
+          sale_id,
           organization_id,
-          client:crm_clients(id, name)
+          amount,
+          next_cycle_date,
+          last_cycle_date,
+          sales!inner(
+            id,
+            code,
+            client_id,
+            client:crm_clients(id, name)
+          ),
+          sale_recurring_cycles(
+            id,
+            period_start,
+            period_end,
+            due_date,
+            amount,
+            status
+          )
         `)
         .eq("organization_id", organization.id)
-        .eq("has_recurring", true)
-        .eq("recurring_status", "active")
-        .lte("next_renewal_date", soon)
-        .order("next_renewal_date", { ascending: true });
+        .eq("service_status", "active")
+        .not("next_cycle_date", "is", null)
+        .lte("next_cycle_date", soon)
+        .order("next_cycle_date", { ascending: true });
 
       if (error) throw error;
-      return (data as unknown as RecurringSaleWithClient[]) || [];
+
+      return (data ?? []).flatMap((recurrence): RecurringSaleWithClient[] => {
+        const sale = recurrence.sales;
+        if (!sale || !recurrence.next_cycle_date) return [];
+
+        const currentCycle = recurrence.sale_recurring_cycles.reduce<
+          RecurringCycleSummary | null
+        >((latest, cycle) => {
+          if (!latest || cycle.period_start > latest.period_start) return cycle;
+          return latest;
+        }, null);
+
+        return [{
+          id: sale.id,
+          recurrence_id: recurrence.id,
+          code: sale.code ?? "",
+          client_id: sale.client_id,
+          recurring_value: recurrence.amount,
+          recurring_status: "active",
+          next_renewal_date: recurrence.next_cycle_date,
+          last_renewal_date: recurrence.last_cycle_date,
+          organization_id: recurrence.organization_id,
+          current_cycle: currentCycle,
+          client: sale.client,
+        }];
+      });
     },
     enabled: !!organization?.id,
   });
@@ -58,104 +121,41 @@ export function useRecurringSales() {
 
 export function useRenewSale() {
   const queryClient = useQueryClient();
-  const { organization } = useAuth();
 
   return useMutation({
-    mutationFn: async ({
-      saleId,
-      organizationId,
-      amount,
-      paymentMethod
-    }: {
-      saleId: string;
-      organizationId: string;
-      amount: number;
-      paymentMethod?: string;
-    }) => {
-      const today = new Date().toISOString().split('T')[0];
+    mutationFn: async ({ saleId, organizationId }: RenewSaleInput) => {
+      const { data: recurrence, error: recurrenceError } = await supabase
+        .from("sale_recurrences")
+        .select("id, next_cycle_date")
+        .eq("sale_id", saleId)
+        .eq("organization_id", organizationId)
+        .eq("service_status", "active")
+        .maybeSingle();
 
-      // Criar pagamento
-      const { error: paymentError } = await supabase
-        .from("sale_payments")
-        .insert({
-          organization_id: organizationId,
-          sale_id: saleId,
-          amount,
-          payment_date: today,
-          status: 'pending',
-          payment_method: paymentMethod || 'other',
-          notes: 'Renovação mensal',
-        });
-
-      if (paymentError) throw paymentError;
-
-      // Gerar registo de comissão para a renovação
-      try {
-        const { data: sale } = await supabase
-          .from("sales")
-          .select("created_by, client_org_id")
-          .eq("id", saleId)
-          .single();
-
-        if (sale?.created_by) {
-          const salesSettings = (organization?.sales_settings as any) || {};
-          const globalRate = salesSettings.commission_percentage || 0;
-
-          let rate = globalRate;
-          if (rate <= 0) {
-            const { data: member } = await supabase
-              .from("organization_members")
-              .select("commission_rate")
-              .eq("organization_id", organizationId)
-              .eq("user_id", sale.created_by)
-              .eq("is_active", true)
-              .maybeSingle();
-            rate = Number(member?.commission_rate || 0);
-          }
-
-          if (rate > 0) {
-            const commissionAmount = amount * (rate / 100);
-            await (supabase as any)
-              .from("stripe_commission_records")
-              .insert({
-                organization_id: organizationId,
-                sale_id: saleId,
-                user_id: sale.created_by,
-                client_org_id: sale.client_org_id || null,
-                amount,
-                commission_rate: rate,
-                commission_amount: commissionAmount,
-                stripe_invoice_id: `manual-${saleId}-${today}`,
-                period_start: today,
-                period_end: addMonths(new Date(), 1).toISOString().split('T')[0],
-                plan: null,
-                status: "pending",
-              });
-          }
-        }
-      } catch (err) {
-        console.error("Error creating commission for renewal:", err);
+      if (recurrenceError) throw recurrenceError;
+      if (!recurrence?.next_cycle_date) {
+        throw new RecurrenceActionError("renew", saleId);
       }
 
-      // Atualizar venda com próxima renovação
-      const nextMonth = addMonths(new Date(), 1).toISOString().split('T')[0];
-      const { error: saleError } = await supabase
-        .from("sales")
-        .update({
-          last_renewal_date: today,
-          next_renewal_date: nextMonth,
-        })
-        .eq("id", saleId);
+      const { data: cycle, error: cycleError } = await supabase.rpc(
+        "create_recurring_cycle",
+        {
+          p_recurrence_id: recurrence.id,
+          p_period_start: recurrence.next_cycle_date,
+        },
+      );
 
-      if (saleError) throw saleError;
+      if (cycleError) throw cycleError;
+      return cycle;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["sale-recurrence"] });
+      queryClient.invalidateQueries({ queryKey: ["recurring-cycles"] });
       queryClient.invalidateQueries({ queryKey: ["sale-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["stripe-commissions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      toast.success("Renovação registada com sucesso!");
+      toast.success("Ciclo de renovação criado com sucesso!");
     },
     onError: () => {
       toast.error("Erro ao registar renovação");
@@ -168,18 +168,29 @@ export function useCancelRecurrence() {
 
   return useMutation({
     mutationFn: async (saleId: string) => {
-      const { error } = await supabase
-        .from("sales")
-        .update({
-          recurring_status: 'cancelled',
-        })
-        .eq("id", saleId);
+      const { data: recurrence, error: recurrenceError } = await supabase
+        .from("sale_recurrences")
+        .select("id")
+        .eq("sale_id", saleId)
+        .in("service_status", ["pending", "active", "paused"])
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (recurrenceError) throw recurrenceError;
+      if (!recurrence) throw new RecurrenceActionError("cancel", saleId);
+
+      const { error } = await supabase.rpc("transition_sale_recurrence", {
+        p_recurrence_id: recurrence.id,
+        p_action: "cancel",
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["sale-recurrence"] });
       toast.success("Recorrência cancelada");
     },
     onError: () => {

@@ -4,10 +4,52 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { SalePayment, PaymentMethod, PaymentRecordStatus } from "@/types/sales";
 
+export interface SalePaymentWithCycle extends SalePayment {
+  readonly recurring_cycle_id: string | null;
+  readonly stripe_gross_amount: number | null;
+  readonly stripe_fee_amount: number | null;
+  readonly stripe_net_amount: number | null;
+}
+
+class SalePaymentValueError extends Error {
+  constructor(
+    readonly field: "payment_method" | "status",
+    readonly value: string,
+  ) {
+    super(`Unexpected sale payment ${field}: ${value}`);
+    this.name = "SalePaymentValueError";
+  }
+}
+
+function parsePaymentMethod(value: string | null): PaymentMethod | null {
+  switch (value) {
+    case null:
+    case "mbway":
+    case "transfer":
+    case "cash":
+    case "card":
+    case "check":
+    case "other":
+      return value;
+    default:
+      throw new SalePaymentValueError("payment_method", value);
+  }
+}
+
+function parsePaymentStatus(value: string): PaymentRecordStatus {
+  switch (value) {
+    case "pending":
+    case "paid":
+      return value;
+    default:
+      throw new SalePaymentValueError("status", value);
+  }
+}
+
 export function useSalePayments(saleId: string | undefined) {
   return useQuery({
     queryKey: ["sale-payments", saleId],
-    queryFn: async () => {
+    queryFn: async (): Promise<SalePaymentWithCycle[]> => {
       const { data, error } = await supabase
         .from("sale_payments")
         .select("*")
@@ -15,7 +57,17 @@ export function useSalePayments(saleId: string | undefined) {
         .order("payment_date", { ascending: true });
 
       if (error) throw error;
-      return data as SalePayment[];
+      return data.map((payment): SalePaymentWithCycle => ({
+        ...payment,
+        payment_method: parsePaymentMethod(payment.payment_method),
+        status: parsePaymentStatus(payment.status),
+        created_at: payment.created_at ?? payment.payment_date,
+        updated_at: payment.updated_at ?? payment.created_at ?? payment.payment_date,
+        recurring_cycle_id: payment.recurring_cycle_id,
+        stripe_gross_amount: payment.stripe_gross_amount,
+        stripe_fee_amount: payment.stripe_fee_amount,
+        stripe_net_amount: payment.stripe_net_amount,
+      }));
     },
     enabled: !!saleId,
   });

@@ -27,7 +27,23 @@ import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
-import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
+import {
+  BILLING_PROVIDER_LABELS,
+  BILLING_STATUS_COLORS,
+  BILLING_STATUS_LABELS,
+  SALE_STATUS_LABELS,
+  SALE_STATUS_COLORS,
+  SALE_STATUSES,
+  SERVICE_STATUS_COLORS,
+  SERVICE_STATUS_LABELS,
+} from "@/types/sales";
+import { RecurringSalesFilters } from "@/components/sales/RecurringSalesFilters";
+import {
+  DEFAULT_RECURRING_SALES_FILTERS,
+  hasRecurringSalesFilter,
+  matchesRecurringSalesFilters,
+  type RecurringSalesFilters as RecurringSalesFilterState,
+} from "@/components/sales/recurring-sales-filter-logic";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
@@ -59,6 +75,10 @@ const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
   const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('sales-type-v1', 'all');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
+  const [recurringFilters, setRecurringFilters] = usePersistedState<RecurringSalesFilterState>(
+    "sales-recurring-filters-v1",
+    DEFAULT_RECURRING_SALES_FILTERS,
+  );
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [salesTab, setSalesTab] = useState<'vendas' | 'comissoes'>('vendas');
@@ -101,6 +121,16 @@ const deleteSale = useMutation({
     }
   }, [sales, pendingSaleId]);
 
+  const recurringProducts = useMemo(() => {
+    const productsById = new Map<string, { id: string; name: string }>();
+    for (const sale of sales ?? []) {
+      for (const product of sale.recurring_products ?? []) {
+        productsById.set(product.id, product);
+      }
+    }
+    return Array.from(productsById.values());
+  }, [sales]);
+
   // Sync selectedSale with fresh data from React Query cache
   useEffect(() => {
     if (selectedSale && sales) {
@@ -116,6 +146,14 @@ const deleteSale = useMutation({
     return sales.filter((sale) => {
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
       const matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter;
+      const matchesRecurring = matchesRecurringSalesFilters(
+        {
+          hasRecurring: sale.has_recurring,
+          recurrence: sale.recurrence ?? null,
+          recurringProductIds: sale.recurring_product_ids ?? [],
+        },
+        recurringFilters,
+      );
 
       const matchesDate = (() => {
         if (!dateRange?.from) return true;
@@ -128,7 +166,7 @@ const deleteSale = useMutation({
       })();
 
       if (!search.trim()) {
-        return matchesStatus && matchesType && matchesDate;
+        return matchesStatus && matchesType && matchesDate && matchesRecurring;
       }
 
       const matchesSearchTerm = matchesSearch(
@@ -141,9 +179,9 @@ const deleteSale = useMutation({
         sale.notes,
       );
 
-      return matchesSearchTerm && matchesStatus && matchesType && matchesDate;
+      return matchesSearchTerm && matchesStatus && matchesType && matchesDate && matchesRecurring;
     });
-  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether]);
+  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether, recurringFilters]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -367,7 +405,8 @@ const deleteSale = useMutation({
       </div>
 
       {/* Filters */}
-      <div className="px-4 md:px-6 pb-4 flex flex-col sm:flex-row gap-3">
+      <div className="px-4 md:px-6 pb-4 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -405,6 +444,12 @@ const deleteSale = useMutation({
             </SelectContent>
           </Select>
         )}
+        </div>
+        <RecurringSalesFilters
+          filters={recurringFilters}
+          products={recurringProducts}
+          onChange={setRecurringFilters}
+        />
       </div>
 
       {/* Sales List */}
@@ -416,7 +461,7 @@ const deleteSale = useMutation({
             <Skeleton className="h-24 w-full" />
           </>
         ) : filteredSales.length === 0 ? (
-          (search || statusFilter !== "all") ? (
+          (search || statusFilter !== "all" || hasRecurringSalesFilter(recurringFilters)) ? (
             <EmptyState icon={ShoppingBag} title="Nenhuma venda encontrada" description="Tenta ajustar os filtros de pesquisa." />
           ) : (
             <EmptyState
@@ -457,6 +502,25 @@ const deleteSale = useMutation({
                           {(sale as any).proposal_type === 'energia' ? '⚡ Energia' : '🔧 Serviços'}
                         </Badge>
                       )}
+                      {sale.recurrence && (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className={`${SERVICE_STATUS_COLORS[sale.recurrence.service_status]} text-xs`}
+                          >
+                            Serviço: {SERVICE_STATUS_LABELS[sale.recurrence.service_status]}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`${BILLING_STATUS_COLORS[sale.recurrence.billing_status]} text-xs`}
+                          >
+                            Cobrança: {BILLING_STATUS_LABELS[sale.recurrence.billing_status]}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {BILLING_PROVIDER_LABELS[sale.recurrence.billing_provider]}
+                          </Badge>
+                        </>
+                      )}
                       {sale.code && (
                         <span className="text-xs font-medium text-primary">{sale.code}</span>
                       )}
@@ -475,6 +539,11 @@ const deleteSale = useMutation({
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-semibold">{formatCurrency(sale.total_value)}</p>
+                    {sale.recurrence && (
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(sale.recurrence.amount)}/mês
+                      </p>
+                    )}
                     {sale.proposal && (
                       <p className="text-xs text-muted-foreground">Via proposta</p>
                     )}

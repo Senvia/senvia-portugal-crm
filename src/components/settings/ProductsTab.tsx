@@ -10,6 +10,8 @@ import { ServicosProductsManager } from './ServicosProductsManager';
 import { hasPerfect2GetherAccess } from '@/lib/perfect2gether';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
+import { ProductStripeBadge } from './ProductStripeSync';
+import { useStripeProductMappings } from '@/hooks/useStripeProductSync';
 import type { Product } from '@/types/proposals';
 import {
   AlertDialog,
@@ -25,6 +27,9 @@ import {
 export function ProductsTab() {
   const { data: products = [], isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
+  // Um pedido para o catálogo inteiro. Um por linha transformaria esta página
+  // numa cascata de chamadas.
+  const { data: stripeMappings = {} } = useStripeProductMappings();
   const syncItems = useSyncInvoiceXpressItems();
   const { organization, organizations, isSuperAdmin } = useAuth();
   // The "Produtos Telecom (Serviços)" section below is legacy Perfect2Gether
@@ -125,6 +130,7 @@ export function ProductsTab() {
                       {!product.is_active && (
                         <Badge variant="secondary" className="text-xs">Inativo</Badge>
                       )}
+                      <ProductStripeBadge mapping={stripeMappings[product.id]} />
                     </div>
                     {product.description && (
                       <p className="text-sm text-muted-foreground truncate">{product.description}</p>
