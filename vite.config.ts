@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 
 // PWA plugin removed intentionally — was causing stale shells (cached old
 // builds prevented users from receiving new features like the Importar button).
@@ -12,7 +13,16 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 8080,
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    // HTTPS em desenvolvimento. Nao e capricho: o SDK do Facebook recusa-se a
+    // correr sobre HTTP — devolve "o SENVIA nao esta usando uma conexao segura"
+    // e nao ha forma de ligar o WhatsApp a partir de http://localhost.
+    // O certificado e assinado por nos, por isso o browser pede confirmacao a
+    // primeira vez.
+    mode === "development" && basicSsl(),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
