@@ -142,6 +142,11 @@ export function useWhatsAppSignup() {
             // das permissões do token, e pergunta se houver mais do que uma.
             waba_id: sessao?.waba_id ?? null,
             phone_number_id: sessao?.phone_number_id ?? null,
+            // De onde o login foi lançado. O código pode vir preso a um
+            // redirect_uri interno do SDK, e o servidor precisa dos candidatos
+            // para descobrir qual — ver a troca em meta-connect.
+            page_url: window.location.origin + window.location.pathname,
+            page_origin: window.location.origin + '/',
             label,
           },
         });

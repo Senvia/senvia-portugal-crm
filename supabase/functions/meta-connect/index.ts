@@ -614,40 +614,45 @@ Deno.serve(async (req) => {
       // Troca do código pelo token. Server-to-server, com o App Secret — é por
       // isto que o código não serve de nada a quem o intercete.
       //
-      // ATENÇÃO à forma: um código gerado pelo SDK JavaScript NÃO é trocado como
-      // um código vindo de um redirect. Sem `redirect_uri` no diálogo, a troca
-      // é um POST com `grant_type: authorization_code` — mandá-lo como o do
-      // fluxo por redirect faz a Meta responder "make sure your redirect_uri is
-      // identical", sobre um redirect_uri que nunca existiu. E há códigos de
-      // versões do SDK que ainda exigem a forma antiga com redirect_uri VAZIO,
-      // por isso tenta-se essa como recurso antes de desistir.
-      let tJson: { access_token?: string; error?: { message?: string } } = {};
-      const tRes = await fetch(`${GRAPH}/oauth/access_token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: appId,
-          client_secret: appSecret,
-          code,
-          grant_type: "authorization_code",
-        }),
-      });
-      tJson = await tRes.json().catch(() => ({}));
+      // A forma DOCUMENTADA (GET com client_id + client_secret + code, sem mais
+      // nada) foi recusada com "make sure your redirect_uri is identical" — o
+      // que significa que o código veio preso a um redirect_uri que o diálogo
+      // usou por dentro e nós não vemos. Não se sabe a priori qual, por isso
+      // tentam-se os candidatos por ordem e REGISTA-SE qual funcionou, para um
+      // dia isto voltar a ser uma chamada só. Uma validação falhada não consome
+      // o código, e tudo isto corre dentro dos 30 segundos de vida dele.
+      const candidatos: Array<{ nome: string; uri: string | null }> = [
+        { nome: "sem redirect_uri (forma documentada)", uri: null },
+        { nome: "redirect_uri vazio (forma antiga do SDK)", uri: "" },
+        // A página que lançou o FB.login — se o SDK prendeu o código à origem.
+        ...(body.page_url ? [{ nome: "página que lançou o login", uri: String(body.page_url) }] : []),
+        ...(body.page_origin ? [{ nome: "origem da página", uri: String(body.page_origin) }] : []),
+        // O redirect registado na app — se a configuração o usou por omissão.
+        { nome: "redirect registado da app", uri: redirectUri },
+      ];
 
-      if (!tJson.access_token) {
-        const t2 = await fetch(`${GRAPH}/oauth/access_token`
+      let tJson: { access_token?: string; error?: { message?: string } } = {};
+      const recusas: string[] = [];
+      for (const c of candidatos) {
+        const url = `${GRAPH}/oauth/access_token`
           + `?client_id=${encodeURIComponent(appId)}`
           + `&client_secret=${encodeURIComponent(appSecret)}`
-          + `&redirect_uri=`
-          + `&code=${encodeURIComponent(code)}`);
-        const j2 = await t2.json().catch(() => ({}));
-        if (j2.access_token) tJson = j2;
-        else logError("troca do código falhou nas duas formas", { primeira: tJson?.error?.message, segunda: j2?.error?.message });
+          + (c.uri === null ? "" : `&redirect_uri=${encodeURIComponent(c.uri)}`)
+          + `&code=${encodeURIComponent(code)}`;
+        const r = await fetch(url);
+        const j = await r.json().catch(() => ({}));
+        if (j.access_token) {
+          tJson = j;
+          log("troca do código conseguida", { forma: c.nome });
+          break;
+        }
+        recusas.push(`${c.nome}: ${j?.error?.message ?? r.status}`);
       }
 
       if (!tJson.access_token) {
+        logError("troca do código falhou em todas as formas", { recusas });
         return jsonRes({
-          error: (tJson?.error?.message ?? "Falha ao obter o token")
+          error: (recusas[0] ?? "Falha ao obter o token")
             + " — repete a ligação: o código só vale 30 segundos e uma vez.",
         }, 502);
       }
