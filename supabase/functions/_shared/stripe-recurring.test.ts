@@ -2,6 +2,8 @@ import { assertEquals } from "https://deno.land/std@0.190.0/testing/asserts.ts";
 import {
   billingStatusFromSubscription,
   centsToAmount,
+  invoiceMetadata,
+  invoicePaymentIds,
   invoicePeriod,
   isHandledEvent,
   parseRecurringMetadata,
@@ -38,6 +40,37 @@ Deno.test("ids que não são UUID são recusados", () => {
     senvia_recurrence_id: REC,
   });
   assertEquals(result, { ok: false, reason: "malformed" });
+});
+
+Deno.test("a metadata da fatura vem da subscrição, não da fatura", () => {
+  // Este era o defeito que matava tudo em silêncio: a metadata é gravada na
+  // SUBSCRIÇÃO, e invoice.metadata está vazia. Ler o sítio errado descartava
+  // todos os pagamentos com um 200 a dizer que tinha corrido bem.
+  const meta = invoiceMetadata({
+    metadata: {},
+    parent: { subscription_details: { metadata: { senvia_sale_id: SALE } } },
+  });
+  assertEquals(meta?.senvia_sale_id, SALE);
+});
+
+Deno.test("aceita o caminho antigo, anterior à Basil", () => {
+  const meta = invoiceMetadata({ subscription_details: { metadata: { senvia_sale_id: SALE } } });
+  assertEquals(meta?.senvia_sale_id, SALE);
+});
+
+Deno.test("faturas avulsas caem na metadata própria", () => {
+  assertEquals(invoiceMetadata({ metadata: { senvia_sale_id: SALE } })?.senvia_sale_id, SALE);
+});
+
+Deno.test("o payment intent vem de invoice.payments na Basil", () => {
+  // A Basil removeu invoice.charge; sem este caminho a taxa fica sempre a zero
+  // e o líquido passa a ser igual ao bruto.
+  const ids = invoicePaymentIds({ payments: { data: [{ payment: { payment_intent: "pi_123" } }] } });
+  assertEquals(ids, { chargeId: null, paymentIntentId: "pi_123" });
+});
+
+Deno.test("ainda aceita o charge directo das versões antigas", () => {
+  assertEquals(invoicePaymentIds({ charge: "ch_9" }).chargeId, "ch_9");
 });
 
 Deno.test("cêntimos convertem para euros", () => {

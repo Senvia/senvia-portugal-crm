@@ -52,6 +52,7 @@ interface MappingRow {
   stripe_product_id: string;
   stripe_price_id: string;
   unit_amount: number;
+  interval: string;
   active: boolean;
   synced_at: string | null;
   sync_error: string | null;
@@ -109,7 +110,7 @@ serve(async (req) => {
 
     const { data: existing } = await supabase
       .from("stripe_product_mappings")
-      .select("id, stripe_product_id, stripe_price_id, unit_amount, active, synced_at, sync_error")
+      .select("id, stripe_product_id, stripe_price_id, unit_amount, interval, active, synced_at, sync_error")
       .eq("organization_id", product.organization_id)
       .eq("product_id", product.id)
       .maybeSingle<MappingRow>();
@@ -170,13 +171,19 @@ serve(async (req) => {
       let priceId = existing?.stripe_price_id ?? null;
       const amountChanged = !existing || existing.unit_amount !== unitAmount;
 
+      // O intervalo vem do mapeamento existente, não é assumido mensal. Um
+      // produto anual (Senvia OS Elite Anual, 1152€/ano) cujo preço mudasse
+      // ganhava um preço MENSAL de 1152€ e as subscrições vivas eram migradas
+      // para ele — o cliente passava a pagar doze vezes mais, todos os meses.
+      const interval: "month" | "year" = existing?.interval === "year" ? "year" : "month";
+
       if (amountChanged) {
         const price: Stripe.Price = await stripe.prices.create(
           {
             product: stripeProductId,
             currency: "eur",
             unit_amount: unitAmount,
-            recurring: { interval: "month", interval_count: 1 },
+            recurring: { interval, interval_count: 1 },
             metadata: {
               senvia_organization_id: product.organization_id,
               senvia_product_id: product.id,
@@ -224,7 +231,9 @@ serve(async (req) => {
             stripe_price_id: priceId,
             currency: "EUR",
             unit_amount: unitAmount,
-            interval: "month",
+            // Preserva o intervalo real: gravar "month" num mapeamento anual
+            // fazia a sincronização seguinte criar mesmo um preço mensal.
+            interval,
             interval_count: 1,
             active: true,
             synced_at: new Date().toISOString(),
@@ -233,7 +242,7 @@ serve(async (req) => {
           },
           { onConflict: "organization_id,product_id" },
         )
-        .select("id, stripe_product_id, stripe_price_id, unit_amount, active, synced_at, sync_error")
+        .select("id, stripe_product_id, stripe_price_id, unit_amount, interval, active, synced_at, sync_error")
         .maybeSingle<MappingRow>();
 
       log("sincronizado", { productId: product.id, priceId, amountChanged });

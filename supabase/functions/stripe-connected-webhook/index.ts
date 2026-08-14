@@ -15,6 +15,8 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { serviceClient, stripeClient } from "../_shared/stripe-connect.ts";
 import {
   billingStatusFromSubscription,
+  invoiceMetadata,
+  invoicePaymentIds,
   invoicePeriod,
   isHandledEvent,
   parseRecurringMetadata,
@@ -123,23 +125,32 @@ async function settleInvoiceCycle(
   const cycleId = await materializeInvoiceCycle(supabase, invoice, identity);
   if (!cycleId) return;
 
-  // A taxa só existe na balance transaction do charge; a fatura não a traz.
+  // A taxa só existe na balance transaction; a fatura não a traz. A Basil
+  // removeu invoice.charge, por isso o id vem de invoice.payments.
   let balanceTransaction: { fee?: number | null; net?: number | null } | null = null;
-  const chargeId = typeof invoice.charge === "string" ? invoice.charge : invoice.charge?.id;
-  if (chargeId) {
-    try {
-      const charge = await stripe.charges.retrieve(
-        chargeId,
-        { expand: ["balance_transaction"] },
+  const { chargeId, paymentIntentId } = invoicePaymentIds(invoice as unknown as Record<string, unknown>);
+  try {
+    let charge: Stripe.Charge | null = null;
+    if (chargeId) {
+      charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] }, { stripeAccount: account });
+    } else if (paymentIntentId) {
+      const intent = await stripe.paymentIntents.retrieve(
+        paymentIntentId,
+        { expand: ["latest_charge.balance_transaction"] },
         { stripeAccount: account },
       );
-      const bt = charge.balance_transaction;
-      if (bt && typeof bt !== "string") balanceTransaction = { fee: bt.fee, net: bt.net };
-    } catch (err) {
-      log("balance transaction indisponível", {
-        message: err instanceof Error ? err.message : "desconhecido",
-      });
+      const latest = intent.latest_charge;
+      charge = latest && typeof latest !== "string" ? latest : null;
     }
+    let bt = charge?.balance_transaction ?? null;
+    if (typeof bt === "string") {
+      bt = await stripe.balanceTransactions.retrieve(bt, { stripeAccount: account });
+    }
+    if (bt && typeof bt !== "string") balanceTransaction = { fee: bt.fee, net: bt.net };
+  } catch (err) {
+    log("balance transaction indisponível", {
+      message: err instanceof Error ? err.message : "desconhecido",
+    });
   }
 
   const { gross, fee, net } = settlementAmounts(invoice, balanceTransaction);
@@ -318,8 +329,14 @@ serve(async (req) => {
   if (!account) return new Response("ok", { status: 200 });
 
   const supabase = serviceClient();
-  const object = event.data.object as { metadata?: Record<string, string> };
-  const parsed = parseRecurringMetadata(object.metadata);
+  // Faturas guardam a nossa metadata na subscrição, não em si próprias — ler
+  // `object.metadata` numa fatura devolve sempre vazio e descartava o
+  // pagamento. Sessões e subscrições trazem-na directamente.
+  const object = event.data.object as Record<string, unknown>;
+  const rawMetadata = event.type.startsWith("invoice.")
+    ? invoiceMetadata(object)
+    : (object.metadata as Record<string, string> | undefined);
+  const parsed = parseRecurringMetadata(rawMetadata);
 
   if (!parsed.ok || !isHandledEvent(event.type)) {
     // Devolve 200: não é um erro nosso, e um não-2xx faria o Stripe repetir

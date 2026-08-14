@@ -19,6 +19,8 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
 import { stripeClient, modeFromSecretKey } from "../_shared/stripe-connect.ts";
 import {
+  invoiceMetadata,
+  invoicePaymentIds,
   invoicePeriod,
   parseRecurringMetadata,
   settlementAmounts,
@@ -66,9 +68,8 @@ async function recoverInvoice(
   account: string,
   organizationId: string,
 ): Promise<Recovered | null> {
-  const parsed = parseRecurringMetadata(
-    (invoice.subscription_details?.metadata ?? invoice.metadata) as Record<string, string>,
-  );
+  // A nossa metadata vive na subscricao; a Basil moveu-a para invoice.parent.
+  const parsed = parseRecurringMetadata(invoiceMetadata(invoice as unknown as Record<string, unknown>));
   // Sem a nossa metadata não há forma segura de saber a que venda pertence, e
   // adivinhar é como o dinheiro vai parar ao cliente errado. Fica de fora.
   if (!parsed.ok) return null;
@@ -112,21 +113,28 @@ async function recoverInvoice(
   }
   if (!cycleId) return null;
 
+  // A Basil removeu invoice.charge: o id vem de invoice.payments.
   let balanceTransaction: { fee?: number | null; net?: number | null } | null = null;
-  const chargeId = typeof invoice.charge === "string" ? invoice.charge : invoice.charge?.id;
-  if (chargeId) {
-    try {
-      const charge = await stripe.charges.retrieve(
-        chargeId,
-        { expand: ["balance_transaction"] },
+  const { chargeId, paymentIntentId } = invoicePaymentIds(invoice as unknown as Record<string, unknown>);
+  try {
+    let charge: Stripe.Charge | null = null;
+    if (chargeId) {
+      charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] }, { stripeAccount: account });
+    } else if (paymentIntentId) {
+      const intent = await stripe.paymentIntents.retrieve(
+        paymentIntentId,
+        { expand: ["latest_charge.balance_transaction"] },
         { stripeAccount: account },
       );
-      const bt = charge.balance_transaction;
-      if (bt && typeof bt !== "string") balanceTransaction = { fee: bt.fee, net: bt.net };
-    } catch {
-      // Sem a balance transaction o líquido deduz-se do bruto. O que liquida a
-      // dívida é o bruto, por isso a recuperação não fica bloqueada por isto.
+      const latest = intent.latest_charge;
+      charge = latest && typeof latest !== "string" ? latest : null;
     }
+    let bt = charge?.balance_transaction ?? null;
+    if (typeof bt === "string") bt = await stripe.balanceTransactions.retrieve(bt, { stripeAccount: account });
+    if (bt && typeof bt !== "string") balanceTransaction = { fee: bt.fee, net: bt.net };
+  } catch {
+    // Sem a balance transaction o líquido deduz-se do bruto. O que liquida a
+    // dívida é o bruto, por isso a recuperação não fica bloqueada por isto.
   }
 
   const { gross, fee, net } = settlementAmounts(invoice, balanceTransaction);

@@ -42,6 +42,64 @@ export function parseRecurringMetadata(
   return { ok: true, value: { organizationId, saleId, recurrenceId } };
 }
 
+/**
+ * Onde vive a NOSSA metadata numa fatura.
+ *
+ * Isto não é detalhe: a metadata é gravada na SUBSCRIÇÃO (subscription_data no
+ * Checkout), e uma fatura tem metadata PRÓPRIA, que está vazia. Ler
+ * `invoice.metadata` devolve sempre nada, e o evento é descartado por
+ * "identidade desconhecida" — o pagamento entra no Stripe e nunca chega ao CRM,
+ * em silêncio, com um 200 a dizer que correu tudo bem.
+ *
+ * A versão Basil da API moveu o sítio outra vez: era
+ * `invoice.subscription_details`, passou a `invoice.parent.subscription_details`.
+ * Aceitamos os dois, e o fallback para a metadata da própria fatura serve
+ * faturas avulsas criadas por nós.
+ */
+export function invoiceMetadata(
+  invoice: Record<string, unknown> | null | undefined,
+): Record<string, string | undefined> | null {
+  if (!invoice) return null;
+  const parent = invoice.parent as { subscription_details?: { metadata?: Record<string, string> } } | undefined;
+  const legacy = invoice.subscription_details as { metadata?: Record<string, string> } | undefined;
+  const own = invoice.metadata as Record<string, string> | undefined;
+
+  const fromParent = parent?.subscription_details?.metadata;
+  if (fromParent && Object.keys(fromParent).length > 0) return fromParent;
+  const fromLegacy = legacy?.metadata;
+  if (fromLegacy && Object.keys(fromLegacy).length > 0) return fromLegacy;
+  return own ?? null;
+}
+
+/**
+ * O charge / payment intent de uma fatura.
+ *
+ * A Basil removeu `invoice.charge` e `invoice.payment_intent` em favor de
+ * `invoice.payments`. Sem isto a taxa do Stripe fica sempre a zero e o líquido
+ * passa a ser igual ao bruto — os números batem certo com a dívida, mas mentem
+ * sobre quanto dinheiro entrou mesmo na conta.
+ */
+export function invoicePaymentIds(
+  invoice: Record<string, unknown> | null | undefined,
+): { chargeId: string | null; paymentIntentId: string | null } {
+  const idOf = (value: unknown): string | null => {
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object" && "id" in value) {
+      const id = (value as { id?: unknown }).id;
+      return typeof id === "string" ? id : null;
+    }
+    return null;
+  };
+
+  const chargeId = idOf(invoice?.charge);
+  let paymentIntentId = idOf(invoice?.payment_intent);
+  if (!chargeId && !paymentIntentId) {
+    const payments = invoice?.payments as { data?: Array<{ payment?: { payment_intent?: unknown } }> } | undefined;
+    paymentIntentId = idOf(payments?.data?.[0]?.payment?.payment_intent);
+  }
+  return { chargeId, paymentIntentId };
+}
+
 /** Cêntimos para euros. O Stripe conta em inteiros: 4990 → 49.90. */
 export function centsToAmount(cents: number | null | undefined): number {
   if (typeof cents !== "number" || !Number.isFinite(cents)) return 0;
