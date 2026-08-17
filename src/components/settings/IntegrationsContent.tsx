@@ -22,6 +22,7 @@ import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
 import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
+import { useWhatsAppPairing } from "@/hooks/useWhatsAppPairing";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
@@ -1087,6 +1088,29 @@ function InboxesManager() {
   // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
   const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
 
+  // Concluir o emparelhamento de Coexistence: corre o assistente da Meta pelo
+  // SDK (só ele regista o número) e pede contactos e histórico. É o único sítio
+  // onde o SDK entra, e o código que ele devolve é ignorado de propósito.
+  const pairing = useWhatsAppPairing();
+  const concluirEmparelhamento = (ch: { metadata_public?: unknown }) => {
+    const meta = (ch.metadata_public ?? {}) as { phone_number_id?: string; waba_id?: string };
+    pairing.mutate(
+      { phoneNumberId: meta.phone_number_id, wabaId: meta.waba_id },
+      {
+        onSuccess: (r) => toast({
+          title: r.registado ? 'Número registado' : 'Ainda por registar',
+          description: r.mensagem,
+          variant: r.registado ? undefined : 'destructive',
+        }),
+        onError: (err) => toast({
+          title: 'Não foi possível concluir',
+          description: (err as Error).message,
+          variant: 'destructive',
+        }),
+      },
+    );
+  };
+
   const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
     setNewOpen(false);
@@ -1235,6 +1259,24 @@ function InboxesManager() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 px-4 py-3 mt-auto">
+                  {/* Ligar a caixa e REGISTAR o número são coisas diferentes. O
+                      fluxo por redirect faz a primeira (por isso a caixa
+                      aparece "Ligada"), mas só o assistente lançado pelo SDK
+                      faz a segunda — e sem ela a Meta não entrega mensagem
+                      nenhuma. Daí um botão próprio, em vez de o esconder
+                      dentro da ligação. */}
+                  {ch.channel_type === 'whatsapp' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 gap-1.5 h-8"
+                      disabled={pairing.isPending}
+                      onClick={() => concluirEmparelhamento(ch)}
+                    >
+                      <RefreshCw className={cn('h-3.5 w-3.5', pairing.isPending && 'animate-spin')} />
+                      {pairing.isPending ? 'A verificar…' : 'Concluir ligação'}
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => {
                     if (isEmail) setEditEmailCh(ch as unknown as EmailChannel);
                     else setEditCh(ch);

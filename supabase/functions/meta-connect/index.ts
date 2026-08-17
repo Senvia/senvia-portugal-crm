@@ -925,6 +925,100 @@ Deno.serve(async (req) => {
     }
 
     /**
+     * Concluir o emparelhamento de Coexistence, DEPOIS do assistente do SDK.
+     *
+     * Porquê separado da ligação: o número fica `DISCONNECTED`/`ON_PREMISE` se
+     * o Cadastro Incorporado não correr com session logging, e o session
+     * logging só existe quando o assistente é lançado pelo SDK. O fluxo por
+     * redirect partilha a conta (é por isso que a caixa se cria) mas não
+     * regista o número, e sem registo a Meta não entrega nada — nem mensagens,
+     * nem histórico. As duas chamadas de saída ficam trancadas uma na outra:
+     * `/register` responde "not available for SMB businesses" e `smb_app_data`
+     * responde "(#133010) Account not registered".
+     *
+     * Esta ação NÃO troca código nenhum. O token já existe, veio do redirect, e
+     * é o do canal. Assim a troca do SDK — que falha sempre com o subcódigo
+     * 36008, por razão nunca explicada — deixa de estar no caminho.
+     */
+    if (body.action === "whatsapp_pairing") {
+      const numeroId = String(body.phone_number_id ?? "");
+      const wabaId = String(body.waba_id ?? "");
+      if (!numeroId && !wabaId) {
+        return jsonRes({ error: "O assistente não indicou o número." }, 400);
+      }
+
+      // A caixa e o token dela. Procura-se pelo número; se o assistente só
+      // disser a conta, aceita-se a caixa dessa conta.
+      let q = admin.from("messaging_channels")
+        .select("id, label, metadata")
+        .eq("organization_id", orgId)
+        .eq("channel_type", "whatsapp");
+      q = numeroId
+        ? q.eq("metadata->>phone_number_id", numeroId)
+        : q.eq("metadata->>waba_id", wabaId);
+      const { data: canal } = await q.maybeSingle();
+
+      if (!canal) {
+        return jsonRes({
+          error: "Não encontrámos a caixa deste número. Liga primeiro o WhatsApp e só depois conclui o emparelhamento.",
+        }, 404);
+      }
+
+      const { data: seg } = await admin.from("messaging_channel_secrets")
+        .select("page_access_token").eq("channel_id", canal.id).maybeSingle();
+      if (!seg?.page_access_token) {
+        return jsonRes({ error: "A caixa não tem credenciais guardadas. Volta a ligar o WhatsApp." }, 400);
+      }
+
+      const meta = (canal.metadata ?? {}) as Record<string, string>;
+      const alvo = numeroId || meta.phone_number_id;
+      const token = seg.page_access_token;
+
+      const estado = await fetch(
+        `${GRAPH}/${encodeURIComponent(alvo)}`
+        + `?fields=status,platform_type,is_on_biz_app,code_verification_status,display_phone_number`
+        + `&access_token=${encodeURIComponent(token)}`,
+      ).then((r) => r.json()).catch(() => ({}));
+
+      // Pedir contactos e histórico. Só resulta se o assistente tiver mesmo
+      // registado o número — se não, volta o 133010, e é isso que se mostra.
+      const sincronia: Array<{ tipo: string; ok: boolean; erro: string | null }> = [];
+      for (const tipo of ["smb_app_state_sync", "history"]) {
+        try {
+          const r = await fetch(`${GRAPH}/${encodeURIComponent(alvo)}/smb_app_data`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messaging_product: "whatsapp", sync_type: tipo, access_token: token }),
+          });
+          const j = await r.json().catch(() => ({}));
+          sincronia.push({ tipo, ok: r.ok, erro: j?.error?.message ?? null });
+        } catch (e) {
+          sincronia.push({ tipo, ok: false, erro: (e as Error).message });
+        }
+      }
+
+      log("emparelhamento de Coexistence", { canal: canal.id, estado, sincronia });
+
+      const registado = estado?.status === "CONNECTED";
+      return jsonRes({
+        registado,
+        estado: {
+          status: estado?.status ?? null,
+          platform_type: estado?.platform_type ?? null,
+          is_on_biz_app: estado?.is_on_biz_app ?? null,
+        },
+        sincronia,
+        // A mensagem é escrita aqui e não no browser: o que distingue os casos
+        // são os códigos da Meta, e eles vivem deste lado.
+        mensagem: registado
+          ? "Número registado. Pedimos os contactos e o histórico — chegam por webhook nos próximos minutos."
+          : `A Meta ainda tem o número como ${estado?.status ?? "desconhecido"}`
+            + ` (${estado?.platform_type ?? "?"}). O assistente não chegou a registá-lo:`
+            + ` confirma no telemóvel, na app WhatsApp Business, se há um pedido de ligação por aceitar.`,
+      });
+    }
+
+    /**
      * Concluir o assistente do WhatsApp.
      *
      * O SDK devolve TRÊS coisas: o código (para trocar por token), o `waba_id` e
