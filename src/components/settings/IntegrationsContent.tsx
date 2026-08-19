@@ -1092,8 +1092,11 @@ function InboxesManager() {
   // SDK (só ele regista o número) e pede contactos e histórico. É o único sítio
   // onde o SDK entra, e o código que ele devolve é ignorado de propósito.
   const pairing = useWhatsAppPairing();
-  const concluirEmparelhamento = (ch: { metadata_public?: unknown }) => {
-    const meta = (ch.metadata_public ?? {}) as { phone_number_id?: string; waba_id?: string };
+  const concluirEmparelhamento = (ch: { metadata?: unknown }) => {
+    // `metadata` e nao `metadata_public`: o hook le a coluna publica da base de
+    // dados mas entrega-a com o nome `metadata`. Ler o nome da coluna aqui dava
+    // sempre undefined, e o servidor respondia 'o assistente nao indicou o numero'.
+    const meta = (ch.metadata ?? {}) as { phone_number_id?: string; waba_id?: string };
     pairing.mutate(
       { phoneNumberId: meta.phone_number_id, wabaId: meta.waba_id },
       {
