@@ -842,6 +842,220 @@ Deno.serve(async (req) => {
     // A linha em si é apagada pelo CRM (RLS da organização) — aqui é só a
     // subscrição.
     /**
+     * Diagnóstico do WhatsApp — perguntar à Meta o que se passa, em vez de adivinhar.
+     *
+     * PORQUE EXISTE
+     *
+     * Quando a ligação não presta, o sintoma é sempre o mesmo e não diz nada: a
+     * caixa aparece ligada e não chega mensagem nenhuma. As causas possíveis são
+     * seis, todas invisíveis deste lado, e cada uma pede uma correção diferente:
+     *
+     *   1. a app não está subscrita ao campo `messages` do WhatsApp
+     *   2. o token não tem a WABA nos `granular_scopes` (a conta nunca foi
+     *      mesmo partilhada — o famoso `target_ids: []`)
+     *   3. o número não está registado (`DISCONNECTED`/`ON_PREMISE`) porque o
+     *      assistente não correu o passo do QR
+     *   4. a WABA não está subscrita à nossa app
+     *   5. o token expirou
+     *   6. a empresa do cliente não está verificada na Meta
+     *
+     * Cada uma delas custou pelo menos uma tarde a descobrir. Isto pergunta as
+     * seis de uma vez e responde por palavras.
+     *
+     * NÃO ALTERA NADA. Só lê. Pode correr-se as vezes que forem precisas.
+     */
+    if (body.action === "whatsapp_diagnostico") {
+      const appToken = `${appId}|${appSecret}`;
+
+      const achados: Array<{ passo: string; ok: boolean | null; detalhe: string }> = [];
+      const add = (passo: string, ok: boolean | null, detalhe: string) =>
+        achados.push({ passo, ok, detalhe });
+
+      /** Um GET ao Graph que nunca atira: o diagnóstico não pode morrer a meio. */
+      const graph = async (caminho: string, token: string) => {
+        try {
+          const sep = caminho.includes("?") ? "&" : "?";
+          const r = await fetch(
+            `${GRAPH}/${caminho}${sep}access_token=${encodeURIComponent(token)}`,
+          );
+          return await r.json().catch(() => ({}));
+        } catch (e) {
+          return { error: { message: (e as Error).message } };
+        }
+      };
+
+      // ── 1. Os segredos estão lá? ──────────────────────────────────────────
+      const cfgWa = Deno.env.get("WHATSAPP_LOGIN_CONFIG_ID") || "";
+      const emFalta = [
+        !appId && "FACEBOOK_APP_ID",
+        !appSecret && "FACEBOOK_APP_SECRET",
+        !cfgWa && "WHATSAPP_LOGIN_CONFIG_ID",
+        !Deno.env.get("META_WEBHOOK_VERIFY_TOKEN") && "META_WEBHOOK_VERIFY_TOKEN",
+      ].filter(Boolean);
+      add(
+        "Segredos da app no Supabase",
+        emFalta.length === 0,
+        emFalta.length ? `em falta: ${emFalta.join(", ")}` : "estão todos presentes",
+      );
+
+      // ── 2. A app está subscrita às mensagens de WhatsApp? ─────────────────
+      //
+      // Este é o assassino silencioso número um. A subscrição é ao nível da APP
+      // (painel da Meta → Webhooks), não da conta do cliente. Se o campo
+      // `messages` não estiver lá, NENHUM cliente recebe nada, para sempre, e
+      // nada no CRM o denuncia.
+      const subsApp = await graph(`${appId}/subscriptions`, appToken);
+      if (subsApp?.error) {
+        add("Webhooks da app", null,
+          `não foi possível verificar: ${subsApp.error.message ?? "erro do Graph"}`);
+      } else {
+        const objs = (subsApp?.data ?? []) as Array<Record<string, any>>;
+        const wa = objs.find((s) => s.object === "whatsapp_business_account");
+        const campos = ((wa?.fields ?? []) as Array<any>)
+          .map((f) => (typeof f === "string" ? f : f?.name)).filter(Boolean);
+        add(
+          "App subscrita a `messages` do WhatsApp",
+          campos.includes("messages"),
+          wa
+            ? `campos subscritos: ${campos.join(", ") || "nenhum"}`
+            : "o objeto `whatsapp_business_account` não tem subscrição nenhuma "
+              + "— nenhum cliente vai receber mensagens",
+        );
+      }
+
+      // ── 3. As caixas desta organização ────────────────────────────────────
+      const { data: canais } = await admin.from("messaging_channels")
+        .select("id, label, status, metadata")
+        .eq("organization_id", orgId)
+        .eq("channel_type", "whatsapp");
+
+      if (!canais?.length) {
+        add("Caixas de WhatsApp", false, "esta organização não tem nenhuma ligada");
+        return jsonRes({ achados, caixas: [] });
+      }
+
+      const caixas: Array<Record<string, unknown>> = [];
+
+      for (const canal of canais) {
+        const meta = (canal.metadata ?? {}) as Record<string, string>;
+        const numeroId = meta.phone_number_id;
+        const wabaId = meta.waba_id;
+        const linha: Array<{ passo: string; ok: boolean | null; detalhe: string }> = [];
+        const addC = (passo: string, ok: boolean | null, detalhe: string) =>
+          linha.push({ passo, ok, detalhe });
+
+        const { data: seg } = await admin.from("messaging_channel_secrets")
+          .select("page_access_token").eq("channel_id", canal.id).maybeSingle();
+        const token = seg?.page_access_token ?? "";
+
+        addC("Credenciais guardadas", !!token,
+          token ? "sim" : "não há token — a caixa não consegue falar com a Meta");
+
+        if (token) {
+          // 3a. O token é válido, e sobre QUE contas?
+          //
+          // `granular_scopes` é o campo que interessa: mostra, por permissão, os
+          // `target_ids` — as WABAs a que ela se aplica. Vazio quer dizer que a
+          // pessoa deu a permissão mas nunca escolheu conta nenhuma, que é o
+          // resultado de correr o diálogo sem o Cadastro Incorporado.
+          const dbg = await graph(
+            `debug_token?input_token=${encodeURIComponent(token)}`, appToken);
+          const d = dbg?.data ?? {};
+          if (dbg?.error || !Object.keys(d).length) {
+            addC("Token", null, `não foi possível inspecionar: ${
+              dbg?.error?.message ?? "resposta vazia"}`);
+          } else {
+            const expira = Number(d.expires_at ?? 0);
+            addC("Token válido", !!d.is_valid,
+              d.is_valid
+                ? (expira ? `expira em ${new Date(expira * 1000).toISOString().slice(0, 10)}`
+                          : "sem prazo de validade")
+                : "a Meta já não o aceita — é preciso voltar a ligar");
+
+            const gs = (d.granular_scopes ?? []) as Array<Record<string, any>>;
+            const alvos = gs.flatMap((g) => g.target_ids ?? []);
+            addC("A conta de WhatsApp foi mesmo partilhada", alvos.length > 0,
+              alvos.length
+                ? `contas no token: ${alvos.join(", ")}`
+                : "`target_ids` vazio — a permissão foi dada mas nenhuma conta "
+                  + "foi escolhida. É o sinal de que o Cadastro Incorporado não correu.");
+
+            const scopes = (d.scopes ?? []) as string[];
+            const precisa = ["whatsapp_business_messaging", "whatsapp_business_management"];
+            const faltam = precisa.filter((p) => !scopes.includes(p));
+            addC("Permissões de WhatsApp no token", faltam.length === 0,
+              faltam.length ? `faltam: ${faltam.join(", ")}` : precisa.join(", "));
+          }
+
+          // 3b. O número: está REGISTADO? É aqui que a Coexistence morre.
+          if (numeroId) {
+            const n = await graph(
+              `${encodeURIComponent(numeroId)}?fields=status,platform_type,is_on_biz_app,`
+              + `code_verification_status,display_phone_number,verified_name,quality_rating`,
+              token,
+            );
+            if (n?.error) {
+              addC("Número", false, `a Meta recusou: ${n.error.message}`);
+            } else {
+              const registado = n.status === "CONNECTED";
+              addC("Número registado na Cloud API", registado,
+                registado
+                  ? `${n.display_phone_number ?? numeroId} — ${n.verified_name ?? "sem nome"}`
+                    + `, qualidade ${n.quality_rating ?? "?"}`
+                  : `está como ${n.status ?? "?"} (${n.platform_type ?? "?"}`
+                    + `, na app do telemóvel: ${n.is_on_biz_app ? "sim" : "não"}). `
+                    + "Sem estar CONNECTED a Meta não entrega mensagens nem histórico.");
+            }
+          } else {
+            addC("Número", false, "a caixa não guardou `phone_number_id`");
+          }
+
+          // 3c. A WABA: verificada? E subscrita à nossa app?
+          if (wabaId) {
+            const w = await graph(
+              `${encodeURIComponent(wabaId)}?fields=name,account_review_status,`
+              + `business_verification_status,country,ownership_type`,
+              token,
+            );
+            if (w?.error) {
+              addC("Conta de WhatsApp Business", false, `a Meta recusou: ${w.error.message}`);
+            } else {
+              addC("Empresa verificada na Meta",
+                w.business_verification_status === "verified",
+                `verificação: ${w.business_verification_status ?? "?"}`
+                + `, revisão da conta: ${w.account_review_status ?? "?"}`);
+            }
+
+            const sa = await graph(`${encodeURIComponent(wabaId)}/subscribed_apps`, token);
+            const apps = (sa?.data ?? []) as Array<Record<string, any>>;
+            const nossa = apps.some((a) =>
+              String(a?.whatsapp_business_api_data?.id ?? a?.id ?? "") === appId);
+            addC("A conta está subscrita à nossa app", nossa,
+              sa?.error
+                ? `não foi possível verificar: ${sa.error.message}`
+                : nossa
+                  ? "sim — os webhooks desta conta vêm para nós"
+                  : "não. Sem isto as mensagens desta conta nunca chegam ao CRM.");
+          } else {
+            addC("Conta de WhatsApp Business", false, "a caixa não guardou `waba_id`");
+          }
+        }
+
+        caixas.push({
+          id: canal.id,
+          label: canal.label,
+          status: canal.status,
+          phone_number_id: numeroId ?? null,
+          waba_id: wabaId ?? null,
+          achados: linha,
+        });
+      }
+
+      log("diagnóstico de WhatsApp", { orgId, caixas: caixas.length });
+      return jsonRes({ achados, caixas });
+    }
+
+    /**
      * Ligar um número de WhatsApp SEM o assistente.
      *
      * Porque existe: o Embedded Signup serve para os CLIENTES ligarem as contas

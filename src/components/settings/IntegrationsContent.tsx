@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target, CreditCard } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target, CreditCard, Stethoscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StripeIntegrationCard } from "@/components/settings/StripeIntegrationCard";
 import { useStripeConnection } from "@/hooks/useStripeConnection";
@@ -23,6 +23,8 @@ import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
 import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
 import { useWhatsAppPairing } from "@/hooks/useWhatsAppPairing";
+import { useWhatsAppDiagnostico } from "@/hooks/useWhatsAppDiagnostico";
+import { WhatsAppDiagnosticoDialog } from "./WhatsAppDiagnosticoDialog";
 import { AddEmailModal, EditEmailModal } from "./EmailManager";
 import { useDeleteEmailChannel, type EmailChannel } from "@/hooks/useEmailChannels";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
@@ -1114,6 +1116,15 @@ function InboxesManager() {
     );
   };
 
+  // Diagnóstico: pergunta à Meta porque é que a caixa não recebe nada. Só lê,
+  // por isso pode correr-se sempre que houver dúvida — e há sempre.
+  const [diagOpen, setDiagOpen] = useState(false);
+  const diagnostico = useWhatsAppDiagnostico();
+  const correrDiagnostico = () => {
+    setDiagOpen(true);
+    diagnostico.mutate();
+  };
+
   const startMetaConnect = (connect: 'instagram' | 'messenger' | 'whatsapp') => {
     if (blockIfAtLimit()) { setNewOpen(false); return; }
     setNewOpen(false);
@@ -1180,7 +1191,7 @@ function InboxesManager() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilterType(null)}
-              className={"${filterType === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors"}
+              className={`${filterType === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors`}
             >
               Todas
             </button>
@@ -1190,7 +1201,7 @@ function InboxesManager() {
                 <button
                   key={t}
                   onClick={() => setFilterType(filterType === t ? null : t)}
-                  className={"${filterType === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors"}
+                  className={`${filterType === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors`}
                 >
                   {meta.label}
                 </button>
@@ -1286,6 +1297,19 @@ function InboxesManager() {
                   }}>
                     <Settings2 className="h-3.5 w-3.5" /> Editar
                   </Button>
+                  {/* O diagnóstico só lê — não altera nada — e é o que
+                      distingue "a Meta não nos deixa" de "o CRM tem um bug".
+                      Fica como ícone para não empurrar os outros dois botões. */}
+                  {ch.channel_type === 'whatsapp' && (
+                    <button
+                      type="button"
+                      onClick={correrDiagnostico}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      title="Diagnóstico: porque é que não chegam mensagens?"
+                    >
+                      <Stethoscope className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setToDelete({ id: ch.id, type: ch.channel_type })}
@@ -1333,6 +1357,14 @@ function InboxesManager() {
       )}
       {/* Add email modal */}
       <AddEmailModal open={addEmailOpen} onOpenChange={setAddEmailOpen} />
+
+      <WhatsAppDiagnosticoDialog
+        open={diagOpen}
+        onOpenChange={setDiagOpen}
+        relatorio={diagnostico.data ?? null}
+        aCarregar={diagnostico.isPending}
+        erro={diagnostico.error ? (diagnostico.error as Error).message : null}
+      />
 
       {/* Escolher a conta, quando a autorização abrange mais do que uma.
           Sem isto ligava-se a primeira que a Meta devolvesse — e numa agência,
