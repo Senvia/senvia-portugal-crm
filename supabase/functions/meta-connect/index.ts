@@ -1184,6 +1184,49 @@ Deno.serve(async (req) => {
         emFalta.length ? `em falta: ${emFalta.join(", ")}` : "estão todos presentes",
       );
 
+      // ── 1b. A configuração do diálogo corre mesmo o assistente? ───────────
+      //
+      // ESTE É O PASSO QUE FALTAVA, e explica o sintoma mais confuso de todos:
+      // o cliente carrega em ligar, a janela da Meta abre, ele autoriza — e
+      // NUNCA lhe aparece a escolha do número nem o código QR. A caixa fica
+      // "Ligada" e o número fica `DISCONNECTED`/`ON_PREMISE` para sempre.
+      //
+      // A causa é a configuração no painel da Meta: um Facebook Login for
+      // Business normal concede as permissões e volta — não corre assistente
+      // nenhum. Só uma configuração de CADASTRO INCORPORADO do WhatsApp mostra
+      // os passos de escolher o número e emparelhar o telemóvel.
+      //
+      // Sem isto, a única forma de o descobrir era abrir o painel e comparar à
+      // vista. Fica escrito onde a pergunta se faz.
+      if (cfgWa) {
+        const cfg = await graph(encodeURIComponent(cfgWa), appToken);
+        if (cfg?.error) {
+          add("Configuração do diálogo do WhatsApp", null,
+            `a Meta não a reconhece: ${cfg.error.message}. `
+            + "Confirma o WHATSAPP_LOGIN_CONFIG_ID no painel.");
+        } else {
+          // Os nomes dos campos não são estáveis entre versões do Graph, por
+          // isso aceita-se qualquer um deles e regista-se o que veio.
+          const tipo = String(cfg?.config_type ?? cfg?.login_variation ?? "");
+          const ehIncorporado = /WHATSAPP|EMBEDDED|SIGNUP/i.test(tipo)
+            || /WHATSAPP|EMBEDDED|SIGNUP/i.test(JSON.stringify(cfg ?? {}));
+          add(
+            "A configuração corre o Cadastro Incorporado",
+            ehIncorporado,
+            ehIncorporado
+              ? `tipo: ${tipo || "declara ativos de WhatsApp"}`
+              : `tipo: ${tipo || "não declarado"} — parece um Login for Business normal, `
+                + "que concede as permissões e volta SEM correr o assistente. É por isso "
+                + "que não aparece a escolha do número nem o código QR, e o número fica "
+                + "por registar. No painel da Meta é preciso uma configuração de Cadastro "
+                + "Incorporado do WhatsApp (WhatsApp Embedded Signup).",
+          );
+          // O corpo inteiro vai para o registo: é onde se vê o que a Meta
+          // declara mesmo, sem depender da nossa leitura dele.
+          log("configuração do WhatsApp tal como a Meta a devolve", { cfg });
+        }
+      }
+
       // ── 2. A app está subscrita às mensagens de WhatsApp? ─────────────────
       //
       // Este é o assassino silencioso número um. A subscrição é ao nível da APP
@@ -1344,7 +1387,17 @@ Deno.serve(async (req) => {
                     + `, qualidade ${n.quality_rating ?? "?"}`
                   : `está como ${n.status ?? "?"} (${n.platform_type ?? "?"}`
                     + `, na app do telemóvel: ${n.is_on_biz_app ? "sim" : "não"}). `
-                    + "Sem estar CONNECTED a Meta não entrega mensagens nem histórico.");
+                    + "Sem estar CONNECTED a Meta não entrega mensagens nem histórico."
+                    // A distinção que poupa horas: o telemóvel já emparelhado e
+                    // o número na mesma por registar quer dizer que a metade
+                    // manual está feita e o que falta é o assistente. Insistir
+                    // no telemóvel a partir daqui não leva a lado nenhum.
+                    + (n.is_on_biz_app
+                      ? " O telemóvel JÁ está emparelhado — o que falta é o registo,"
+                        + " que só acontece dentro do assistente da Meta (o passo do código QR)."
+                        + " Se esse passo nunca te apareceu, o problema está na configuração"
+                        + " do diálogo, não no teu telemóvel."
+                      : " O telemóvel ainda não está emparelhado com este número."));
             }
           } else {
             addC("Número", false, "a caixa não guardou `phone_number_id`");
