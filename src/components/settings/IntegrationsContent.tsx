@@ -1283,7 +1283,16 @@ function InboxesManager() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 px-4 py-3 mt-auto">
+                {/*
+                  `flex-wrap` não é decoração: nas caixas de WhatsApp esta
+                  linha tem QUATRO coisas — "Concluir ligação", "Editar", o
+                  diagnóstico e o arquivo — e num cartão de uma grelha de
+                  quatro colunas não cabem. Sem quebra de linha, o "Editar"
+                  aparecia cortado a meio e os dois ícones ficavam FORA do
+                  cartão: o botão de arquivar existia e não havia como lhe
+                  chegar.
+                */}
+                <div className="flex flex-wrap items-center gap-2 px-4 py-3 mt-auto">
                   {/* Ligar a caixa e REGISTAR o número são coisas diferentes. O
                       fluxo por redirect faz a primeira (por isso a caixa
                       aparece "Ligada"), mas só o assistente lançado pelo SDK
@@ -1294,7 +1303,9 @@ function InboxesManager() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="flex-1 gap-1.5 h-8"
+                      // Linha inteira: é o botão com o texto mais longo, e é o
+                      // que empurrava os outros para fora do cartão.
+                      className="w-full gap-1.5 h-8"
                       disabled={pairing.isPending}
                       onClick={() => concluirEmparelhamento(ch)}
                     >
@@ -1302,7 +1313,9 @@ function InboxesManager() {
                       {pairing.isPending ? 'A verificar…' : 'Concluir ligação'}
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => {
+                  {/* `min-w-0`: sem isto o botão recusa-se a encolher abaixo do
+                      tamanho do texto e volta a transbordar. */}
+                  <Button size="sm" variant="outline" className="h-8 min-w-0 flex-1 gap-1.5" onClick={() => {
                     if (isEmail) setEditEmailCh(ch as unknown as EmailChannel);
                     else setEditCh(ch);
                   }}>
@@ -1315,7 +1328,7 @@ function InboxesManager() {
                     <button
                       type="button"
                       onClick={correrDiagnostico}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                       title="Diagnóstico: porque é que não chegam mensagens?"
                     >
                       <Stethoscope className="h-4 w-4" />
@@ -1331,7 +1344,7 @@ function InboxesManager() {
                     <button
                       type="button"
                       onClick={() => setToDelete({ id: ch.id, type: ch.channel_type })}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                      className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive"
                       title="Arquivar caixa"
                     >
                       <Trash2 className="h-4 w-4" />
