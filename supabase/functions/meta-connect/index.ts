@@ -50,8 +50,19 @@ async function signState(data: Record<string, string>, secret: string): Promise<
   return `${payload}.${await hmac(payload, secret)}`;
 }
 
-/** Um `state` só vale 15 minutos: é o tempo de fazer o login, não mais. */
-const STATE_TTL_MS = 15 * 60 * 1000;
+/**
+ * Quanto tempo vale um `state`.
+ *
+ * Eram 15 minutos, "o tempo de fazer o login". Chega para o Instagram e o
+ * Messenger e NÃO CHEGA para o WhatsApp: o Cadastro Incorporado pode incluir
+ * criar a conta, adicionar o número e esperar por um SMS de verificação. Passar
+ * disso fazia o cliente concluir o assistente todo e receber "Pedido inválido —
+ * recomeça a ligação a partir do CRM", sem nada que explicasse porquê.
+ *
+ * Meia hora continua a ser curto para quem interceta um `state` e longo o
+ * suficiente para quem está mesmo a ligar uma conta.
+ */
+const STATE_TTL_MS = 30 * 60 * 1000;
 
 async function readState(state: string, secret: string): Promise<Record<string, string> | null> {
   const [payload, sig] = state.split(".", 2);
@@ -63,6 +74,52 @@ async function readState(state: string, secret: string): Promise<Record<string, 
   const t = Number(data.t ?? 0);
   if (!t || Date.now() - t > STATE_TTL_MS) return null;
   return data;
+}
+
+/**
+ * Lê um `signed_request` da Meta e devolve o conteúdo — ou null se a assinatura
+ * não bater certo.
+ *
+ * O formato é `<assinatura>.<conteúdo>`, ambos em base64url, e a assinatura é
+ * HMAC-SHA256 do conteúdo com o App Secret. É o que separa um pedido vindo
+ * mesmo da Meta de um pedido vindo de qualquer pessoa que descubra o endereço.
+ */
+async function lerSignedRequest(
+  assinado: string,
+  appSecret: string,
+): Promise<Record<string, unknown> | null> {
+  const [sigPart, payloadPart] = assinado.split(".", 2);
+  if (!sigPart || !payloadPart) return null;
+
+  const bytes = (b64url: string): Uint8Array => {
+    const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/")
+      + "=".repeat((4 - (b64url.length % 4)) % 4);
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(appSecret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    );
+    const esperada = new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadPart)),
+    );
+    const recebida = bytes(sigPart);
+
+    // Comparação de tempo constante, como no resto do projeto.
+    if (esperada.length !== recebida.length) return null;
+    let diff = 0;
+    for (let i = 0; i < esperada.length; i++) diff |= esperada[i] ^ recebida[i];
+    if (diff !== 0) return null;
+
+    return JSON.parse(new TextDecoder().decode(bytes(payloadPart)));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -96,6 +153,95 @@ async function membroDaOrg(
   }
   if (!isMember) return { ok: false, status: 403, error: "Sem acesso a esta organização" };
   return { ok: true };
+}
+
+/** Quem está a chamar, ou null se não houver sessão válida. */
+async function utilizadorDoPedido(
+  req: Request,
+  admin: ReturnType<typeof createClient>,
+): Promise<{ id: string } | null> {
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!bearer) return null;
+  const { data: { user } } = await admin.auth.getUser(bearer);
+  return user ? { id: user.id } : null;
+}
+
+/** É dono do SaaS? Nem toda a ação desta função é de um cliente. */
+async function ehSuperAdmin(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await admin.rpc("has_role", {
+    _user_id: userId, _role: "super_admin",
+  });
+  if (error) {
+    logError("verificação de super_admin falhou", { error: error.message });
+    return false;
+  }
+  return data === true;
+}
+
+/**
+ * Troca um token de curta duração por um de 60 dias.
+ *
+ * PORQUE É QUE ISTO TEM DE EXISTIR
+ *
+ * O que a troca do código devolve pode ser um token de curta duração — uma ou
+ * duas horas. Guardá-lo tal e qual faz a caixa funcionar na demonstração e
+ * morrer a meio da tarde: as mensagens continuam a CHEGAR (a subscrição do
+ * webhook é ao nível da app, não do token), mas deixa de se conseguir
+ * responder, e o erro da Meta fala em sessão expirada sem dizer porquê. É a
+ * pior avaria possível — parece que está tudo bem.
+ *
+ * Os tokens de Página tirados de um token de utilizador HERDAM a validade dele:
+ * se o do utilizador for longo, o da Página não expira. Por isso a troca é
+ * feita ANTES de ir buscar as Páginas, e não depois.
+ *
+ * Se a troca falhar, devolve-se o token original — vale mais uma ligação que
+ * dura pouco do que nenhuma, e o diagnóstico mostra a validade real.
+ */
+async function tokenLongo(
+  curto: string,
+  appId: string,
+  appSecret: string,
+): Promise<string> {
+  try {
+    const r = await fetch(
+      `${GRAPH}/oauth/access_token`
+      + `?grant_type=fb_exchange_token`
+      + `&client_id=${encodeURIComponent(appId)}`
+      + `&client_secret=${encodeURIComponent(appSecret)}`
+      + `&fb_exchange_token=${encodeURIComponent(curto)}`,
+    );
+    const j = await r.json().catch(() => ({}));
+    if (j?.access_token) {
+      log("token trocado por um de longa duração", {
+        expira_em_dias: j.expires_in ? Math.round(Number(j.expires_in) / 86400) : "sem prazo",
+      });
+      return String(j.access_token);
+    }
+    logError("troca por token longo recusada", { erro: j?.error?.message ?? r.status });
+  } catch (e) {
+    logError("troca por token longo falhou", { erro: (e as Error).message });
+  }
+  return curto;
+}
+
+/**
+ * O id da pessoa que autorizou, do lado da Meta.
+ *
+ * Guarda-se na caixa por uma razão só: é ele que permite ao callback de
+ * desautorização saber QUAIS as caixas a marcar quando alguém remove a app.
+ * Sem isto, a Meta avisa-nos e nós não temos como ligar o aviso a nada.
+ */
+async function idDoUtilizadorMeta(token: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${GRAPH}/me?fields=id&access_token=${encodeURIComponent(token)}`);
+    const j = await r.json().catch(() => ({}));
+    return j?.id ? String(j.id) : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── página de resultado ─────────────────────────────────────────────────────
@@ -199,6 +345,13 @@ async function ligarWhatsApp(p: {
   appSecret: string;
   origem: string | null;
   supabaseUrl: string;
+  /**
+   * A resposta é um fetch (JSON) e não um popup (redirecionamento)?
+   *
+   * Estava a ser lido sem estar declarado: em Deno o deploy não faz typecheck,
+   * por isso passava, mas qualquer verificação de tipos parava aqui.
+   */
+  comoJson?: boolean;
 }): Promise<Response> {
   const { admin, userToken, orgId, origem } = p;
   const emJson = p.comoJson === true;
@@ -218,6 +371,10 @@ async function ligarWhatsApp(p: {
   // CLIENTE. Foi o que aconteceu: ligou-se a conta da Delta Capital à caixa da
   // Senvia, sem nada para escolher.
   const wabas: Array<{ id: string; nome: string | null }> = [];
+  // As permissões que a Meta diz ter concedido a ESTE token. Separa duas
+  // situações que davam exatamente o mesmo sintoma e pedem respostas opostas:
+  // "deu a permissão mas não escolheu conta" e "a permissão nunca foi dada".
+  let concedidas: string[] = [];
   const porque: string[] = [];
   // Ids de negócio que a autorização abrange. Servem de ponte quando o
   // `/me/businesses` é recusado — ver o passo 3.
@@ -238,6 +395,7 @@ async function ligarWhatsApp(p: {
     ).then((r) => r.json());
 
     const escopos = debug?.data?.granular_scopes ?? [];
+    concedidas = (debug?.data?.scopes ?? []) as string[];
     // O que a Meta devolveu mesmo, e não a nossa leitura dela. Sem isto, um
     // "não encontrámos nada" é indistinguível de "não soubemos procurar".
     log("debug_token do WhatsApp", {
@@ -324,7 +482,28 @@ async function ligarWhatsApp(p: {
   }
 
   if (wabas.length === 0) {
-    logError("nenhuma WABA encontrada", { porque });
+    logError("nenhuma WABA encontrada", { porque, concedidas });
+
+    // PRIMEIRO: a permissão chegou sequer a ser concedida?
+    //
+    // Se não chegou, revogar não resolve nada — não há nada para revogar — e a
+    // mensagem "acabei de apagar o consentimento, liga outra vez" manda a
+    // pessoa repetir um ciclo que nunca vai acabar. É o que aconteceria a
+    // QUALQUER CLIENTE enquanto a app não tiver Acesso Avançado a estas
+    // permissões: fora da equipa da app, a Meta simplesmente não as concede.
+    const precisa = ["whatsapp_business_messaging", "whatsapp_business_management"];
+    const emFalta = precisa.filter((p) => !concedidas.includes(p));
+    if (emFalta.length > 0) {
+      return resp({
+        error: "A Meta não concedeu as permissões de WhatsApp a esta ligação"
+          + ` (em falta: ${emFalta.join(", ")}).`
+          + " Ou foram recusadas no ecrã de autorização, ou a app do Senvia ainda"
+          + " não tem Acesso Avançado a estas permissões — nesse caso só funciona"
+          + " para quem tem cargo na app, e é preciso concluir a App Review na Meta."
+          + " Fala connosco: não é coisa que se resolva do teu lado.",
+        code: "sem_permissoes",
+      });
+    }
 
     // Repor o consentimento no estado de primeira autorização.
     //
@@ -417,7 +596,10 @@ async function ligarWhatsApp(p: {
 
     if (pendErr || !pendente) {
       logError("não foi possível guardar a escolha", { error: pendErr?.message });
-      return resp({ error: "Erro ao preparar a escolha da conta." }, origem);
+      // O segundo argumento de `resp` é o STATUS, um número — passava-se aqui a
+      // origem. Com ela preenchida, o `new Response` rebentava com RangeError e
+      // o utilizador levava um 500 mudo em vez desta frase.
+      return resp({ error: "Erro ao preparar a escolha da conta." }, 500);
     }
 
     return resp({
@@ -458,6 +640,7 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
   const { data: noutra } = await admin.from("messaging_channels")
     .select("id, organization_id")
     .eq("metadata->>phone_number_id", String(numero.phone_number_id))
+    .is("archived_at", null)
     .maybeSingle();
   if (noutra && noutra.organization_id !== orgId) {
     return responder({
@@ -534,6 +717,10 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
 
   const etiqueta = (p.label || numero.verified_name || numero.display_phone_number || "WhatsApp").trim();
 
+  // Quem autorizou. É a chave que o callback de desautorização usa para saber
+  // que caixas marcar quando esta pessoa remover a app.
+  const metaUserId = await idDoUtilizadorMeta(userToken);
+
   const campos = {
     organization_id: orgId,
     channel_type: "whatsapp",
@@ -541,8 +728,12 @@ async function criarCaixaWhatsApp(p: any): Promise<Response> {
     provider: "meta",
     status: "connected",
     label: etiqueta,
+    // Voltar a ligar uma caixa arquivada tira-a do arquivo — senão ficava
+    // ligada e invisível ao mesmo tempo.
+    archived_at: null,
     phone_number: String(numero.display_phone_number ?? "").replace(/\D/g, "") || null,
     metadata: {
+      meta_user_id: metaUserId,
       phone_number_id: String(numero.phone_number_id),
       waba_id: wabaId,
       waba_name: numero.waba_name ?? null,
@@ -617,8 +808,62 @@ Deno.serve(async (req) => {
   const redirectUri = `${supabaseUrl}/functions/v1/meta-connect`;
 
   // ── Desautorização ────────────────────────────────────────────────────────
+  //
+  // A Meta chama isto quando o cliente remove a nossa app das definições dele.
+  // Respondia `{ok:true}` e não fazia mais nada — e a caixa ficava no CRM a
+  // dizer "Ligada" com um token morto: não entra mensagem, não sai mensagem, e
+  // nada no produto o denuncia. É também um dos pontos verificados em App
+  // Review.
+  //
+  // Agora marca-se a caixa como avariada. Não se arquiva nem se apaga: isso é
+  // decisão de quem a ligou, e o histórico fica onde está.
   if (url.searchParams.get("action") === "deauthorize") {
-    log("desautorização recebida");
+    if (!appSecret) {
+      logError("desautorização sem FACEBOOK_APP_SECRET — ignorada");
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // O corpo é form-urlencoded com um `signed_request`, tal como no callback
+    // de eliminação de dados. Sem verificar a assinatura, qualquer pessoa podia
+    // desligar as caixas de um cliente à distância.
+    let signed = "";
+    if (req.method === "POST") {
+      const ct = req.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        signed = String((await req.json().catch(() => ({}))).signed_request ?? "");
+      } else {
+        const form = await req.formData().catch(() => null);
+        signed = String(form?.get("signed_request") ?? "");
+      }
+    }
+
+    const dados = signed ? await lerSignedRequest(signed, appSecret) : null;
+    const metaUserId = String(dados?.user_id ?? "");
+
+    if (!metaUserId) {
+      logError("desautorização sem utilizador identificável", { tinhaAssinatura: !!signed });
+      // 200 à mesma: a Meta reentrega em qualquer outro código, e uma
+      // reentrega infinita de um pedido que não sabemos ler não ajuda ninguém.
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const admin = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: afetadas, error } = await admin.from("messaging_channels")
+      .update({ status: "error" })
+      .eq("provider", "meta")
+      .eq("metadata->>meta_user_id", metaUserId)
+      .is("archived_at", null)
+      .select("id, label");
+
+    if (error) logError("desautorização não aplicada", { error: error.message });
+    log("desautorização recebida", {
+      metaUserId, caixas: (afetadas ?? []).map((c) => c.label ?? c.id),
+    });
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -635,6 +880,45 @@ Deno.serve(async (req) => {
   // Nada sai na resposta: o resultado vai só para o registo. Assim isto pode
   // ser chamado por qualquer pessoa sem expor a configuração nem os segredos.
   if (url.searchParams.get("action") === "autoexame") {
+    // ATENÇÃO: isto corria SEM AUTENTICAÇÃO NENHUMA.
+    //
+    // A função tem `verify_jwt = false` (tem de ter — o callback do OAuth chega
+    // pelo browser sem sessão), e este ramo estava antes de qualquer
+    // verificação. Com `?canal=<uuid>` ia buscar o token de um canal qualquer e
+    // interrogava a Meta com ele; com `&sincronizar=1` chegava a fazer pedidos
+    // POST à Meta em nome desse canal e devolvia as respostas no corpo. O
+    // comentário original dizia "nada sai na resposta" — deixou de ser verdade
+    // quando o `saida` foi acrescentado, e ninguém voltou a ler o comentário.
+    //
+    // Agora: é preciso sessão, e ou se é membro da organização DAQUELE canal,
+    // ou se é dono do SaaS para ver a configuração da app.
+    const adminAuth = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const quem = await utilizadorDoPedido(req, adminAuth);
+    if (!quem) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const souDono = await ehSuperAdmin(adminAuth, quem.id);
+    const canalPedido = url.searchParams.get("canal");
+    if (canalPedido) {
+      const { data: dono } = await adminAuth.from("messaging_channels")
+        .select("organization_id").eq("id", canalPedido).maybeSingle();
+      const acesso = dono
+        ? await membroDaOrg(req, String(dono.organization_id), adminAuth)
+        : { ok: false as const, status: 404, error: "Caixa não encontrada" };
+      if (!acesso.ok) {
+        return new Response(JSON.stringify({ error: acesso.error }), {
+          status: acesso.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!souDono) {
+      return new Response(JSON.stringify({ error: "Sem acesso" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const cfgWa = Deno.env.get("WHATSAPP_LOGIN_CONFIG_ID") || "";
     const appToken = `${appId}|${appSecret}`;
     const ver = async (nome: string, endereco: string) => {
@@ -655,7 +939,9 @@ Deno.serve(async (req) => {
       configWhatsAppIgualAoGeral: !!cfgWa && cfgWa === configId,
     });
 
-    if (cfgWa && appId && appSecret) {
+    // A configuração da APP (ids, segredos, subscrições do painel) é nossa, não
+    // do cliente: um membro de uma organização só vê o exame da caixa dele.
+    if (cfgWa && appId && appSecret && souDono) {
       await ver(
         "configuração do WhatsApp (campos por omissão)",
         `${GRAPH}/${encodeURIComponent(cfgWa)}?access_token=${encodeURIComponent(appToken)}`,
@@ -910,27 +1196,67 @@ Deno.serve(async (req) => {
           `não foi possível verificar: ${subsApp.error.message ?? "erro do Graph"}`);
       } else {
         const objs = (subsApp?.data ?? []) as Array<Record<string, any>>;
-        const wa = objs.find((s) => s.object === "whatsapp_business_account");
-        const campos = ((wa?.fields ?? []) as Array<any>)
-          .map((f) => (typeof f === "string" ? f : f?.name)).filter(Boolean);
-        add(
-          "App subscrita a `messages` do WhatsApp",
-          campos.includes("messages"),
-          wa
-            ? `campos subscritos: ${campos.join(", ") || "nenhum"}`
-            : "o objeto `whatsapp_business_account` não tem subscrição nenhuma "
-              + "— nenhum cliente vai receber mensagens",
-        );
+        const camposDe = (objeto: string) => {
+          const o = objs.find((s) => s.object === objeto);
+          return {
+            existe: !!o,
+            campos: ((o?.fields ?? []) as Array<any>)
+              .map((f) => (typeof f === "string" ? f : f?.name)).filter(Boolean) as string[],
+          };
+        };
+
+        // Os três objetos, não só o WhatsApp. Cada canal tem o seu, e ter um
+        // subscrito não diz nada sobre os outros — era por isso que o
+        // Instagram podia estar mudo com este exame todo a dar verde.
+        for (
+          const [objeto, nome] of [
+            ["whatsapp_business_account", "WhatsApp"],
+            ["instagram", "Instagram"],
+            ["page", "Messenger"],
+          ] as const
+        ) {
+          const { existe, campos } = camposDe(objeto);
+          add(
+            `App subscrita a \`messages\` do ${nome}`,
+            existe && campos.includes("messages"),
+            existe
+              ? `campos subscritos: ${campos.join(", ") || "nenhum"}`
+              : `o objeto \`${objeto}\` não tem subscrição nenhuma no painel da app`
+                + " — nenhum cliente vai receber mensagens deste canal",
+          );
+        }
+
+        // Os três campos que a Coexistence exige, à parte: sem eles a caixa de
+        // WhatsApp liga e fica vazia, sem erro nenhum que o explique.
+        const wa = camposDe("whatsapp_business_account");
+        if (wa.existe) {
+          const faltam = ["history", "smb_message_echoes", "smb_app_state_sync"]
+            .filter((c) => !wa.campos.includes(c));
+          add(
+            "Campos da Coexistence subscritos",
+            faltam.length === 0,
+            faltam.length
+              ? `faltam: ${faltam.join(", ")} — sem eles não chega histórico, `
+                + "nem o que o dono escreve pelo telemóvel, nem os contactos"
+              : "history, smb_message_echoes e smb_app_state_sync",
+          );
+        }
       }
 
       // ── 3. As caixas desta organização ────────────────────────────────────
+      //
+      // Todas as caixas da Meta, não só as de WhatsApp. O Instagram e o
+      // Messenger tinham exatamente o mesmo sintoma — "ligada e calada" — e
+      // nenhuma forma de o examinar sem ser a olho.
       const { data: canais } = await admin.from("messaging_channels")
-        .select("id, label, status, metadata")
+        .select("id, label, status, channel_type, metadata")
         .eq("organization_id", orgId)
-        .eq("channel_type", "whatsapp");
+        .eq("provider", "meta")
+        .in("channel_type", ["whatsapp", "instagram", "facebook"])
+        .is("archived_at", null);
 
       if (!canais?.length) {
-        add("Caixas de WhatsApp", false, "esta organização não tem nenhuma ligada");
+        add("Caixas da Meta", false, "esta organização não tem nenhuma ligada");
         return jsonRes({ achados, caixas: [] });
       }
 
@@ -940,6 +1266,8 @@ Deno.serve(async (req) => {
         const meta = (canal.metadata ?? {}) as Record<string, string>;
         const numeroId = meta.phone_number_id;
         const wabaId = meta.waba_id;
+        const ehWhatsApp = canal.channel_type === "whatsapp";
+        const ehInsta = canal.channel_type === "instagram";
         const linha: Array<{ passo: string; ok: boolean | null; detalhe: string }> = [];
         const addC = (passo: string, ok: boolean | null, detalhe: string) =>
           linha.push({ passo, ok, detalhe });
@@ -974,19 +1302,31 @@ Deno.serve(async (req) => {
 
             const gs = (d.granular_scopes ?? []) as Array<Record<string, any>>;
             const alvos = gs.flatMap((g) => g.target_ids ?? []);
-            addC("A conta de WhatsApp foi mesmo partilhada", alvos.length > 0,
-              alvos.length
-                ? `contas no token: ${alvos.join(", ")}`
-                : "`target_ids` vazio — a permissão foi dada mas nenhuma conta "
-                  + "foi escolhida. É o sinal de que o Cadastro Incorporado não correu.");
-
             const scopes = (d.scopes ?? []) as string[];
-            const precisa = ["whatsapp_business_messaging", "whatsapp_business_management"];
+
+            if (ehWhatsApp) {
+              addC("A conta de WhatsApp foi mesmo partilhada", alvos.length > 0,
+                alvos.length
+                  ? `contas no token: ${alvos.join(", ")}`
+                  : "`target_ids` vazio — a permissão foi dada mas nenhuma conta "
+                    + "foi escolhida. É o sinal de que o Cadastro Incorporado não correu.");
+            }
+
+            // As permissões que este canal precisa — não são as mesmas nos
+            // três, e pedir as do WhatsApp a uma Página dava sempre vermelho.
+            const precisa = ehWhatsApp
+              ? ["whatsapp_business_messaging", "whatsapp_business_management"]
+              : ehInsta
+              ? ["instagram_basic", "instagram_manage_messages", "pages_manage_metadata"]
+              : ["pages_messaging", "pages_manage_metadata"];
             const faltam = precisa.filter((p) => !scopes.includes(p));
-            addC("Permissões de WhatsApp no token", faltam.length === 0,
-              faltam.length ? `faltam: ${faltam.join(", ")}` : precisa.join(", "));
+            addC("Permissões no token", faltam.length === 0,
+              faltam.length
+                ? `faltam: ${faltam.join(", ")} — é o que a App Review tem de aprovar`
+                : precisa.join(", "));
           }
 
+          if (ehWhatsApp) {
           // 3b. O número: está REGISTADO? É aqui que a Coexistence morre.
           if (numeroId) {
             const n = await graph(
@@ -1039,20 +1379,165 @@ Deno.serve(async (req) => {
           } else {
             addC("Conta de WhatsApp Business", false, "a caixa não guardou `waba_id`");
           }
+          } else {
+            // ── Instagram e Messenger ────────────────────────────────────────
+            //
+            // Mesmo sintoma do WhatsApp — "ligada e calada" — e até agora não
+            // havia forma de o examinar. As duas perguntas que interessam: a
+            // Página está subscrita à nossa app, e com que campos?
+            const pageId = meta.page_id;
+            if (!pageId) {
+              addC("Página do Facebook", false, "a caixa não guardou `page_id`");
+            } else {
+              const sa = await graph(
+                `${encodeURIComponent(pageId)}/subscribed_apps?fields=subscribed_fields`, token);
+              if (sa?.error) {
+                addC("A Página está subscrita à nossa app", null,
+                  `não foi possível verificar: ${sa.error.message}`);
+              } else {
+                const apps = (sa?.data ?? []) as Array<Record<string, any>>;
+                const campos = apps.flatMap((a) => (a?.subscribed_fields ?? []) as string[]);
+                addC("A Página está subscrita à nossa app", apps.length > 0,
+                  apps.length
+                    ? `campos: ${campos.join(", ") || "nenhum declarado"}`
+                    : "não. Sem isto as mensagens desta Página nunca chegam ao CRM.");
+                if (apps.length) {
+                  addC("Campo `messages` na Página", campos.includes("messages"),
+                    campos.includes("messages")
+                      ? "sim"
+                      : "falta — a Página está subscrita mas não às mensagens");
+                }
+              }
+
+              if (ehInsta) {
+                // A conta de Instagram continua ligada à Página? Desligá-la lá
+                // não dá erro nenhum deste lado — as mensagens é que param.
+                const ig = await graph(
+                  `${encodeURIComponent(pageId)}?fields=instagram_business_account{id,username}`,
+                  token,
+                );
+                const ligada = ig?.instagram_business_account?.id;
+                addC("Instagram ligado à Página", !!ligada,
+                  ligada
+                    ? `@${ig.instagram_business_account.username ?? ligada}`
+                    : "a Página já não tem conta de Instagram Business ligada"
+                      + (ig?.error ? ` (${ig.error.message})` : ""));
+              }
+            }
+          }
         }
 
         caixas.push({
           id: canal.id,
           label: canal.label,
           status: canal.status,
+          channel_type: canal.channel_type,
           phone_number_id: numeroId ?? null,
           waba_id: wabaId ?? null,
           achados: linha,
         });
       }
 
-      log("diagnóstico de WhatsApp", { orgId, caixas: caixas.length });
+      log("diagnóstico das caixas da Meta", { orgId, caixas: caixas.length });
       return jsonRes({ achados, caixas });
+    }
+
+    /**
+     * Sincronizar os modelos de mensagem de uma caixa de WhatsApp.
+     *
+     * PORQUE É QUE ISTO FALTAVA
+     *
+     * A tabela `whatsapp_templates` existe desde a migração da Cloud API e
+     * nunca foi preenchida por nada — nem por esta função, nem por nenhuma
+     * outra. O resultado prático: passadas 24 horas sobre a última mensagem da
+     * pessoa, o `meta-send` recusa (e bem, a Meta também recusaria) e não havia
+     * absolutamente mais nada a fazer. A conversa era um beco sem saída.
+     *
+     * Os modelos são a única forma de reabrir uma conversa fora da janela, e
+     * têm de ser aprovados pela Meta antes. Isto vai buscá-los à WABA e guarda
+     * o que ela devolve, incluindo os componentes — é deles que o compositor
+     * tira as variáveis a preencher.
+     */
+    if (body.action === "whatsapp_templates_sync") {
+      const channelId = String(body.channel_id ?? "");
+      if (!channelId) return jsonRes({ error: "channel_id em falta" }, 400);
+
+      const { data: canal } = await admin.from("messaging_channels")
+        .select("id, metadata, channel_type")
+        .eq("id", channelId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (!canal || canal.channel_type !== "whatsapp") {
+        return jsonRes({ error: "Caixa de WhatsApp não encontrada." }, 404);
+      }
+
+      const wabaId = ((canal.metadata ?? {}) as Record<string, string>).waba_id;
+      if (!wabaId) return jsonRes({ error: "A caixa não guardou `waba_id`." }, 400);
+
+      const { data: seg } = await admin.from("messaging_channel_secrets")
+        .select("page_access_token").eq("channel_id", channelId).maybeSingle();
+      if (!seg?.page_access_token) {
+        return jsonRes({ error: "A caixa não tem credenciais. Volta a ligar o WhatsApp." }, 400);
+      }
+
+      // A Meta pagina isto. Uma conta com muitos modelos devolvia só os
+      // primeiros 25 e os outros nunca apareciam no compositor — o limite de
+      // páginas é uma rede contra um `next` que nunca acabe.
+      const linhas: Array<Record<string, unknown>> = [];
+      let proxima: string | null = `${GRAPH}/${encodeURIComponent(wabaId)}/message_templates`
+        + `?fields=id,name,language,category,status,components&limit=100`
+        + `&access_token=${encodeURIComponent(seg.page_access_token)}`;
+
+      for (let pagina = 0; proxima && pagina < 20; pagina++) {
+        const r = await fetch(proxima);
+        const j = await r.json().catch(() => ({}));
+        if (j?.error) {
+          logError("modelos não sincronizados", { erro: j.error.message });
+          return jsonRes({
+            error: `A Meta recusou a lista de modelos: ${j.error.message}`,
+          }, 502);
+        }
+        for (const t of j?.data ?? []) {
+          if (!t?.id) continue;
+          linhas.push({
+            organization_id: orgId,
+            channel_id: channelId,
+            meta_id: String(t.id),
+            name: String(t.name ?? ""),
+            language: String(t.language ?? ""),
+            category: t.category ?? null,
+            status: String(t.status ?? "UNKNOWN"),
+            components: t.components ?? [],
+            synced_at: new Date().toISOString(),
+            status_updated_at: new Date().toISOString(),
+          });
+        }
+        proxima = j?.paging?.next ?? null;
+      }
+
+      if (linhas.length > 0) {
+        const { error: upErr } = await admin.from("whatsapp_templates")
+          .upsert(linhas, { onConflict: "channel_id,meta_id" });
+        if (upErr) {
+          logError("modelos não gravados", { error: upErr.message });
+          return jsonRes({ error: "Erro ao guardar os modelos." }, 500);
+        }
+      }
+
+      // Os que já não existem na Meta saem: um modelo apagado lá continuava a
+      // ser oferecido aqui, e o envio falhava com um erro que não se explica.
+      // Não é histórico de ninguém — é uma cópia do que a Meta tem.
+      const vivos = linhas.map((l) => String(l.meta_id));
+      if (vivos.length > 0) {
+        await admin.from("whatsapp_templates").delete()
+          .eq("channel_id", channelId)
+          .not("meta_id", "in", `(${vivos.map((v) => `"${v}"`).join(",")})`)
+          .then(() => {}, (e: unknown) => logError("limpeza de modelos falhou", { e }));
+      }
+
+      const aprovados = linhas.filter((l) => l.status === "APPROVED").length;
+      log("modelos sincronizados", { canal: channelId, total: linhas.length, aprovados });
+      return jsonRes({ total: linhas.length, aprovados });
     }
 
     /**
@@ -1068,6 +1553,22 @@ Deno.serve(async (req) => {
      * dois identificadores, que não são segredos.
      */
     if (body.action === "whatsapp_manual") {
+      // SÓ O DONO DO SAAS.
+      //
+      // Esta ação liga um número com o `WHATSAPP_SYSTEM_TOKEN` — o token de
+      // utilizador de sistema DA SENVIA. A única verificação era pertencer à
+      // organização indicada no pedido, o que qualquer cliente cumpre para a
+      // organização dele: bastava chamar isto com um `phone_number_id` que o
+      // nosso token alcançasse para passar a ler e a escrever por um número
+      // nosso. O que a autenticação confirmava era a pergunta errada.
+      const quem = await utilizadorDoPedido(req, admin);
+      if (!quem || !await ehSuperAdmin(admin, quem.id)) {
+        return jsonRes({
+          error: "Esta ligação manual é reservada à equipa do Senvia. "
+            + "Liga o teu WhatsApp pelo assistente da Meta.",
+        }, 403);
+      }
+
       const numeroId = String(body.phone_number_id ?? "");
       const wabaId = String(body.waba_id ?? "");
       if (!numeroId || !wabaId) {
@@ -1097,7 +1598,8 @@ Deno.serve(async (req) => {
       }
 
       const { data: dono } = await admin.from("messaging_channels")
-        .select("id, organization_id").eq("metadata->>phone_number_id", numeroId).maybeSingle();
+        .select("id, organization_id").eq("metadata->>phone_number_id", numeroId)
+        .is("archived_at", null).maybeSingle();
       if (dono && dono.organization_id !== orgId) {
         return jsonRes({ error: "Este número já está ligado noutra conta do Senvia OS." }, 409);
       }
@@ -1131,8 +1633,12 @@ Deno.serve(async (req) => {
       // sem publicar frontend — foi tê-la em falta que partiu a troca do código.
       return jsonRes({
         app_id: appId,
+        // A MESMA versão que o servidor usa em todas as chamadas ao Graph.
+        // Estava fixa em "v24.0" enquanto o servidor falava v21.0 e o diálogo
+        // de OAuth também — três versões diferentes no mesmo fluxo é uma
+        // avaria à espera de acontecer, e das que não dão erro nenhum.
+        graph_version: GRAPH.split("/").pop(),
         config_id: cfg,
-        graph_version: "v24.0",
         es_version: "v3",
         feature_type: "whatsapp_business_app_onboarding",
       });
@@ -1310,6 +1816,10 @@ Deno.serve(async (req) => {
         }, 502);
       }
 
+      // 60 dias em vez de duas horas: sem isto a caixa liga hoje e deixa de
+      // conseguir responder amanhã, sem nada que o explique.
+      tJson.access_token = await tokenLongo(tJson.access_token, appId, appSecret);
+
       // O assistente nem sempre nos diz qual a conta — a mensagem da sessão e o
       // código chegam por caminhos diferentes e a primeira pode perder-se. Em
       // vez de falhar uma ligação que correu bem, descobre-se pelo token; e se
@@ -1327,6 +1837,7 @@ Deno.serve(async (req) => {
         .from("messaging_channels")
         .select("id, organization_id")
         .eq("metadata->>phone_number_id", numeroId)
+        .is("archived_at", null)
         .maybeSingle();
       if (dados && dados.organization_id !== orgId) {
         return jsonRes({ error: "Este número já está ligado noutra conta do Senvia OS." }, 409);
@@ -1358,11 +1869,51 @@ Deno.serve(async (req) => {
 
     // Concluir uma ligação que ficou à espera de escolha. O token está guardado
     // no servidor; daqui só vem o identificador da escolha e o número escolhido.
+    /**
+     * Há alguma escolha à espera desta organização?
+     *
+     * PORQUE É QUE ISTO É PRECISO
+     *
+     * O CRM fica à espera de um `postMessage` da janela do OAuth. No WhatsApp
+     * essa janela passa por `business.facebook.com`, que define
+     * Cross-Origin-Opener-Policy — o browser corta a ligação entre as duas
+     * janelas e o `postMessage` pode nunca chegar. Para as ligações que criam
+     * a caixa há a rede de segurança de a procurar na base de dados; para as
+     * que param à espera de escolha NÃO HAVIA NADA: o cliente autorizava tudo,
+     * tinha três números para escolher, e o CRM dizia-lhe ao fim de oito
+     * minutos que a ligação não chegou ao fim.
+     *
+     * A tabela não é legível pelo browser (só o service_role lá chega, é lá que
+     * vive o token), por isso a pergunta tem de passar por aqui.
+     */
+    if (body.action === "pending_choice") {
+      const { data: pend } = await admin
+        .from("meta_pending_connections")
+        .select("id, connect, options, expires_at")
+        .eq("organization_id", orgId)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!pend) return jsonRes({ pending: null });
+      // O token NÃO vai aqui — nunca vai. Só o identificador e o que é preciso
+      // para desenhar a lista.
+      return jsonRes({
+        pending: {
+          pending_id: pend.id,
+          connect: pend.connect,
+          options: pend.options,
+        },
+      });
+    }
+
     if (body.action === "finish_choice") {
       const pendingId = String(body.pending_id ?? "");
-      const escolhido = String(body.phone_number_id ?? "");
+      // Um número de WhatsApp ou uma Página — a escolha existe agora nos dois.
+      const escolhido = String(body.phone_number_id ?? body.page_id ?? "");
       if (!pendingId || !escolhido) {
-        return jsonRes({ error: "pending_id ou phone_number_id em falta" }, 400);
+        return jsonRes({ error: "pending_id e a conta escolhida são obrigatórios" }, 400);
       }
 
       const { data: pend } = await admin
@@ -1378,10 +1929,54 @@ Deno.serve(async (req) => {
         return jsonRes({ error: "A escolha expirou. Recomeça a ligação." }, 410);
       }
 
-      // O número TEM de vir da lista que nós guardámos. Aceitar um número
-      // qualquer daqui deixava ligar uma conta que a autorização não cobre.
-      const numero = (pend.options as Array<Record<string, unknown>>)
-        .find((o) => String(o.phone_number_id) === escolhido);
+      // A conta TEM de vir da lista que nós guardámos. Aceitar um id qualquer
+      // daqui deixava ligar uma conta que a autorização não cobre.
+      const opcoes = pend.options as Array<Record<string, unknown>>;
+
+      // ── Páginas (Instagram e Messenger) ────────────────────────────────
+      if (pend.connect === "instagram" || pend.connect === "facebook") {
+        const opcao = opcoes.find((o) => String(o.page_id) === escolhido);
+        if (!opcao) {
+          return jsonRes({ error: "Essa Página não faz parte desta autorização." }, 400);
+        }
+
+        // O token da PÁGINA não é guardado na escolha — só o do utilizador, e
+        // esse fica no servidor. Vai-se buscar agora, no momento de ligar: um
+        // token de Página guardado à espera é um token a mais no mundo.
+        const pagesRes = await fetch(
+          `${GRAPH}/me/accounts?fields=id,name,access_token,`
+          + `instagram_business_account{id,username}&limit=100`,
+          { headers: { Authorization: `Bearer ${pend.user_token}` } },
+        );
+        const pagesJson = await pagesRes.json().catch(() => ({}));
+        const alvo = (pagesJson?.data ?? [] as MetaPage[])
+          .find((pg: MetaPage) => String(pg.id) === escolhido);
+
+        if (!alvo) {
+          await admin.from("meta_pending_connections").delete().eq("id", pend.id);
+          return jsonRes({
+            error: pagesJson?.error?.message
+              ?? "A Meta já não devolve essa Página para esta autorização. Recomeça a ligação.",
+          }, 409);
+        }
+
+        const resposta = await criarCaixaPagina({
+          admin,
+          target: alvo,
+          channelType: pend.connect,
+          orgId,
+          label: pend.label ?? undefined,
+          userToken: pend.user_token,
+          origem: null,
+          comoJson: true,
+          restantes: opcoes.length - 1,
+        });
+        await admin.from("meta_pending_connections").delete().eq("id", pend.id);
+        return resposta;
+      }
+
+      // ── WhatsApp ───────────────────────────────────────────────────────
+      const numero = opcoes.find((o) => String(o.phone_number_id) === escolhido);
       if (!numero) return jsonRes({ error: "Esse número não faz parte desta autorização." }, 400);
 
       const r = await criarCaixaWhatsApp({
@@ -1419,7 +2014,9 @@ Deno.serve(async (req) => {
         const { count } = await admin.from("messaging_channels")
           .select("id", { count: "exact", head: true })
           .eq(`metadata->>${campo}`, alvoId)
-          .neq("id", channelId);
+          .neq("id", channelId)
+          // Uma caixa arquivada não é razão para manter a subscrição viva.
+          .is("archived_at", null);
         outrasCaixas = count ?? 0;
       }
 
@@ -1437,7 +2034,35 @@ Deno.serve(async (req) => {
       } else if (outrasCaixas > 0) {
         log("subscrição mantida — a conta ainda serve outra caixa", { [campo]: alvoId, outrasCaixas });
       }
-      return jsonRes({ ok: true });
+
+      // ARQUIVAR, não apagar.
+      //
+      // A linha da caixa era apagada pelo CRM logo a seguir a isto — e como
+      // `meta_conversations.channel_id` é ON DELETE CASCADE, ia atrás dela todo
+      // o histórico de conversas daquele canal. Um administrador que carregasse
+      // em "Remover" entre duas tentativas de ligar o WhatsApp perdia as
+      // mensagens dos clientes, sem retorno e sem aviso que o dissesse.
+      //
+      // Arquivada, a caixa deixa de receber e de enviar, sai dos índices únicos
+      // (o mesmo número pode voltar a ser ligado) e as conversas continuam
+      // legíveis na Caixa de Entrada. É o que "remover" tem de querer dizer
+      // quando o que lá está dentro é de outra pessoa.
+      const { error: arqErr } = await admin.from("messaging_channels")
+        .update({ archived_at: new Date().toISOString(), status: "disconnected" })
+        .eq("id", channelId)
+        .eq("organization_id", orgId);
+      if (arqErr) {
+        logError("falha a arquivar a caixa", { error: arqErr.message });
+        return jsonRes({ error: "Não foi possível arquivar a caixa." }, 500);
+      }
+
+      // O token já não serve para nada e não tem de continuar guardado.
+      await admin.from("messaging_channel_secrets").delete()
+        .eq("channel_id", channelId)
+        .then(() => {}, (e: unknown) => logError("token não removido", { e }));
+
+      log("caixa arquivada", { canal: channelId, orgId });
+      return jsonRes({ ok: true, archived: true });
     }
     // O WhatsApp entra pelo mesmo diálogo, com uma configuração própria no
     // painel da Meta (Embedded Signup) — daí o config_id poder mudar.
@@ -1567,7 +2192,9 @@ Deno.serve(async (req) => {
         <h1>${msg} <span class="tag">erro</span></h1>
         <pre><code>${JSON.stringify(tokenJson, null, 2).replace(/[<>]/g, "")}</code></pre>`, false);
     }
-    const userToken = String(tokenJson.access_token);
+    // Antes de mais nada: 60 dias em vez de duas horas. Os tokens das Páginas
+    // são tirados DESTE, e herdam a validade dele — a ordem importa.
+    const userToken = await tokenLongo(String(tokenJson.access_token), appId, appSecret);
 
     // 2. Páginas + Instagram ligado a cada uma
     const pagesRes = await fetch(
@@ -1632,15 +2259,26 @@ Deno.serve(async (req) => {
           // ainda estar em Acesso Padrão, e a Meta devolve uma lista vazia a
           // quem não tem cargo nela. Dizer "liga o Instagram" mandava a pessoa
           // mexer nas definições erradas.
-          ? "A Meta não devolveu nenhuma Página para esta conta. Confirma que tens um cargo de administrador numa Página do Facebook e que a autorizaste no ecrã anterior."
+          //
+          // As duas causas ficam nomeadas, porque só uma delas é do cliente: ou
+          // não escolheu a Página no ecrã da Meta, ou a app ainda não tem
+          // Acesso Avançado — e nesse caso não há nada que ele possa fazer.
+          ? "A Meta não devolveu nenhuma Página para esta conta. Duas causas possíveis: "
+            + "não selecionaste a Página no ecrã de autorização da Meta (repete e confirma "
+            + "que a Página aparece marcada), ou não tens cargo de administrador nela. "
+            + "Se a Página está lá e continua a falhar, o problema é do nosso lado — a app "
+            + "precisa de Acesso Avançado aprovado pela Meta. Fala connosco."
           : `Nenhuma das tuas Páginas (${nomes}) tem uma conta de Instagram Business ligada. Liga-a em facebook.com → Página → Definições → Instagram.`,
       }, origemPopup);
     }
 
     // Já ligadas? Tirar da lista em vez de rejeitar — senão, com várias Páginas,
     // a escolha caía sempre na mesma e as outras nunca chegavam a ser ligáveis.
+    // As arquivadas não contam: já não recebem nada, e mantê-las na lista
+    // impedia para sempre de voltar a ligar a mesma Página.
     const { data: jaLigadas } = await admin.from("messaging_channels")
-      .select("metadata").eq("organization_id", orgId).eq("channel_type", channelType);
+      .select("metadata").eq("organization_id", orgId).eq("channel_type", channelType)
+      .is("archived_at", null);
     const ligadas = new Set(
       (jaLigadas ?? []).map((c) => (c.metadata as { page_id?: string } | null)?.page_id).filter(Boolean),
     );
@@ -1653,27 +2291,121 @@ Deno.serve(async (req) => {
       }, origemPopup);
     }
 
-    // Uma Página escolhe-se sozinha; com várias, a primeira ainda não ligada —
-    // e repetir a ligação apanha a seguinte.
-    const target = candidates[0];
+    // COM VÁRIAS PÁGINAS, PERGUNTA-SE QUAL.
+    //
+    // Isto ligava `candidates[0]` — a primeira que a Meta devolvesse — e dizia
+    // ao cliente para repetir a ligação se quisesse outra. Para quem tem três
+    // Páginas (uma agência, ou uma empresa com marcas separadas) isso é ligar
+    // a errada e ter de adivinhar quantas vezes repetir.
+    //
+    // É exatamente o mesmo erro que já tinha acontecido no WhatsApp, onde a
+    // primeira conta devolvida era a de um CLIENTE. Ali resolveu-se a
+    // perguntar; aqui ficou por resolver. Passa a usar o mesmo mecanismo.
+    //
+    // O token fica no servidor: para o browser vai só o identificador da
+    // escolha e o que é preciso para desenhar a lista.
+    if (candidates.length > 1) {
+      const opcoes = candidates.map((c) => ({
+        page_id: c.id,
+        page_name: c.name,
+        ig_username: c.instagram_business_account?.username ?? null,
+      }));
 
-    // A mesma Página noutra organização entrega as mensagens dela a quem a
-    // ligou primeiro: o webhook resolve por page_id e devolve UMA linha. Duas
-    // organizações a partilhar a Página é isolamento partido, não um aviso.
-    const { data: noutraOrg } = await admin.from("messaging_channels")
-      .select("id").eq("channel_type", channelType)
-      .eq("metadata->>page_id", target.id).neq("organization_id", orgId).maybeSingle();
-    if (noutraOrg) {
-      return popupDone({
-        error: "Esta Página já está ligada noutra conta do Senvia OS. "
-          + "Desliga-a lá primeiro, ou fala connosco para a transferirmos.",
-      }, origemPopup);
+      const { data: pendente, error: pendErr } = await admin
+        .from("meta_pending_connections")
+        .insert({
+          organization_id: orgId,
+          connect: channelType,
+          label: state.label || null,
+          user_token: userToken,
+          options: opcoes,
+        }).select("id").single();
+
+      if (pendente && !pendErr) {
+        return popupDone({
+          needs_choice: true,
+          connect: channelType,
+          pending_id: pendente.id,
+          options: opcoes,
+        }, origemPopup);
+      }
+
+      // Não conseguir guardar a escolha não pode custar a ligação inteira: se
+      // isto falhar, segue-se com a primeira, que é o que acontecia sempre.
+      logError("escolha de Página não guardada — a seguir com a primeira", {
+        error: pendErr?.message,
+      });
     }
 
-    const defaultLabel = wantsInstagram
-      ? `@${target.instagram_business_account!.username}`
-      : target.name;
-    const label = (state.label || defaultLabel).trim();
+    return await criarCaixaPagina({
+      admin,
+      target: candidates[0],
+      channelType,
+      orgId,
+      label: state.label,
+      userToken,
+      origem: origemPopup,
+      restantes: candidates.length - 1,
+    });
+  } catch (e) {
+    logError("erro inesperado", { error: (e as Error).message });
+    return stateRaw
+      ? popupDone({ error: (e as Error).message }, origemPopup)
+      : page("Erro", `<h1>Erro <span class="tag">erro</span></h1><p><code>${(e as Error).message.replace(/[<>]/g, "")}</code></p>`, false);
+  }
+});
+
+/**
+ * Cria a caixa de uma Página já escolhida (Instagram ou Messenger).
+ *
+ * Estava tudo escrito dentro do callback do OAuth, o que o tornava
+ * inalcançável a partir de qualquer outro sítio — e foi por isso que a escolha
+ * entre várias Páginas nunca chegou a existir aqui, ao contrário do WhatsApp.
+ * Serve agora os dois chamadores: o callback (que responde ao POPUP) e a
+ * escolha feita no CRM (que responde a um FETCH).
+ */
+// deno-lint-ignore no-explicit-any
+async function criarCaixaPagina(p: {
+  // deno-lint-ignore no-explicit-any
+  admin: any;
+  target: MetaPage;
+  channelType: string;
+  orgId: string;
+  label?: string;
+  userToken: string;
+  origem: string | null;
+  comoJson?: boolean;
+  restantes?: number;
+}): Promise<Response> {
+  const { admin, target, channelType, orgId, userToken, origem } = p;
+  const wantsInstagram = channelType === "instagram";
+
+  const responder = (payload: Record<string, unknown>, status = 200) =>
+    p.comoJson
+      ? new Response(JSON.stringify(payload), {
+        status: payload.error ? (status === 200 ? 400 : status) : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+      : popupDone(payload, origem);
+
+  // A mesma Página noutra organização entrega as mensagens dela a quem a
+  // ligou primeiro: o webhook resolve por page_id e devolve UMA linha. Duas
+  // organizações a partilhar a Página é isolamento partido, não um aviso.
+  const { data: noutraOrg } = await admin.from("messaging_channels")
+    .select("id").eq("channel_type", channelType)
+    .eq("metadata->>page_id", target.id).neq("organization_id", orgId)
+    .is("archived_at", null).maybeSingle();
+  if (noutraOrg) {
+    return responder({
+      error: "Esta Página já está ligada noutra conta do Senvia OS. "
+        + "Desliga-a lá primeiro, ou fala connosco para a transferirmos.",
+    }, 409);
+  }
+
+  const defaultLabel = wantsInstagram
+    ? `@${target.instagram_business_account?.username ?? target.name}`
+    : target.name;
+  const label = (p.label || defaultLabel).trim();
 
     // Subscrever a Página aos nossos webhooks. SEM ISTO a Meta não envia
     // mensagem nenhuma — a ligação fica feita e a caixa aparece vazia para
@@ -1737,11 +2469,11 @@ Deno.serve(async (req) => {
 
     if (!sub.ok) {
       logError("subscrição da Página falhou", { status: sub.status, subJson: sub.corpo });
-      return popupDone({
+      return responder({
         error: `A Página foi autorizada mas não conseguimos subscrever as mensagens: ${
           sub.corpo?.error?.message ?? sub.status
         }`,
-      }, origemPopup);
+      }, 502);
     }
     log("Página subscrita", { pageId: target.id, subFields });
 
@@ -1752,6 +2484,8 @@ Deno.serve(async (req) => {
       status: "connected",
       label,
       metadata: {
+        // Quem autorizou — é por aqui que a desautorização encontra a caixa.
+        meta_user_id: await idDoUtilizadorMeta(userToken),
         page_id: target.id,
         page_name: target.name,
         ig_account_id: target.instagram_business_account?.id ?? null,
@@ -1762,7 +2496,7 @@ Deno.serve(async (req) => {
 
     if (insertErr || !novoCanal) {
       logError("insert falhou", { error: insertErr?.message });
-      return popupDone({ error: "Erro ao guardar a caixa na base de dados." }, origemPopup);
+      return responder({ error: "Erro ao guardar a caixa na base de dados." }, 500);
     }
 
     // O token da Página vai para uma tabela à parte, com RLS e ZERO políticas:
@@ -1779,22 +2513,16 @@ Deno.serve(async (req) => {
       // Sem token não se envia nada — mais vale não deixar a caixa meia-feita.
       logError("falha a guardar o token", { error: segredoErr.message });
       await admin.from("messaging_channels").delete().eq("id", novoCanal.id);
-      return popupDone({ error: "Erro ao guardar as credenciais da Página. Tenta novamente." }, origemPopup);
+      return responder({ error: "Erro ao guardar as credenciais da Página. Tenta novamente." }, 500);
     }
 
     log("caixa criada", { orgId, channelType, page: target.name });
-    return popupDone({
+    return responder({
       success: true,
       channel_type: channelType,
       label,
       ig_username: target.instagram_business_account?.username ?? null,
       page_name: target.name,
-      remaining: candidates.length - 1,
-    }, origemPopup);
-  } catch (e) {
-    logError("erro inesperado", { error: (e as Error).message });
-    return stateRaw
-      ? popupDone({ error: (e as Error).message }, origemPopup)
-      : page("Erro", `<h1>Erro <span class="tag">erro</span></h1><p><code>${(e as Error).message.replace(/[<>]/g, "")}</code></p>`, false);
-  }
-});
+      remaining: p.restantes ?? 0,
+    });
+}

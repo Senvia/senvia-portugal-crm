@@ -1,0 +1,15 @@
+-- Adenda à auditoria: a função nova `meta-media` precisa de poder perguntar
+-- quem pode aceder a uma caixa.
+--
+-- `pode_aceder_caixa` foi criada com `REVOKE EXECUTE FROM PUBLIC` seguido de
+-- `GRANT ... TO authenticated`. O `service_role` — que é quem corre as edge
+-- functions — mantém o direito por via das permissões por omissão do Supabase,
+-- e por isso isto funciona hoje.
+--
+-- Mas "funciona por via de uma permissão que ninguém escreveu" é exatamente o
+-- tipo de coisa que se parte numa restauração ou num projeto novo, e o sintoma
+-- seria mudo: as fotografias que os clientes enviam por WhatsApp deixavam de
+-- abrir com "permission denied for function pode_aceder_caixa" nos registos.
+--
+-- Uma linha explícita fecha essa porta. É idempotente.
+GRANT EXECUTE ON FUNCTION public.pode_aceder_caixa(UUID, UUID) TO service_role;

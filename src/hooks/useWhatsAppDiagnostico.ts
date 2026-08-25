@@ -28,6 +28,14 @@ export interface CaixaDiagnostico {
   id: string;
   label: string | null;
   status: string | null;
+  /**
+   * 'whatsapp' | 'instagram' | 'facebook'.
+   *
+   * O diagnóstico passou a cobrir os três: o Instagram e o Messenger tinham
+   * exatamente o mesmo sintoma — "ligada e calada" — e nenhuma forma de o
+   * examinar sem ser a olho.
+   */
+  channel_type?: string;
   phone_number_id: string | null;
   waba_id: string | null;
   achados: Achado[];

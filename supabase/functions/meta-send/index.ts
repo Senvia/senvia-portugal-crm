@@ -62,7 +62,7 @@ async function enviarWhatsApp(p: any): Promise<Response> {
   const {
     admin, conv, channel, token, numeroId,
     text, temTexto, attachment_url, attachment_type, action,
-    message_external_id, reaction, reply_to_mid, userId,
+    message_external_id, reaction, reply_to_mid, userId, template,
   } = p;
 
   // "A escrever" e "visto" não existem nesta API. Devolve-se sucesso em vez de
@@ -84,6 +84,38 @@ async function enviarWhatsApp(p: any): Promise<Response> {
       type: "reaction",
       // Emoji vazio = retirar a reação. É assim que a API o diz.
       reaction: { message_id: message_external_id, emoji: action === "react" ? (reaction || "❤️") : "" },
+    };
+  } else if (action === "send_template") {
+    /**
+     * Modelo aprovado — a única mensagem que a Meta aceita fora das 24 horas.
+     *
+     * O formato é rígido e a Meta não perdoa: os parâmetros vão POR
+     * COMPONENTE (cabeçalho, corpo) e PELA ORDEM das variáveis do modelo
+     * ({{1}}, {{2}}, …). Um parâmetro a mais ou a menos e a resposta é o
+     * #132000, que diz "number of parameters does not match" e mais nada.
+     */
+    if (!template?.name || !template?.language) {
+      return json({ error: "Modelo sem nome ou sem idioma." }, 400);
+    }
+
+    const parametros = (vs: unknown): Array<Record<string, unknown>> =>
+      (Array.isArray(vs) ? vs : []).map((v) => ({ type: "text", text: String(v ?? "") }));
+
+    const componentes: Array<Record<string, unknown>> = [];
+    const cab = parametros(template.variables?.header);
+    if (cab.length) componentes.push({ type: "header", parameters: cab });
+    const corpoVars = parametros(template.variables?.body);
+    if (corpoVars.length) componentes.push({ type: "body", parameters: corpoVars });
+
+    corpo = {
+      messaging_product: "whatsapp",
+      to: conv.contact_ref,
+      type: "template",
+      template: {
+        name: String(template.name),
+        language: { code: String(template.language) },
+        ...(componentes.length ? { components: componentes } : {}),
+      },
     };
   } else if (attachment_url) {
     const tipo = ["image", "video", "audio", "document"].includes(String(attachment_type))
@@ -124,6 +156,14 @@ async function enviarWhatsApp(p: any): Promise<Response> {
     const msg = e?.code === 131047 || /24 hours|re-engagement/i.test(e?.message ?? "")
       ? "Passaram mais de 24 horas desde a última mensagem desta pessoa. "
         + "Fora desse prazo o WhatsApp só permite enviar um modelo aprovado pela Meta."
+      // Os dois erros de modelo que aparecem a sério, e que a mensagem crua da
+      // Meta não explica a ninguém.
+      : e?.code === 132000
+      ? "O número de campos preenchidos não corresponde ao que o modelo espera. "
+        + "Sincroniza os modelos e tenta outra vez."
+      : e?.code === 132001 || e?.code === 132015
+      ? "Este modelo não está aprovado (ou foi pausado) para este idioma. "
+        + "Escolhe outro, ou confirma o estado no painel da Meta."
       : (e?.message ?? `O WhatsApp recusou o envio (${res.status})`);
     return json({ error: msg, code: e?.code ?? null }, 502);
   }
@@ -141,14 +181,24 @@ async function enviarWhatsApp(p: any): Promise<Response> {
   }
 
   const wamid = resposta?.messages?.[0]?.id ?? null;
-  const resumo = temTexto ? String(text) : `[${attachment_type || "anexo"}]`;
+
+  // O que fica escrito na conversa.
+  //
+  // Num modelo não há `text`: o que se manda é o nome do modelo e as variáveis.
+  // O compositor envia o `preview` — o corpo já com as variáveis preenchidas —
+  // porque é isso que a pessoa do outro lado vai ler, e é isso que o agente
+  // tem de ver aqui daqui a três dias.
+  const textoModelo = action === "send_template"
+    ? String(template?.preview ?? `[modelo: ${template?.name ?? "?"}]`)
+    : null;
+  const resumo = textoModelo ?? (temTexto ? String(text) : `[${attachment_type || "anexo"}]`);
 
   const { error: insErr } = await admin.from("meta_messages").insert({
     organization_id: conv.organization_id,
     conversation_id: conv.id,
     external_id: wamid,
     direction: "outgoing",
-    content: temTexto ? String(text) : null,
+    content: textoModelo ?? (temTexto ? String(text) : null),
     reply_to_external_id: reply_to_mid ?? null,
     attachments: attachment_url ? [{ type: attachment_type || "document", url: attachment_url }] : [],
     sent_by: userId,
@@ -191,10 +241,14 @@ Deno.serve(async (req) => {
       conversation_id, text,
       // Anexo por URL (a Meta vai buscá-lo, por isso tem de ser público).
       attachment_url, attachment_type,
-      // "react" / "unreact" / "typing_on" / "typing_off" / "mark_seen"
+      // "react" / "unreact" / "typing_on" / "typing_off" / "mark_seen" /
+      // "send_template"
       action, message_external_id, reaction,
       // Responder A uma mensagem concreta (o `mid` dela, do lado da Meta).
       reply_to_mid,
+      // Modelo aprovado, para reabrir uma conversa fora das 24 horas:
+      // { name, language, variables: { body: [...], header: [...] } }
+      template,
     } = await req.json().catch(() => ({}));
 
     const temTexto = !!String(text ?? "").trim();
@@ -202,12 +256,10 @@ Deno.serve(async (req) => {
     if (!temTexto && !attachment_url && !action) {
       return json({ error: "Nada para enviar" }, 400);
     }
-    // Limite da Meta: 1000 bytes, não 1000 caracteres — acentos contam a dobrar.
-    if (temTexto && new TextEncoder().encode(String(text)).length > 1000) {
-      return json({
-        error: "A mensagem excede o limite de 1000 bytes do Instagram. Divide-a em duas.",
-      }, 400);
-    }
+    // O limite de tamanho é verificado MAIS ABAIXO, depois de se saber qual é o
+    // canal: aqui em cima aplicava-se o limite do Instagram (1000 bytes) a
+    // tudo, e recusava mensagens de WhatsApp perfeitamente válidas — o WhatsApp
+    // aceita 4096 caracteres — com uma frase que falava do Instagram.
 
     const { data: conv } = await admin
       .from("meta_conversations")
@@ -235,7 +287,12 @@ Deno.serve(async (req) => {
     // As ações de sinalização (a escrever, visto) não contam como mensagem, por
     // isso não são bloqueadas por ela.
     const acaoSinal = action === "typing_on" || action === "typing_off" || action === "mark_seen";
-    if (!acaoSinal && conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
+    // Um modelo aprovado é EXATAMENTE o que a Meta permite fora da janela — é
+    // para isso que os modelos existem. Bloqueá-lo aqui era fechar a única
+    // porta que estava aberta.
+    const ehModelo = action === "send_template";
+    if (!acaoSinal && !ehModelo
+      && conv.window_expires_at && new Date(conv.window_expires_at) < new Date()) {
       return json({
         error: "Passaram mais de 24 horas desde a última mensagem desta pessoa. "
           + "A Meta só permite responder dentro desse prazo — só é possível "
@@ -249,10 +306,22 @@ Deno.serve(async (req) => {
     // organization_id) e passar a enviar pela Página de outra organização.
     const { data: channel } = await admin
       .from("messaging_channels")
-      .select("metadata, channel_type")
+      .select("metadata, channel_type, archived_at, label")
       .eq("id", conv.channel_id)
       .eq("organization_id", conv.organization_id)
       .maybeSingle();
+
+    // Caixa arquivada: as conversas continuam legíveis — é o ponto de arquivar
+    // em vez de apagar — mas já não se envia por ela. A subscrição na Meta foi
+    // removida e o token apagado; tentar seria um erro do Graph que ninguém
+    // consegue interpretar.
+    if (channel?.archived_at) {
+      return json({
+        error: `A caixa "${channel.label ?? "desta conversa"}" está arquivada. `
+          + "O histórico continua aqui, mas para voltar a responder tens de a ligar outra vez.",
+        code: "channel_archived",
+      }, 409);
+    }
     // O token vive fora do metadata: aquela tabela é legível por qualquer membro.
     const { data: secret } = await admin
       .from("messaging_channel_secrets")
@@ -271,11 +340,35 @@ Deno.serve(async (req) => {
       return json({ error: "Canal sem credenciais — volta a ligar a conta." }, 400);
     }
 
+    // O limite é DE CADA CANAL, e só se sabe qual é depois de saber qual é o
+    // canal. O Instagram e o Messenger contam BYTES (1000) — um acento conta
+    // por dois; o WhatsApp conta caracteres (4096).
+    if (temTexto) {
+      const t = String(text);
+      if (ehWhatsApp && [...t].length > 4096) {
+        return json({
+          error: "A mensagem excede o limite de 4096 caracteres do WhatsApp. Divide-a em duas.",
+        }, 400);
+      }
+      if (!ehWhatsApp && new TextEncoder().encode(t).length > 1000) {
+        return json({
+          error: "A mensagem excede o limite de 1000 bytes da Meta para este canal "
+            + "(os acentos contam a dobrar). Divide-a em duas.",
+        }, 400);
+      }
+    }
+
+    if (ehModelo && !ehWhatsApp) {
+      return json({
+        error: "Os modelos de mensagem só existem no WhatsApp.",
+      }, 400);
+    }
+
     if (ehWhatsApp) {
       return await enviarWhatsApp({
         admin, conv, channel, token: pageToken, numeroId: meta.phone_number_id!,
         text, temTexto, attachment_url, attachment_type, action,
-        message_external_id, reaction, reply_to_mid, userId: user.id,
+        message_external_id, reaction, reply_to_mid, userId: user.id, template,
       });
     }
 

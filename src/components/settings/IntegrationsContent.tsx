@@ -21,7 +21,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook, useOrganization } from "@/hooks/useOrganization";
 import { MetaConversionsForm } from "./MetaConversionsForm";
 import { OrgPixelsForm } from "./OrgPixelsForm";
-import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useDeleteChannel, useFinishMetaChoice, type OpcaoNumero } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useUpdateChannelAssignment, useUpdateChannelGroups, useConnectMetaChannel, useArchiveChannel, useFinishMetaChoice, ehPagina, type OpcaoConta } from "@/hooks/useMessagingChannels";
 import { useWhatsAppPairing } from "@/hooks/useWhatsAppPairing";
 import { useWhatsAppDiagnostico } from "@/hooks/useWhatsAppDiagnostico";
 import { WhatsAppDiagnosticoDialog } from "./WhatsAppDiagnosticoDialog";
@@ -1016,7 +1016,7 @@ function InboxesManager() {
   const { organization } = useAuth();
   const { toast } = useToast();
   const deleteEmailChannel = useDeleteEmailChannel();
-  const deleteChannel = useDeleteChannel();
+  const archiveChannel = useArchiveChannel();
   const updateAssign = useUpdateChannelAssignment();
   const updateGroups = useUpdateChannelGroups();
 
@@ -1054,7 +1054,9 @@ function InboxesManager() {
   // messaging_channels row (WhatsApp, Email, ...), so channels.length is the count.
   const overrideInboxes = (organization as { max_inboxes_override?: number | null } | null)?.max_inboxes_override;
   const maxInboxes = overrideInboxes ?? limits.maxInboxes;
-  const inboxCount = channels.length;
+  // As arquivadas não ocupam lugar no plano: já não recebem nem enviam, só
+  // guardam o histórico. Contá-las era cobrar por uma caixa desligada.
+  const inboxCount = channels.filter((c) => !c.archived_at).length;
   const atInboxLimit = maxInboxes != null && inboxCount >= maxInboxes;
 
   // Returns true (and warns) when the org has hit its caixa limit — callers bail.
@@ -1088,7 +1090,12 @@ function InboxesManager() {
   // O que fica é o que se mediu: o popup criou caixas; o SDK nunca criou
   // nenhuma.
   // Contas entre as quais escolher, quando a autorização abrange mais do que uma.
-  const [escolha, setEscolha] = useState<{ pendingId: string; opcoes: OpcaoNumero[] } | null>(null);
+  // A escolha existe nos três canais: números de WhatsApp e Páginas do
+  // Facebook/Instagram. O `connect` diz qual, para o diálogo falar a língua
+  // certa — "número" e "Página" não são a mesma coisa para quem lê.
+  const [escolha, setEscolha] = useState<
+    { pendingId: string; connect: string; opcoes: OpcaoConta[] } | null
+  >(null);
 
   // Concluir o emparelhamento de Coexistence: corre o assistente da Meta pelo
   // SDK (só ele regista o número) e pede contactos e histórico. É o único sítio
@@ -1140,7 +1147,11 @@ function InboxesManager() {
           // `in` em vez de `data.needs_choice`: o TypeScript só estreita o tipo
           // pela presença da chave, porque a outra variante tem-na opcional.
           if ('pending_id' in data) {
-            setEscolha({ pendingId: data.pending_id, opcoes: data.options });
+            setEscolha({
+              pendingId: data.pending_id,
+              connect: data.connect,
+              opcoes: data.options,
+            });
             return;
           }
 
@@ -1300,7 +1311,7 @@ function InboxesManager() {
                   {/* O diagnóstico só lê — não altera nada — e é o que
                       distingue "a Meta não nos deixa" de "o CRM tem um bug".
                       Fica como ícone para não empurrar os outros dois botões. */}
-                  {ch.channel_type === 'whatsapp' && (
+                  {ch.channel_type === 'whatsapp' && !ch.archived_at && (
                     <button
                       type="button"
                       onClick={correrDiagnostico}
@@ -1310,14 +1321,22 @@ function InboxesManager() {
                       <Stethoscope className="h-4 w-4" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setToDelete({ id: ch.id, type: ch.channel_type })}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                    title="Remover caixa"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {/* Já arquivada não se arquiva outra vez. E não se apaga:
+                      as conversas dela continuam na Caixa de Entrada. */}
+                  {ch.archived_at ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Arquivada
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setToDelete({ id: ch.id, type: ch.channel_type })}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                      title="Arquivar caixa"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1373,50 +1392,83 @@ function InboxesManager() {
       <Dialog open={!!escolha} onOpenChange={(o) => !o && setEscolha(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Qual número queres ligar?</DialogTitle>
+            <DialogTitle>
+              {escolha?.connect === 'whatsapp'
+                ? 'Qual número queres ligar?'
+                : 'Qual Página queres ligar?'}
+            </DialogTitle>
             <DialogDescription>
-              A tua autorização dá acesso a {escolha?.opcoes.length} números. Escolhe o
-              que vai receber e responder no Senvia OS.
+              A tua autorização dá acesso a {escolha?.opcoes.length}
+              {escolha?.connect === 'whatsapp' ? ' números' : ' Páginas'}. Escolhe
+              {escolha?.connect === 'whatsapp' ? ' o' : ' a'} que vai receber e responder
+              no Senvia OS.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {escolha?.opcoes.map((o) => (
-              <button
-                key={o.phone_number_id}
-                type="button"
-                disabled={finishChoice.isPending}
-                onClick={() => finishChoice.mutate(
-                  { pendingId: escolha.pendingId, phoneNumberId: o.phone_number_id },
-                  {
-                    onSuccess: (d) => {
-                      setEscolha(null);
-                      toast({ title: 'WhatsApp ligado', description: `${d.label} conectado` });
+            {escolha?.opcoes.map((o) => {
+              // Cada canal tem o seu identificador e o seu ícone; o resto do
+              // botão é o mesmo, e duplicá-lo seria duplicar o próximo erro.
+              const pagina = ehPagina(o);
+              const id = pagina ? o.page_id : o.phone_number_id;
+              const titulo = pagina
+                ? (o.ig_username ? `@${o.ig_username}` : (o.page_name ?? o.page_id))
+                : (o.verified_name || o.display_phone_number || o.phone_number_id);
+              const subtitulo = pagina
+                ? (o.ig_username ? o.page_name ?? '' : 'Página do Facebook')
+                : `${o.display_phone_number ?? ''}${o.waba_name ? ` · ${o.waba_name}` : ''}`;
+              const Icon = pagina
+                ? (escolha.connect === 'instagram' ? InstagramIcon : MessengerIcon)
+                : WhatsAppIcon;
+              const cor = pagina
+                ? (escolha.connect === 'instagram'
+                  ? { fg: 'text-[#E4405F]', bg: 'bg-[#E4405F]/10' }
+                  : { fg: 'text-[#0084FF]', bg: 'bg-[#0084FF]/10' })
+                : { fg: 'text-[#25D366]', bg: 'bg-[#25D366]/10' };
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={finishChoice.isPending}
+                  onClick={() => finishChoice.mutate(
+                    pagina
+                      ? { pendingId: escolha.pendingId, pageId: id }
+                      : { pendingId: escolha.pendingId, phoneNumberId: id },
+                    {
+                      onSuccess: (d) => {
+                        setEscolha(null);
+                        toast({
+                          title: `${{
+                            whatsapp: 'WhatsApp',
+                            instagram: 'Instagram',
+                            facebook: 'Messenger',
+                          }[escolha.connect] ?? 'Caixa'} ligado`,
+                          description: `${d.label} conectado`,
+                        });
+                      },
+                      onError: (e) => toast({
+                        title: 'Não foi possível ligar',
+                        description: (e as Error).message,
+                        variant: 'destructive',
+                      }),
                     },
-                    onError: (e) => toast({
-                      title: 'Não foi possível ligar',
-                      description: (e as Error).message,
-                      variant: 'destructive',
-                    }),
-                  },
-                )}
-                className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/50 disabled:opacity-50"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/10">
-                  <WhatsAppIcon className="h-5 w-5 text-[#25D366]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {o.verified_name || o.display_phone_number || o.phone_number_id}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {o.display_phone_number}
+                  )}
+                  className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/50 disabled:opacity-50"
+                >
+                  <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', cor.bg)}>
+                    <Icon className={cn('h-5 w-5', cor.fg)} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{titulo}</p>
                     {/* O nome da conta é o que distingue "a minha" da "do cliente". */}
-                    {o.waba_name ? ` · ${o.waba_name}` : ''}
-                  </p>
-                </div>
-                {finishChoice.isPending && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
-              </button>
-            ))}
+                    {subtitulo && (
+                      <p className="truncate text-xs text-muted-foreground">{subtitulo}</p>
+                    )}
+                  </div>
+                  {finishChoice.isPending && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+                </button>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>
@@ -1426,7 +1478,7 @@ function InboxesManager() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Nova caixa de entrada</DialogTitle>
-            <DialogDescription>Escolhe o canal e dá-lhe um nome.</DialogDescription>
+            <DialogDescription>Escolhe o canal. O nome vem da conta que ligares — podes mudá-lo depois.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 mt-1">
             {CHANNEL_CATALOG.map((c) => {
@@ -1463,12 +1515,23 @@ function InboxesManager() {
               );
             })}
           </div>
-          {/* Este bloco ligava o WhatsApp diretamente, sem passar pelo catálogo
-              acima — deixá-lo aqui tornaria o "Brevemente" decorativo. */}
-          {(
+          {/* Este texto dizia "WhatsApp, Instagram e Facebook estão a caminho.
+              Por agora, a Caixa de Entrada trabalha com email" — em cima dos
+              três botões que já funcionavam. Todos os clientes liam que o
+              produto não fazia aquilo que estavam a ver funcionar.
+
+              Passa a dizer o que ainda falta, e só quando falta mesmo alguma
+              coisa: é a lista de canais que decide, não uma frase escrita à
+              mão que ninguém volta a ler. */}
+          {CHANNEL_CATALOG.some((c) => !c.available) ? (
             <p className="border-t pt-4 text-xs text-muted-foreground">
-              WhatsApp, Instagram e Facebook estão a caminho. Por agora, a Caixa de Entrada
-              trabalha com email.
+              {CHANNEL_CATALOG.filter((c) => !c.available).map((c) => c.label).join(', ')}
+              {' '}ainda {CHANNEL_CATALOG.filter((c) => !c.available).length === 1 ? 'está' : 'estão'} a caminho.
+            </p>
+          ) : (
+            <p className="border-t pt-4 text-xs text-muted-foreground">
+              Vais autorizar a ligação numa janela da Meta. Escolhe lá a conta que queres
+              ligar — se tiveres mais do que uma, perguntamos qual a seguir.
             </p>
           )}
         </DialogContent>
@@ -1477,9 +1540,18 @@ function InboxesManager() {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover esta caixa?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {toDelete?.type === 'email' ? 'Remover esta caixa?' : 'Arquivar esta caixa?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              A caixa deixa de aparecer no CRM e as mensagens desse canal deixam de ser geridas aqui. Esta ação não pode ser anulada.
+              {toDelete?.type === 'email'
+                ? 'A caixa deixa de aparecer no CRM e as mensagens desse canal deixam de ser geridas aqui. Esta ação não pode ser anulada.'
+                // Isto dizia "não pode ser anulada" e era literalmente verdade:
+                // apagava a caixa E, por cascata, todas as conversas dela. Já
+                // não é o que acontece, e a frase tinha de deixar de o dizer.
+                : 'A caixa deixa de receber e de enviar mensagens, e liberta o lugar no plano. '
+                  + 'As conversas e o histórico ficam na Caixa de Entrada para consulta. '
+                  + 'Podes voltar a ligar a conta quando quiseres.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1488,15 +1560,16 @@ function InboxesManager() {
               onClick={() => {
                 if (!toDelete) return;
                 // Cada tipo tem o seu caminho: o email passa pela função
-                // email-inbox (mexe em credenciais IMAP/SMTP), os outros apagam
-                // a linha. Mandar tudo para o email dava 404 ao apagar Instagram.
+                // email-inbox (mexe em credenciais IMAP/SMTP); os canais da
+                // Meta arquivam-se pela meta-connect, que também avisa a Meta
+                // para parar de enviar e apaga o token.
                 if (toDelete.type === 'email') deleteEmailChannel.mutate(toDelete.id);
-                else deleteChannel.mutate(toDelete.id);
+                else archiveChannel.mutate(toDelete.id);
                 setToDelete(null);
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remover
+              {toDelete?.type === 'email' ? 'Remover' : 'Arquivar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

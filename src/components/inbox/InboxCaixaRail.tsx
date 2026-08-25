@@ -200,9 +200,21 @@ export function InboxCaixaRail({
                 active ? 'bg-primary/10 font-semibold text-primary' : 'text-foreground/80 hover:bg-accent',
               )}
             >
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dotColor(ch) }} />
-              <span className="min-w-0 flex-1 truncate text-left">{ch.label || 'WhatsApp'}</span>
-              <CountBadge n={unreadFor(ch)} active={active} />
+              <span
+                className={cn('h-2.5 w-2.5 shrink-0 rounded-full', ch.archived_at && 'opacity-40')}
+                style={{ background: dotColor(ch) }}
+              />
+              <span className={cn(
+                'min-w-0 flex-1 truncate text-left',
+                // Arquivada: continua na lista, porque as conversas continuam lá
+                // para se lerem — mas não se confunde com uma caixa a receber.
+                ch.archived_at && 'text-muted-foreground',
+              )}>
+                {ch.label || 'WhatsApp'}
+              </span>
+              {ch.archived_at
+                ? <span className="shrink-0 text-[10px] text-muted-foreground">arquivada</span>
+                : <CountBadge n={unreadFor(ch)} active={active} />}
             </button>
           );
         })}

@@ -23,6 +23,16 @@ export interface MessagingChannel {
   rotate_enabled: boolean;
   color: string | null;
   metadata: Record<string, unknown> | null;
+  /**
+   * Caixa desligada mas CONSERVADA.
+   *
+   * Substitui o que antes era um `delete` na linha — e como as conversas têm
+   * `ON DELETE CASCADE` para cá, esse delete levava atrás todo o histórico de
+   * mensagens do canal. Arquivada, a caixa não recebe nem envia, mas continua
+   * na Caixa de Entrada e as conversas continuam legíveis. Tirar o acesso ao
+   * que um cliente escreveu conta como apagá-lo.
+   */
+  archived_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -66,7 +76,7 @@ export function useMessagingChannels() {
         .select(
           'id, organization_id, channel_type, provider, label, evolution_instance,'
           + ' chatwoot_inbox_id, status, phone_number, assigned_user_ids, rotate_enabled,'
-          + ' color, created_at, updated_at, metadata_public',
+          + ' color, archived_at, created_at, updated_at, metadata_public',
         )
         .eq('organization_id', organization.id)
         // Stable order: without it Postgres returns rows in physical/heap order,
@@ -183,6 +193,28 @@ export interface OpcaoNumero {
 }
 
 /**
+ * Uma Página do Facebook entre as quais escolher.
+ *
+ * O Instagram e o Messenger ligavam a PRIMEIRA Página que a Meta devolvesse, e
+ * quem tivesse três ficava com a errada e tinha de repetir a ligação até
+ * calhar. É o mesmo erro que já tinha acontecido no WhatsApp — ali resolveu-se
+ * a perguntar, aqui tinha ficado por resolver.
+ */
+export interface OpcaoPagina {
+  page_id: string;
+  page_name: string | null;
+  ig_username: string | null;
+}
+
+/** Uma conta entre as quais escolher, seja qual for o canal. */
+export type OpcaoConta = OpcaoNumero | OpcaoPagina;
+
+/** Distingue as duas sem depender do canal declarado. */
+export function ehPagina(o: OpcaoConta): o is OpcaoPagina {
+  return 'page_id' in o;
+}
+
+/**
  * O que a ligação devolve.
  *
  * Pode acabar de duas maneiras: ligada, ou à espera de escolha. A segunda existe
@@ -191,22 +223,28 @@ export interface OpcaoNumero {
  */
 export type MetaConnectResult =
   | { channel_type: string; label: string; ig_username?: string | null; needs_choice?: false }
-  | { needs_choice: true; connect: string; pending_id: string; options: OpcaoNumero[] };
+  | { needs_choice: true; connect: string; pending_id: string; options: OpcaoConta[] };
 
-/** Conclui uma ligação depois de escolhido o número. */
+/** Conclui uma ligação depois de escolhida a conta (número ou Página). */
 export function useFinishMetaChoice() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ pendingId, phoneNumberId }: { pendingId: string; phoneNumberId: string }) => {
+    mutationFn: async (
+      { pendingId, phoneNumberId, pageId }:
+        { pendingId: string; phoneNumberId?: string; pageId?: string },
+    ) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       const { data, error } = await supabase.functions.invoke('meta-connect', {
         body: {
           action: 'finish_choice',
           organization_id: organization.id,
           pending_id: pendingId,
+          // Só um deles vai preenchido; o servidor sabe qual esperar pelo canal
+          // que guardou com a escolha.
           phone_number_id: phoneNumberId,
+          page_id: pageId,
         },
       });
       if (error) {
@@ -273,8 +311,13 @@ export function useConnectMetaChannel() {
           .select('channel_type, label, metadata_public')
           .eq('organization_id', organization.id)
           .eq('channel_type', wanted)
-          .gte('created_at', before)
-          .order('created_at', { ascending: false })
+          // `updated_at` e não `created_at`: voltar a ligar um número que já
+          // existia (ou reviver uma caixa arquivada) ATUALIZA a linha em vez de
+          // criar outra — e por `created_at` a busca não encontrava nada, o que
+          // dava "a ligação não chegou ao fim" depois de ter corrido bem.
+          .gte('updated_at', before)
+          .is('archived_at', null)
+          .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         if (!criada) return null;
@@ -283,6 +326,30 @@ export function useConnectMetaChannel() {
           label: criada.label ?? '',
           ig_username: (criada.metadata_public as { ig_username?: string } | null)?.ig_username ?? null,
         } as MetaConnectResult;
+      };
+
+      /**
+       * A outra maneira de acabar: a autorização abrange várias contas e ficou
+       * uma escolha à espera.
+       *
+       * Sem isto, o caminho de recurso só sabia procurar uma caixa CRIADA — e
+       * uma ligação que para à espera de escolha não cria nenhuma. No WhatsApp,
+       * onde o browser corta a referência à janela por causa do COOP, isso
+       * significava autorizar tudo, ter três números para escolher, e o CRM
+       * dizer ao fim de oito minutos que a ligação não chegou ao fim.
+       */
+      const procurarEscolha = async (): Promise<MetaConnectResult | null> => {
+        const { data } = await supabase.functions.invoke('meta-connect', {
+          body: { action: 'pending_choice', organization_id: organization.id },
+        });
+        const p = (data as { pending?: { pending_id: string; connect: string; options: OpcaoConta[] } | null })?.pending;
+        if (!p) return null;
+        return {
+          needs_choice: true,
+          connect: p.connect,
+          pending_id: p.pending_id,
+          options: p.options,
+        };
       };
 
       const result = await new Promise<MetaConnectResult | null>(
@@ -311,6 +378,9 @@ export function useConnectMetaChannel() {
             if (!cortada) return;
             const caixa = await procurarCaixa();
             if (caixa) { cleanup(); resolve(caixa); return; }
+            // Nada criado — mas pode estar uma escolha à espera.
+            const escolha = await procurarEscolha();
+            if (escolha) { cleanup(); resolve(escolha); return; }
             // Sem referência à janela não há como distinguir "ainda a preencher"
             // de "desistiu". Espera-se o tempo de um assistente com verificação
             // por SMS e desiste-se com uma mensagem honesta.
@@ -333,7 +403,10 @@ export function useConnectMetaChannel() {
       // Pode vir "ligado" ou "escolhe qual" — quem chama decide o que mostrar.
       if (result) return result;
 
-      const criada = await procurarCaixa();
+      // Última verificação antes de desistir: a janela pode ter-se fechado
+      // depois de a caixa ficar criada (ou de a escolha ficar à espera), e a
+      // mensagem perder-se pelo caminho.
+      const criada = await procurarCaixa() ?? await procurarEscolha();
       if (!criada) throw new Error('Ligação não concluída — o assistente da Meta não chegou ao fim.');
       return criada;
     },
@@ -344,19 +417,27 @@ export function useConnectMetaChannel() {
 }
 
 /**
- * Elimina uma caixa que não é de email (hoje: Instagram/Messenger).
+ * Arquiva uma caixa que não é de email (Instagram, Messenger, WhatsApp).
  *
- * As caixas de email têm o seu próprio caminho (useDeleteEmailChannel → função
- * email-inbox), porque envolvem credenciais IMAP/SMTP. Estas não: apaga-se a
- * linha, protegida pelo RLS da organização, e avisa-se a Meta para deixar de
- * enviar webhooks desta Página.
+ * PORQUE É QUE ISTO DEIXOU DE APAGAR
  *
- * A remoção da subscrição é "melhor esforço": se falhar, a caixa desaparece do
- * CRM na mesma e a Meta fica a enviar mensagens que o webhook ignora por não
- * reconhecer a página. Preferível a recusar apagar por causa de uma chamada
- * externa que não controlamos.
+ * Isto fazia `delete` na linha do canal. Como `meta_conversations.channel_id` é
+ * `ON DELETE CASCADE` — e `meta_messages` cascateia a seguir —, cada clique em
+ * "Remover" levava atrás TODAS as conversas e mensagens daquele canal. Sem
+ * aviso, sem retorno, e num sítio onde se carrega a sério: entre duas
+ * tentativas falhadas de ligar o WhatsApp, remover a caixa parece o passo
+ * natural.
+ *
+ * Arquivar faz o que "remover" tinha de querer dizer: a caixa desliga-se da
+ * Meta (subscrição cancelada, token apagado), sai dos índices que impediam
+ * voltar a ligar o mesmo número, deixa de contar para o limite do plano — e o
+ * histórico fica onde está, legível. O que os clientes escreveram não é nosso
+ * para apagar.
+ *
+ * Quem arquiva é a edge function: é lá que está o token que ainda é preciso
+ * para avisar a Meta, e o arquivo e o cancelamento têm de acontecer juntos.
  */
-export function useDeleteChannel() {
+export function useArchiveChannel() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
 
@@ -364,19 +445,27 @@ export function useDeleteChannel() {
     mutationFn: async (channelId: string) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
 
-      supabase.functions.invoke('meta-connect', {
+      const { data, error } = await supabase.functions.invoke('meta-connect', {
         body: { action: 'disconnect', organization_id: organization.id, channel_id: channelId },
-      }).catch(() => { /* melhor esforço — ver acima */ });
-
-      const { error } = await supabase
-        .from('messaging_channels')
-        .delete()
-        .eq('id', channelId)
-        .eq('organization_id', organization.id);
-      if (error) throw error;
+      });
+      if (error) {
+        let detalhe = '';
+        try {
+          const b = await (error as { context?: Response }).context?.json();
+          detalhe = b?.error ?? '';
+        } catch { /* corpo não era JSON */ }
+        throw new Error(detalhe || (error as Error).message);
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
     },
     onSuccess: () => {
+      toast.success('Caixa arquivada', {
+        description: 'Deixa de receber e de enviar. As conversas continuam na Caixa de Entrada.',
+      });
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+    onError: (e) => {
+      toast.error('Não foi possível arquivar', { description: (e as Error).message });
     },
   });
 }

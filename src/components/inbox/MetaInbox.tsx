@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X, Reply } from 'lucide-react';
+import { Loader2, MessageCircle, Send, PanelLeft, Clock, Paperclip, SmilePlus, Mic, X, Reply, Archive, FileText, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,9 +11,11 @@ import { formatRelativeTime, formatDateTime } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   useMetaConversations, useMetaMessages, useSendMetaMessage, useMarkMetaRead,
-  useMetaAction, useSendMetaAttachment,
-  type MetaConversation, type MetaMessage,
+  useMetaAction, useSendMetaAttachment, useMetaMedia,
+  useWhatsAppTemplates, useSyncWhatsAppTemplates, useSendWhatsAppTemplate,
+  type MetaConversation, type MetaMessage, type WhatsAppTemplate,
 } from '@/hooks/useMetaInbox';
+import { ListStatusTicks } from './StatusTicks';
 
 /**
  * Caixa de Instagram / Messenger.
@@ -35,7 +37,13 @@ export function MetaInbox({
   /** 'instagram' ou 'facebook' — o Instagram só aceita uma reação. */
   channelType?: string;
   /** Nome e tipo de cada caixa, para dizer de onde veio cada conversa. */
-  caixas?: Array<{ id: string; label: string | null; channel_type: string }>;
+  caixas?: Array<{
+    id: string;
+    label: string | null;
+    channel_type: string;
+    /** Arquivada: o histórico lê-se, mas já não se responde por ela. */
+    archived_at?: string | null;
+  }>;
   onOpenRail?: () => void;
 }) {
   const { data: conversations = [], isLoading, isError, refetch } = useMetaConversations(channelId);
@@ -167,6 +175,9 @@ export function MetaInbox({
           // reagir numa conversa de Messenger tem mais emojis do que numa de
           // Instagram, e usar o tipo errado oferecia botões que iam falhar.
           channelType={caixaDe(selected.channel_id)?.channel_type ?? channelType}
+          // Uma caixa arquivada continua a mostrar tudo o que lá está — é para
+          // isso que se arquiva em vez de apagar — mas não se responde por ela.
+          arquivada={!!caixaDe(selected.channel_id)?.archived_at}
           onBack={() => setSelectedId(null)}
         />
       ) : (
@@ -202,10 +213,12 @@ interface Pendente {
 function MetaThread({
   conversation,
   channelType,
+  arquivada,
   onBack,
 }: {
   conversation: MetaConversation;
   channelType?: string;
+  arquivada?: boolean;
   onBack: () => void;
 }) {
   const { data: messages = [], isLoading, isError, refetch } = useMetaMessages(conversation.id);
@@ -255,7 +268,9 @@ function MetaThread({
   // sempre que se abria uma conversa antiga. Não se pede o que já se sabe que
   // vai ser negado.
   useEffect(() => {
-    if (windowExpired) return;
+    // Numa caixa arquivada já não há token nenhum para falar com a Meta — o
+    // "visto" ia falhar em todas as conversas que se abrissem.
+    if (windowExpired || arquivada) return;
     act.mutate({ conversationId: conversation.id, action: 'mark_seen' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id]);
@@ -428,15 +443,39 @@ function MetaThread({
                 ) : (
                   <>
                     {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-                    {m.attachments?.map((a, i) => <Attachment key={i} type={a.type} url={a.url} />)}
+                    {m.attachments?.map((a, i) => (
+                      <Attachment
+                        key={i}
+                        type={a.type}
+                        url={a.url}
+                        // O WhatsApp não manda ficheiro nenhum, manda um id — e
+                        // sem estes dois a fotografia de um cliente aparecia
+                        // como a palavra "[image]".
+                        mediaId={a.media_id ?? null}
+                        messageId={m.id}
+                      />
+                    ))}
                   </>
                 )}
-                <p className={cn(
-                  'mt-0.5 text-[10px]',
+                <span className={cn(
+                  'mt-0.5 flex items-center gap-1 text-[10px]',
                   m.direction === 'outgoing' ? 'text-primary-foreground/70' : 'text-muted-foreground',
+                  m.direction === 'outgoing' && 'justify-end',
                 )}>
                   {formatRelativeTime(m.sent_at ?? m.created_at)}
-                </p>
+                  {/* Entregue / lida / falhada. Só o WhatsApp o diz, e estava
+                      guardado na base de dados sem nunca chegar ao ecrã. */}
+                  {m.direction === 'outgoing' && m.delivery_status && (
+                    <span title={
+                      m.delivery_status === 'read' ? 'Lida'
+                        : m.delivery_status === 'delivered' ? 'Entregue no telemóvel'
+                        : m.delivery_status === 'failed' ? 'Não foi entregue'
+                        : 'Enviada'
+                    }>
+                      <ListStatusTicks status={m.delivery_status} />
+                    </span>
+                  )}
+                </span>
                 {m.reaction && (
                   // Colada ao canto inferior, como no Instagram.
                   <span
@@ -511,14 +550,31 @@ function MetaThread({
       </div>
 
       <footer className="border-t p-3">
-        {windowExpired ? (
-          // Bloquear com explicação é melhor do que deixar escrever e falhar
-          // depois: a Meta recusa fora da janela com um erro que não se entende.
-          <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-            Passaram mais de 24 horas desde a última mensagem desta pessoa. A Meta só permite
-            responder dentro desse prazo — poderás voltar a escrever assim que ela enviar
-            nova mensagem.
+        {arquivada ? (
+          <p className="flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+            <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Esta caixa está arquivada. O histórico fica aqui para consulta;
+              para voltar a responder, liga a conta outra vez em Definições → Integrações.
+            </span>
           </p>
+        ) : windowExpired ? (
+          // Fora das 24 horas há uma coisa — e uma só — que a Meta aceita: um
+          // modelo aprovado, e só no WhatsApp. Nos outros canais não há saída
+          // nenhuma, e dizê-lo é melhor do que deixar escrever e falhar depois.
+          channelType === 'whatsapp' ? (
+            <ModelosWhatsApp
+              conversationId={conversation.id}
+              channelId={conversation.channel_id}
+              contacto={conversation.contact_name || conversation.contact_ref}
+            />
+          ) : (
+            <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+              Passaram mais de 24 horas desde a última mensagem desta pessoa. A Meta só permite
+              responder dentro desse prazo — poderás voltar a escrever assim que ela enviar
+              nova mensagem.
+            </p>
+          )
         ) : (
           <div className="space-y-2">
           {replyTo && (
@@ -661,8 +717,22 @@ function instagramCode(url: string): { seg: string; code: string } | null {
  * EXPIRAM. Enquanto a conversa é recente mostram-se; mais tarde deixam de
  * abrir, e por isso o link fica sempre disponível como alternativa.
  */
-function Attachment({ type, url }: { type: string; url: string | null }) {
+function Attachment({ type, url, mediaId, messageId }: {
+  type: string;
+  url: string | null;
+  /** WhatsApp: o id do ficheiro na Meta, quando não há endereço. */
+  mediaId?: string | null;
+  messageId?: string;
+}) {
   const [broken, setBroken] = useState(false);
+
+  // O WhatsApp não manda o ficheiro — manda um id que só se resolve com o token
+  // da conta, do lado do servidor. Sem este ramo, tudo o que um cliente
+  // enviasse por WhatsApp aparecia como o nome do tipo entre parênteses.
+  if (!url && mediaId && messageId) {
+    return <AnexoWhatsApp type={type} mediaId={mediaId} messageId={messageId} />;
+  }
+
   if (!url) return <span className="text-xs opacity-70">[{type}]</span>;
 
   const ig = instagramCode(url);
@@ -713,6 +783,229 @@ function Attachment({ type, url }: { type: string; url: string | null }) {
     <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs underline">
       {rotulo}{broken ? ' (já não abre aqui)' : ''}
     </a>
+  );
+}
+
+/**
+ * Um ficheiro do WhatsApp: pede-se ao servidor e mostra-se.
+ *
+ * Fica em componente próprio por causa das regras dos hooks — o `Attachment`
+ * decide o que desenhar depois de vários `return`, e um hook não pode viver
+ * atrás de um deles.
+ *
+ * Só se descarrega o que está à vista: `loading="lazy"` não serve aqui (não é
+ * um `<img src>` normal), por isso quem tem uma conversa com cem fotografias
+ * paga cem pedidos ao abrir. É aceitável porque cada um deles é servido com
+ * cache de uma hora — mas é o sítio óbvio para pôr um observador de
+ * visibilidade se algum dia se notar.
+ */
+function AnexoWhatsApp({ type, mediaId, messageId }: {
+  type: string;
+  mediaId: string;
+  messageId: string;
+}) {
+  const { url, erro, aCarregar } = useMetaMedia(messageId, mediaId);
+
+  if (aCarregar) {
+    return (
+      <span className="mt-1 flex items-center gap-1.5 text-xs opacity-70">
+        <Loader2 className="h-3 w-3 animate-spin" /> A carregar o ficheiro…
+      </span>
+    );
+  }
+
+  if (erro || !url) {
+    // Dizer o que aconteceu, e não só que não dá: o caso comum é a Meta já ter
+    // deitado fora o ficheiro, e isso não é uma avaria do CRM.
+    return (
+      <span className="mt-1 block text-xs opacity-70">
+        [{type}] {erro ?? 'não foi possível abrir'}
+      </span>
+    );
+  }
+
+  return <Attachment type={type} url={url} />;
+}
+
+/**
+ * Modelos aprovados — a única saída de uma conversa fora das 24 horas.
+ *
+ * PORQUE É QUE ISTO EXISTE
+ *
+ * Passado o prazo, a Meta recusa qualquer texto livre. Até aqui o compositor
+ * dizia isso e mais nada: a conversa ficava um beco sem saída, e a tabela de
+ * modelos existia na base de dados sem nunca ter sido preenchida por ninguém.
+ *
+ * Um modelo tem variáveis ({{1}}, {{2}}, …) que a Meta exige preenchidas pela
+ * ordem certa — nem uma a mais nem uma a menos. O formulário é gerado a partir
+ * dos componentes que ela devolveu, para não haver adivinhação.
+ */
+function ModelosWhatsApp({ conversationId, channelId, contacto }: {
+  conversationId: string;
+  channelId: string;
+  contacto: string;
+}) {
+  const { data: modelos = [], isLoading } = useWhatsAppTemplates(channelId);
+  const sincronizar = useSyncWhatsAppTemplates();
+  const enviar = useSendWhatsAppTemplate();
+  const [escolhido, setEscolhido] = useState<WhatsAppTemplate | null>(null);
+  const [valores, setValores] = useState<Record<string, string>>({});
+
+  // O corpo e o cabeçalho do modelo escolhido, e quantas variáveis cada um
+  // tem. `{{1}}` repetido conta uma vez — é a mesma variável.
+  const partes = useMemo(() => {
+    const comp = (t: string) =>
+      escolhido?.components?.find((c) => c.type?.toUpperCase() === t);
+    const contar = (texto?: string) => {
+      const nums = [...(texto ?? '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+      return nums.length ? Math.max(...nums) : 0;
+    };
+    const corpo = comp('BODY')?.text ?? '';
+    const cabecalho = comp('HEADER');
+    // Só cabeçalhos de TEXTO levam variáveis por aqui; os de imagem ou
+    // documento precisam de um ficheiro, que é outra conversa.
+    const cabTexto = cabecalho?.format?.toUpperCase() === 'TEXT' ? (cabecalho.text ?? '') : '';
+    return { corpo, nCorpo: contar(corpo), cabTexto, nCab: contar(cabTexto) };
+  }, [escolhido]);
+
+  /** O texto final, como a pessoa o vai ler. */
+  const preencher = (texto: string, prefixo: string) =>
+    texto.replace(/\{\{(\d+)\}\}/g, (_m, n) => valores[`${prefixo}${n}`] || `{{${n}}}`);
+
+  const porPreencher = [
+    ...Array.from({ length: partes.nCab }, (_, i) => `h${i + 1}`),
+    ...Array.from({ length: partes.nCorpo }, (_, i) => `b${i + 1}`),
+  ].filter((k) => !valores[k]?.trim());
+
+  const submeter = () => {
+    if (!escolhido || porPreencher.length > 0) return;
+    enviar.mutate({
+      conversationId,
+      name: escolhido.name,
+      language: escolhido.language,
+      variables: {
+        header: Array.from({ length: partes.nCab }, (_, i) => valores[`h${i + 1}`] ?? ''),
+        body: Array.from({ length: partes.nCorpo }, (_, i) => valores[`b${i + 1}`] ?? ''),
+      },
+      preview: preencher(partes.corpo, 'b'),
+    }, {
+      onSuccess: () => {
+        toast.success('Modelo enviado', {
+          description: `${contacto} recebe a mensagem e a conversa reabre quando responder.`,
+        });
+        setEscolhido(null);
+        setValores({});
+      },
+      onError: (e) => toast.error('Não foi enviado', { description: (e as Error).message }),
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg bg-muted p-3">
+      <p className="text-xs text-muted-foreground">
+        Passaram mais de 24 horas desde a última mensagem de {contacto}. Fora desse prazo o
+        WhatsApp só entrega <strong>modelos aprovados pela Meta</strong>.
+      </p>
+
+      {isLoading ? (
+        <Skeleton className="h-9 w-full" />
+      ) : modelos.length === 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            Ainda não há modelos aprovados guardados para esta caixa.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            disabled={sincronizar.isPending}
+            onClick={() => sincronizar.mutate(channelId, {
+              onSuccess: (r) => toast.success(
+                r.aprovados > 0
+                  ? `${r.aprovados} modelo(s) aprovado(s) encontrado(s).`
+                  : 'A Meta não devolveu nenhum modelo aprovado para esta conta.',
+              ),
+              onError: (e) => toast.error('Não foi possível sincronizar', {
+                description: (e as Error).message,
+              }),
+            })}
+          >
+            {sincronizar.isPending
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <RefreshCw className="h-3 w-3" />}
+            Ir buscar à Meta
+          </Button>
+        </div>
+      ) : !escolhido ? (
+        <div className="flex flex-wrap gap-1.5">
+          {modelos.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => { setEscolhido(m); setValores({}); }}
+              className="flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs hover:bg-accent"
+            >
+              <FileText className="h-3 w-3" />
+              {m.name}
+              <span className="opacity-60">{m.language}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold">{escolhido.name}</p>
+            <button
+              type="button"
+              onClick={() => { setEscolhido(null); setValores({}); }}
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Escolher outro modelo"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {[
+            ...Array.from({ length: partes.nCab }, (_, i) => ({ k: `h${i + 1}`, n: i + 1, onde: 'Cabeçalho' })),
+            ...Array.from({ length: partes.nCorpo }, (_, i) => ({ k: `b${i + 1}`, n: i + 1, onde: 'Corpo' })),
+          ].map(({ k, n, onde }) => (
+            <Input
+              key={k}
+              value={valores[k] ?? ''}
+              onChange={(e) => setValores((v) => ({ ...v, [k]: e.target.value }))}
+              placeholder={`${onde} — variável ${n}`}
+              className="h-8 text-xs"
+            />
+          ))}
+
+          {/* O que vai ser mesmo enviado. Um modelo com variáveis por preencher
+              lê-se muito mal em bruto, e o erro só apareceria depois de enviar. */}
+          {/* Cada parte com o seu prefixo: as variáveis do cabeçalho e as do
+              corpo são numeradas a partir de 1 as duas, e juntá-las numa só
+              substituição trocava o texto de sítio. */}
+          <p className="whitespace-pre-wrap rounded-lg bg-background p-2 text-xs">
+            {partes.cabTexto && (
+              <span className="block font-semibold">{preencher(partes.cabTexto, 'h')}</span>
+            )}
+            {preencher(partes.corpo, 'b')}
+          </p>
+
+          <Button
+            size="sm"
+            className="h-8 w-full gap-1.5 text-xs"
+            disabled={porPreencher.length > 0 || enviar.isPending}
+            onClick={submeter}
+          >
+            {enviar.isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Send className="h-3.5 w-3.5" />}
+            {porPreencher.length > 0
+              ? `Faltam ${porPreencher.length} campo(s)`
+              : 'Enviar modelo'}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

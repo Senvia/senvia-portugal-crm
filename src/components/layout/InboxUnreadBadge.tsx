@@ -44,7 +44,14 @@ export function InboxUnreadBadge({ className }: { className?: string }) {
   const emailChannels = channels.filter((c) => c.channel_type === "email");
   const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
 
-  const totalMeta = Object.values(metaUnread ?? {}).reduce((s, n) => s + n, 0);
+  // As caixas arquivadas não contam para o distintivo. As conversas delas
+  // ficam (é para isso que se arquiva em vez de apagar), mas o que lá estava
+  // por ler no momento do arquivo ficaria a pedir atenção para sempre, numa
+  // caixa a que já ninguém tem de responder.
+  const arquivadas = new Set(channels.filter((c) => c.archived_at).map((c) => c.id));
+  const totalMeta = Object.entries(metaUnread ?? {})
+    .filter(([channelId]) => !arquivadas.has(channelId))
+    .reduce((s, [, n]) => s + n, 0);
   const totalEmail = Object.values(emailCounts).reduce((s, n) => s + n, 0);
   const total = totalMeta + totalEmail;
 

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +37,21 @@ export interface MetaMessage {
   external_id: string | null;
   direction: 'incoming' | 'outgoing';
   content: string | null;
-  attachments: Array<{ type: string; url: string | null }>;
+  /**
+   * `url` para o Instagram e o Messenger, que mandam o ficheiro pronto.
+   *
+   * No WhatsApp NÃO HÁ url: a Meta manda um `media_id` e o ficheiro só se
+   * descarrega com o token da conta, por um endereço que expira em minutos. Por
+   * isso vem `url: null` e um `media_id` — é o `meta-media` que o resolve.
+   */
+  attachments: Array<{
+    type: string;
+    url: string | null;
+    media_id?: string | null;
+    mime?: string | null;
+  }>;
+  /** Só o WhatsApp dá isto: sent | delivered | read | failed. */
+  delivery_status: string | null;
   sent_by: string | null;
   reply_to_external_id: string | null;
   reaction: string | null;
@@ -132,7 +147,7 @@ export function useMetaMessages(conversationId: string | null) {
       if (!conversationId) return [];
       const { data, error } = await db
         .from('meta_messages')
-        .select('id, conversation_id, external_id, direction, content, attachments, sent_by, reply_to_external_id, reaction, reaction_by, is_deleted, sent_at, created_at')
+        .select('id, conversation_id, external_id, direction, content, attachments, delivery_status, sent_by, reply_to_external_id, reaction, reaction_by, is_deleted, sent_at, created_at')
         .eq('conversation_id', conversationId)
         .order('sent_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
@@ -143,6 +158,197 @@ export function useMetaMessages(conversationId: string | null) {
     enabled: !!conversationId,
     refetchInterval: 10_000,
   });
+}
+
+/**
+ * Um ficheiro recebido pelo WhatsApp, pronto a mostrar.
+ *
+ * PORQUE É QUE NÃO CHEGA UM `<img src>`
+ *
+ * O WhatsApp não manda o ficheiro no webhook — manda um id. O endereço real só
+ * se obtém com o token da conta, e expira em minutos; e o token não pode chegar
+ * ao browser. Por isso o download é feito pela função `meta-media` e o que
+ * chega aqui são os bytes, que viram um endereço local.
+ *
+ * Sem isto, toda a fotografia que um cliente enviasse aparecia na conversa como
+ * a palavra "[image]".
+ *
+ * O endereço local é largado ao sair: sem `revokeObjectURL`, cada conversa
+ * aberta deixava os ficheiros presos à memória do separador até o fechar.
+ */
+export function useMetaMedia(messageId: string, mediaId: string | null | undefined) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!mediaId) return;
+    let vivo = true;
+    let criado: string | null = null;
+
+    (async () => {
+      try {
+        // `functions.invoke` NÃO SERVE AQUI.
+        //
+        // Ele olha para o Content-Type da resposta e, para tudo o que não seja
+        // JSON ou `application/octet-stream`, faz `res.text()` — o que estraga
+        // silenciosamente qualquer imagem, áudio ou PDF. Com `fetch` direto o
+        // blob chega intacto E com o tipo certo, que é o que faz o `<img>`
+        // saber o que está a mostrar.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Sessão expirada. Recarrega a página.');
+
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-media`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ message_id: messageId, media_id: mediaId }),
+          },
+        );
+
+        if (!res.ok) {
+          const corpo = await res.json().catch(() => ({}));
+          throw new Error(corpo?.error || `Não foi possível abrir o ficheiro (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        if (!vivo) return;
+        criado = URL.createObjectURL(blob);
+        setUrl(criado);
+      } catch (e) {
+        if (vivo) setErro((e as Error).message || 'Não foi possível abrir o ficheiro.');
+      }
+    })();
+
+    return () => {
+      vivo = false;
+      if (criado) URL.revokeObjectURL(criado);
+    };
+  }, [messageId, mediaId]);
+
+  return { url, erro, aCarregar: !url && !erro && !!mediaId };
+}
+
+/** Um modelo aprovado pela Meta, tal como ela o devolve. */
+export interface WhatsAppTemplate {
+  id: string;
+  meta_id: string;
+  name: string;
+  language: string;
+  category: string | null;
+  status: string;
+  components: Array<{
+    type: string;
+    format?: string;
+    text?: string;
+    buttons?: Array<{ text?: string }>;
+  }>;
+}
+
+/**
+ * Os modelos aprovados de uma caixa de WhatsApp.
+ *
+ * São a ÚNICA forma de escrever a alguém passadas as 24 horas sobre a última
+ * mensagem dela. Até aqui a tabela existia e nunca era preenchida por nada, e o
+ * compositor limitava-se a dizer que não dava — a conversa era um beco.
+ */
+export function useWhatsAppTemplates(channelId: string | null, ativo = true) {
+  return useQuery({
+    queryKey: ['whatsapp-templates', channelId],
+    queryFn: async (): Promise<WhatsAppTemplate[]> => {
+      if (!channelId) return [];
+      const { data, error } = await db
+        .from('whatsapp_templates')
+        .select('id, meta_id, name, language, category, status, components')
+        .eq('channel_id', channelId)
+        .eq('status', 'APPROVED')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return (data || []) as WhatsAppTemplate[];
+    },
+    enabled: !!channelId && ativo,
+  });
+}
+
+/** Vai buscar à Meta a lista de modelos desta caixa e guarda-a. */
+export function useSyncWhatsAppTemplates() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('meta-connect', {
+        body: {
+          action: 'whatsapp_templates_sync',
+          organization_id: organization.id,
+          channel_id: channelId,
+        },
+      });
+      if (error) throw new Error(await detalheDoErro(error));
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data as { total: number; aprovados: number };
+    },
+    onSuccess: (_d, channelId) => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates', channelId] });
+    },
+  });
+}
+
+/** Envia um modelo — a mensagem que a Meta aceita fora da janela das 24h. */
+export function useSendWhatsAppTemplate() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+
+  return useMutation({
+    mutationFn: async (vars: {
+      conversationId: string;
+      name: string;
+      language: string;
+      variables: { header?: string[]; body?: string[] };
+      /** O corpo já com as variáveis preenchidas — é o que fica na conversa. */
+      preview: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('meta-send', {
+        body: {
+          conversation_id: vars.conversationId,
+          action: 'send_template',
+          template: {
+            name: vars.name,
+            language: vars.language,
+            variables: vars.variables,
+            preview: vars.preview,
+          },
+        },
+      });
+      if (error) throw new Error(await detalheDoErro(error));
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['meta-messages', vars.conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['meta-conversations', organization?.id] });
+    },
+  });
+}
+
+/**
+ * O motivo real por trás de um erro do `invoke`.
+ *
+ * O cliente da Supabase deita fora o corpo da resposta e entrega sempre a mesma
+ * frase genérica — que é onde estava, por exemplo, "o modelo não está
+ * aprovado". Sem isto, o utilizador lê "non-2xx status code".
+ */
+async function detalheDoErro(error: unknown): Promise<string> {
+  try {
+    const body = await (error as { context?: Response }).context?.json();
+    if (body?.error) return String(body.error);
+  } catch { /* corpo não era JSON */ }
+  return (error as Error).message;
 }
 
 /** Responder. O envio é feito na edge function: o token da Página nunca vem ao browser. */

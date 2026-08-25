@@ -156,6 +156,11 @@ verify_jwt = false
 [functions.meta-send]
 verify_jwt = false
 
+# Ficheiros recebidos pelo WhatsApp: o webhook só guarda um id, e o download
+# exige o token da conta. Mesma regra do envio — sessão verificada por dentro.
+[functions.meta-media]
+verify_jwt = false
+
 # Chamada pela Meta a cada mensagem recebida. Autentica-se pela assinatura
 # HMAC em X-Hub-Signature-256, verificada dentro da função.
 [functions.meta-webhook]

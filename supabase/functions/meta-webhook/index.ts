@@ -130,15 +130,55 @@ async function processarWhatsApp(
       const value = change?.value;
       if (!value) continue;
 
+      // ── Estado de um modelo de mensagem ──────────────────────────────────
+      //
+      // TEM DE VIR ANTES do `phone_number_id`. Este evento é da CONTA, não de
+      // um número: não traz `metadata.phone_number_id` nenhum, e mais abaixo
+      // seria descartado pelo `continue` sem nunca chegar a lado nenhum. A
+      // conta vem no `entry.id`.
+      //
+      // Sem isto, a nossa cópia dos modelos envelhecia em silêncio e o
+      // compositor oferecia modelos que a Meta já tinha recusado ou pausado.
+      if (change.field === "message_template_status_update") {
+        const wabaId = String(entry.id ?? "");
+        const metaId = String(value?.message_template_id ?? "");
+        if (wabaId && metaId) {
+          const { data: canal } = await supabase
+            .from("messaging_channels")
+            .select("id, organization_id")
+            .eq("metadata->>waba_id", wabaId)
+            .eq("provider", "meta")
+            .is("archived_at", null)
+            .limit(1)
+            .maybeSingle();
+          if (canal) {
+            orgId = canal.organization_id;
+            await supabase.from("whatsapp_templates").update({
+              status: String(value?.event ?? "UNKNOWN"),
+              rejected_reason: value?.reason ?? null,
+              status_updated_at: new Date().toISOString(),
+            }).eq("channel_id", canal.id).eq("meta_id", metaId)
+              .then(() => {}, (e: unknown) => logError("estado do modelo não gravado", { e }));
+            log("estado de modelo atualizado", { metaId, evento: value?.event });
+          }
+        }
+        resultado = "modelo";
+        continue;
+      }
+
       const numeroId = String(value?.metadata?.phone_number_id ?? "");
       if (!numeroId) continue;
       phoneNumberId = numeroId;
 
       const { data: channel, error: canalErr } = await supabase
         .from("messaging_channels")
-        .select("id, organization_id, channel_type, assigned_user_ids, label")
+        .select("id, organization_id, channel_type, assigned_user_ids, label, phone_number, metadata")
         .eq("metadata->>phone_number_id", numeroId)
         .eq("provider", "meta")
+        // Uma caixa arquivada já não recebe. Sem este filtro, ter arquivado uma
+        // e voltado a ligar o mesmo número deixava duas linhas a competir, e o
+        // `.limit(1)` escolhia ao acaso qual delas ficava com as mensagens.
+        .is("archived_at", null)
         .limit(1)
         .maybeSingle();
       if (canalErr) logError("procura de canal WhatsApp falhou", { error: canalErr.message });
@@ -164,18 +204,48 @@ async function processarWhatsApp(
       // conversa ficava com metade do diálogo — as respostas dadas no telemóvel
       // não apareciam em lado nenhum.
       if (change.field === "history" || change.field === "smb_message_echoes") {
-        const doTelemovel = change.field === "smb_message_echoes";
-        for (const fio of value.messages ?? value.history ?? []) {
-          // O `history` vem agrupado por conversa; os ecos vêm soltos.
+        // QUEM SOMOS NÓS, nesta caixa.
+        //
+        // Isto estava errado de uma forma que só o histórico revelava: a
+        // direção era decidida pelo NOME DO CAMPO do webhook, não por quem
+        // escreveu cada mensagem. No `history`, `doTelemovel` é sempre falso,
+        // por isso TODAS as mensagens antigas entravam como recebidas — e as
+        // que a empresa tinha enviado ficavam com o próprio número da empresa
+        // como contacto, criando uma conversa da empresa consigo mesma e
+        // partindo metade de cada diálogo. O histórico é precisamente aquilo
+        // para que serve a Coexistence.
+        //
+        // Compara-se por dígitos: o `display_phone_number` vem com sinais e
+        // espaços ("+351 912 …") e o `wa_id` vem só com números.
+        const soDigitos = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+        const nossos = new Set(
+          [
+            value?.metadata?.display_phone_number,
+            channel.phone_number,
+            (channel.metadata as { display_phone_number?: string } | null)?.display_phone_number,
+          ].map(soDigitos).filter(Boolean),
+        );
+        const ehNosso = (v: unknown) => {
+          const d = soDigitos(v);
+          return !!d && nossos.has(d);
+        };
+
+        // Os ecos vêm em `message_echoes`; o histórico em `history`, agrupado
+        // por conversa. Ler só `messages` deixava cair os ecos inteiros — o
+        // CRM ficava a ver metade do diálogo e ninguém percebia porquê.
+        const lotes = value.message_echoes ?? value.messages ?? value.history ?? [];
+        for (const fio of lotes) {
           const lista = fio?.messages ?? [fio];
           for (const msg of lista) {
             try {
+              // Por mensagem, e não por campo: num mesmo lote de histórico há
+              // as duas direções.
+              const saida = ehNosso(msg.from);
               await guardarWhatsApp(supabase, channel, msg, {
-                // Num eco, `from` somos NÓS: o contacto é o destinatário.
-                contraparte: doTelemovel && msg.from === value?.metadata?.display_phone_number
-                  ? String(msg.to ?? "")
-                  : String(msg.from ?? msg.to ?? ""),
-                saida: doTelemovel && msg.from === value?.metadata?.display_phone_number,
+                contraparte: saida
+                  ? String(msg.to ?? msg.recipient_id ?? "")
+                  : String(msg.from ?? ""),
+                saida,
                 // Histórico não notifica: são mensagens de há dias, e avisar
                 // delas seria tocar o telemóvel centenas de vezes de uma vez.
                 notificar: false,
@@ -604,7 +674,10 @@ Deno.serve(async (req) => {
               // assigned_user_ids: quem atende esta caixa. Vazio = a organização
               // toda. É o que decide a quem toca o telemóvel.
               .select("id, organization_id, channel_type, metadata, assigned_user_ids, label")
-              .eq(`metadata->>${col}`, pageId);
+              .eq(`metadata->>${col}`, pageId)
+              // Arquivada = já não recebe. Com uma arquivada e outra viva para
+              // a mesma Página, o `.limit(1)` escolhia ao acaso.
+              .is("archived_at", null);
             if (tipo) q = q.eq("channel_type", tipo);
             const { data, error } = await q.limit(1).maybeSingle();
             if (error) logError(`procura de canal por ${col} falhou`, { error: error.message });
