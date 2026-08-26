@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { ipDoPedido, rateLimitDb, respostaLimiteExcedido } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -829,6 +830,25 @@ async function executeTool(
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Cada pedido daqui é uma chamada a um modelo de linguagem — o único sítio do
+  // produto onde um ciclo deixado a correr se traduz diretamente em fatura.
+  // Vinte por minuto é muito mais do que qualquer pessoa escreve a conversar.
+  {
+    const limitador = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const rl = await rateLimitDb(limitador, `otto-chat:${ipDoPedido(req)}`, 20, 60);
+    if (!rl.allowed) {
+      console.warn("[otto-chat] limite excedido", { ip: ipDoPedido(req), hits: rl.hits });
+      return respostaLimiteExcedido(
+        rl.retryAfter,
+        corsHeaders,
+        "Estás a escrever mais depressa do que eu consigo pensar. Espera um pouco.",
+      );
+    }
   }
 
   try {

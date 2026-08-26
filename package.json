@@ -67,6 +67,7 @@
     "emoji-regex": "^10.6.0",
     "framer-motion": "^12.24.12",
     "input-otp": "^1.4.2",
+    "libphonenumber-js": "^1.13.11",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ipDoPedido, rateLimitDb, respostaLimiteExcedido } from '../_shared/security.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -655,6 +656,22 @@ Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Endpoint público de uma loja: catálogo, carrinho, encomendas. Sem limite,
+  // uma raspagem do catálogo ou um ciclo a criar encomendas corre à vontade.
+  // O limite é largo porque navegar numa loja são muitos pedidos legítimos
+  // seguidos — trava o automático sem estorvar quem está a comprar.
+  {
+    const limitador = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const rl = await rateLimitDb(limitador, `store-api:${ipDoPedido(req)}`, 120, 60);
+    if (!rl.allowed) {
+      console.warn('[store-api] limite excedido', { ip: ipDoPedido(req), hits: rl.hits });
+      return respostaLimiteExcedido(rl.retryAfter, corsHeaders);
+    }
   }
 
   try {

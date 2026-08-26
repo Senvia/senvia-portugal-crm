@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { normalizeEmail, normalizePtPhone, normalizeInternationalPhone } from '../_shared/contact-validation.ts';
+import { ipDoPedido, rateLimitDb, respostaLimiteExcedido } from '../_shared/security.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -647,6 +648,48 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const mode = url.searchParams.get('mode');
     const token = url.searchParams.get('token');
+
+    // ===== LIMITE DE PEDIDOS =====
+    //
+    // Este endpoint é público e cada pedido custa caro: grava um lead, pede uma
+    // classificação a uma IA, envia email e manda notificações. Sem limite,
+    // um ciclo deixado a correr uma noite enche a base de dados de leads falsos
+    // e a fatura da IA com eles.
+    //
+    // Dois baldes por IP, de propósito. O curto trava o ciclo automático; o
+    // longo trava quem submete devagar durante horas — e nenhum deles atrapalha
+    // uma pessoa a preencher um formulário, que o faz uma vez.
+    //
+    // O modo webhook é outra coisa: quem chama é o Make ou o Facebook Lead Ads,
+    // de um IP fixo, e uma campanha a sério manda rajadas legítimas. Aí o balde
+    // é o TOKEN, não o IP, e o limite é muito mais largo.
+    const limitador = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const ip = ipDoPedido(req);
+
+    if (mode === 'webhook' && token) {
+      const rl = await rateLimitDb(limitador, `submit-lead:wh:${token}`, 300, 60);
+      if (!rl.allowed) {
+        console.warn('[submit-lead] limite do webhook excedido', { token: token.slice(0, 8), hits: rl.hits });
+        return respostaLimiteExcedido(rl.retryAfter, corsHeaders,
+          'Demasiados envios seguidos para este webhook. Abranda o ritmo e volta a tentar.');
+      }
+    } else {
+      const curto = await rateLimitDb(limitador, `submit-lead:min:${ip}`, 5, 60);
+      if (!curto.allowed) {
+        console.warn('[submit-lead] limite por minuto excedido', { ip, hits: curto.hits });
+        return respostaLimiteExcedido(curto.retryAfter, corsHeaders,
+          'Enviaste demasiados formulários seguidos. Espera um minuto e tenta outra vez.');
+      }
+      const longo = await rateLimitDb(limitador, `submit-lead:hora:${ip}`, 30, 3600);
+      if (!longo.allowed) {
+        console.warn('[submit-lead] limite por hora excedido', { ip, hits: longo.hits });
+        return respostaLimiteExcedido(longo.retryAfter, corsHeaders,
+          'Demasiados envios desta ligação na última hora.');
+      }
+    }
 
     // ===== WEBHOOK MODE (Zapier/Make) =====
     if (mode === 'webhook' && token) {

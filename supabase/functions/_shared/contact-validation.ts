@@ -1,10 +1,16 @@
+import {
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "npm:libphonenumber-js@1.13.11/max";
+
 // Contact validation — Deno side, for Edge Functions that ingest leads.
 // Mirror of src/lib/validation/contact.ts (keep both in sync — there's no
 // shared module loader between Deno Edge Functions and the Vite bundle).
 //
-// Rules are PT-focused since this is a Portugal-only CRM:
-//   * Phone: PT mobile (9 + [1,2,3,6]) or PT landline (2 + 8 digits), accepts
-//     +351, 00351, leading 0 or none. Normalizes to E.164 (+351XXXXXXXXX).
+//   * Phone: validated against the country's NUMBERING PLAN via libphonenumber
+//     (`/max` metadata — the only set that carries the per-operator patterns),
+//     plus our own anti-fake heuristics on top. Portugal is the default when no
+//     country code is given. Normalizes to E.164.
 //   * Email: standard regex + curated disposable-domain blocklist + obvious-
 //     fake localparts (test@, asdf@, etc.) blocked.
 
@@ -93,81 +99,166 @@ export type ValidationResult<T> =
   | { ok: true; value: T }
   | { ok: false; reason: string };
 
+/**
+ * Telefone português. Mantida porque o nome continua importado noutros sítios;
+ * por dentro é a mesma validação por plano de numeração, com Portugal como
+ * país por omissão.
+ */
 export function normalizePtPhone(raw: string | null | undefined): ValidationResult<string> {
-  if (!raw) return { ok: false, reason: "Telefone em falta" };
-
-  // Strip whitespace, dashes, dots, parentheses, underscores
-  let cleaned = String(raw).replace(/[\s\-.()_]/g, "");
-
-  // International prefix forms: +351, 00351, 351
-  cleaned = cleaned.replace(/^\+/, "");
-  cleaned = cleaned.replace(/^00/, "");
-  if (cleaned.startsWith("351")) cleaned = cleaned.slice(3);
-
-  // Drop leading 0 used in national format (e.g. 0912 345 678)
-  if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
-
-  // After stripping prefixes must be exactly 9 digits
-  if (!/^\d{9}$/.test(cleaned)) {
-    return { ok: false, reason: "Telefone deve ter 9 dígitos" };
-  }
-
-  const first = cleaned[0];
-  const second = cleaned[1];
-
-  // Must start with 9 (mobile) or 2 (landline)
-  if (first !== "9" && first !== "2") {
-    return { ok: false, reason: "Telefone PT começa por 9 (móvel) ou 2 (fixo)" };
-  }
-
-  // Mobile prefixes in PT: 91, 92, 93, 96 (MEO, Vodafone, NOS, NOWO/other)
-  if (first === "9" && !["1", "2", "3", "6"].includes(second)) {
-    return { ok: false, reason: "Prefixo móvel PT inválido" };
-  }
-
-  // Reject all-same digit (999999999, 111111111, etc.)
-  if (/^(\d)\1{8}$/.test(cleaned)) {
-    return { ok: false, reason: "Telefone obviamente falso" };
-  }
-
-  // Reject ascending or descending sequence (123456789, 987654321)
-  if (cleaned === "123456789" || cleaned === "987654321") {
-    return { ok: false, reason: "Telefone sequencial inválido" };
-  }
-
-  return { ok: true, value: "+351" + cleaned };
+  const r = validarTelefone(raw, 'PT');
+  return r.ok ? { ok: true, value: r.value.e164 } : r;
 }
 
-// Accepts a phone WITH its country code (E.164-ish), as produced by the
-// PhoneInput country selector. Portugal (+351) gets the strict PT rules; other
-// countries get a basic E.164 sanity check. Returns the full number WITH the
-// country code (+351912345678, +5511987654321, ...) — the code is never stripped.
-export function normalizeInternationalPhone(raw: string | null | undefined): ValidationResult<string> {
+/**
+ * Um número obviamente inventado, mesmo quando o plano de numeração o aceita.
+ *
+ * O plano de numeração diz se um número PODE existir, não se é a sério.
+ * `+351 911 111 111` e `+351 912 345 678` passam a validação oficial — o
+ * prefixo 91 existe e o comprimento está certo — e nenhum dos dois é o número
+ * de ninguém. É contra isto que estas regras existem.
+ */
+function pareceInventado(nacional: string, pais: string | null): string | null {
+  // Todos os dígitos iguais: 911111111, 222222222.
+  if (/^(\d)\1+$/.test(nacional)) return "Telefone obviamente falso";
+
+  /** Uma escada de dígitos consecutivos, para cima ou para baixo. */
+  const ehEscada = (s: string) => {
+    let sobe = true, desce = true;
+    for (let i = 1; i < s.length; i++) {
+      const d = s.charCodeAt(i) - s.charCodeAt(i - 1);
+      if (d !== 1) sobe = false;
+      if (d !== -1) desce = false;
+      if (!sobe && !desce) return false;
+    }
+    return sobe || desce;
+  };
+
+  // O número inteiro em escada — vale para qualquer país.
+  if (nacional.length >= 6 && ehEscada(nacional)) {
+    return "Telefone sequencial inválido";
+  }
+
+  // Sete dígitos iguais no fim: 911111111, 962222222.
+  //
+  // O `todos iguais` acima não os apanha — o prefixo da operadora é diferente
+  // do resto — e o plano de numeração aceita-os, porque o prefixo é real. Sete
+  // repetições seguidas não acontecem num número atribuído a alguém.
+  if (nacional.length >= 8 && /^(\d)\1{6}$/.test(nacional.slice(-7))) {
+    return "Telefone obviamente falso";
+  }
+
+  // A partir daqui, SÓ PORTUGAL.
+  //
+  // O falso mais comum cá é `912345678`, onde a escada começa depois do prefixo
+  // da operadora — a verificar só o número inteiro, ele passava. Mas aplicar
+  // esta regra a toda a gente rejeitava números estrangeiros perfeitamente
+  // plausíveis: o teste apanhou um brasileiro (+55 11 98765-4321) e um espanhol
+  // (+34 600 123 456) a serem recusados. Em Portugal sei o que é um número a
+  // sério; lá fora não sei, e recusar um lead verdadeiro é pior do que aceitar
+  // um falso.
+  if (pais === "PT" && nacional.length === 9 && ehEscada(nacional.slice(2))) {
+    return "Telefone sequencial inválido";
+  }
+
+  // O mesmo par repetido do princípio ao fim: 919191919, 212121212.
+  if (nacional.length >= 8 && /^(\d\d)\1{3,}\d?$/.test(nacional)) {
+    return "Telefone obviamente falso";
+  }
+
+  return null;
+}
+
+/**
+ * Valida um telefone contra o PLANO DE NUMERAÇÃO do país a que pertence.
+ *
+ * PORQUE É QUE ISTO SUBSTITUIU AS REGRAS ESCRITAS À MÃO
+ *
+ * Um número de telefone não tem dígito de controlo — não há checksum como no
+ * NIF ou no IBAN. O mais perto que existe é confrontá-lo com o plano de
+ * numeração: o comprimento certo para aquele país, e um prefixo de operadora
+ * que exista mesmo. É isso que a `libphonenumber` faz, com as tabelas que a
+ * Google mantém a partir dos reguladores.
+ *
+ * O que se ganha, em concreto: `+351 999 999 999` e `+351 981 234 567` eram
+ * aceites (nove dígitos, começa por 9) e agora são recusados — o 99 e o 98 não
+ * estão atribuídos a operadora nenhuma em Portugal. E os outros países deixam
+ * de ser "entre 8 e 15 dígitos", que aceitava quase tudo.
+ *
+ * Usa-se o conjunto de metadados `/max`: é o único que traz os padrões por
+ * operadora e o TIPO do número. O `/min`, que é o predefinido, só confere o
+ * comprimento — com ele, `+351 999 999 999` passava à mesma.
+ */
+export function validarTelefone(
+  raw: string | null | undefined,
+  paisPorOmissao: CountryCode = "PT",
+): ValidationResult<{ e164: string; tipo: string | null; pais: string | null }> {
   if (!raw) return { ok: false, reason: "Telefone em falta" };
 
-  let cleaned = String(raw).replace(/[\s\-.()_]/g, "");
+  let cleaned = String(raw).replace(/[\s\-.()_/]/g, "");
   cleaned = cleaned.replace(/^00/, "+");
 
-  // No country code provided: assume Portugal (back-compat with bare national numbers).
-  if (!cleaned.startsWith("+")) {
-    if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
-    cleaned = "+351" + cleaned;
+  // Sem indicativo assume-se Portugal — é um CRM português, e os números
+  // nacionais escritos à mão quase nunca o trazem.
+  const semIndicativo = !cleaned.startsWith("+");
+
+  const numero = parsePhoneNumberFromString(
+    cleaned,
+    semIndicativo ? paisPorOmissao : undefined,
+  );
+
+  if (!numero) {
+    return { ok: false, reason: "Telefone inválido" };
   }
 
-  // Portugal: keep the strict PT rules (prefixes, anti-fake).
-  if (cleaned.startsWith("+351")) {
-    return normalizePtPhone(cleaned);
+  if (!numero.isValid()) {
+    // A mensagem diz o que fazer, não só que está errado. Distinguir o
+    // comprimento do prefixo poupa a quem preenche uma segunda tentativa às
+    // cegas.
+    //
+    // As frases sobre Portugal SÓ se usam quando o número é mesmo português.
+    // Um `+1 555 555 5555` levava com "um número português tem 9 dígitos", que
+    // não ajuda ninguém — o país vinha da omissão, não do que foi escrito.
+    const nacional = String(numero.nationalNumber ?? "");
+    const ehPortugues = semIndicativo
+      ? paisPorOmissao === "PT"
+      : numero.country === "PT" || cleaned.startsWith("+351");
+
+    if (ehPortugues) {
+      return {
+        ok: false,
+        reason: nacional.length !== 9
+          ? "Um número português tem 9 dígitos"
+          : "Esse prefixo não existe em Portugal — os telemóveis começam por 91, 92, 93 ou 96",
+      };
+    }
+    return { ok: false, reason: "Esse número não existe no país indicado" };
   }
 
-  // Other countries: basic E.164 check (8 to 15 digits including country code).
-  const digits = cleaned.slice(1);
-  if (!/^\d{8,15}$/.test(digits)) {
-    return { ok: false, reason: "Número internacional inválido" };
-  }
-  if (/^(\d)\1+$/.test(digits)) {
-    return { ok: false, reason: "Telefone obviamente falso" };
-  }
-  return { ok: true, value: "+" + digits };
+  const inventado = pareceInventado(
+    String(numero.nationalNumber ?? ""),
+    numero.country ?? (semIndicativo ? paisPorOmissao : null),
+  );
+  if (inventado) return { ok: false, reason: inventado };
+
+  return {
+    ok: true,
+    value: {
+      e164: numero.number,
+      // MOBILE | FIXED_LINE | FIXED_LINE_OR_MOBILE | ... ou null quando a Meta
+      // dos metadados não consegue decidir.
+      tipo: numero.getType() ?? null,
+      pais: numero.country ?? null,
+    },
+  };
+}
+
+/**
+ * A forma antiga, mantida porque é o que os chamadores esperam: devolve só o
+ * E.164. Por dentro é a validação nova.
+ */
+export function normalizeInternationalPhone(raw: string | null | undefined): ValidationResult<string> {
+  const r = validarTelefone(raw);
+  return r.ok ? { ok: true, value: r.value.e164 } : r;
 }
 
 export function normalizeEmail(raw: string | null | undefined): ValidationResult<string> {
@@ -175,7 +266,10 @@ export function normalizeEmail(raw: string | null | undefined): ValidationResult
 
   const trimmed = String(raw).trim().toLowerCase();
 
-  const EMAIL_RE = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/;
+  // O hífen fica no FIM da classe, sem barra: escapá-lo lá dentro é
+  // desnecessário e o ESLint do lado do browser recusa-o (este ficheiro é
+  // gerado para lá).
+  const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
   if (!EMAIL_RE.test(trimmed)) {
     return { ok: false, reason: "Formato de email inválido" };
   }
