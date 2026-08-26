@@ -12,6 +12,7 @@ import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
 import { FormSettings, migrateFormSettings, CustomField, MetaPixel } from "@/types";
 import { normalizeEmail, normalizeInternationalPhone } from "@/lib/validation/contact";
+import { useAntiBot, CampoArmadilha } from "@/components/forms/AntiBot";
 import { getBrandStyle } from "@/lib/color";
 
 // Declare fbq for TypeScript
@@ -119,6 +120,9 @@ const ConversationalLeadForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [stepData, setStepData] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Armadilha para robôs: um campo que não se vê, e o tempo desde que a página
+  // abriu. Não custa um clique a quem responde a sério.
+  const antiBot = useAntiBot();
 
   useEffect(() => {
     const fetchForm = async () => {
@@ -440,6 +444,10 @@ const ConversationalLeadForm = () => {
       },
       gdpr_consent: true,
       automation_enabled: true,
+      // A mesma armadilha do formulário clássico. Aqui o tempo de preenchimento
+      // é sempre folgado — isto é uma conversa —, mas o campo invisível vale na
+      // mesma: um robô que leia o HTML preenche-o à mesma.
+      ...antiBot.campos(),
     };
 
     // Log for n8n webhook integration
@@ -567,6 +575,7 @@ const ConversationalLeadForm = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50/50 dark:bg-transparent p-4">
+      <CampoArmadilha value={antiBot.isca} onChange={antiBot.setIsca} />
       <motion.div
         className="w-full max-w-lg"
         initial={{ opacity: 0, y: 20 }}

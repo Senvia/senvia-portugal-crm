@@ -182,6 +182,19 @@ function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: an
 }
 
 interface LeadSubmission {
+  /**
+   * Armadilha para robôs. Ver `src/components/forms/AntiBot.tsx`.
+   *
+   * `hp_website` é um campo que não se vê no ecrã: uma pessoa não o pode
+   * preencher, um robô que leia o HTML preenche-o. `hp_tempo_ms` é quanto tempo
+   * passou desde que o formulário abriu.
+   *
+   * Os dois são OPCIONAIS de propósito — um formulário já aberto no browser de
+   * alguém, servido antes desta versão, não os envia, e não pode deixar de
+   * funcionar por isso.
+   */
+  hp_website?: string | null;
+  hp_tempo_ms?: number | null;
   company_nif?: string | null;
   company_name?: string | null;
   name?: string | null;
@@ -700,6 +713,47 @@ Deno.serve(async (req) => {
     // Parse request body
     const body: LeadSubmission = await req.json();
     console.log('Lead submission received:', { ...body, email: '[REDACTED]' });
+
+    // ===== ARMADILHA PARA ROBÔS =====
+    //
+    // Duas perguntas que uma pessoa e um robô respondem de maneira diferente:
+    // preencheu um campo que não aparece no ecrã, e preencheu tudo em menos de
+    // dois segundos e meio. Nenhuma delas custa um clique a quem preenche a
+    // sério — é por isso que se faz isto antes de se pensar em captcha, que
+    // cobra a toda a gente para travar uma minoria.
+    //
+    // RESPONDE-SE SUCESSO, NÃO ERRO. Um robô que leve 400 aprende e tenta
+    // outra vez com outra forma; um robô que leve 201 vai-se embora
+    // convencido. O lead é que não existe.
+    //
+    // Fica sempre registado: se algum dia isto começar a apanhar gente a
+    // sério — o preenchimento automático do browser é o suspeito —, vê-se nos
+    // registos em vez de se descobrir pelas queixas de leads que não chegam.
+    const armadilha = String(body.hp_website ?? '').trim();
+    const tempoPreenchimento = Number(body.hp_tempo_ms ?? 0);
+    const TEMPO_MINIMO_MS = 2500;
+
+    if (armadilha) {
+      console.warn('[submit-lead] ARMADILHA: campo invisível preenchido', {
+        ip, valor: armadilha.slice(0, 40),
+      });
+      return new Response(
+        JSON.stringify({ success: true, message: 'Contacto registado com sucesso' }),
+        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // `> 0` na condição: um formulário servido antes desta versão não manda o
+    // campo, e `0` não pode ser lido como "preencheu num instante".
+    if (tempoPreenchimento > 0 && tempoPreenchimento < TEMPO_MINIMO_MS) {
+      console.warn('[submit-lead] ARMADILHA: preenchido depressa demais', {
+        ip, ms: tempoPreenchimento,
+      });
+      return new Response(
+        JSON.stringify({ success: true, message: 'Contacto registado com sucesso' }),
+        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Validate public_key is required
     if (!body.public_key) {

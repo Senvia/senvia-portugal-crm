@@ -15,6 +15,7 @@ import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings, MetaPixel } from '@/types';
 import { normalizeEmail, normalizeInternationalPhone } from '@/lib/validation/contact';
 import { readableTextColor } from '@/lib/color';
+import { useAntiBot, CampoArmadilha } from '@/components/forms/AntiBot';
 
 // Declare fbq for TypeScript
 declare global {
@@ -103,6 +104,9 @@ export default function PublicLeadForm() {
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Armadilha para robôs: um campo que não se vê e o tempo que demorou a
+  // preencher. Não custa um clique a quem preenche a sério.
+  const antiBot = useAntiBot();
   const [isSuccess, setIsSuccess] = useState(false);
   
   // Form state
@@ -379,6 +383,7 @@ export default function PublicLeadForm() {
         email: normalizedEmail || null,
         phone: normalizedPhone || null,
         gdpr_consent: true,
+        ...antiBot.campos(),
         public_key: formData?.public_key,
         form_id: formData?.form_id,  // Include form_id for form-specific settings
         source: detectedSource,
@@ -563,6 +568,7 @@ export default function PublicLeadForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <CampoArmadilha value={antiBot.isca} onChange={antiBot.setIsca} />
             {/* Fixed Fields - conditionally rendered */}
             {settings.fields.name.visible && (
               <div className="space-y-2">
