@@ -64,6 +64,14 @@ interface IntegrationsContentProps {
   updateOrganizationIsPending: boolean;
   keyinvoiceApiKey: string;
   setKeyinvoiceApiKey: (value: string) => void;
+  /**
+   * Que chaves ja estao gravadas — nao quais sao.
+   *
+   * Os campos de chave passaram a ser de ESCRITA APENAS: o valor nunca volta
+   * ao browser (migracao 20260826140000). Sem isto, um campo vazio parecia
+   * "por configurar" quando na verdade estava configurado ha meses.
+   */
+  chavesGuardadas?: { whatsapp: boolean; brevo: boolean; invoicexpress: boolean; keyinvoice: boolean };
   keyinvoiceApiUrl: string;
   setKeyinvoiceApiUrl: (value: string) => void;
   showKeyinvoiceApiKey: boolean;
@@ -179,7 +187,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
       case 'keyinvoice': return !!keyinvoiceApiKey;
-      case 'meta': return !!(org as { meta_conversions_api_token?: string } | null)?.meta_conversions_api_token;
+      case 'meta': return !!(org as { tem_meta_conversions_token?: boolean } | null)?.tem_meta_conversions_token;
       case 'stripe': return stripeConnection.connected;
     }
   };
@@ -1617,7 +1625,7 @@ function InboxesManager() {
   );
 }
 
-function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail, showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo, updateOrganizationIsPending, profileSenderEmail, setProfileSenderEmail, emailSignature, setEmailSignature, handleSaveProfile, updateProfileIsPending }: IntegrationsContentProps) {
+function BrevoForm({ chavesGuardadas, brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail, showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo, updateOrganizationIsPending, profileSenderEmail, setProfileSenderEmail, emailSignature, setEmailSignature, handleSaveProfile, updateProfileIsPending }: IntegrationsContentProps) {
   return (
     <>
       <div className="rounded-lg bg-muted/50 border p-3 space-y-1">
@@ -1632,7 +1640,7 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
       <div className="space-y-2">
         <Label htmlFor="brevo-api-key">API Key do Brevo</Label>
         <div className="relative">
-          <Input id="brevo-api-key" data-otto-target="settings-brevo-api" type={showBrevoApiKey ? 'text' : 'password'} placeholder="xkeysib-..." value={brevoApiKey} onChange={(e) => setBrevoApiKey(e.target.value)} />
+          <Input id="brevo-api-key" data-otto-target="settings-brevo-api" type={showBrevoApiKey ? 'text' : 'password'} placeholder={chavesGuardadas?.brevo ? "Guardada — escreve uma nova para substituir" : "xkeysib-..."} value={brevoApiKey} onChange={(e) => setBrevoApiKey(e.target.value)} />
           <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowBrevoApiKey(!showBrevoApiKey)}>
             {showBrevoApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>
@@ -1679,7 +1687,7 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
   );
 }
 
-function InvoiceXpressForm({ invoiceXpressAccountName, setInvoiceXpressAccountName, invoiceXpressApiKey, setInvoiceXpressApiKey, showInvoiceXpressApiKey, setShowInvoiceXpressApiKey, handleSaveInvoiceXpress, updateOrganizationIsPending }: IntegrationsContentProps) {
+function InvoiceXpressForm({ chavesGuardadas, invoiceXpressAccountName, setInvoiceXpressAccountName, invoiceXpressApiKey, setInvoiceXpressApiKey, showInvoiceXpressApiKey, setShowInvoiceXpressApiKey, handleSaveInvoiceXpress, updateOrganizationIsPending }: IntegrationsContentProps) {
   return (
     <>
       <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
@@ -1693,7 +1701,7 @@ function InvoiceXpressForm({ invoiceXpressAccountName, setInvoiceXpressAccountNa
       <div className="space-y-2">
         <Label htmlFor="ix-api-key">API Key</Label>
         <div className="relative">
-          <Input id="ix-api-key" data-otto-target="settings-invoicexpress-api" type={showInvoiceXpressApiKey ? 'text' : 'password'} placeholder="Chave de autenticação" value={invoiceXpressApiKey} onChange={(e) => setInvoiceXpressApiKey(e.target.value)} />
+          <Input id="ix-api-key" data-otto-target="settings-invoicexpress-api" type={showInvoiceXpressApiKey ? 'text' : 'password'} placeholder={chavesGuardadas?.invoicexpress ? "Guardada — escreve uma nova para substituir" : "Chave de autenticação"} value={invoiceXpressApiKey} onChange={(e) => setInvoiceXpressApiKey(e.target.value)} />
           <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowInvoiceXpressApiKey(!showInvoiceXpressApiKey)}>
             {showInvoiceXpressApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>
@@ -1708,7 +1716,7 @@ function InvoiceXpressForm({ invoiceXpressAccountName, setInvoiceXpressAccountNa
   );
 }
 
-function KeyInvoiceForm({ keyinvoiceApiKey, setKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl, showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, handleSaveKeyInvoice, updateOrganizationIsPending }: IntegrationsContentProps) {
+function KeyInvoiceForm({ chavesGuardadas, keyinvoiceApiKey, setKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl, showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, handleSaveKeyInvoice, updateOrganizationIsPending }: IntegrationsContentProps) {
   return (
     <>
       <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
@@ -1717,7 +1725,7 @@ function KeyInvoiceForm({ keyinvoiceApiKey, setKeyinvoiceApiKey, keyinvoiceApiUr
       <div className="space-y-2">
         <Label htmlFor="ki-api-key">Chave da API</Label>
         <div className="relative">
-          <Input id="ki-api-key" type={showKeyinvoiceApiKey ? 'text' : 'password'} placeholder="Chave da API KeyInvoice" value={keyinvoiceApiKey} onChange={(e) => setKeyinvoiceApiKey(e.target.value)} />
+          <Input id="ki-api-key" type={showKeyinvoiceApiKey ? 'text' : 'password'} placeholder={chavesGuardadas?.keyinvoice ? "Guardada — escreve uma nova para substituir" : "Chave da API KeyInvoice"} value={keyinvoiceApiKey} onChange={(e) => setKeyinvoiceApiKey(e.target.value)} />
           <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowKeyinvoiceApiKey(!showKeyinvoiceApiKey)}>
             {showKeyinvoiceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>

@@ -77,7 +77,7 @@ export default function FinancePayments() {
     try { localStorage.setItem(SORT_KEY, JSON.stringify({ field: sortField, direction: sortDirection })); } catch {}
   }, [sortField, sortDirection]);
 
-  const hasInvoiceXpress = !!(organization?.invoicexpress_api_key && organization?.invoicexpress_account_name);
+  const hasInvoiceXpress = !!(organization?.tem_invoicexpress_api_key && organization?.invoicexpress_account_name);
   const taxConfig = organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null;
 
   // Load sale items when draft modal is open

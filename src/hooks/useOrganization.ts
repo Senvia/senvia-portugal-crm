@@ -17,7 +17,7 @@ export function useOrganization() {
 
       const { data, error } = await supabase
         .from('organizations')
-        .select('id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config')
+        .select('id,name,slug,code,public_key,plan,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config,tem_brevo_api_key,tem_invoicexpress_api_key,tem_keyinvoice_password,tem_whatsapp_api_key,tem_meta_conversions_token')
         .eq('id', organization.id)
         .single();
 
@@ -32,7 +32,8 @@ interface UpdateOrganizationData {
   name?: string;
   webhook_url?: string | null;
   whatsapp_instance?: string | null;
-  whatsapp_api_key?: string | null;
+  /** As chaves em si nao sao legiveis pelo cliente — so se estao configuradas. */
+  tem_whatsapp_api_key?: boolean | null;
   whatsapp_base_url?: string | null;
   ai_qualification_rules?: string | null;
   form_settings?: Json;
@@ -40,14 +41,14 @@ interface UpdateOrganizationData {
   msg_template_warm?: string | null;
   msg_template_cold?: string | null;
   meta_pixels?: Json;
-  meta_conversions_api_token?: string | null;
-  brevo_api_key?: string | null;
+  tem_meta_conversions_token?: boolean | null;
+  tem_brevo_api_key?: boolean | null;
   brevo_sender_email?: string | null;
   invoicexpress_account_name?: string | null;
-  invoicexpress_api_key?: string | null;
+  tem_invoicexpress_api_key?: boolean | null;
   billing_provider?: string;
   keyinvoice_username?: string | null;
-  keyinvoice_password?: string | null;
+  tem_keyinvoice_password?: boolean | null;
   keyinvoice_company_code?: string | null;
   keyinvoice_api_url?: string | null;
   tax_config?: Json;

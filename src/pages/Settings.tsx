@@ -105,6 +105,21 @@ export default function Settings() {
   // WhatsApp Business state
   const [whatsappBaseUrl, setWhatsappBaseUrl] = useState('');
   const [whatsappInstance, setWhatsappInstance] = useState('');
+  /**
+   * Que chaves já estão gravadas — não quais são.
+   *
+   * As colunas dos segredos deixaram de ser legíveis pelo browser (migração
+   * 20260826140000): qualquer colaborador conseguia ler a chave da InvoiceXpress
+   * da empresa e emitir faturação por fora do CRM com ela. O que a interface
+   * precisa é só de saber se está configurada, para dizer "guardada" em vez de
+   * mostrar um campo vazio que parece por preencher.
+   *
+   * Os campos passam a ser de ESCRITA APENAS: em branco quer dizer "manter a
+   * atual", como na Stripe ou no GitHub.
+   */
+  const [chavesGuardadas, setChavesGuardadas] = useState({
+    whatsapp: false, brevo: false, invoicexpress: false, keyinvoice: false,
+  });
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
 
@@ -170,19 +185,36 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
+        // As chaves de API ja nao sao legiveis pelo cliente (ver a migracao
+        // 20260826140000). Le-se se ESTAO configuradas; o valor nunca volta ao
+        // browser, tal como na Stripe ou no GitHub.
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, tem_whatsapp_api_key, form_settings, tem_brevo_api_key, brevo_sender_email, invoicexpress_account_name, tem_invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, tem_keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
         .eq('id', organization.id)
         .single();
 
       if (!error && data) {
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
-        setWhatsappApiKey(data.whatsapp_api_key || '');
-        setBrevoApiKey(data.brevo_api_key || '');
+
+
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
-        setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
-        setKeyinvoiceApiKey((data as any).keyinvoice_password || '');
+        // Um só cast, com os nomes escritos: as colunas `tem_*` são mais
+        // recentes do que os tipos gerados do Supabase.
+        const temChave = data as unknown as {
+          tem_whatsapp_api_key?: boolean;
+          tem_brevo_api_key?: boolean;
+          tem_invoicexpress_api_key?: boolean;
+          tem_keyinvoice_password?: boolean;
+        };
+        setChavesGuardadas({
+          whatsapp: !!temChave.tem_whatsapp_api_key,
+          brevo: !!temChave.tem_brevo_api_key,
+          invoicexpress: !!temChave.tem_invoicexpress_api_key,
+          keyinvoice: !!temChave.tem_keyinvoice_password,
+        });
+
+
         setKeyinvoiceApiUrl((data as any).keyinvoice_api_url || '');
 
         const tc = (data as any).tax_config;
@@ -229,13 +261,13 @@ export default function Settings() {
     updateOrganization.mutate({
       whatsapp_base_url: whatsappBaseUrl.trim() || null,
       whatsapp_instance: whatsappInstance.trim() || null,
-      whatsapp_api_key: whatsappApiKey.trim() || null,
+      ...(whatsappApiKey.trim() ? { whatsapp_api_key: whatsappApiKey.trim() } : {}),
     });
   };
 
   const handleSaveBrevo = () => {
     updateOrganization.mutate({
-      brevo_api_key: brevoApiKey.trim() || null,
+      ...(brevoApiKey.trim() ? { brevo_api_key: brevoApiKey.trim() } : {}),
       brevo_sender_email: brevoSenderEmail.trim() || null,
     });
   };
@@ -243,13 +275,13 @@ export default function Settings() {
   const handleSaveInvoiceXpress = () => {
     updateOrganization.mutate({
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
-      invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
+      ...(invoiceXpressApiKey.trim() ? { invoicexpress_api_key: invoiceXpressApiKey.trim() } : {}),
     });
   };
 
   const handleSaveKeyInvoice = () => {
     updateOrganization.mutate({
-      keyinvoice_password: keyinvoiceApiKey.trim() || null,
+      ...(keyinvoiceApiKey.trim() ? { keyinvoice_password: keyinvoiceApiKey.trim() } : {}),
       keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
     });
   };
@@ -311,6 +343,7 @@ export default function Settings() {
   };
 
   const integrationsContentProps = {
+    chavesGuardadas,
     isLoadingIntegrations,
     updateOrganizationIsPending: updateOrganization.isPending,
     whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance,

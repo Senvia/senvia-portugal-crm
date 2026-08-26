@@ -1591,7 +1591,7 @@ export function CreateSaleModal({
           onAdd={(payment) => setDraftPayments(prev => [...prev, payment])}
           hideInvoiceReference={
             (organization?.integrations_enabled as any)?.invoicexpress !== false
-            && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
+            && !!(organization?.invoicexpress_account_name && organization?.tem_invoicexpress_api_key)
           }
           
         />

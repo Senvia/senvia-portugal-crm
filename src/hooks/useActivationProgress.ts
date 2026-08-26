@@ -67,7 +67,7 @@ export function useActivationProgress(): ActivationProgress {
         (supabase as any)
           .from("organizations")
           .select(
-            "first_lead_at, first_client_at, first_sale_at, first_proposal_at, billing_provider, invoicexpress_api_key, keyinvoice_username, brevo_api_key, integrations_enabled, whatsapp_instance",
+            "first_lead_at, first_client_at, first_sale_at, first_proposal_at, billing_provider, tem_invoicexpress_api_key, keyinvoice_username, tem_brevo_api_key, integrations_enabled, whatsapp_instance",
           )
           .eq("id", orgId!)
           .maybeSingle(),
@@ -94,8 +94,8 @@ export function useActivationProgress(): ActivationProgress {
         clients: !!o.first_client_at,
         sales: !!o.first_sale_at,
         proposals: !!o.first_proposal_at,
-        finance: !!(o.billing_provider || o.invoicexpress_api_key || o.keyinvoice_username),
-        integrations: !!o.brevo_api_key || integrationsEnabled,
+        finance: !!(o.billing_provider || o.tem_invoicexpress_api_key || o.keyinvoice_username),
+        integrations: !!o.tem_brevo_api_key || integrationsEnabled,
         inbox: (channelsRes.count ?? 0) > 0 || !!o.whatsapp_instance,
         team: (membersRes.count ?? 0) > 1,
       };

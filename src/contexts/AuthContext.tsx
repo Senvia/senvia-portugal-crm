@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // que nem sequer existe em subscription_plans. A app cai então no plano por
   // omissão (Starter) e tranca Financeiro, Marketing, E-commerce e Prospects a
   // quem devia estar a ver o sistema todo.
-  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,trial_ends_at,first_paid_at,billing_exempt,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config';
+  const SAFE_ORG_FIELDS = 'id,name,slug,code,public_key,plan,trial_ends_at,first_paid_at,billing_exempt,created_at,form_settings,niche,enabled_modules,logo_url,integrations_enabled,tax_config,sales_settings,ai_qualification_rules,msg_template_hot,msg_template_warm,msg_template_cold,ai_response_mode,servicos_products_config,tem_brevo_api_key,tem_invoicexpress_api_key,tem_keyinvoice_password,tem_whatsapp_api_key,tem_meta_conversions_token,invoicexpress_account_name';
   const loadOrganization = useCallback(async (orgId: string) => {
     const { data: orgData } = await supabase
       .from('organizations')

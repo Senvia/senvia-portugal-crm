@@ -107,7 +107,7 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
         supabase.from("organization_invites").select("id", { count: "exact", head: true }).eq("organization_id", orgId!),
         supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", orgId!),
         supabase.from("messaging_channels").select("id", { count: "exact", head: true }).eq("organization_id", orgId!).eq("status", "connected"),
-        supabase.from("organizations").select("invoicexpress_api_key, keyinvoice_username, brevo_api_key, billing_provider, whatsapp_instance, ai_response_mode, msg_template_hot, msg_template_warm, msg_template_cold").eq("id", orgId!).maybeSingle(),
+        supabase.from("organizations").select("tem_invoicexpress_api_key, keyinvoice_username, tem_brevo_api_key, billing_provider, whatsapp_instance, ai_response_mode, msg_template_hot, msg_template_warm, msg_template_cold").eq("id", orgId!).maybeSingle(),
         supabase.from("forms").select("id", { count: "exact", head: true }).eq("organization_id", orgId!).or("msg_template_hot.not.is.null,msg_template_warm.not.is.null,msg_template_cold.not.is.null"),
       ]);
       const org = orgRes.data as any;
@@ -125,8 +125,8 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
         // A channel row is the modern signal; whatsapp_instance is the legacy
         // org-level one. useActivationProgress already accepts both.
         channels: (channelsRes.count ?? 0) > 0 || !!org?.whatsapp_instance ? 1 : 0,
-        invoicing: !!(org?.billing_provider || org?.invoicexpress_api_key || org?.keyinvoice_username),
-        marketing: !!org?.brevo_api_key,
+        invoicing: !!(org?.billing_provider || org?.tem_invoicexpress_api_key || org?.keyinvoice_username),
+        marketing: !!org?.tem_brevo_api_key,
         autoreply: (autoreplyRes.count ?? 0) > 0 || globalAutoreply,
       };
     },

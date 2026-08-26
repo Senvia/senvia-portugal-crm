@@ -390,7 +390,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     });
   };
 
-  const isBrevoConfigured = !!(orgData?.brevo_api_key && orgData?.brevo_sender_email);
+  const isBrevoConfigured = !!(orgData?.tem_brevo_api_key && orgData?.brevo_sender_email);
   const canSendEmail = proposal.client?.email && isBrevoConfigured && !sendProposalEmail.isPending;
 
   return (

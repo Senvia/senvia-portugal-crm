@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Eye, EyeOff, Loader2, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,18 @@ export function MetaConversionsForm() {
   const [token, setToken] = useState("");
   const [show, setShow] = useState(false);
 
-  // The column isn't in the generated Supabase types yet, so read it via a cast.
-  const storedToken =
-    (org as { meta_conversions_api_token?: string | null } | null | undefined)?.meta_conversions_api_token ?? "";
+  // O TOKEN NÃO VOLTA AO BROWSER.
+  //
+  // Era lido da coluna para preencher o campo. Essa coluna deixou de ser
+  // legível pelo cliente (migração 20260826140000): qualquer colaborador
+  // conseguia ler o token de conversões da empresa e enviar eventos em nome
+  // dela. Lê-se apenas SE já existe um, para o campo poder dizer "guardado" em
+  // vez de parecer por preencher.
+  const jaConfigurado = !!(org as { tem_meta_conversions_token?: boolean } | null | undefined)
+    ?.tem_meta_conversions_token;
 
-  // Seed the field once the org loads.
-  useEffect(() => {
-    setToken(storedToken);
-  }, [storedToken]);
-
-  const dirty = token !== storedToken;
+  // Só se grava o que for escrito agora — em branco quer dizer manter o atual.
+  const dirty = token.trim().length > 0;
 
   if (isLoading) {
     return (
@@ -51,7 +53,7 @@ export function MetaConversionsForm() {
               type={show ? "text" : "password"}
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="EAAG..."
+              placeholder={jaConfigurado ? "Guardado — escreve um novo para substituir" : "EAAG..."}
               autoComplete="off"
               className="pr-10"
             />
@@ -65,7 +67,7 @@ export function MetaConversionsForm() {
             </button>
           </div>
           <Button
-            onClick={() => updateOrg.mutate({ meta_conversions_api_token: token.trim() || null })}
+            onClick={() => { updateOrg.mutate({ meta_conversions_api_token: token.trim() }); setToken(""); }}
             disabled={!dirty || updateOrg.isPending}
           >
             {updateOrg.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
