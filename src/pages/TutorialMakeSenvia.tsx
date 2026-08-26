@@ -1,9 +1,18 @@
 import { useState } from "react";
-import { CheckCircle2, Clipboard, ExternalLink, FileText, PlayCircle, Printer, Send, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Clipboard, ExternalLink, FileText, Loader2, PlayCircle, Printer, Send, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SEO } from "@/components/SEO";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLeadIntakeWebhooks } from "@/hooks/useLeadIntakeWebhooks";
 import { Button } from "@/components/ui/button";
 
 const asset = (name: string) => `/tutorials/make-senvia/${name}`;
+
+// O endpoint do SENVIA OS e sempre o mesmo; so o token muda de organizacao para
+// organizacao (cada org tem o seu em Definicoes > Integracoes > Webhooks de Entrada).
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://chhmfwlimtbsyjmgtokn.supabase.co";
+const WEBHOOK_URL_EXAMPLE = `${SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=O-SEU-TOKEN`;
+const SETTINGS_WEBHOOKS_LINK = "/settings?og=integrations&os=integrations-connect";
 
 const facebookSteps = [
   {
@@ -44,7 +53,7 @@ const checklist = [
   "Pagina de Facebook selecionada.",
   "Formulario certo selecionado.",
   "Todos os campos do formulario selecionados em Fields.",
-  "Webhook de entrada copiado no SENVIA OS.",
+  "URL do webhook da sua organizacao copiado em Definicoes > Integracoes.",
   "Modulo HTTP configurado com Make a request.",
   "Pedido HTTP enviado por POST com body JSON.",
   "Lead de teste recebido no SENVIA OS.",
@@ -81,6 +90,95 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
+// Percurso exato dentro do SENVIA OS ate ao URL do webhook.
+const CRM_PATH = ["Definicoes", "Integracoes", "Automacoes", "Webhook de Entrada", "Adicionar Webhook"];
+
+function CrmPath() {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2 rounded-lg border border-emerald-700/20 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+      {CRM_PATH.map((label, index) => (
+        <li key={label} className="flex items-center gap-1.5">
+          {index > 0 && <ChevronRight className="h-4 w-4 text-emerald-600/60" aria-hidden />}
+          <span className="rounded-md bg-white px-2 py-1 shadow-sm">{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Mostra o webhook real da organizacao de quem esta a ver a pagina. Como o
+// tutorial e publico, quem chega sem sessao iniciada ve apenas o formato
+// generico e o caminho para o ir buscar dentro do CRM.
+function WebhookUrlBlock() {
+  const { organization, isLoading: authLoading } = useAuth();
+  const { data: webhooks = [], isLoading: webhooksLoading } = useLeadIntakeWebhooks();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const active = webhooks.filter((webhook) => webhook.is_active);
+  const options = active.length > 0 ? active : webhooks;
+  const selected = options.find((webhook) => webhook.id === selectedId) || options[0] || null;
+  const loading = authLoading || (!!organization && webhooksLoading);
+  const url = selected
+    ? `${SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=${selected.token}`
+    : WEBHOOK_URL_EXAMPLE;
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-950 text-white">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
+        <strong className="text-sm">{selected ? "O webhook da sua organizacao" : "Formato do URL"}</strong>
+        {loading ? (
+          <span className="flex items-center gap-2 text-xs text-slate-300">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            A carregar
+          </span>
+        ) : (
+          <CopyButton value={url} />
+        )}
+      </div>
+      <pre className="overflow-x-auto p-4 text-sm text-emerald-50">
+        <code>{url}</code>
+      </pre>
+      {selected ? (
+        <div className="space-y-2 border-t border-white/10 bg-slate-900 px-4 py-3 text-xs text-slate-300">
+          <p>
+            URL pronto a colar no Make, ja com o token de{" "}
+            <strong className="text-white">{organization?.name}</strong>. Nao precisa de escrever nada a mao.
+          </p>
+          {options.length > 1 && (
+            <label className="flex flex-wrap items-center gap-2">
+              <span>Webhook:</span>
+              <select
+                value={selected.id}
+                onChange={(event) => setSelectedId(event.target.value)}
+                className="rounded border border-white/20 bg-slate-950 px-2 py-1 text-xs text-white"
+              >
+                {options.map((webhook) => (
+                  <option key={webhook.id} value={webhook.id}>
+                    {webhook.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2 border-t border-white/10 bg-slate-900 px-4 py-3 text-xs text-slate-300">
+          <p>
+            Esta a ver o formato generico porque nao tem sessao iniciada neste navegador. Entre no SENVIA OS e volte a
+            abrir esta pagina: o token da sua organizacao aparece aqui automaticamente.
+          </p>
+          <Button asChild size="sm" variant="secondary" className="gap-2">
+            <Link to="/">
+              <ExternalLink className="h-4 w-4" />
+              Entrar no SENVIA OS
+            </Link>
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepCard({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
   return (
     <article className="grid gap-5 rounded-lg border border-emerald-950/10 bg-white p-5 shadow-sm md:grid-cols-[72px_1fr] md:p-7">
@@ -113,7 +211,7 @@ export default function TutorialMakeSenvia() {
       <SEO
         title="Tutorial Make + SENVIA OS"
         description="Guia para conectar Facebook Lead Ads ao SENVIA OS usando Make."
-        canonical="/tutorial/make-senvia"
+        canonical="/tutoriais/make"
       />
 
       <main className="min-h-screen bg-[#f6f7f3] text-slate-950">
@@ -124,6 +222,12 @@ export default function TutorialMakeSenvia() {
               <h1 className="text-xl font-black tracking-tight">Tutorial Make + Facebook Lead Ads</h1>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button asChild variant="ghost" className="gap-2">
+                <Link to="/tutoriais">
+                  <ArrowLeft className="h-4 w-4" />
+                  Todos os tutoriais
+                </Link>
+              </Button>
               <Button asChild variant="outline" className="gap-2">
                 <a href="#passos">
                   <PlayCircle className="h-4 w-4" />
@@ -247,22 +351,59 @@ export default function TutorialMakeSenvia() {
             </div>
           </StepCard>
 
-          <StepCard number="04" title="Copiar o webhook no SENVIA OS">
-            <p>No SENVIA OS, entre em Definicoes &gt; Integracoes &gt; Webhook de Entrada.</p>
-            <ul className="list-disc space-y-2 pl-5">
-              <li>Crie ou abra o webhook que sera usado para receber leads.</li>
-              <li>Defina a origem, pipeline ou responsavel conforme a configuracao da equipa.</li>
-              <li>Copie o URL do webhook para usar no Make.</li>
-            </ul>
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-950 text-white">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
-                <strong className="text-sm">Formato do URL</strong>
-                <CopyButton value="https://SEU-SUPABASE/functions/v1/submit-lead?mode=webhook&token=SEU_TOKEN" />
-              </div>
-              <pre className="overflow-x-auto p-4 text-sm text-emerald-50">
-                <code>https://SEU-SUPABASE/functions/v1/submit-lead?mode=webhook&amp;token=SEU_TOKEN</code>
-              </pre>
-            </div>
+          <StepCard number="04" title="Ir buscar o webhook dentro do SENVIA OS">
+            <p>
+              O endereco do SENVIA OS e sempre o mesmo para toda a gente. O que muda de organizacao para organizacao
+              e o <strong>token</strong> no fim do URL: e ele que identifica a sua conta e faz o lead entrar no CRM
+              certo. Por isso o URL tem de ser copiado de dentro do SENVIA OS.
+            </p>
+            <CrmPath />
+            <ol className="list-decimal space-y-3 pl-5">
+              <li>
+                Entre no SENVIA OS e, no menu lateral, clique em <strong>Definicoes</strong>.
+              </li>
+              <li>
+                Abra <strong>Integracoes</strong>. Vai ver os cartoes agrupados por tema.
+              </li>
+              <li>
+                No grupo <strong>Automacoes</strong>, clique no cartao <strong>Webhook de Entrada</strong> — o que diz
+                "Receber leads (Facebook, Zapier, Make)". Cuidado para nao escolher o "Webhook de Saida", que serve
+                para o contrario.
+              </li>
+              <li>
+                Confirme que o interruptor no canto superior direito esta <strong>ligado</strong>.
+              </li>
+              <li>
+                Clique em <strong>Adicionar Webhook</strong>. Na janela <em>Novo Webhook de Entrada</em>, escreva um
+                nome que identifique a origem (ex: Facebook Ads - Campanha Verao) e escolha a{" "}
+                <strong>atribuicao de leads</strong>: sem atribuicao, responsavel fixo ou rotacao entre colaboradores.
+                Depois clique em <strong>Criar webhook</strong>.
+              </li>
+              <li>
+                No cartao do webhook criado, clique em <strong>Editar</strong>. Confirme que o estado no topo diz{" "}
+                <strong>Ativo</strong>.
+              </li>
+              <li>
+                No campo <strong>URL DO WEBHOOK</strong>, clique no botao de copiar ao lado da caixa. E este o URL que
+                vai colar no Make, no passo 07.
+              </li>
+            </ol>
+            <p>
+              Nao quer criar um webhook novo? Cada organizacao ja tem um <strong>Webhook Principal</strong> criado
+              automaticamente nesse mesmo ecra — pode abrir esse e copiar o URL da mesma forma.
+            </p>
+            <Button asChild variant="outline" className="gap-2">
+              <a href={SETTINGS_WEBHOOKS_LINK} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4" />
+                Abrir Definicoes &gt; Integracoes
+              </a>
+            </Button>
+            <WebhookUrlBlock />
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              Trate este URL como uma palavra-passe: quem o tiver consegue criar leads na sua conta. Nao o publique
+              nem o partilhe fora da equipa. Se achar que ficou exposto, crie um novo webhook no mesmo ecra e
+              substitua o URL no Make.
+            </p>
           </StepCard>
 
           <StepCard number="05" title="Adicionar o modulo HTTP">
@@ -299,7 +440,7 @@ export default function TutorialMakeSenvia() {
               </div>
               {[
                 ["Method", "POST"],
-                ["URL", "URL copiado no SENVIA OS"],
+                ["URL", "O URL copiado no passo 04 (ja inclui o token da sua organizacao)"],
                 ["Headers", "Content-Type: application/json"],
                 ["Body type", "Raw ou JSON, conforme aparecer na conta Make"],
               ].map(([field, value]) => (

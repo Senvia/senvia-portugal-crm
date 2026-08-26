@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target, CreditCard, Stethoscope } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound, Target, CreditCard, Stethoscope, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StripeIntegrationCard } from "@/components/settings/StripeIntegrationCard";
 import { useStripeConnection } from "@/hooks/useStripeConnection";
@@ -789,6 +789,12 @@ function InboundWebhookSection() {
           <li>Body type: <strong>JSON</strong> — mapeia <code className="bg-muted px-1 rounded text-xs">name</code>, <code className="bg-muted px-1 rounded text-xs">email</code>, <code className="bg-muted px-1 rounded text-xs">phone</code>, <code className="bg-muted px-1 rounded text-xs">company</code></li>
         </ol>
         <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ Não partilhes estes URLs publicamente.</p>
+        <Link
+          to="/tutoriais/make"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:underline"
+        >
+          <GraduationCap className="h-3.5 w-3.5" /> Ver tutorial passo a passo (Facebook Lead Ads + Make)
+        </Link>
       </div>
     </div>
   );
