@@ -95,10 +95,10 @@ const CRM_PATH = ["Definicoes", "Integracoes", "Automacoes", "Webhook de Entrada
 
 function CrmPath() {
   return (
-    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2 rounded-lg border border-emerald-700/20 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2 rounded-lg border border-blue-600/20 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
       {CRM_PATH.map((label, index) => (
         <li key={label} className="flex items-center gap-1.5">
-          {index > 0 && <ChevronRight className="h-4 w-4 text-emerald-600/60" aria-hidden />}
+          {index > 0 && <ChevronRight className="h-4 w-4 text-blue-500/60" aria-hidden />}
           <span className="rounded-md bg-white px-2 py-1 shadow-sm">{label}</span>
         </li>
       ))}
@@ -135,7 +135,7 @@ function WebhookUrlBlock() {
           <CopyButton value={url} />
         )}
       </div>
-      <pre className="overflow-x-auto p-4 text-sm text-emerald-50">
+      <pre className="overflow-x-auto p-4 text-sm text-slate-100">
         <code>{url}</code>
       </pre>
       {selected ? (
@@ -181,8 +181,8 @@ function WebhookUrlBlock() {
 
 function StepCard({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
   return (
-    <article className="grid gap-5 rounded-lg border border-emerald-950/10 bg-white p-5 shadow-sm md:grid-cols-[72px_1fr] md:p-7">
-      <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-emerald-700/20 bg-emerald-50 text-lg font-black text-emerald-800">
+    <article className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-[72px_1fr] md:p-7">
+      <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-blue-600/20 bg-blue-50 text-lg font-black text-blue-700">
         {number}
       </div>
       <div className="min-w-0">
@@ -214,11 +214,11 @@ export default function TutorialMakeSenvia() {
         canonical="/tutoriais/make"
       />
 
-      <main className="min-h-screen bg-[#f6f7f3] text-slate-950">
-        <header className="border-b border-emerald-950/10 bg-white/85 backdrop-blur">
+      <main className="min-h-screen bg-slate-50 text-slate-950">
+        <header className="border-b border-slate-200 bg-white/85 backdrop-blur">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">SENVIA OS</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">SENVIA OS</p>
               <h1 className="text-xl font-black tracking-tight">Tutorial Make + Facebook Lead Ads</h1>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -234,7 +234,7 @@ export default function TutorialMakeSenvia() {
                   Ver passos
                 </a>
               </Button>
-              <Button type="button" className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => window.print()}>
+              <Button type="button" className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => window.print()}>
                 <Printer className="h-4 w-4" />
                 Imprimir PDF
               </Button>
@@ -244,7 +244,7 @@ export default function TutorialMakeSenvia() {
 
         <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.08fr_0.92fr] lg:px-8 lg:py-16">
           <div className="flex flex-col justify-center">
-            <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800">
+            <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-blue-600/20 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
               <ShieldCheck className="h-4 w-4" />
               Guia para configurar sozinho
             </p>
@@ -257,7 +257,7 @@ export default function TutorialMakeSenvia() {
             </p>
           </div>
 
-          <aside className="rounded-lg border border-emerald-950/10 bg-white p-5 shadow-sm">
+          <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-lg font-bold">Fluxo da integracao</h3>
             <div className="mt-5 space-y-3">
               {[
@@ -280,8 +280,8 @@ export default function TutorialMakeSenvia() {
 
         <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-emerald-700/20 bg-emerald-50 p-5">
-              <CheckCircle2 className="mb-3 h-6 w-6 text-emerald-700" />
+            <div className="rounded-lg border border-blue-600/20 bg-blue-50 p-5">
+              <CheckCircle2 className="mb-3 h-6 w-6 text-blue-600" />
               <h3 className="font-bold text-slate-950">O que vai ser configurado</h3>
               <p className="mt-2 text-sm text-slate-600">Facebook Lead Ads, Make e webhook de entrada do SENVIA OS.</p>
             </div>
@@ -300,7 +300,7 @@ export default function TutorialMakeSenvia() {
 
         <section id="passos" className="mx-auto max-w-7xl space-y-5 px-4 py-10 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-bold uppercase tracking-wider text-emerald-700">Passo a passo</p>
+            <p className="text-sm font-bold uppercase tracking-wider text-blue-600">Passo a passo</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">Configurar o scenario no Make</h2>
             <p className="mt-4 text-slate-600">Siga os passos na ordem. No fim, execute um teste antes de deixar a automacao ativa.</p>
           </div>
@@ -308,7 +308,7 @@ export default function TutorialMakeSenvia() {
           <StepCard number="01" title="Criar conta no Make">
             <p>
               Acesse{" "}
-              <a href="https://us2.make.com/" target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline underline-offset-4">
+              <a href="https://us2.make.com/" target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline underline-offset-4">
                 us2.make.com <ExternalLink className="inline h-3 w-3" />
               </a>
               , crie uma conta gratuita ou entre numa conta existente.
@@ -455,7 +455,7 @@ export default function TutorialMakeSenvia() {
                 <strong className="text-sm">Exemplo de JSON</strong>
                 <CopyButton value={payload} />
               </div>
-              <pre className="overflow-x-auto p-4 text-sm text-emerald-50">
+              <pre className="overflow-x-auto p-4 text-sm text-slate-100">
                 <code>{payload}</code>
               </pre>
             </div>
@@ -485,14 +485,14 @@ export default function TutorialMakeSenvia() {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {checklist.map((item) => (
                   <label key={item} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <input type="checkbox" className="mt-1 accent-emerald-700" />
+                    <input type="checkbox" className="mt-1 accent-blue-600" />
                     <span>{item}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            <aside className="rounded-lg border border-emerald-700/20 bg-emerald-50 p-5 md:p-7">
+            <aside className="rounded-lg border border-blue-600/20 bg-blue-50 p-5 md:p-7">
               <h2 className="text-2xl font-black tracking-tight text-slate-950">Explicacao simples</h2>
               <p className="mt-4 text-slate-700">
                 O formulario continua igual para quem preenche. A diferenca e que, assim que uma pessoa envia os dados,

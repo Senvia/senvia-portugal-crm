@@ -30,16 +30,16 @@ export default function Tutoriais() {
         canonical="/tutoriais"
       />
 
-      <main className="min-h-screen bg-[#f6f7f3] text-slate-950">
-        <header className="border-b border-emerald-950/10 bg-white/85 backdrop-blur">
+      <main className="min-h-screen bg-slate-50 text-slate-950">
+        <header className="border-b border-slate-200 bg-white/85 backdrop-blur">
           <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">SENVIA OS</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">SENVIA OS</p>
             <h1 className="text-xl font-black tracking-tight">Tutoriais</h1>
           </div>
         </header>
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-          <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800">
+          <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-blue-600/20 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
             <GraduationCap className="h-4 w-4" />
             Guias para configurar sozinho
           </p>
@@ -56,20 +56,20 @@ export default function Tutoriais() {
               <Link
                 key={tutorial.to}
                 to={tutorial.to}
-                className="group flex flex-col rounded-lg border border-emerald-950/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md md:p-6"
+                className="group flex flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md md:p-6"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-emerald-700/20 bg-emerald-50 text-emerald-800">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-blue-600/20 bg-blue-50 text-blue-700">
                     <Plug className="h-5 w-5" />
                   </span>
-                  <div className="flex flex-wrap gap-2 text-xs font-semibold text-emerald-800">
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1">{tutorial.tag}</span>
+                  <div className="flex flex-wrap gap-2 text-xs font-semibold text-blue-700">
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1">{tutorial.tag}</span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{tutorial.duration}</span>
                   </div>
                 </div>
                 <h3 className="mt-4 text-xl font-bold tracking-tight">{tutorial.title}</h3>
                 <p className="mt-2 flex-1 text-sm text-slate-600">{tutorial.description}</p>
-                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700">
                   Abrir tutorial
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </span>
