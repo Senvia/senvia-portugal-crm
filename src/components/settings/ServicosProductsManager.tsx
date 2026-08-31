@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
+import { cn } from '@/lib/utils';
 import type { CatalogProduct } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -39,6 +40,8 @@ export function ServicosProductsManager() {
       price: 0,
       has_commission: false,
       commission_pct: 0,
+      commission_type: 'pct',
+      commission_fixed: 0,
     }]);
     setNewName('');
   };
@@ -106,6 +109,7 @@ export function ServicosProductsManager() {
                     onCheckedChange={(checked) => updateProduct(product.name, {
                       has_commission: checked,
                       commission_pct: checked ? product.commission_pct : 0,
+                      commission_fixed: checked ? product.commission_fixed ?? 0 : 0,
                     })}
                   />
                 </div>
@@ -113,17 +117,59 @@ export function ServicosProductsManager() {
 
               {product.has_commission && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={product.commission_pct || ''}
-                    onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
-                    placeholder="0"
-                    className="h-9"
-                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs text-muted-foreground">
+                      {product.commission_type === 'fixed' ? 'Comissão (€)' : 'Comissão (%)'}
+                    </Label>
+                    <div className="flex overflow-hidden rounded-md border">
+                      <button
+                        type="button"
+                        onClick={() => updateProduct(product.name, { commission_type: 'pct' })}
+                        className={cn(
+                          'px-2 py-0.5 text-[11px] leading-5 transition-colors',
+                          product.commission_type !== 'fixed'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateProduct(product.name, { commission_type: 'fixed' })}
+                        className={cn(
+                          'px-2 py-0.5 text-[11px] leading-5 transition-colors',
+                          product.commission_type === 'fixed'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        €
+                      </button>
+                    </div>
+                  </div>
+                  {product.commission_type === 'fixed' ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={product.commission_fixed || ''}
+                      onChange={(e) => updateProduct(product.name, { commission_fixed: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                      className="h-9"
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={product.commission_pct || ''}
+                      onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="h-9"
+                    />
+                  )}
                 </div>
               )}
             </div>

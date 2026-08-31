@@ -32,7 +32,8 @@ import {
   type ProposalType,
   type ModeloServico,
   type NegotiationType,
-  type Proposal 
+  type Proposal,
+  getCatalogCommission,
 } from '@/types/proposals';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
@@ -235,10 +236,17 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       if (isNewFormat && catalog) {
         const catProduct = catalog.find(c => c.name === produto);
         if (catProduct) {
-          const comissao = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+          const comissao = getCatalogCommission(catProduct);
           setServicosDetails(d => ({
             ...d,
-            [produto]: { name: catProduct.name, price: catProduct.price, commission_pct: catProduct.commission_pct, comissao },
+            [produto]: {
+              name: catProduct.name,
+              price: catProduct.price,
+              commission_pct: catProduct.commission_pct,
+              commission_type: catProduct.commission_type ?? 'pct',
+              commission_fixed: catProduct.commission_fixed ?? 0,
+              comissao,
+            },
           }));
         }
       }

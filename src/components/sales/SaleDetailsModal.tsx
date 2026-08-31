@@ -280,7 +280,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     displayComissao != null ||
     proposalCpesHaveEnergyValues
   );
-  const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; comissao?: number; name?: string }> | null;
+  const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; commission_type?: string; comissao?: number; name?: string }> | null;
   const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
     sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
   );
@@ -562,7 +562,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                         {detail?.comissao != null && detail.comissao > 0 && (
                                           <p className="text-xs text-muted-foreground">
                                             Comissão: <span className="text-green-500 font-medium">{formatCurrency(detail.comissao)}</span>
-                                            {detail.commission_pct != null && ` (${detail.commission_pct}%)`}
+                                            {detail.commission_type !== 'fixed' && detail.commission_pct != null && ` (${detail.commission_pct}%)`}
                                           </p>
                                         )}
                                       </div>

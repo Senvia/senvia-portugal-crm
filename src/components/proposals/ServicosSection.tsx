@@ -16,7 +16,7 @@ import type {
   CatalogProduct,
   ModeloServico,
 } from '@/types/proposals';
-import { FIELD_LABELS } from '@/types/proposals';
+import { FIELD_LABELS, getCatalogCommission } from '@/types/proposals';
 
 interface ServicosSectionProps {
   modeloServico: ModeloServico;
@@ -137,12 +137,12 @@ function CatalogProducts({
     onToggleProduct(value);
     const catProduct = catalog.find((c) => c.name === value);
     if (catProduct) {
-      const comissaoVal = catProduct.has_commission
-        ? Math.round(catProduct.price * catProduct.commission_pct) / 100
-        : 0;
+      const comissaoVal = getCatalogCommission(catProduct);
       onSetProductDetail(value, {
         price: catProduct.price,
         commission_pct: catProduct.commission_pct,
+        commission_type: catProduct.commission_type ?? 'pct',
+        commission_fixed: catProduct.commission_fixed ?? 0,
         comissao: comissaoVal,
       });
     }
@@ -174,7 +174,9 @@ function CatalogProducts({
           if (!catProduct) return null;
           const detail = servicosDetails[productName] || {};
           const price = detail.price ?? catProduct.price;
+          const isFixedCommission = (detail.commission_type ?? catProduct.commission_type) === 'fixed';
           const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
+          const commissionFixed = detail.commission_fixed ?? catProduct.commission_fixed ?? 0;
 
           return (
             <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
@@ -183,7 +185,7 @@ function CatalogProducts({
                   <span className="text-sm font-medium">{detail.name ?? productName}</span>
                   {catProduct.has_commission && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {commissionPct}% comissão
+                      {isFixedCommission ? `${commissionFixed} € comissão` : `${commissionPct}% comissão`}
                     </Badge>
                   )}
                 </div>

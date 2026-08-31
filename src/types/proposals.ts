@@ -154,6 +154,8 @@ export interface ServicosProductDetail {
   name?: string;
   price?: number;
   commission_pct?: number;
+  commission_type?: CommissionType;
+  commission_fixed?: number;
 }
 
 export type ServicosDetails = Record<string, ServicosProductDetail>;
@@ -181,9 +183,22 @@ export const FIELD_LABELS: Record<string, string> = {
 };
 
 // ─── New catalog format (Escolha Inteligente, etc.) ───
+export type CommissionType = 'pct' | 'fixed';
+
 export interface CatalogProduct {
   name: string;
   price: number;
   has_commission: boolean;
   commission_pct: number;
+  // 'fixed' pays commission_fixed euros per unit. Absent means 'pct', so
+  // catalogs saved before this option keep behaving exactly as before.
+  commission_type?: CommissionType;
+  commission_fixed?: number;
+}
+
+/** Commission earned for one unit of a catalog product, in euros. */
+export function getCatalogCommission(product: CatalogProduct): number {
+  if (!product.has_commission) return 0;
+  if (product.commission_type === 'fixed') return product.commission_fixed ?? 0;
+  return Math.round(product.price * product.commission_pct) / 100;
 }

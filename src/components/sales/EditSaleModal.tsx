@@ -57,7 +57,7 @@ import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getCatalogCommission } from "@/types/proposals";
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
@@ -740,12 +740,14 @@ export function EditSaleModal({
                               setServicosProdutos(prev => [...prev, name]);
                               const catProduct = catalog?.find(c => c.name === name);
                               if (catProduct) {
-                                const comissaoVal = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+                                const comissaoVal = getCatalogCommission(catProduct);
                                 setServicosDetails(prev => ({
                                   ...prev,
                                   [name]: {
                                     price: catProduct.price,
                                     commission_pct: catProduct.commission_pct,
+                                    commission_type: catProduct.commission_type ?? 'pct',
+                                    commission_fixed: catProduct.commission_fixed ?? 0,
                                     comissao: comissaoVal,
                                   },
                                 }));

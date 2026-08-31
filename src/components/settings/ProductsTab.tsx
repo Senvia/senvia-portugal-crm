@@ -64,6 +64,11 @@ export function ProductsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Telecom orgs never see the products table in Nova Venda / Nova Proposta:
+          those modals read the "Outros Serviços" catalog instead. Showing both
+          catalogs here would offer a product list that cannot be sold. */}
+      {!showServicosManager && (
+      <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div>
@@ -190,6 +195,8 @@ export function ProductsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
+      )}
 
       {showServicosManager && <ServicosProductsManager />}
     </div>

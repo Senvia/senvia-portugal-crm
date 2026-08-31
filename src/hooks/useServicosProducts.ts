@@ -17,6 +17,8 @@ interface CatalogConfigFromDB {
   price: number;
   has_commission: boolean;
   commission_pct: number;
+  commission_type?: 'pct' | 'fixed';
+  commission_fixed?: number;
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -53,6 +55,8 @@ export function useServicosProducts() {
         price: c.price ?? 0,
         has_commission: c.has_commission ?? false,
         commission_pct: c.commission_pct ?? 0,
+        commission_type: c.commission_type ?? 'pct',
+        commission_fixed: c.commission_fixed ?? 0,
       }));
       return {
         products: catalog.map((c) => c.name),
