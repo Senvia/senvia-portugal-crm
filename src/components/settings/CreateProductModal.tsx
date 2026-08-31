@@ -23,7 +23,7 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
   const [price, setPrice] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [commissionValue, setCommissionValue] = useState('');
-  const [commissionRenewalValue, setCommissionRenewalValue] = useState('');
+  const [commissionRenewalValue, setCommissionRenewalValue] = useState('0');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +37,7 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
       tax_value: null,
       tax_exemption_reason: null,
       commission_value: commissionValue ? parseFloat(commissionValue) : null,
-      commission_renewal_value: commissionRenewalValue ? parseFloat(commissionRenewalValue) : null,
+      commission_renewal_value: commissionRenewalValue !== '' ? parseFloat(commissionRenewalValue) : 0,
     }, {
       onSuccess: (product) => {
         setName('');
@@ -45,7 +45,7 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
         setPrice('');
         setIsRecurring(false);
         setCommissionValue('');
-        setCommissionRenewalValue('');
+        setCommissionRenewalValue('0');
         onOpenChange(false);
         if (onCreated) onCreated(product);
       },
@@ -113,7 +113,7 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="commission-renewal" className="text-xs">
-                  Renovação (€){commissionValue && parseFloat(commissionValue) > 0 ? " *" : ""}
+                  Renovação (€)
                 </Label>
                 <Input
                   id="commission-renewal"
@@ -123,15 +123,9 @@ export function CreateProductModal({ open, onOpenChange, onCreated }: CreateProd
                   value={commissionRenewalValue}
                   onChange={(e) => setCommissionRenewalValue(e.target.value)}
                   placeholder="0.00"
-                  required={!!commissionValue && parseFloat(commissionValue) > 0}
                 />
               </div>
             </div>
-            {commissionValue && parseFloat(commissionValue) > 0 && !commissionRenewalValue && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Define a comissão de renovação (já não existe o 25% automático).
-              </p>
-            )}
           </div>
 
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">

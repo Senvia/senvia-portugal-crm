@@ -33,7 +33,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
   const [isActive, setIsActive] = useState(product.is_active);
   const [isRecurring, setIsRecurring] = useState(product.is_recurring);
   const [commissionValue, setCommissionValue] = useState(product.commission_value?.toString() || '');
-  const [commissionRenewalValue, setCommissionRenewalValue] = useState(product.commission_renewal_value?.toString() || '');
+  const [commissionRenewalValue, setCommissionRenewalValue] = useState(product.commission_renewal_value?.toString() ?? '0');
 
   useEffect(() => {
     setName(product.name);
@@ -42,7 +42,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
     setIsActive(product.is_active);
     setIsRecurring(product.is_recurring);
     setCommissionValue(product.commission_value?.toString() || '');
-    setCommissionRenewalValue(product.commission_renewal_value?.toString() || '');
+    setCommissionRenewalValue(product.commission_renewal_value?.toString() ?? '0');
   }, [product]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -60,7 +60,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
       tax_exemption_reason: null,
       invoicexpress_id: product.invoicexpress_id,
       commission_value: commissionValue ? parseFloat(commissionValue) : null,
-      commission_renewal_value: commissionRenewalValue ? parseFloat(commissionRenewalValue) : null,
+      commission_renewal_value: commissionRenewalValue !== '' ? parseFloat(commissionRenewalValue) : 0,
     }, {
       onSuccess: () => onOpenChange(false),
     });
@@ -128,7 +128,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="edit-commission-renewal" className="text-xs">
-                  Renovação (€){commissionValue && parseFloat(commissionValue) > 0 ? " *" : ""}
+                  Renovação (€)
                 </Label>
                 <Input
                   id="edit-commission-renewal"
@@ -138,15 +138,9 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
                   value={commissionRenewalValue}
                   onChange={(e) => setCommissionRenewalValue(e.target.value)}
                   placeholder="0.00"
-                  required={!!commissionValue && parseFloat(commissionValue) > 0}
                 />
               </div>
             </div>
-            {commissionValue && parseFloat(commissionValue) > 0 && !commissionRenewalValue && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Define a comissão de renovação (já não existe o 25% automático).
-              </p>
-            )}
           </div>
           )}
 
