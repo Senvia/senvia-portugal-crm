@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
+import { CreateTelecomProductModal } from './CreateTelecomProductModal';
 import { cn } from '@/lib/utils';
 import type { CatalogProduct } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
@@ -14,7 +15,7 @@ export function ServicosProductsManager() {
   const { data: org } = useOrganization();
   const updateOrg = useUpdateOrganization();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [newName, setNewName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   // Orgs still on the old [{name, fields}] shape cannot be edited here. Saving
   // would replace their catalog with an empty one, so we block it instead.
   const [isLegacyConfig, setIsLegacyConfig] = useState(false);
@@ -32,18 +33,10 @@ export function ServicosProductsManager() {
     updateOrg.mutate({ servicos_products_config: products as unknown as Json });
   };
 
-  const addProduct = () => {
-    if (!newName.trim()) return;
-    if (products.some(p => p.name.toLowerCase() === newName.trim().toLowerCase())) return;
-    setProducts(prev => [...prev, {
-      name: newName.trim(),
-      price: 0,
-      has_commission: false,
-      commission_pct: 0,
-      commission_type: 'pct',
-      commission_fixed: 0,
-    }]);
-    setNewName('');
+  const addProduct = (product: CatalogProduct) => {
+    const next = [...products, product];
+    setProducts(next);
+    updateOrg.mutate({ servicos_products_config: next as unknown as Json });
   };
 
   const removeProduct = (name: string) => {
@@ -58,15 +51,21 @@ export function ServicosProductsManager() {
 
   return (
     <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5" />
-          Produtos Telecom (Serviços)
-        </CardTitle>
-        <CardDescription>
-          Configure os produtos disponíveis para propostas e vendas de "Outros Serviços". 
-          Na hora da venda, os valores podem ser editados sem alterar o catálogo.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <Settings2 className="h-5 w-5" />
+            Produtos Telecom (Serviços)
+          </CardTitle>
+          <CardDescription>
+            Configure os produtos disponíveis para propostas e vendas de "Outros Serviços". 
+            Na hora da venda, os valores podem ser editados sem alterar o catálogo.
+          </CardDescription>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} size="sm" disabled={isLegacyConfig}>
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLegacyConfig && (
@@ -176,19 +175,15 @@ export function ServicosProductsManager() {
           </div>
         ))}
 
-        <div className="flex gap-2">
-          <Input
-            placeholder="Nome do novo produto..."
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addProduct()}
-            className="flex-1"
-          />
-          <Button variant="outline" size="sm" onClick={addProduct} disabled={!newName.trim()}>
-            <Plus className="h-4 w-4 mr-1" />
-            Adicionar
-          </Button>
-        </div>
+        {products.length === 0 && !isLegacyConfig && (
+          <div className="py-10 text-center">
+            <Settings2 className="mx-auto h-10 w-10 text-muted-foreground/40" />
+            <p className="mt-3 text-sm text-muted-foreground">Ainda não tem produtos configurados.</p>
+            <p className="text-sm text-muted-foreground">
+              Adicione produtos para os poder vender em propostas e vendas.
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-end pt-2">
           <Button onClick={handleSave} disabled={updateOrg.isPending || isLegacyConfig} size="sm">
@@ -196,6 +191,14 @@ export function ServicosProductsManager() {
           </Button>
         </div>
       </CardContent>
+
+      <CreateTelecomProductModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        existingNames={products.map(p => p.name)}
+        onCreate={addProduct}
+        isPending={updateOrg.isPending}
+      />
     </Card>
   );
 }
