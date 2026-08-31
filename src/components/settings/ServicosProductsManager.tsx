@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Settings2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Settings2, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,21 @@ import type { Json } from '@/integrations/supabase/types';
 
 export function ServicosProductsManager() {
   const { data: org } = useOrganization();
-  const updateOrg = useUpdateOrganization();
+  // Saves happen as the user edits, so a toast per field would be noise.
+  const updateOrg = useUpdateOrganization({ silent: true });
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   // Orgs still on the old [{name, fields}] shape cannot be edited here. Saving
   // would replace their catalog with an empty one, so we block it instead.
   const [isLegacyConfig, setIsLegacyConfig] = useState(false);
+  // While an edit is unsaved, the org refetch must not overwrite what is on
+  // screen: the server still holds the previous value.
+  const dirtyRef = useRef(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
+    if (dirtyRef.current) return;
     const saved = (org as any)?.servicos_products_config as CatalogProduct[] | null;
     const hasSaved = !!saved && Array.isArray(saved) && saved.length > 0;
     const isCatalog = hasSaved && typeof saved![0].price === 'number';
@@ -29,24 +36,48 @@ export function ServicosProductsManager() {
     setProducts(isCatalog ? saved! : []);
   }, [org]);
 
-  const handleSave = () => {
-    updateOrg.mutate({ servicos_products_config: products as unknown as Json });
+  useEffect(() => () => clearTimeout(savedTimerRef.current), []);
+
+  const persist = (next: CatalogProduct[]) => {
+    if (isLegacyConfig) return;
+    dirtyRef.current = true;
+    updateOrg.mutate(
+      { servicos_products_config: next as unknown as Json },
+      {
+        onSuccess: () => {
+          dirtyRef.current = false;
+          setJustSaved(true);
+          clearTimeout(savedTimerRef.current);
+          savedTimerRef.current = setTimeout(() => setJustSaved(false), 2000);
+        },
+        // Keep dirtyRef set on failure so the refetch cannot discard the edit.
+      },
+    );
   };
 
   const addProduct = (product: CatalogProduct) => {
     const next = [...products, product];
     setProducts(next);
-    updateOrg.mutate({ servicos_products_config: next as unknown as Json });
+    persist(next);
   };
 
   const removeProduct = (name: string) => {
-    setProducts(prev => prev.filter(p => p.name !== name));
+    const next = products.filter(p => p.name !== name);
+    setProducts(next);
+    persist(next);
   };
 
+  /** Local edit only. Text fields save on blur, so typing does not hit the DB. */
   const updateProduct = (name: string, updates: Partial<CatalogProduct>) => {
-    setProducts(prev => prev.map(p =>
-      p.name === name ? { ...p, ...updates } : p
-    ));
+    dirtyRef.current = true;
+    setProducts(prev => prev.map(p => (p.name === name ? { ...p, ...updates } : p)));
+  };
+
+  /** For controls with no blur of their own: switches and the %/€ toggle. */
+  const updateAndSave = (name: string, updates: Partial<CatalogProduct>) => {
+    const next = products.map(p => (p.name === name ? { ...p, ...updates } : p));
+    setProducts(next);
+    persist(next);
   };
 
   return (
@@ -58,14 +89,27 @@ export function ServicosProductsManager() {
             Produtos Telecom (Serviços)
           </CardTitle>
           <CardDescription>
-            Configure os produtos disponíveis para propostas e vendas de "Outros Serviços". 
+            Configure os produtos disponíveis para propostas e vendas de "Outros Serviços".
             Na hora da venda, os valores podem ser editados sem alterar o catálogo.
           </CardDescription>
         </div>
-        <Button onClick={() => setCreateOpen(true)} size="sm" disabled={isLegacyConfig}>
-          <Plus className="h-4 w-4 mr-2" />
-          Adicionar
-        </Button>
+        <div className="flex items-center gap-3">
+          {updateOrg.isPending ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              A guardar...
+            </span>
+          ) : justSaved ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Check className="h-3 w-3 text-green-500" />
+              Guardado
+            </span>
+          ) : null}
+          <Button onClick={() => setCreateOpen(true)} size="sm" disabled={isLegacyConfig}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLegacyConfig && (
@@ -85,7 +129,7 @@ export function ServicosProductsManager() {
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
@@ -95,6 +139,7 @@ export function ServicosProductsManager() {
                   min="0"
                   value={product.price || ''}
                   onChange={(e) => updateProduct(product.name, { price: parseFloat(e.target.value) || 0 })}
+                  onBlur={() => persist(products)}
                   placeholder="0.00"
                   className="h-9"
                 />
@@ -105,7 +150,7 @@ export function ServicosProductsManager() {
                 <div className="flex items-center h-9">
                   <Switch
                     checked={product.has_commission}
-                    onCheckedChange={(checked) => updateProduct(product.name, {
+                    onCheckedChange={(checked) => updateAndSave(product.name, {
                       has_commission: checked,
                       commission_pct: checked ? product.commission_pct : 0,
                       commission_fixed: checked ? product.commission_fixed ?? 0 : 0,
@@ -123,7 +168,7 @@ export function ServicosProductsManager() {
                     <div className="flex overflow-hidden rounded-md border">
                       <button
                         type="button"
-                        onClick={() => updateProduct(product.name, { commission_type: 'pct' })}
+                        onClick={() => updateAndSave(product.name, { commission_type: 'pct' })}
                         className={cn(
                           'px-2 py-0.5 text-[11px] leading-5 transition-colors',
                           product.commission_type !== 'fixed'
@@ -135,7 +180,7 @@ export function ServicosProductsManager() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateProduct(product.name, { commission_type: 'fixed' })}
+                        onClick={() => updateAndSave(product.name, { commission_type: 'fixed' })}
                         className={cn(
                           'px-2 py-0.5 text-[11px] leading-5 transition-colors',
                           product.commission_type === 'fixed'
@@ -154,6 +199,7 @@ export function ServicosProductsManager() {
                       min="0"
                       value={product.commission_fixed || ''}
                       onChange={(e) => updateProduct(product.name, { commission_fixed: parseFloat(e.target.value) || 0 })}
+                      onBlur={() => persist(products)}
                       placeholder="0.00"
                       className="h-9"
                     />
@@ -165,6 +211,7 @@ export function ServicosProductsManager() {
                       max="100"
                       value={product.commission_pct || ''}
                       onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
+                      onBlur={() => persist(products)}
                       placeholder="0"
                       className="h-9"
                     />
@@ -184,12 +231,6 @@ export function ServicosProductsManager() {
             </p>
           </div>
         )}
-
-        <div className="flex justify-end pt-2">
-          <Button onClick={handleSave} disabled={updateOrg.isPending || isLegacyConfig} size="sm">
-            {updateOrg.isPending ? 'A guardar...' : 'Guardar Produtos'}
-          </Button>
-        </div>
       </CardContent>
 
       <CreateTelecomProductModal

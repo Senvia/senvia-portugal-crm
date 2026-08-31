@@ -60,7 +60,12 @@ interface UpdateOrganizationData {
   ai_response_mode?: 'global' | 'per_form';
 }
 
-export function useUpdateOrganization() {
+/**
+ * @param options.silent skip the success toast. For screens that save on their
+ * own as the user edits, where one toast per field would be noise. Errors still
+ * toast either way.
+ */
+export function useUpdateOrganization(options?: { silent?: boolean }) {
   const { organization, refetchUserData } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -81,6 +86,7 @@ export function useUpdateOrganization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organization'] });
       refetchUserData();
+      if (options?.silent) return;
       toast({
         title: 'Guardado',
         description: 'Definições atualizadas com sucesso.',
