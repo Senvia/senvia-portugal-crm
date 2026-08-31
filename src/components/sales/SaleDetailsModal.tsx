@@ -70,6 +70,8 @@ import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
+import { useSaleCommissionSplits } from "@/hooks/useCommissionSplits";
+import { useTeamMembers } from "@/hooks/useTeam";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
@@ -169,6 +171,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
       setNotes(sale.notes || "");
     }
   }, [sale]);
+
+  // Per-beneficiary commission breakdown. Declared above the early return so
+  // the hook order never changes between renders.
+  const { data: commissionSplitsData } = useSaleCommissionSplits(sale?.id);
+  const commissionSplits = commissionSplitsData ?? [];
+  const { data: splitMembers } = useTeamMembers();
+  const splitBeneficiaryName = (userId: string) =>
+    (splitMembers ?? []).find((m) => m.user_id === userId)?.full_name || 'Desconhecido';
 
   if (!sale) return null;
 
@@ -596,6 +606,27 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <div className="col-span-2">
                               <p className="text-xs text-muted-foreground">Comissão</p>
                               <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
+                              {commissionSplits.length > 0 && (
+                                <div className="mt-2 space-y-1 border-t pt-2">
+                                  <p className="text-xs text-muted-foreground">Repartição</p>
+                                  {commissionSplits.map((split) => (
+                                    <div key={split.id} className="flex items-center justify-between gap-2">
+                                      <span className="text-xs">
+                                        {splitBeneficiaryName(split.user_id)}
+                                        {split.product_name && (
+                                          <span className="text-muted-foreground"> · {split.product_name}</span>
+                                        )}
+                                        {split.basis === 'pct' && (
+                                          <span className="text-muted-foreground"> · {split.rate}%</span>
+                                        )}
+                                      </span>
+                                      <span className="text-xs font-medium text-green-500">
+                                        {formatCurrency(split.amount)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

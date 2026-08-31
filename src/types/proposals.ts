@@ -185,6 +185,24 @@ export const FIELD_LABELS: Record<string, string> = {
 // ─── New catalog format (Escolha Inteligente, etc.) ───
 export type CommissionType = 'pct' | 'fixed';
 
+/**
+ * One line of a product's commission split.
+ *
+ * kind 'user'    pays the named user.
+ * kind 'profile' pays a single person, the seller of the sale, and only when
+ *                the seller holds that profile. It is how you say "whoever
+ *                sells this earns 30€" without naming anyone.
+ *
+ * 'pct' values are a percentage of the sale total.
+ */
+export interface CommissionSplit {
+  kind: 'user' | 'profile';
+  user_id?: string;
+  profile_id?: string;
+  type: CommissionType;
+  value: number;
+}
+
 export interface CatalogProduct {
   name: string;
   price: number;
@@ -194,6 +212,9 @@ export interface CatalogProduct {
   // catalogs saved before this option keep behaving exactly as before.
   commission_type?: CommissionType;
   commission_fixed?: number;
+  // When set, the sale pays these people instead of a single commission.
+  // Amounts are frozen per sale in sale_commission_splits.
+  splits?: CommissionSplit[];
 }
 
 /** Commission earned for one unit of a catalog product, in euros. */

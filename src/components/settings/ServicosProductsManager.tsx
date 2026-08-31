@@ -7,14 +7,19 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { CreateTelecomProductModal } from './CreateTelecomProductModal';
+import { CommissionSplitsEditor } from './CommissionSplitsEditor';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
 import { cn } from '@/lib/utils';
-import type { CatalogProduct } from '@/types/proposals';
+import type { CatalogProduct, CommissionSplit } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
 
 export function ServicosProductsManager() {
   const { data: org } = useOrganization();
   // Saves happen as the user edits, so a toast per field would be noise.
   const updateOrg = useUpdateOrganization({ silent: true });
+  const { data: teamMembers } = useTeamMembers();
+  const { profiles } = useOrganizationProfiles();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -219,6 +224,14 @@ export function ServicosProductsManager() {
                 </div>
               )}
             </div>
+
+            <CommissionSplitsEditor
+              splits={product.splits ?? []}
+              members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
+              profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
+              onChange={(splits: CommissionSplit[]) => updateProduct(product.name, { splits })}
+              onCommit={(splits: CommissionSplit[]) => updateAndSave(product.name, { splits })}
+            />
           </div>
         ))}
 

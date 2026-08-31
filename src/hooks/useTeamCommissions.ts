@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchSplitsBySale } from '@/hooks/useCommissionSplits';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { startOfMonth, endOfMonth } from 'date-fns';
 
@@ -117,26 +118,37 @@ export function useTeamCommissions(selectedMonth: string, effectiveUserIds?: str
         return m?.full_name || 'Desconhecido';
       };
 
+      // Sales can pay several people (sale_commission_splits). Without splits
+      // the whole commission still goes to the resolved commercial.
+      const splitsBySale = await fetchSplitsBySale(inMonth.map((s) => s.id as string));
+
       const byUser = new Map<string, TeamCommissionEntry>();
       for (const sale of inMonth) {
-        const userId = getCommercial(sale) || 'unassigned';
-        let entry = byUser.get(userId);
-        if (!entry) {
-          entry = { userId, name: memberName(userId), totalCommission: 0, salesCount: 0, sales: [] };
-          byUser.set(userId, entry);
-        }
         const commission = Number(sale.comissao || 0);
-        entry.totalCommission += commission;
-        entry.salesCount += 1;
-        entry.sales.push({
-          saleId: sale.id,
-          saleCode: (sale.code as string) || null,
-          clientName: getClientName(sale),
-          saleDate: sale.sale_date as string | null,
-          activationDate: sale.activation_date as string | null,
-          totalValue: Number(sale.total_value || 0),
-          comissao: commission,
-        });
+        const splits = splitsBySale.get(sale.id);
+        const shares = splits && splits.length > 0
+          ? splits.map((sp) => ({ userId: sp.user_id, amount: sp.amount }))
+          : [{ userId: getCommercial(sale) || 'unassigned', amount: commission }];
+
+        for (const share of shares) {
+          const userId = share.userId || 'unassigned';
+          let entry = byUser.get(userId);
+          if (!entry) {
+            entry = { userId, name: memberName(userId), totalCommission: 0, salesCount: 0, sales: [] };
+            byUser.set(userId, entry);
+          }
+          entry.totalCommission += share.amount;
+          entry.salesCount += 1;
+          entry.sales.push({
+            saleId: sale.id,
+            saleCode: (sale.code as string) || null,
+            clientName: getClientName(sale),
+            saleDate: sale.sale_date as string | null,
+            activationDate: sale.activation_date as string | null,
+            totalValue: Number(sale.total_value || 0),
+            comissao: share.amount,
+          });
+        }
       }
 
       let commercials = Array.from(byUser.values());

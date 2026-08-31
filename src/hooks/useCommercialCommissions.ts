@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchSplitsBySale } from '@/hooks/useCommissionSplits';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, format } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
@@ -238,23 +239,42 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         return e;
       };
 
+      // A sale can pay several people (sale_commission_splits). Where splits
+      // exist the commission is divided by them; sales without splits keep the
+      // single-commercial behaviour resolved by getCommercial().
+      const splitsBySale = await fetchSplitsBySale(monthItems.map((mi) => mi.sale.id as string));
+
       for (const mi of monthItems) {
         const s = mi.sale;
-        const e = ensure(getCommercial(s));
         const paid = !!s.commission_paid_at;
-        e.items.push({
-          kind: 'direct',
-          id: s.id,
-          label: getClientName(s),
-          date: mi.date,
-          amount: mi.amount,
-          saleValue: Number(s.total_value || 0),
-          paid,
-          proportional: mi.proportional,
-        });
-        e.total += mi.amount;
-        if (paid) e.totalPaid += mi.amount;
-        else { e.totalPending += mi.amount; e.pendingSaleIds.push(s.id); }
+        const splits = splitsBySale.get(s.id);
+
+        // mi.amount can already be a fraction of the commission (proportional to
+        // the payments received this month), so each share keeps that fraction.
+        const saleCommission = Number(s.comissao || 0);
+        const factor = saleCommission > 0 ? mi.amount / saleCommission : 0;
+
+        const shares = splits && splits.length > 0
+          ? splits.map((sp) => ({ userId: sp.user_id, amount: sp.amount * factor }))
+          : [{ userId: getCommercial(s), amount: mi.amount }];
+
+        for (const share of shares) {
+          if (!share.userId) continue;
+          const e = ensure(share.userId);
+          e.items.push({
+            kind: 'direct',
+            id: s.id,
+            label: getClientName(s),
+            date: mi.date,
+            amount: share.amount,
+            saleValue: Number(s.total_value || 0),
+            paid,
+            proportional: mi.proportional,
+          });
+          e.total += share.amount;
+          if (paid) e.totalPaid += share.amount;
+          else { e.totalPending += share.amount; e.pendingSaleIds.push(s.id); }
+        }
       }
       for (const r of recs) {
         const e = ensure((r.user_id as string) || 'unassigned');
