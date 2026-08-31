@@ -14,15 +14,17 @@ export function ServicosProductsManager() {
   const updateOrg = useUpdateOrganization();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [newName, setNewName] = useState('');
+  // Orgs still on the old [{name, fields}] shape cannot be edited here. Saving
+  // would replace their catalog with an empty one, so we block it instead.
+  const [isLegacyConfig, setIsLegacyConfig] = useState(false);
 
   useEffect(() => {
     const saved = (org as any)?.servicos_products_config as CatalogProduct[] | null;
-    if (saved && Array.isArray(saved) && saved.length > 0 && typeof saved[0].price === 'number') {
-      setProducts(saved);
-    } else {
-      // Start with empty catalog for new orgs
-      setProducts([]);
-    }
+    const hasSaved = !!saved && Array.isArray(saved) && saved.length > 0;
+    const isCatalog = hasSaved && typeof saved![0].price === 'number';
+    setIsLegacyConfig(hasSaved && !isCatalog);
+    // Start with an empty catalog for new orgs
+    setProducts(isCatalog ? saved! : []);
   }, [org]);
 
   const handleSave = () => {
@@ -64,6 +66,15 @@ export function ServicosProductsManager() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isLegacyConfig && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Esta organização tem um catálogo no formato antigo, que este ecrã não sabe editar.
+              Guardar aqui apagaria esse catálogo, por isso a gravação está bloqueada.
+              Contacta o suporte para o converter.
+            </p>
+          </div>
+        )}
         {products.map((product) => (
           <div key={product.name} className="p-4 rounded-lg border bg-card space-y-3">
             <div className="flex items-center justify-between">
@@ -134,7 +145,7 @@ export function ServicosProductsManager() {
         </div>
 
         <div className="flex justify-end pt-2">
-          <Button onClick={handleSave} disabled={updateOrg.isPending} size="sm">
+          <Button onClick={handleSave} disabled={updateOrg.isPending || isLegacyConfig} size="sm">
             {updateOrg.isPending ? 'A guardar...' : 'Guardar Produtos'}
           </Button>
         </div>

@@ -7,7 +7,6 @@ import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServicosProductsManager } from './ServicosProductsManager';
-import { hasPerfect2GetherAccess } from '@/lib/perfect2gether';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import { ProductStripeBadge } from './ProductStripeSync';
@@ -31,15 +30,12 @@ export function ProductsTab() {
   // numa cascata de chamadas.
   const { data: stripeMappings = {} } = useStripeProductMappings();
   const syncItems = useSyncInvoiceXpressItems();
-  const { organization, organizations, isSuperAdmin } = useAuth();
-  // The "Produtos Telecom (Serviços)" section below is legacy Perfect2Gether
-  // catalog (Solar/Baterias/Carregadores/...). Only show for Perfect2Gether
-  // orgs — every other telecom org uses the standard products table above.
-  const showServicosManager = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
+  const { organization } = useAuth();
+  // The "Outros Serviços" catalog (organizations.servicos_products_config) feeds
+  // the product picker in Nova Venda and Nova Proposta for telecom orgs, which
+  // never see the standard products table there. This is its only editor, so
+  // every telecom org needs it.
+  const showServicosManager = organization?.niche === 'telecom';
   const hasInvoiceXpress = !!(organization as any)?.tem_invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
