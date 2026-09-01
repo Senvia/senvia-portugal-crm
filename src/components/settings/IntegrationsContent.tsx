@@ -570,11 +570,22 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
   useEffect(() => { setNameDraft(webhook.name); }, [webhook.name, open]);
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=${webhook.token}`;
-  const selected = webhook.assigned_user_ids || [];
   const handleCopy = () => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-  const assignMode = deriveAssignmentMode(selected, webhook.rotate_enabled);
+  // Local state, not derived on every render: an empty selection persists as
+  // 'none' server-side (assigned_user_ids=[]), so re-deriving the mode from
+  // the webhook after every save would snap "Responsável fixo"/"Rotação"
+  // straight back to "Sem atribuição" before the user picks anyone.
+  const [assignMode, setAssignMode] = useState<AssignmentMode>(() => deriveAssignmentMode(webhook.assigned_user_ids, webhook.rotate_enabled));
+  const [assignUsers, setAssignUsers] = useState<string[]>(() => webhook.assigned_user_ids || []);
+  useEffect(() => {
+    setAssignMode(deriveAssignmentMode(webhook.assigned_user_ids, webhook.rotate_enabled));
+    setAssignUsers(webhook.assigned_user_ids || []);
+  }, [webhook.id, open]);
+
   const applyAssignment = (mode: AssignmentMode, userIds: string[]) => {
+    setAssignMode(mode);
+    setAssignUsers(userIds);
     const f = assignmentToFields(mode, userIds);
     updateWebhook.mutate({ id: webhook.id, assigned_user_ids: f.assigned_user_ids, rotate_enabled: f.rotate_enabled });
   };
@@ -641,7 +652,7 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
             <AssignmentSelector
               members={members}
               mode={assignMode}
-              userIds={selected}
+              userIds={assignUsers}
               noun="leads"
               onChange={({ mode, userIds }) => applyAssignment(mode, userIds)}
             />
