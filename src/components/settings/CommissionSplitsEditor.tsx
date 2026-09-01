@@ -59,16 +59,16 @@ export function CommissionSplitsEditor({
   return (
     <div className="space-y-2 border-t pt-3">
       <div className="flex items-center justify-between">
-        <Label className="text-xs text-muted-foreground">Repartição da comissão</Label>
+        <Label className="text-xs text-muted-foreground">Comissões</Label>
         <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addLine}>
           <Plus className="h-3 w-3 mr-1" />
-          Adicionar pessoa
+          Adicionar comissão
         </Button>
       </div>
 
       {splits.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Sem repartição. A comissão do produto fica toda para o comercial da venda, como até aqui.
+          Sem comissão configurada para este produto.
         </p>
       ) : (
         <div className="space-y-2">

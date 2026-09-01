@@ -4,14 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { CreateTelecomProductModal } from './CreateTelecomProductModal';
 import { CommissionSplitsEditor } from './CommissionSplitsEditor';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
-import { cn } from '@/lib/utils';
 import type { CatalogProduct, CommissionSplit } from '@/types/proposals';
+import { deriveCommissionFields } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
 
 export function ServicosProductsManager() {
@@ -135,102 +134,26 @@ export function ServicosProductsManager() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={product.price || ''}
-                  onChange={(e) => updateProduct(product.name, { price: parseFloat(e.target.value) || 0 })}
-                  onBlur={() => persist(products)}
-                  placeholder="0.00"
-                  className="h-9"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Tem Comissão?</Label>
-                <div className="flex items-center h-9">
-                  <Switch
-                    checked={product.has_commission}
-                    onCheckedChange={(checked) => updateAndSave(product.name, {
-                      has_commission: checked,
-                      commission_pct: checked ? product.commission_pct : 0,
-                      commission_fixed: checked ? product.commission_fixed ?? 0 : 0,
-                    })}
-                  />
-                </div>
-              </div>
-
-              {product.has_commission && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-xs text-muted-foreground">
-                      {product.commission_type === 'fixed' ? 'Comissão (€)' : 'Comissão (%)'}
-                    </Label>
-                    <div className="flex overflow-hidden rounded-md border">
-                      <button
-                        type="button"
-                        onClick={() => updateAndSave(product.name, { commission_type: 'pct' })}
-                        className={cn(
-                          'px-2 py-0.5 text-[11px] leading-5 transition-colors',
-                          product.commission_type !== 'fixed'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted',
-                        )}
-                      >
-                        %
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateAndSave(product.name, { commission_type: 'fixed' })}
-                        className={cn(
-                          'px-2 py-0.5 text-[11px] leading-5 transition-colors',
-                          product.commission_type === 'fixed'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted',
-                        )}
-                      >
-                        €
-                      </button>
-                    </div>
-                  </div>
-                  {product.commission_type === 'fixed' ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={product.commission_fixed || ''}
-                      onChange={(e) => updateProduct(product.name, { commission_fixed: parseFloat(e.target.value) || 0 })}
-                      onBlur={() => persist(products)}
-                      placeholder="0.00"
-                      className="h-9"
-                    />
-                  ) : (
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={product.commission_pct || ''}
-                      onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
-                      onBlur={() => persist(products)}
-                      placeholder="0"
-                      className="h-9"
-                    />
-                  )}
-                </div>
-              )}
+            <div className="max-w-[200px] space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={product.price || ''}
+                onChange={(e) => updateProduct(product.name, { price: parseFloat(e.target.value) || 0 })}
+                onBlur={() => persist(products)}
+                placeholder="0.00"
+                className="h-9"
+              />
             </div>
 
             <CommissionSplitsEditor
               splits={product.splits ?? []}
               members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
               profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
-              onChange={(splits: CommissionSplit[]) => updateProduct(product.name, { splits })}
-              onCommit={(splits: CommissionSplit[]) => updateAndSave(product.name, { splits })}
+              onChange={(splits: CommissionSplit[]) => updateProduct(product.name, { splits, ...deriveCommissionFields(splits) })}
+              onCommit={(splits: CommissionSplit[]) => updateAndSave(product.name, { splits, ...deriveCommissionFields(splits) })}
             />
           </div>
         ))}

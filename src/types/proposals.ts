@@ -220,6 +220,29 @@ export interface CatalogProduct {
 /** Commission earned for one unit of a catalog product, in euros. */
 export function getCatalogCommission(product: CatalogProduct): number {
   if (!product.has_commission) return 0;
-  if (product.commission_type === 'fixed') return product.commission_fixed ?? 0;
-  return Math.round(product.price * product.commission_pct) / 100;
+  const fixedPart = product.commission_fixed ?? 0;
+  const pctPart = Math.round(product.price * (product.commission_pct ?? 0)) / 100;
+  return fixedPart + pctPart;
+}
+
+/**
+ * Derives the legacy scalar commission fields (has_commission, commission_pct,
+ * commission_fixed, commission_type) from the splits list, so screens that
+ * still read those fields — the sale-creation prefill via getCatalogCommission,
+ * mainly — show a sensible number before generate_sale_commission_splits()
+ * (see 20260831210000_sale_commission_splits.sql) freezes the real per-person
+ * amounts server-side. Splits are the single source of truth the user edits;
+ * these fields are just kept in sync automatically.
+ */
+export function deriveCommissionFields(
+  splits: CommissionSplit[],
+): Pick<CatalogProduct, 'has_commission' | 'commission_pct' | 'commission_fixed' | 'commission_type'> {
+  const fixedSum = splits.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
+  const pctSum = splits.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
+  return {
+    has_commission: splits.length > 0,
+    commission_fixed: fixedSum,
+    commission_pct: pctSum,
+    commission_type: fixedSum > 0 && pctSum === 0 ? 'fixed' : 'pct',
+  };
 }
