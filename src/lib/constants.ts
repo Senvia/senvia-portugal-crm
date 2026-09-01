@@ -62,9 +62,11 @@ export const INBOX_CONFIG = {
 export const MESSAGING_CHANNELS = {
   // Cloud API oficial da Meta. As caixas antigas do Evolution NÃO voltam com
   // isto: são excluídas pelo `provider` em useMessagingChannels.
-  whatsapp: true,
-  instagram: true,
-  facebook: true,
+  // Pausados a pedido (2026-09-01): só o email fica ativo por agora. As
+  // caixas já ligadas continuam na base de dados — voltar a "true" reabre-as.
+  whatsapp: false,
+  instagram: false,
+  facebook: false,
 } as const;
 
 /** True se ALGUM canal de mensagens está aberto (o email é sempre à parte). */

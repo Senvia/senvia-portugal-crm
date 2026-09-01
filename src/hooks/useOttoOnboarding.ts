@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules, type EnabledModules } from "@/hooks/useModules";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { MESSAGING_CHANNELS_ENABLED } from "@/lib/constants";
 
 // A single setup task Otto guides. `module` gates it to an enabled module (null =
 // always relevant). `kind`/`target` describe the action (see runSetupTask).
@@ -149,7 +150,12 @@ export function useOttoOnboarding(): OttoOnboardingStatus {
     { key: "leads", label: "Importar os teus leads", description: "Traz os teus contactos para o CRM.", icon: "upload", module: null, done: c.leads > 0, kind: "tour", target: "import_leads" },
   ];
 
-  const tasks = all.filter((t) => t.module === null || (modules as any)?.[t.module]);
+  // "inbox" points at connecting WhatsApp, which is paused (MESSAGING_CHANNELS
+  // in constants.ts) — pointing an admin at a hidden connect flow is worse
+  // than not showing the step. Comes back on its own once the pause lifts.
+  const tasks = all
+    .filter((t) => t.module === null || (modules as any)?.[t.module])
+    .filter((t) => t.key !== "inbox" || MESSAGING_CHANNELS_ENABLED);
   const pending = tasks.filter((t) => !t.done);
 
   // Only the tasks the admin can actually finish alone decide "configurado".

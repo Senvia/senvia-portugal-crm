@@ -49,8 +49,13 @@ export function InboxUnreadBadge({ className }: { className?: string }) {
   // por ler no momento do arquivo ficaria a pedir atenção para sempre, numa
   // caixa a que já ninguém tem de responder.
   const arquivadas = new Set(channels.filter((c) => c.archived_at).map((c) => c.id));
+  // useMetaUnreadTotals lê TODAS as meta_conversations da org, sem filtrar por
+  // tipo de canal — por isso um canal pausado em MESSAGING_CHANNELS (que já
+  // não aparece em `channels`, via isChannelEnabled) continuava a somar aqui.
+  // Só contam canais que a UI realmente mostra.
+  const visiveis = new Set(channels.filter((c) => c.channel_type !== "email").map((c) => c.id));
   const totalMeta = Object.entries(metaUnread ?? {})
-    .filter(([channelId]) => !arquivadas.has(channelId))
+    .filter(([channelId]) => visiveis.has(channelId) && !arquivadas.has(channelId))
     .reduce((s, [, n]) => s + n, 0);
   const totalEmail = Object.values(emailCounts).reduce((s, n) => s + n, 0);
   const total = totalMeta + totalEmail;
