@@ -12,6 +12,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
+import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
 import { InboxUnreadBadge } from "./InboxUnreadBadge";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
@@ -125,14 +126,17 @@ export function AppSidebar({
                 src={organization?.logo_url || "/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png"}
               />
             )}
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              title={collapsed ? "Expandir menu" : "Recolher menu"}
-              className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            >
-              {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-            </button>
+            <div className="flex items-center gap-0.5">
+              {!collapsed && <WhatsNewButton variant="sidebar" />}
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                title={collapsed ? "Expandir menu" : "Recolher menu"}
+                className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              >
+                {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
           {!collapsed && (

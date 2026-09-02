@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
+import { useWhatsNewStore } from '@/stores/useWhatsNewStore';
 import { isPerfect2GetherOrg } from '@/lib/perfect2gether';
 import {
   Dialog,
@@ -16,13 +18,32 @@ interface WhatsNewDialogProps {
 }
 
 export function WhatsNewDialog({ organizationId }: WhatsNewDialogProps) {
-  const { announcement, shouldShow, markAsSeen } = useAnnouncements();
+  const { announcement, hasUnread, markAsSeen } = useAnnouncements();
+  const isOpen = useWhatsNewStore((s) => s.isOpen);
+  const autoOpenedId = useWhatsNewStore((s) => s.autoOpenedId);
+  const markAutoOpened = useWhatsNewStore((s) => s.markAutoOpened);
+  const close = useWhatsNewStore((s) => s.close);
 
-  if (isPerfect2GetherOrg(organizationId)) return null;
-  if (!shouldShow || !announcement) return null;
+  const blocked = isPerfect2GetherOrg(organizationId);
+
+  // Still shows itself once when something is unread; the bell is there for
+  // everything after that (and for reading it again later).
+  useEffect(() => {
+    if (blocked || !announcement || !hasUnread) return;
+    if (autoOpenedId === announcement.id) return;
+    markAutoOpened(announcement.id);
+  }, [blocked, announcement, hasUnread, autoOpenedId, markAutoOpened]);
+
+  if (blocked || !announcement || !isOpen) return null;
+
+  // Opening it IS reading it — that is what clears the red dot.
+  const dismiss = () => {
+    markAsSeen();
+    close();
+  };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) markAsSeen(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open) dismiss(); }}>
       <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
@@ -49,7 +70,7 @@ export function WhatsNewDialog({ organizationId }: WhatsNewDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button onClick={markAsSeen} className="w-full sm:w-auto">
+          <Button onClick={dismiss} className="w-full sm:w-auto">
             Entendi
           </Button>
         </DialogFooter>

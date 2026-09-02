@@ -55,7 +55,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const { data: clients = [] } = useClients();
   const { data: products = [] } = useActiveProducts();
   const { organization } = useAuth();
-  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat, operators: catalogOperators } = useServicosProducts();
   const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   const createProposal = useCreateProposal();
   const createProposalCpesBatch = useCreateProposalCpesBatch();
@@ -566,6 +566,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                           isNewFormat={isNewFormat}
                           configs={SERVICOS_PRODUCT_CONFIGS}
                           catalog={catalog}
+                          operators={catalogOperators}
                           onToggleProduct={handleToggleServicoProduto}
                           onUpdateDetail={handleUpdateProductDetail}
                           onSetProductDetail={handleSetProductDetail}

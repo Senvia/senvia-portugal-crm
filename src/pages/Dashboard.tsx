@@ -18,6 +18,7 @@ import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
+import { TelecomLifecyclePanel } from "@/components/dashboard/TelecomLifecyclePanel";
 import { PaidTrafficCard } from "@/components/dashboard/PaidTrafficCard";
 import { OttoDashboardSetup } from "@/components/otto/OttoDashboardSetup";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -98,6 +99,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Atividade Comercial</h2>
               <div className="space-y-4">
                 <CommitmentPanel />
+                <TelecomLifecyclePanel />
                 <SalesPerformancePanel />
                 <MetricsPanel />
                 <ActivationsPanel />

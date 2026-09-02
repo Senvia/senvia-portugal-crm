@@ -16,7 +16,12 @@ import type {
   CatalogProduct,
   ModeloServico,
 } from '@/types/proposals';
-import { FIELD_LABELS, getCatalogCommission } from '@/types/proposals';
+import { FIELD_LABELS, getCatalogCommission, getCatalogCommissionForQuantity, getCatalogPriceForQuantity } from '@/types/proposals';
+
+interface OperatorRef {
+  id: string;
+  name: string;
+}
 
 interface ServicosSectionProps {
   modeloServico: ModeloServico;
@@ -27,6 +32,8 @@ interface ServicosSectionProps {
   isNewFormat: boolean;
   configs?: ServicosProductConfig[];
   catalog?: CatalogProduct[] | null;
+  /** So the "add product" search can also match by operator name (Digi, Vodafone...). */
+  operators?: OperatorRef[];
   onToggleProduct: (name: string) => void;
   /** For legacy format: update a single numeric field */
   onUpdateDetail: (product: string, field: string, value: number | undefined) => void;
@@ -47,6 +54,7 @@ export function ServicosSection({
   isNewFormat,
   configs = [],
   catalog,
+  operators = [],
   onToggleProduct,
   onUpdateDetail,
   onSetProductDetail,
@@ -80,6 +88,7 @@ export function ServicosSection({
       {isNewFormat && catalog ? (
         <CatalogProducts
           catalog={catalog}
+          operators={operators}
           servicosProdutos={servicosProdutos}
           servicosDetails={servicosDetails}
           onToggleProduct={onToggleProduct}
@@ -107,6 +116,7 @@ export function ServicosSection({
 
 function CatalogProducts({
   catalog,
+  operators,
   servicosProdutos,
   servicosDetails,
   onToggleProduct,
@@ -114,6 +124,7 @@ function CatalogProducts({
   attempted,
 }: {
   catalog: CatalogProduct[];
+  operators: OperatorRef[];
   servicosProdutos: string[];
   servicosDetails: ServicosDetails;
   onToggleProduct: (name: string) => void;
@@ -123,27 +134,40 @@ function CatalogProducts({
   const totalComissao = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
   const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
 
-  // Build combobox options from catalog, excluding already selected
+  // Build combobox options from catalog, excluding already selected. Sublabel
+  // carries the operator name (so it also matches while searching — see
+  // SearchableCombobox) followed by the price, when there is one to show.
+  const operatorById = new Map(operators.map((o) => [o.id, o.name]));
   const comboboxOptions: ComboboxOption[] = catalog
     .filter((c) => !servicosProdutos.includes(c.name))
-    .map((c) => ({
-      value: c.name,
-      label: c.name,
-      sublabel: c.price.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }),
-    }));
+    .map((c) => {
+      const operatorName = c.operator_id ? operatorById.get(c.operator_id) : undefined;
+      const priceText = c.price ? c.price.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : null;
+      const sublabel = [operatorName, priceText].filter(Boolean).join(' · ') || undefined;
+      return { value: c.name, label: c.name, sublabel };
+    });
 
   const handleAddProduct = (value: string | null) => {
     if (!value) return;
     onToggleProduct(value);
     const catProduct = catalog.find((c) => c.name === value);
     if (catProduct) {
-      const comissaoVal = getCatalogCommission(catProduct);
+      const isTiered = !!catProduct.quantity_tiers?.length;
+      const comissaoVal = isTiered
+        ? getCatalogCommissionForQuantity(catProduct, 1)
+        : getCatalogCommission(catProduct);
+      const priceVal = isTiered ? getCatalogPriceForQuantity(catProduct, 1) : catProduct.price;
       onSetProductDetail(value, {
-        price: catProduct.price,
+        price: priceVal,
         commission_pct: catProduct.commission_pct,
         commission_type: catProduct.commission_type ?? 'pct',
         commission_fixed: catProduct.commission_fixed ?? 0,
         comissao: comissaoVal,
+        quantidade: 1,
+        // Frozen here: the catalog can move this product to another operator
+        // later, and this sale must keep the one it was actually sold under.
+        operator_id: catProduct.operator_id,
+        operator_name: catProduct.operator_id ? operatorById.get(catProduct.operator_id) : undefined,
       });
     }
   };
@@ -174,18 +198,33 @@ function CatalogProducts({
           if (!catProduct) return null;
           const detail = servicosDetails[productName] || {};
           const price = detail.price ?? catProduct.price;
-          const isFixedCommission = (detail.commission_type ?? catProduct.commission_type) === 'fixed';
+          const isTiered = !!catProduct.quantity_tiers?.length;
+          // Per unit, from the splits when there are any (see
+          // getCatalogCommission) — the scalar mirror is often stale.
+          const unitCommission = getCatalogCommission(catProduct);
+          const hasCommission = isTiered || unitCommission > 0 || catProduct.has_commission;
           const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
-          const commissionFixed = detail.commission_fixed ?? catProduct.commission_fixed ?? 0;
+          const quantidade = detail.quantidade ?? 1;
+          const unitPrice = isTiered ? getCatalogPriceForQuantity(catProduct, quantidade) : (catProduct.price || 0);
 
           return (
             <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{detail.name ?? productName}</span>
-                  {catProduct.has_commission && (
+                  {(detail.operator_name ?? (catProduct.operator_id ? operatorById.get(catProduct.operator_id) : undefined)) && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                      {detail.operator_name ?? operatorById.get(catProduct.operator_id!)}
+                    </Badge>
+                  )}
+                  {hasCommission && !isTiered && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {isFixedCommission ? `${commissionFixed} € comissão` : `${commissionPct}% comissão`}
+                      {unitCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })} comissão/unid.
+                    </Badge>
+                  )}
+                  {isTiered && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                      Comissão por escalão
                     </Badge>
                   )}
                 </div>
@@ -220,29 +259,46 @@ function CatalogProducts({
                     value={price}
                     onChange={(e) => {
                       const newPrice = parseFloat(e.target.value) || 0;
-                      const comissao = catProduct.has_commission ? Math.round(newPrice * commissionPct) / 100 : 0;
+                      const comissao = isTiered
+                        ? getCatalogCommissionForQuantity({ ...catProduct, price: newPrice }, quantidade)
+                        : getCatalogCommission({ ...catProduct, price: newPrice }) * quantidade;
                       onSetProductDetail(productName, { ...detail, price: newPrice, comissao });
                     }}
                     className="h-8"
                   />
                 </div>
-                {catProduct.has_commission && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
-                    <Input
-                      type="number"
-                      value={commissionPct}
-                      readOnly
-                      className="h-8 bg-muted cursor-not-allowed opacity-70"
-                    />
-                  </div>
-                )}
+                {/* Quantity applies to every product — you can sell three of
+                    the same package. Tiered products additionally resolve
+                    their band (and price) from it. */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Quantidade</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantidade}
+                    onChange={(e) => {
+                      const newQty = Math.max(1, parseInt(e.target.value, 10) || 1);
+                      const comissao = isTiered
+                        ? getCatalogCommissionForQuantity(catProduct, newQty)
+                        : unitCommission * newQty;
+                      const newPrice = isTiered
+                        ? getCatalogPriceForQuantity(catProduct, newQty) * newQty
+                        : unitPrice * newQty;
+                      onSetProductDetail(productName, { ...detail, quantidade: newQty, comissao, price: newPrice });
+                    }}
+                    className="h-8"
+                  />
+                </div>
               </div>
-              {catProduct.has_commission && (
+              {hasCommission && (
                 <div className="text-xs text-muted-foreground">
-                  Comissão: <span className="font-medium text-foreground">
-                    {(price * commissionPct / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                  Comissão ({quantidade} unid.): <span className="font-medium text-foreground">
+                    {(detail.comissao ?? 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                   </span>
+                  {isTiered && !catProduct.quantity_tiers?.some(t => quantidade >= t.min && (t.max == null || quantidade <= t.max)) && (
+                    <span className="ml-1 text-destructive">(sem escalão para esta quantidade)</span>
+                  )}
                 </div>
               )}
             </div>

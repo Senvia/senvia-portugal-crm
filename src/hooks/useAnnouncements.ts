@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 interface Announcement {
   id: string;
@@ -19,7 +19,9 @@ function getStorageKey(userId: string) {
 
 export function useAnnouncements() {
   const { user } = useAuth();
-  const [dismissed, setDismissed] = useState(false);
+  // Bumped when the announcement is marked as seen, so the red dot clears
+  // immediately instead of waiting for a remount to re-read localStorage.
+  const [seenTick, setSeenTick] = useState(0);
 
   const { data: announcement } = useQuery({
     queryKey: ['latest-announcement'],
@@ -44,6 +46,7 @@ export function useAnnouncements() {
   });
 
   const alreadySeen = (() => {
+    void seenTick;
     if (!user?.id || !announcement?.id) return true;
     try {
       return localStorage.getItem(getStorageKey(user.id)) === announcement.id;
@@ -52,15 +55,16 @@ export function useAnnouncements() {
     }
   })();
 
-  const shouldShow = !!announcement && !alreadySeen && !dismissed;
+  /** There is a published announcement this user hasn't opened yet. */
+  const hasUnread = !!announcement && !alreadySeen;
 
   const markAsSeen = useCallback(() => {
     if (!user?.id || !announcement?.id) return;
     try {
       localStorage.setItem(getStorageKey(user.id), announcement.id);
     } catch {}
-    setDismissed(true);
+    setSeenTick((t) => t + 1);
   }, [user?.id, announcement?.id]);
 
-  return { announcement, shouldShow, markAsSeen };
+  return { announcement, hasUnread, markAsSeen };
 }

@@ -1,17 +1,50 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Settings2, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Trash2, Settings2, Check, Loader2, Pencil, Radio, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { CreateTelecomProductModal } from './CreateTelecomProductModal';
-import { CommissionSplitsEditor } from './CommissionSplitsEditor';
+import { ProductEditDialog } from './ProductEditDialog';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
-import type { CatalogProduct, CommissionSplit } from '@/types/proposals';
-import { deriveCommissionFields } from '@/types/proposals';
+import { useOperators, type Operator } from '@/hooks/useOperators';
+import type { CatalogProduct } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
+
+/** Short summary for the compact row — what the commission column shows. */
+function commissionSummary(product: CatalogProduct, operator: Operator | null): string {
+  // A fixed commission_basis wins regardless of kind — an energia operator
+  // can opt out of Matriz de Comissões (see ProductCommissionFields).
+  const isTiered = !!operator && !!operator.commission_basis;
+  if (!isTiered && operator?.kind === 'energia') return 'Ver Matriz de Comissões';
+  if (isTiered) {
+    const n = product.quantity_tiers?.length ?? 0;
+    if (n === 0) return 'Sem escalões';
+    return `${n} escalão${n === 1 ? '' : 'ões'}`;
+  }
+  const n = product.splits?.length ?? 0;
+  if (n === 0) return 'Sem comissão';
+  return `${n} linha${n === 1 ? '' : 's'}`;
+}
+
+/** Price column for the compact row — a range across bands when the product is tiered, else the flat price. */
+function priceSummary(product: CatalogProduct): string {
+  const tiers = product.quantity_tiers;
+  if (tiers && tiers.length > 0) {
+    const prices = tiers.map(t => t.price ?? product.price).filter((p): p is number => p != null);
+    if (prices.length === 0) return '—';
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const fmt = (v: number) => v.toLocaleString('pt-PT', { minimumFractionDigits: 2 });
+    return min === max ? `${fmt(min)} €` : `${fmt(min)} – ${fmt(max)} €`;
+  }
+  return product.price ? `${product.price.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €` : '—';
+}
+
+const SEM_OPERADORA = '__sem_operadora__';
 
 export function ServicosProductsManager() {
   const { data: org } = useOrganization();
@@ -19,8 +52,10 @@ export function ServicosProductsManager() {
   const updateOrg = useUpdateOrganization({ silent: true });
   const { data: teamMembers } = useTeamMembers();
   const { profiles } = useOrganizationProfiles();
+  const { data: operators = [] } = useOperators();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingName, setEditingName] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   // Orgs still on the old [{name, fields}] shape cannot be edited here. Saving
   // would replace their catalog with an empty one, so we block it instead.
@@ -77,12 +112,38 @@ export function ServicosProductsManager() {
     setProducts(prev => prev.map(p => (p.name === name ? { ...p, ...updates } : p)));
   };
 
-  /** For controls with no blur of their own: switches and the %/€ toggle. */
+  /** For controls with no blur of their own: switches, selects, blur handlers. */
   const updateAndSave = (name: string, updates: Partial<CatalogProduct>) => {
     const next = products.map(p => (p.name === name ? { ...p, ...updates } : p));
     setProducts(next);
     persist(next);
   };
+
+  // Grouped by operator so a long catalog reads as a handful of collapsed
+  // sections instead of one unbroken wall of cards. Groups with no products
+  // are skipped; "Sem operadora" comes first since that is the common case
+  // for orgs that haven't set up operators yet.
+  const groups = useMemo(() => {
+    const byOperator = new Map<string, CatalogProduct[]>();
+    for (const product of products) {
+      const key = product.operator_id ?? SEM_OPERADORA;
+      const list = byOperator.get(key) ?? [];
+      list.push(product);
+      byOperator.set(key, list);
+    }
+    const ordered: { key: string; operator: Operator | null; products: CatalogProduct[] }[] = [];
+    if (byOperator.has(SEM_OPERADORA)) {
+      ordered.push({ key: SEM_OPERADORA, operator: null, products: byOperator.get(SEM_OPERADORA)! });
+    }
+    for (const op of operators) {
+      if (byOperator.has(op.id)) {
+        ordered.push({ key: op.id, operator: op, products: byOperator.get(op.id)! });
+      }
+    }
+    return ordered;
+  }, [products, operators]);
+
+  const editingProduct = products.find(p => p.name === editingName) ?? null;
 
   return (
     <Card>
@@ -115,9 +176,9 @@ export function ServicosProductsManager() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         {isLegacyConfig && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 mb-4">
             <p className="text-xs text-amber-600 dark:text-amber-400">
               Esta organização tem um catálogo no formato antigo, que este ecrã não sabe editar.
               Guardar aqui apagaria esse catálogo, por isso a gravação está bloqueada.
@@ -125,38 +186,62 @@ export function ServicosProductsManager() {
             </p>
           </div>
         )}
-        {products.map((product) => (
-          <div key={product.name} className="p-4 rounded-lg border bg-card space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-sm">{product.name}</span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeProduct(product.name)}>
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </Button>
-            </div>
 
-            <div className="max-w-[200px] space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={product.price || ''}
-                onChange={(e) => updateProduct(product.name, { price: parseFloat(e.target.value) || 0 })}
-                onBlur={() => persist(products)}
-                placeholder="0.00"
-                className="h-9"
-              />
-            </div>
-
-            <CommissionSplitsEditor
-              splits={product.splits ?? []}
-              members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
-              profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
-              onChange={(splits: CommissionSplit[]) => updateProduct(product.name, { splits, ...deriveCommissionFields(splits) })}
-              onCommit={(splits: CommissionSplit[]) => updateAndSave(product.name, { splits, ...deriveCommissionFields(splits) })}
-            />
-          </div>
-        ))}
+        {groups.length > 0 && (
+          <Accordion type="multiple" className="border rounded-lg overflow-hidden">
+            {groups.map(({ key, operator, products: groupProducts }) => (
+              <AccordionItem key={key} value={key} className="last:border-b-0 px-3">
+                <AccordionTrigger className="py-2.5 hover:no-underline">
+                  <span className="flex items-center gap-2 text-sm">
+                    {operator ? <Radio className="h-3.5 w-3.5 text-primary" /> : <Package className="h-3.5 w-3.5 text-muted-foreground" />}
+                    <span className="font-medium">{operator?.name ?? 'Sem operadora'}</span>
+                    {operator && (
+                      <Badge variant={operator.kind === 'telecom' ? 'default' : 'secondary'} className="text-[10px]">
+                        {operator.kind === 'telecom' ? 'Telecom' : 'Energia'}
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {groupProducts.length} produto{groupProducts.length === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-2">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="h-8 text-xs">Nome</TableHead>
+                        <TableHead className="h-8 text-xs">Preço Base</TableHead>
+                        <TableHead className="h-8 text-xs">Comissão</TableHead>
+                        <TableHead className="h-8 text-xs w-20" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {groupProducts.map((product) => (
+                        <TableRow key={product.name} className="cursor-pointer" onClick={() => setEditingName(product.name)}>
+                          <TableCell className="py-1.5 text-sm font-medium">{product.name}</TableCell>
+                          <TableCell className="py-1.5 text-sm text-muted-foreground">
+                            {priceSummary(product)}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-xs text-muted-foreground">{commissionSummary(product, operator)}</TableCell>
+                          <TableCell className="py-1.5 text-right">
+                            <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingName(product.name)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeProduct(product.name)}>
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
 
         {products.length === 0 && !isLegacyConfig && (
           <div className="py-10 text-center">
@@ -173,8 +258,21 @@ export function ServicosProductsManager() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         existingNames={products.map(p => p.name)}
+        operators={operators}
+        members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
+        profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
         onCreate={addProduct}
         isPending={updateOrg.isPending}
+      />
+
+      <ProductEditDialog
+        product={editingProduct}
+        onOpenChange={(open) => !open && setEditingName(null)}
+        operators={operators}
+        members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
+        profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
+        onChange={updateProduct}
+        onCommit={updateAndSave}
       />
     </Card>
   );

@@ -1,4 +1,4 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail, LifeBuoy, User, FormInput, TrendingUp, Plug } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail, LifeBuoy, User, FormInput, TrendingUp, Plug, Radio } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
 // Settings information architecture: 8 balanced top-level groups, 2 navigation
@@ -9,9 +9,9 @@ export type SettingsSection =
 
 export type SettingsSubSection =
   | "account-profile" | "account-security" | "account-company" | "account-plan" | "account-support"
-  | "modules-list" | "modules-fields"
+  | "modules-list" | "modules-fields" | "modules-documents"
   | "capture-forms"
-  | "sales-pipeline" | "sales-rules" | "sales-commissions" | "sales-products"
+  | "sales-pipeline" | "sales-rules" | "sales-commissions" | "sales-products" | "sales-operators"
   | "team-access" | "team-profiles" | "team-teams"
   | "integrations-connect"
   | "finance-fiscal" | "finance-expenses"
@@ -87,6 +87,7 @@ export interface SubSectionItem {
   description: string;
   requiresTeam?: boolean;
   requiresIntegrations?: boolean;
+  requiresTelecom?: boolean;
 }
 
 export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
@@ -100,6 +101,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
   modules: [
     { id: "modules-list", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas no menu" },
     { id: "modules-fields", label: "Campos do CRM", icon: List, description: "Campos por módulo (Leads, Clientes, etc.)" },
+    { id: "modules-documents", label: "Documentos de Cliente", icon: FileText, description: "Checklist na ficha do cliente (CTR, ...)", requiresTelecom: true },
   ],
   capture: [
     { id: "capture-forms", label: "Formulários", icon: FileText, description: "Formulários públicos de leads" },
@@ -108,6 +110,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "sales-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
     { id: "sales-rules", label: "Regras de Vendas", icon: ShoppingCart, description: "Bloqueios e atribuição de leads" },
     { id: "sales-commissions", label: "Matriz de Comissões", icon: Calculator, description: "Cálculo automático de comissões" },
+    { id: "sales-operators", label: "Operadoras", icon: Radio, description: "Operadoras de telecom e energia", requiresIntegrations: true, requiresTelecom: true },
     { id: "sales-products", label: "Produtos & Serviços", icon: Package, description: "Catálogo de produtos", requiresIntegrations: true },
   ],
   team: [
@@ -144,6 +147,7 @@ export function getVisibleSubSections(
 ): SubSectionItem[] {
   return (subSectionsMap[group] ?? []).filter(item => {
     if (item.id === 'alerts-fidelization' && !opts.isTelecom) return false;
+    if (item.requiresTelecom && !opts.isTelecom) return false;
     if (item.requiresIntegrations && !opts.canManageIntegrations) return false;
     if (item.requiresTeam && !opts.canManageTeam) return false;
     return true;

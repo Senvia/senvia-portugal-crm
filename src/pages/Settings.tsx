@@ -30,6 +30,8 @@ import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab
 import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { SalesSettingsTab } from '@/components/settings/SalesSettingsTab';
 import { CommissionMatrixTab } from '@/components/settings/CommissionMatrixTab';
+import { OperatorsTab } from '@/components/settings/OperatorsTab';
+import { ClientDocumentTypesSettings } from '@/components/settings/ClientDocumentTypesSettings';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 import { BillingTab } from '@/components/settings/BillingTab';
 import { SupportTicketsTab } from '@/components/settings/SupportTicketsTab';
@@ -386,6 +388,7 @@ export default function Settings() {
       // Módulos e Campos
       case "modules-list": return <ModulesTab />;
       case "modules-fields": return <FieldsManagerTabs />;
+      case "modules-documents": return <ClientDocumentTypesSettings />;
 
       // Formulários de Captação
       case "capture-forms": return <FormsManager />;
@@ -394,6 +397,7 @@ export default function Settings() {
       case "sales-pipeline": return <PipelineEditor />;
       case "sales-rules": return <SalesSettingsTab />;
       case "sales-commissions": return <CommissionMatrixTab />;
+      case "sales-operators": return <OperatorsTab />;
       case "sales-products": return <ProductsTab />;
 
       // Equipa e Acessos

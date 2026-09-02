@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useOperators } from '@/hooks/useOperators';
 import {
   SERVICOS_PRODUCTS,
   SERVICOS_PRODUCT_CONFIGS,
   type ServicosProductConfig,
   type CatalogProduct,
+  type CommissionSplit,
+  type QuantityTier,
 } from '@/types/proposals';
 
 interface LegacyConfigFromDB {
@@ -19,6 +22,9 @@ interface CatalogConfigFromDB {
   commission_pct: number;
   commission_type?: 'pct' | 'fixed';
   commission_fixed?: number;
+  splits?: CommissionSplit[];
+  operator_id?: string;
+  quantity_tiers?: QuantityTier[];
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -34,6 +40,7 @@ function isCatalogFormat(item: any): item is CatalogConfigFromDB {
  */
 export function useServicosProducts() {
   const { data: org } = useOrganization();
+  const { data: operators = [] } = useOperators();
 
   return useMemo(() => {
     const config = (org as any)?.servicos_products_config as any[] | null;
@@ -44,6 +51,7 @@ export function useServicosProducts() {
         configs: SERVICOS_PRODUCT_CONFIGS,
         catalog: null as CatalogProduct[] | null,
         isNewFormat: false,
+        operators,
       };
     }
 
@@ -57,12 +65,16 @@ export function useServicosProducts() {
         commission_pct: c.commission_pct ?? 0,
         commission_type: c.commission_type ?? 'pct',
         commission_fixed: c.commission_fixed ?? 0,
+        splits: c.splits,
+        operator_id: c.operator_id,
+        quantity_tiers: c.quantity_tiers,
       }));
       return {
         products: catalog.map((c) => c.name),
         configs: [] as ServicosProductConfig[], // Not used in new format
         catalog,
         isNewFormat: true,
+        operators,
       };
     }
 
@@ -78,6 +90,7 @@ export function useServicosProducts() {
       configs,
       catalog: null as CatalogProduct[] | null,
       isNewFormat: false,
+      operators,
     };
-  }, [org]);
+  }, [org, operators]);
 }

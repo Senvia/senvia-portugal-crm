@@ -71,10 +71,18 @@ import {
   type NegotiationType,
   type PaymentMethod,
   type SaleStatus,
+  type TelecomStatus,
   PAYMENT_METHOD_LABELS,
   SALE_STATUS_LABELS,
   SALE_STATUSES,
+  TELECOM_STATUSES,
+  TELECOM_STATUS_LABELS,
+  TELECOM_STATUS_HINTS,
+  TELECOM_TO_SALE_STATUS,
 } from "@/types/sales";
+
+/** Radix Select can't hold an empty string as a value. */
+const NO_TELECOM_STATUS = "__none__";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { paymentRecordStatusBadge } from "@/lib/status-badge-maps";
 import { calculatePaymentSummary } from "@/hooks/useSalePayments";
@@ -138,7 +146,7 @@ export function CreateSaleModal({
   const isSenviaOrg = organization?.id === '06fe9e1d-9670-45b0-8717-c5a6e90be380';
   const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
-  const { products: catalogProductNames, configs: servicosConfigs, catalog, isNewFormat } = useServicosProducts();
+  const { products: catalogProductNames, configs: servicosConfigs, catalog, isNewFormat, operators: catalogOperators } = useServicosProducts();
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -173,6 +181,8 @@ export function CreateSaleModal({
   const [clientId, setClientId] = useState<string>("");
   const [proposalId, setProposalId] = useState<string>("");
   const [saleDate, setSaleDate] = useState<Date>(new Date());
+  const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
+  const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [discount, setDiscount] = useState<string>("0");
   const [notes, setNotes] = useState("");
@@ -476,6 +486,23 @@ export function CreateSaleModal({
     return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
   }, [isTelecom, isNewFormat, servicosProdutos, servicosDetails]);
 
+  // Which operator(s) this sale is actually being sold under — from the
+  // frozen operator on each product line, falling back to the catalog for
+  // lines added before that was recorded. Drives the proposal-number field:
+  // there is no "EDP number" unless the sale is an EDP one.
+  const saleOperatorNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const productName of servicosProdutos) {
+      const detail = servicosDetails[productName];
+      const operatorId = detail?.operator_id
+        ?? catalog?.find((c) => c.name === productName)?.operator_id;
+      const name = detail?.operator_name
+        ?? (operatorId ? catalogOperators.find((o) => o.id === operatorId)?.name : undefined);
+      if (name) names.add(name);
+    }
+    return [...names];
+  }, [servicosProdutos, servicosDetails, catalog, catalogOperators]);
+
   // Auto-sync comissao from catalog products
   useEffect(() => {
     if (isTelecom && isNewFormat && !proposalId && servicosProdutos.length > 0) {
@@ -729,6 +756,8 @@ export function CreateSaleModal({
           negotiation_type: negotiationType || undefined,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
           servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
+          telecom_status: telecomStatus || undefined,
+          scheduled_install_date: scheduledInstallDate || undefined,
         } : {}),
         ...(showEnergy && saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || undefined } : {}),
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
@@ -964,6 +993,35 @@ export function CreateSaleModal({
 
                       <div className="space-y-2">
                         <Label>Estado da Venda</Label>
+                        {/* Telecom has its own lifecycle and only that one: picking
+                            it writes sales.status behind the scenes (see
+                            TELECOM_TO_SALE_STATUS) so invoicing and finance keep
+                            working, without asking for the same thing twice. */}
+                        {isTelecom ? (
+                          <Select
+                            value={telecomStatus || NO_TELECOM_STATUS}
+                            onValueChange={(v) => {
+                              const next = v === NO_TELECOM_STATUS ? '' : (v as TelecomStatus);
+                              setTelecomStatus(next);
+                              if (next) setSaleStatus(TELECOM_TO_SALE_STATUS[next]);
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Sem estado" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_TELECOM_STATUS}>Sem estado</SelectItem>
+                              {TELECOM_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  <span className="flex flex-col items-start">
+                                    <span>{TELECOM_STATUS_LABELS[s]}</span>
+                                    {TELECOM_STATUS_HINTS[s] && (
+                                      <span className="text-[11px] text-muted-foreground">{TELECOM_STATUS_HINTS[s]}</span>
+                                    )}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
                         <Select value={saleStatus} onValueChange={(v) => setSaleStatus(v as SaleStatus)}>
                           <SelectTrigger>
                             <SelectValue />
@@ -976,6 +1034,7 @@ export function CreateSaleModal({
                             ))}
                           </SelectContent>
                         </Select>
+                        )}
                       </div>
 
                       {/* Data de Ativação - quando estado é Concluída (apenas telecom) */}
@@ -1005,6 +1064,52 @@ export function CreateSaleModal({
                             </PopoverContent>
                           </Popover>
                         </div>
+                      )}
+
+                      {isTelecom && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Data de Instalação</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !scheduledInstallDate && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {scheduledInstallDate
+                                    ? format(new Date(scheduledInstallDate), "PPP", { locale: pt })
+                                    : "Sem data marcada"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={scheduledInstallDate ? new Date(scheduledInstallDate) : undefined}
+                                  onSelect={(date) => setScheduledInstallDate(date ? format(date, 'yyyy-MM-dd') : '')}
+                                  locale={pt}
+                                />
+                                {scheduledInstallDate && (
+                                  <div className="border-t p-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-full text-xs"
+                                      onClick={() => setScheduledInstallDate('')}
+                                    >
+                                      Limpar data
+                                    </Button>
+                                  </div>
+                                )}
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-[11px] text-muted-foreground">Opcional — pode ficar por marcar.</p>
+                          </div>
+                        </>
                       )}
                     </div>
                   </CardContent>
@@ -1187,6 +1292,7 @@ export function CreateSaleModal({
                         servicosDetails={servicosDetails}
                         isNewFormat={isNewFormat}
                         catalog={catalog}
+                        operators={catalogOperators}
                         configs={servicosConfigs}
                         onToggleProduct={(name) => {
                           if (servicosProdutos.includes(name)) {
@@ -1485,16 +1591,23 @@ export function CreateSaleModal({
                     </CardContent>
                   </Card>
 
-                  {/* EDP Proposal Number */}
-                  {showEnergy && saleFields?.edp_proposal_number?.visible && (<Card>
+                  {/* Operator proposal number — named after the operator this
+                      sale is actually under, and hidden entirely when it has
+                      none (no operator, no operator proposal number). */}
+                  {saleFields?.edp_proposal_number?.visible && saleOperatorNames.length > 0 && (<Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium text-muted-foreground">
-                        {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}
+                        {saleOperatorNames.length === 1
+                          ? `Número Proposta ${saleOperatorNames[0]}`
+                          : 'Número de Proposta'}
+                        {saleFields.edp_proposal_number.required ? ' *' : ''}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
                       <Input
-                        placeholder="Ex: EDP-2024-001234"
+                        placeholder={saleOperatorNames.length === 1
+                          ? `Nº da proposta na ${saleOperatorNames[0]}`
+                          : 'Nº da proposta na operadora'}
                         value={edpProposalNumber}
                         onChange={(e) => setEdpProposalNumber(e.target.value)}
                         required={saleFields.edp_proposal_number.required}

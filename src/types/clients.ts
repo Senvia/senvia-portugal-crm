@@ -42,7 +42,11 @@ export interface CrmClient {
   total_comissao?: number;
   total_mwh?: number;
   total_kwp?: number;
-  
+  /** Units (cards/lines) across every sale of this client, any status. */
+  total_cartoes?: number;
+  /** Keys from organizations.client_document_types this client has handed in. */
+  documents_checked?: string[];
+
   created_at: string;
   updated_at: string;
   

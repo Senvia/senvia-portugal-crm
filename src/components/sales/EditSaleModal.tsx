@@ -50,7 +50,11 @@ import {
   Wrench,
 } from "lucide-react";
 
-import type { SaleWithDetails } from "@/types/sales";
+import type { SaleWithDetails, TelecomStatus } from "@/types/sales";
+import { TELECOM_STATUSES, TELECOM_STATUS_LABELS, TELECOM_STATUS_HINTS, TELECOM_TO_SALE_STATUS } from "@/types/sales";
+
+/** Radix Select can't hold an empty string as a value. */
+const NO_TELECOM_STATUS = "__none__";
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSalePanel } from "./RecurringSalePanel";
 import { Progress } from "@/components/ui/progress";
@@ -93,7 +97,7 @@ export function EditSaleModal({
   onSuccess
 }: EditSaleModalProps) {
   const { data: clients } = useClients();
-  const { products: catalogProductNames, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
+  const { products: catalogProductNames, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat, operators: catalogOperators } = useServicosProducts();
   const { data: products } = useProducts();
   const { data: existingItems = [] } = useSaleItems(sale?.id);
   
@@ -154,6 +158,8 @@ export function EditSaleModal({
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
   const [activationDate, setActivationDate] = useState<string>("");
+  const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
+  const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
   const [edpProposalNumber, setEdpProposalNumber] = useState<string>("");
 
   // Editable CPEs state
@@ -178,6 +184,8 @@ export function EditSaleModal({
       setServicosDetails((sale as any).servicos_details || {});
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
+      setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
+      setScheduledInstallDate(sale.scheduled_install_date || "");
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
     }
   }, [open, sale]);
@@ -432,7 +440,14 @@ export function EditSaleModal({
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
           servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
-          ...(isTelecom ? { activation_date: activationDate || null } : {}),
+          ...(isTelecom ? {
+            activation_date: activationDate || null,
+            telecom_status: telecomStatus || null,
+            scheduled_install_date: scheduledInstallDate || null,
+            // The telecom state IS the sale state here; sales.status is kept
+            // in sync behind it so invoicing/finance keep matching on it.
+            ...(telecomStatus ? { status: TELECOM_TO_SALE_STATUS[telecomStatus] } : {}),
+          } : {}),
           ...(showEnergy && saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || null } : {}),
         },
       });
@@ -604,9 +619,34 @@ export function EditSaleModal({
 
                         <div className="space-y-1.5">
                           <Label className="text-xs text-muted-foreground">Estado</Label>
-                          <div>
-                            <StatusBadge {...saleStatusBadge(sale.status)} />
-                          </div>
+                          {/* One lifecycle in telecom, not two: this writes
+                              sales.status behind it (TELECOM_TO_SALE_STATUS). */}
+                          {isTelecom ? (
+                            <Select
+                              value={telecomStatus || NO_TELECOM_STATUS}
+                              onValueChange={(v) => setTelecomStatus(v === NO_TELECOM_STATUS ? '' : v as TelecomStatus)}
+                              disabled={isDeliveredLocked}
+                            >
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Sem estado" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NO_TELECOM_STATUS}>Sem estado</SelectItem>
+                                {TELECOM_STATUSES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    <span className="flex flex-col items-start">
+                                      <span>{TELECOM_STATUS_LABELS[s]}</span>
+                                      {TELECOM_STATUS_HINTS[s] && (
+                                        <span className="text-[11px] text-muted-foreground">{TELECOM_STATUS_HINTS[s]}</span>
+                                      )}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div>
+                              <StatusBadge {...saleStatusBadge(sale.status)} />
+                            </div>
+                          )}
                         </div>
                         {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
                           <div className="space-y-1.5">
@@ -619,6 +659,21 @@ export function EditSaleModal({
                               disabled={isDeliveredLocked}
                             />
                           </div>
+                        )}
+                        {isTelecom && (
+                          <>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Data de Instalação</Label>
+                              <Input
+                                type="date"
+                                value={scheduledInstallDate}
+                                onChange={(e) => setScheduledInstallDate(e.target.value)}
+                                className="h-9"
+                                disabled={isDeliveredLocked}
+                              />
+                              <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
+                            </div>
+                          </>
                         )}
                       </div>
                     </CardContent>
@@ -727,6 +782,7 @@ export function EditSaleModal({
                           servicosDetails={servicosDetails}
                           isNewFormat={isNewFormat}
                           catalog={catalog}
+                          operators={catalogOperators}
                           configs={SERVICOS_PRODUCT_CONFIGS}
                           onToggleProduct={(name) => {
                             if (servicosProdutos.includes(name)) {

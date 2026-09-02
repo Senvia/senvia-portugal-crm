@@ -42,6 +42,7 @@ import { useEffect, useState } from "react";
 import { useMyCommissions } from "@/hooks/useSalesApproval";
 import { useTeamCommissionTotal } from "@/hooks/useCommercialCommissions";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
+import { ChargebacksTab } from "@/components/finance/ChargebacksTab";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -55,12 +56,16 @@ export default function Finance() {
     memberships: organizations,
     isSuperAdmin,
   }) && isAdmin;
+  // Chargebacks only exist for telecom, where a sale cancelled after install
+  // claws its commission back.
+  const isTelecom = organization?.niche === 'telecom';
   // Commissions moved to the standalone /comissoes page (available with the
   // Vendas module), so they are no longer tabs here.
   const validTabs = [
     "resumo",
     "contas",
     "faturas",
+    ...(isTelecom ? ["chargebacks"] : []),
     "outros",
   ];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
@@ -158,6 +163,7 @@ export default function Finance() {
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="contas">Contas</TabsTrigger>
           <TabsTrigger value="faturas">Faturas</TabsTrigger>
+          {isTelecom && <TabsTrigger value="chargebacks">Chargebacks</TabsTrigger>}
           <TabsTrigger value="outros">Outros</TabsTrigger>
         </TabsList>
 
@@ -498,6 +504,12 @@ export default function Finance() {
         <TabsContent value="faturas" className="mt-0">
           <InvoicesContent />
         </TabsContent>
+
+        {isTelecom && (
+          <TabsContent value="chargebacks" className="mt-0">
+            <ChargebacksTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="outros" className="mt-0">
           <InternalRequests />

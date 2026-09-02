@@ -156,6 +156,16 @@ export interface ServicosProductDetail {
   commission_pct?: number;
   commission_type?: CommissionType;
   commission_fixed?: number;
+  // Units sold in this line — only meaningful for a product with quantity_tiers
+  // (a telecom operator with commission_basis 'per_sale'/'monthly_volume').
+  // Absent/1 for every other product.
+  quantidade?: number;
+  // Operator this line was sold under, FROZEN when the product was added to
+  // the sale. The catalog is live — a product can be moved to another
+  // operator later — so reports of "which operators did this client buy
+  // from" must read this, not the catalog's current operator_id.
+  operator_id?: string;
+  operator_name?: string;
 }
 
 export type ServicosDetails = Record<string, ServicosProductDetail>;
@@ -203,6 +213,41 @@ export interface CommissionSplit {
   value: number;
 }
 
+/**
+ * One quantity band for a product linked to a telecom operator whose
+ * commission_basis is 'per_sale' or 'monthly_volume' (see operators table).
+ * `max: null` means "and above" (the last, open-ended band).
+ *
+ * 'per_sale' resolves the band from the quantity sold in ONE sale.
+ * 'monthly_volume' resolves it from the accumulated monthly quantity (per
+ * seller or org-wide, per the operator's volume_scope) — and when a new sale
+ * pushes the total into a higher band, every sale that month in scope is
+ * RE-resolved to that band, not just the new one.
+ */
+export interface QuantityTier {
+  id: string;
+  min: number;
+  max: number | null;
+  // Overrides the product's base price for units sold in this band (e.g. a
+  // Digi line costs 6€ alone, 5,5€ each from 2, 5€ each from 3). Absent
+  // falls back to the product's own `price` — most operators don't vary
+  // price by quantity, only commission.
+  price?: number;
+  splits: CommissionSplit[];
+  // One-off company-wide reward for REACHING this band (e.g. 15-19 contracts
+  // this month earns +300€, 20-24 earns +600€) — added once, not per unit,
+  // and shared out among this tier's own `splits` in proportion to their
+  // `value`. For a 'monthly_volume' product only the sale that currently
+  // carries the group's latest date gets it (server-side); for 'per_sale' it
+  // applies to that one sale directly. Absent/0 means no bonus.
+  bonus?: number;
+  // 'fixed' (default when absent): `bonus` is euros, paid as-is. 'pct':
+  // `bonus` is a percentage of the tier's own combined commission (all
+  // splits, at the quantity that matched the band) — e.g. 10 units earning
+  // 100€ commission with a 50% bonus pays +50€.
+  bonus_type?: CommissionType;
+}
+
 export interface CatalogProduct {
   name: string;
   price: number;
@@ -215,14 +260,90 @@ export interface CatalogProduct {
   // When set, the sale pays these people instead of a single commission.
   // Amounts are frozen per sale in sale_commission_splits.
   splits?: CommissionSplit[];
+  // Links this product to a row in the `operators` table (Digi, Vodafone...).
+  operator_id?: string;
+  // Present only when the linked operator has a fixed commission_basis
+  // ('per_sale'/'monthly_volume'). When set, this REPLACES `splits` as the
+  // source of truth for the product's commission — the matching band's
+  // splits are used instead. A product that doesn't actually vary by
+  // quantity just gets one band spanning everything (min 1, max ∞).
+  quantity_tiers?: QuantityTier[];
 }
 
-/** Commission earned for one unit of a catalog product, in euros. */
+/**
+ * Commission earned for one unit of a catalog product, in euros.
+ *
+ * `splits` win whenever they exist: they are what the server actually pays
+ * out (generate_sale_commission_splits reads them), while has_commission /
+ * commission_fixed / commission_pct are a legacy mirror that older catalog
+ * entries never had kept in sync — reading those alone showed 0 € for
+ * products whose splits pay hundreds.
+ *
+ * A 'profile' split only pays when the seller holds that profile, which this
+ * can't know, so treat the result as the ceiling: the server freezes the real
+ * per-person amounts on the sale.
+ */
 export function getCatalogCommission(product: CatalogProduct): number {
+  if (product.splits && product.splits.length > 0) {
+    const fixedSum = product.splits.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
+    const pctSum = product.splits.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
+    return fixedSum + Math.round(product.price * pctSum) / 100;
+  }
   if (!product.has_commission) return 0;
   const fixedPart = product.commission_fixed ?? 0;
   const pctPart = Math.round(product.price * (product.commission_pct ?? 0)) / 100;
   return fixedPart + pctPart;
+}
+
+/**
+ * Commission for `quantity` units of a catalog product. When the product has
+ * quantity_tiers (an operator with commission_basis 'per_sale' or
+ * 'monthly_volume'), the whole quantity is resolved against ONE band — the
+ * band's splits are a per-unit rate, so the total is per-unit × quantity, not
+ * graduated like a tax bracket. Falls back to getCatalogCommission (quantity
+ * implicitly 1) for a product with no tiers.
+ *
+ * For 'monthly_volume' operators this is only a same-sale ESTIMATE: the real
+ * band (and whether earlier sales this month get re-resolved to it) is
+ * decided server-side from the accumulated monthly total, not from this
+ * sale's quantity alone.
+ */
+export function getCatalogCommissionForQuantity(product: CatalogProduct, quantity: number): number {
+  const tiers = product.quantity_tiers;
+  if (!tiers || tiers.length === 0) return getCatalogCommission(product);
+
+  const qty = Math.max(1, Math.round(quantity || 1));
+  const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
+  if (!tier) return 0;
+
+  const unitPrice = tier.price ?? product.price;
+  const fixedPerUnit = tier.splits.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
+  const pctPerUnit = tier.splits.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
+  const perUnit = fixedPerUnit + Math.round(unitPrice * pctPerUnit) / 100;
+  const base = perUnit * qty;
+  // The bonus is a flat, once-off reward for reaching the band, not a
+  // per-unit rate — added once, never multiplied by quantity. 'pct' is a
+  // percentage of `base` (the tier's own combined commission at this
+  // quantity). For 'monthly_volume' this is only an ESTIMATE (same caveat as
+  // above): the real value is awarded to a single sale server-side, computed
+  // against the group's accumulated quantity, not this one.
+  const bonusAmount = tier.bonus_type === 'pct' ? (base * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
+  return Math.round((base + bonusAmount) * 100) / 100;
+}
+
+/**
+ * Unit price for `quantity` units of a catalog product — the matching
+ * band's own price when the product has quantity_tiers (e.g. a Digi line is
+ * 6€ alone, 5€ each from 3), else the product's flat price. Multiply by
+ * quantity yourself for a line total.
+ */
+export function getCatalogPriceForQuantity(product: CatalogProduct, quantity: number): number {
+  const tiers = product.quantity_tiers;
+  if (!tiers || tiers.length === 0) return product.price;
+
+  const qty = Math.max(1, Math.round(quantity || 1));
+  const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
+  return tier?.price ?? product.price;
 }
 
 /**

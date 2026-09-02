@@ -61,6 +61,53 @@ export const SALE_STATUS_COLORS: Record<SaleStatus, string> = {
 
 export const SALE_STATUSES: SaleStatus[] = ['in_progress', 'fulfilled', 'delivered', 'cancelled'];
 
+/**
+ * The sale lifecycle in a telecom org — there, this REPLACES SaleStatus in
+ * the UI: the user picks one state, not two. The two cancellations differ by
+ * money: 'anulado' happens before the install and costs nothing; 'cancelado'
+ * happens after it and claws the commission back — see sale_chargebacks.
+ */
+export type TelecomStatus = 'pendente' | 'em_instalacao' | 'ativo' | 'anulado' | 'cancelado';
+
+export const TELECOM_STATUS_LABELS: Record<TelecomStatus, string> = {
+  pendente: 'Pendente',
+  em_instalacao: 'Em instalação',
+  ativo: 'Ativo',
+  anulado: 'Anulado',
+  cancelado: 'Cancelado',
+};
+
+/** Shown under the label where the distinction matters for money. */
+export const TELECOM_STATUS_HINTS: Partial<Record<TelecomStatus, string>> = {
+  ativo: 'Instalado',
+  anulado: 'Antes da instalação — não gera CB',
+  cancelado: 'Após a instalação — gera CB',
+};
+
+export const TELECOM_STATUS_COLORS: Record<TelecomStatus, string> = {
+  pendente: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+  em_instalacao: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+  ativo: 'bg-green-500/20 text-green-500 border-green-500/30',
+  anulado: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  cancelado: 'bg-red-500/20 text-red-500 border-red-500/30',
+};
+
+export const TELECOM_STATUSES: TelecomStatus[] = ['pendente', 'em_instalacao', 'ativo', 'anulado', 'cancelado'];
+
+/**
+ * The generic status each telecom state maps to. In a telecom org the user
+ * only ever picks the telecom state; `sales.status` is written behind it from
+ * this map, because invoicing, commission closing, the finance screens and
+ * every existing filter still read that column.
+ */
+export const TELECOM_TO_SALE_STATUS: Record<TelecomStatus, SaleStatus> = {
+  pendente: 'in_progress',
+  em_instalacao: 'in_progress',
+  ativo: 'delivered',
+  anulado: 'cancelled',
+  cancelado: 'cancelled',
+};
+
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   mbway: 'MB Way',
   transfer: 'Transferência',
@@ -193,6 +240,14 @@ export interface Sale {
 
   // Data de Ativação
   activation_date?: string | null;
+
+  // Telecom-only lifecycle, independent of `status` (see TelecomStatus).
+  telecom_status?: TelecomStatus | null;
+  // When the install is booked for. Optional — sales without one are counted
+  // as "sem data" instead of falling into a month.
+  scheduled_install_date?: string | null;
+  // Units (cards/lines) on this sale, summed from servicos_details by trigger.
+  total_cartoes?: number | null;
 
   // Numero Proposta EDP
   edp_proposal_number?: string | null;

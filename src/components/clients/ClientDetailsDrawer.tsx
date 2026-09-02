@@ -37,7 +37,8 @@ import { formatDate, formatCurrency, getInboxUrl } from "@/lib/format";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { type ProposalStatus, type Proposal } from "@/types/proposals";
-import { type SaleStatus } from "@/types/sales";
+import { type SaleStatus, type TelecomStatus, TELECOM_STATUS_LABELS, TELECOM_STATUS_COLORS } from "@/types/sales";
+import { ClientDocumentsCard } from "@/components/clients/ClientDocumentsCard";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { saleStatusBadge, proposalStatusBadge } from "@/lib/status-badge-maps";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
@@ -339,6 +340,18 @@ export function ClientDetailsDrawer({
                             <p className="text-xs text-muted-foreground">Comissão</p>
                           </div>
                         )}
+                        {isTelecom && (
+                          <div className="text-center p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xl font-bold">{client.total_cartoes || 0}</p>
+                            <p className="text-xs text-muted-foreground">Cartões</p>
+                          </div>
+                        )}
+                        {isTelecom && (
+                          <div className="text-center p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xl font-bold">{formatCurrency(client.total_value)}</p>
+                            <p className="text-xs text-muted-foreground">Valor Total</p>
+                          </div>
+                        )}
                         {showEnergy && (
                           <>
                             <div className="text-center p-3 bg-muted/50 rounded-lg">
@@ -360,6 +373,8 @@ export function ClientDetailsDrawer({
                       </div>
                     </CardContent>
                   </Card>
+
+                  <ClientDocumentsCard clientId={client.id} checked={client.documents_checked} />
 
                   {/* Ações Rápidas */}
                   <Card>
@@ -465,22 +480,37 @@ export function ClientDetailsDrawer({
                     </Card>
                   )}
 
-                  {/* Vendas Recentes */}
-                   {sales.length > 0 && (
+                  {/* Every sale of this client, active and cancelled alike —
+                      the point is the full history, so it is never truncated. */}
+                  {sales.length > 0 && (
                     <Card>
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Vendas Recentes</CardTitle>
+                        <CardTitle className="text-base flex items-center justify-between gap-2">
+                          <span>Vendas</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {sales.length} no total · todos os estados
+                          </span>
+                        </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        {sales.slice(0, 3).map((sale) => (
+                      <CardContent className="space-y-2 max-h-[420px] overflow-y-auto">
+                        {sales.map((sale) => (
                           <div key={sale.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
-                            <div>
-                              <p className="font-medium">{sale.code || `#${sale.id.slice(0, 8)}`}</p>
-                              <p className="text-xs text-muted-foreground">{formatDate(sale.created_at || '')}</p>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{sale.code || `#${sale.id.slice(0, 8)}`}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(sale.created_at || '')}
+                                {isTelecom && !!sale.total_cartoes && ` · ${sale.total_cartoes} cartõe${sale.total_cartoes === 1 ? '' : 's'}`}
+                              </p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               <p className="font-semibold text-success">{formatCurrency(sale.total_value)}</p>
-                              <StatusBadge {...saleStatusBadge(sale.status as SaleStatus)} />
+                              {isTelecom && sale.telecom_status ? (
+                                <Badge variant="outline" className={cn('text-[10px]', TELECOM_STATUS_COLORS[sale.telecom_status as TelecomStatus])}>
+                                  {TELECOM_STATUS_LABELS[sale.telecom_status as TelecomStatus]}
+                                </Badge>
+                              ) : (
+                                <StatusBadge {...saleStatusBadge(sale.status as SaleStatus)} />
+                              )}
                             </div>
                           </div>
                         ))}
