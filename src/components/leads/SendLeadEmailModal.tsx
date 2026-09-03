@@ -77,7 +77,7 @@ export function SendLeadEmailModal({ lead, open, onOpenChange }: SendLeadEmailMo
           </p>
         ) : (
           <div className="space-y-4">
-            <ScrollArea className="max-h-[50vh]">
+            <ScrollArea className="max-h-[50dvh]">
               <div className="space-y-3 pr-3">
                 {welcomeTemplates.length > 0 && (
                   <div className="space-y-2">

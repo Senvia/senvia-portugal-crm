@@ -607,7 +607,7 @@ function IntakeWebhookEditModal({ webhook, members, open, onOpenChange }: {
             {webhook.is_active ? 'Ativo' : 'Inativo'}
           </span>
         </div>
-        <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[70vh]">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[70dvh]">
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</Label>
             <div className="flex gap-2">
@@ -901,7 +901,7 @@ function EditCaixaModal({
           )}
         </div>
 
-        <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[70vh]">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[70dvh]">
           {/* Nome */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>

@@ -233,7 +233,7 @@ export const MediaViewer = memo(function MediaViewer({
           src={item.url}
           controls
           autoPlay
-          className="max-h-[90vh] max-w-[95vw] rounded-xl"
+          className="max-h-[90dvh] max-w-[95vw] rounded-xl"
         />
       ) : item ? (
         <div
@@ -260,7 +260,7 @@ export const MediaViewer = memo(function MediaViewer({
             draggable={false}
             onLoad={() => setImgLoaded(true)}
             className={cn(
-              'max-h-[90vh] max-w-[95vw] select-none rounded-xl object-contain transition-opacity duration-200',
+              'max-h-[90dvh] max-w-[95vw] select-none rounded-xl object-contain transition-opacity duration-200',
               imgLoaded ? 'opacity-100' : 'opacity-0',
             )}
             style={{

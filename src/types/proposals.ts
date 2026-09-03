@@ -248,6 +248,16 @@ export interface QuantityTier {
   bonus_type?: CommissionType;
 }
 
+/**
+ * Stable identity for one catalog entry — `name` alone stopped being unique
+ * once the same product name can exist once per operator plus once with no
+ * operator (see CreateTelecomProductModal). Used wherever the catalog admin
+ * screen needs to find/edit/remove "this exact entry", not just "this name".
+ */
+export function catalogProductKey(product: Pick<CatalogProduct, 'name' | 'operator_id'>): string {
+  return `${product.operator_id ?? ''}::${product.name}`;
+}
+
 export interface CatalogProduct {
   name: string;
   price: number;
@@ -329,6 +339,71 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   // against the group's accumulated quantity, not this one.
   const bonusAmount = tier.bonus_type === 'pct' ? (base * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
   return Math.round((base + bonusAmount) * 100) / 100;
+}
+
+/** Euro value of one split, at a given unit price ('pct' is % of that price). */
+function splitEuroValue(split: CommissionSplit, unitPrice: number): number {
+  return split.type === 'fixed' ? (split.value || 0) : Math.round(unitPrice * (split.value || 0)) / 100;
+}
+
+function isMySplit(split: CommissionSplit, userId?: string | null, profileId?: string | null): boolean {
+  return (split.kind === 'user' && !!userId && split.user_id === userId)
+    || (split.kind === 'profile' && !!profileId && split.profile_id === profileId);
+}
+
+/**
+ * Commission for ONE unit of a flat (non-tiered) catalog product that
+ * actually lands with `userId`/`profileId` — the seller's own cut out of the
+ * pool `getCatalogCommission` totals, not everyone else's share too.
+ *
+ * A legacy product with no `splits` (only the has_commission/commission_pct
+ * scalar mirror) carries no recipient info at all, so there is no "mine" to
+ * compute — returns 0 rather than guessing the whole thing is the seller's.
+ */
+export function getCatalogCommissionForUser(
+  product: CatalogProduct,
+  userId?: string | null,
+  profileId?: string | null,
+): number {
+  if (!product.splits || product.splits.length === 0) return 0;
+  const mine = product.splits.filter(s => isMySplit(s, userId, profileId));
+  const fixedSum = mine.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
+  const pctSum = mine.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
+  return fixedSum + Math.round(product.price * pctSum) / 100;
+}
+
+/**
+ * Same as `getCatalogCommissionForQuantity`, but only the seller's own share
+ * of the tier's splits — including their proportional slice of the tier's
+ * Bónus Geral (shared exactly like the server does: in proportion to each
+ * recipient's own per-unit euro value, not split evenly).
+ */
+export function getCatalogCommissionForQuantityForUser(
+  product: CatalogProduct,
+  quantity: number,
+  userId?: string | null,
+  profileId?: string | null,
+): number {
+  const tiers = product.quantity_tiers;
+  if (!tiers || tiers.length === 0) return getCatalogCommissionForUser(product, userId, profileId);
+
+  const qty = Math.max(1, Math.round(quantity || 1));
+  const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
+  if (!tier) return 0;
+
+  const unitPrice = tier.price ?? product.price;
+  const totalPerUnit = tier.splits.reduce((sum, s) => sum + splitEuroValue(s, unitPrice), 0);
+  const myPerUnit = tier.splits
+    .filter(s => isMySplit(s, userId, profileId))
+    .reduce((sum, s) => sum + splitEuroValue(s, unitPrice), 0);
+  if (myPerUnit <= 0) return 0;
+
+  const myBase = myPerUnit * qty;
+  const totalBase = totalPerUnit * qty;
+  const totalBonus = tier.bonus_type === 'pct' ? (totalBase * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
+  const myBonusShare = totalBase > 0 ? totalBonus * (myBase / totalBase) : 0;
+
+  return Math.round((myBase + myBonusShare) * 100) / 100;
 }
 
 /**

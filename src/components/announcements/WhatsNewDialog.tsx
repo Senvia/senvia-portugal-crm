@@ -44,7 +44,7 @@ export function WhatsNewDialog({ organizationId }: WhatsNewDialogProps) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) dismiss(); }}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[80dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Sparkles className="h-5 w-5 text-primary" />

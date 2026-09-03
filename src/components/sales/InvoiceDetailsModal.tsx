@@ -108,7 +108,7 @@ export function InvoiceDetailsModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-         <DialogContent className="max-w-2xl max-h-[95vh] p-0 gap-0">
+         <DialogContent className="max-w-2xl max-h-[95dvh] p-0 gap-0">
           <DialogHeader className="px-6 py-4 border-b border-border/50">
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               <span>{TYPE_LABELS[documentType] || "Documento"} n.º {ref}</span>
@@ -135,7 +135,7 @@ export function InvoiceDetailsModal({
               <p className="text-xs text-muted-foreground">{(error as Error).message}</p>
             </div>
           ) : details ? (
-              <ScrollArea className="max-h-[calc(95vh-14rem)]">
+              <ScrollArea className="max-h-[calc(95dvh-14rem)]">
                 <div className="p-6 space-y-5">
                   {/* Emitente & Cliente side by side */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

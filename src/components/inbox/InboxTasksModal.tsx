@@ -68,7 +68,7 @@ export function InboxTasksModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-w-[calc(100vw-1rem)] p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] h-[80vh]">
+      <DialogContent className="sm:max-w-5xl max-w-[calc(100vw-1rem)] p-0 gap-0 overflow-hidden flex flex-col max-h-[90dvh] h-[80dvh]">
         <DialogHeader className="border-b px-5 py-3 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <ClipboardList className="h-4 w-4 text-primary" />

@@ -133,7 +133,7 @@ export function InboxCaixaRail({
   const totalUnread = messaging.reduce((s, ch) => s + unreadFor(ch), 0);
 
   return (
-    <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-muted/20 md:flex", className)}>
+    <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-muted/20 lg:flex", className)}>
       <div className="flex items-center justify-between border-b px-3 py-3">
         <h1 className="px-1 text-sm font-semibold text-muted-foreground">Caixas</h1>
         {visibleCaixas.length > 1 && (

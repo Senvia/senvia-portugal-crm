@@ -55,16 +55,22 @@ const checklist = [
   "Todos os campos do formulario selecionados em Fields.",
   "URL do webhook da sua organizacao copiado em Definicoes > Integracoes.",
   "Modulo HTTP configurado com Make a request.",
-  "Pedido HTTP enviado por POST com body JSON.",
+  "Method mudado de GET (que vem por omissao) para POST.",
+  "Corpo (body) preenchido a clicar nos campos do Facebook, nunca chavetas escritas a mao.",
   "Lead de teste recebido no SENVIA OS.",
   "Scenario guardado e ativado.",
 ];
 
+// SEM chavetas de propósito. Isto vai para dentro do editor do Make como
+// texto — se tivesse {{ }}, quem copia cola tal e qual e o Make tenta
+// interpretar aquilo como uma fórmula dele, não como marcador. O passo
+// seguinte explica: seleciona cada NOME_EM_MAIUSCULAS e clica no campo
+// correspondente na lista da direita do Make, que substitui sozinho.
 const payload = `{
-  "name": "{{full_name}}",
-  "email": "{{email}}",
-  "phone": "{{phone_number}}",
-  "company": "{{company_name}}",
+  "name": "NOME_AQUI",
+  "email": "EMAIL_AQUI",
+  "phone": "TELEFONE_AQUI",
+  "company": "EMPRESA_AQUI",
   "source": "Facebook Lead Ads",
   "notes": "Lead recebido automaticamente pelo Make"
 }`;
@@ -439,10 +445,11 @@ export default function TutorialMakeSenvia() {
                 <span className="p-3">Valor</span>
               </div>
               {[
-                ["Method", "POST"],
+                ["Method", "POST — o Make abre este modulo em GET por omissao. Se nao mudar, o pedido falha sempre com \"Method Not Allowed\"."],
                 ["URL", "O URL copiado no passo 04 (ja inclui o token da sua organizacao)"],
-                ["Headers", "Content-Type: application/json"],
-                ["Body type", "Raw ou JSON, conforme aparecer na conta Make"],
+                ["Body type", "Raw"],
+                ["Content type", "JSON (application/json)"],
+                ["Headers", "So mexa aqui se o Content type acima nao acrescentar Content-Type sozinho. Se aparecer duplicado, apague um."],
               ].map(([field, value]) => (
                 <div key={field} className="grid grid-cols-2 border-b border-slate-100 text-sm last:border-b-0">
                   <span className="p-3 font-semibold text-slate-950">{field}</span>
@@ -450,28 +457,81 @@ export default function TutorialMakeSenvia() {
                 </div>
               ))}
             </div>
+
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <strong>Nunca escreva chavetas <code className="rounded bg-white px-1">{"{{ }}"}</code> a mao dentro do corpo (body).</strong>{" "}
+              O Make usa esse simbolo para as suas proprias formulas — se escrever texto livre la dentro (por
+              exemplo <code className="rounded bg-white px-1">{"{{full_name}}"}</code> digitado a mao), o pedido falha logo
+              a validar com o erro <em>"The provided JSON body content is not valid JSON"</em>. O jeito certo esta a
+              seguir.
+            </p>
+
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-950 text-white">
               <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
-                <strong className="text-sm">Exemplo de JSON</strong>
+                <strong className="text-sm">Cole isto no corpo (Content)</strong>
                 <CopyButton value={payload} />
               </div>
               <pre className="overflow-x-auto p-4 text-sm text-slate-100">
                 <code>{payload}</code>
               </pre>
             </div>
-            <p>Ao preencher o JSON, substitua cada campo entre chavetas pelos dados reais vindos do modulo Facebook Lead Ads.</p>
+
+            <ol className="list-decimal space-y-2 pl-5">
+              <li>Cole o texto acima tal como esta, sem mudar nada primeiro.</li>
+              <li>
+                Faca duplo clique em cima de <code className="rounded bg-slate-100 px-1">NOME_AQUI</code> para o
+                selecionar (fica destacado a azul).
+              </li>
+              <li>
+                Sem escrever nada, clique no campo correspondente na lista de campos do Facebook Lead Ads, do lado
+                direito do editor (a mesma lista que apareceu ao configurar o passo 03). O Make substitui o texto
+                selecionado pelo marcador dele automaticamente.
+              </li>
+              <li>Repita para cada um dos outros marcadores em maiusculas.</li>
+              <li>Acrescente mais linhas ao JSON se o formulario tiver outras perguntas que queira enviar.</li>
+            </ol>
+
+            <div className="overflow-hidden rounded-lg border border-red-200 bg-white">
+              <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-900">
+                Erros mais comuns neste passo
+              </div>
+              <div className="divide-y divide-red-100 text-sm">
+                <div className="grid gap-1 p-3 sm:grid-cols-[1fr_1.4fr]">
+                  <span className="font-semibold text-slate-950">"The provided JSON body content is not valid JSON"</span>
+                  <span className="text-slate-600">Algum marcador foi escrito a mao com chavetas. Apague o corpo, cole outra vez o texto sem chavetas e use o clique nos campos, como acima.</span>
+                </div>
+                <div className="grid gap-1 p-3 sm:grid-cols-[1fr_1.4fr]">
+                  <span className="font-semibold text-slate-950">"Method Not Allowed" / <code className="rounded bg-slate-100 px-1">{"{\"error\":\"Método não permitido\"}"}</code></span>
+                  <span className="text-slate-600">O campo Method ainda esta em GET. Mude para POST no topo do modulo e corra outra vez — normalmente resolve sem precisar de enviar outro lead de teste.</span>
+                </div>
+              </div>
+            </div>
           </StepCard>
 
           <StepCard number="08" title="Testar e ativar">
-            <p>Clique em Run once no Make e envie um lead de teste pelo formulario do Facebook.</p>
+            <p>Clique em Run once no Make. O scenario fica a espera ("Waiting for data") de um lead real do formulario do Facebook.</p>
             <ScreenshotCard
               src={asset("make-waiting-save.jpg")}
               title="Aguardar lead de teste"
               description="Quando aparecer Waiting for data, envie um teste para confirmar que o scenario recebe os dados."
             />
+            <p>
+              Sem acesso a pagina de Facebook do cliente? Use a{" "}
+              <a
+                href="https://developers.facebook.com/tools/lead-ads-testing/"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-blue-600 underline underline-offset-4"
+              >
+                Ferramenta de Teste de Lead Ads da Meta <ExternalLink className="inline h-3 w-3" />
+              </a>{" "}
+              (precisa de acesso de Business Manager a pagina) para simular um envio sem gastar em anuncios. Em
+              alternativa, peca ao dono da conta para enviar um teste, ou preencha o formulario real uma vez com os
+              seus proprios dados e apague depois na Central de Leads da Meta.
+            </p>
             <ul className="list-disc space-y-2 pl-5">
               <li>Confirme se o modulo Facebook recebeu os dados.</li>
-              <li>Confirme se o modulo HTTP respondeu com sucesso.</li>
+              <li>Confirme se o modulo HTTP respondeu com sucesso (sem bolinha vermelha).</li>
               <li>Abra o SENVIA OS e verifique se o lead apareceu no CRM.</li>
               <li>Depois do teste, guarde e ative o scenario.</li>
             </ul>

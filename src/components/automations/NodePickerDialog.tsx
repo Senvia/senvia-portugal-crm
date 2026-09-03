@@ -40,7 +40,7 @@ export function NodePickerDialog({ open, onOpenChange, onSelect }: NodePickerDia
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-3">
+        <ScrollArea className="max-h-[60dvh] pr-3">
           <div className="space-y-5">
             {grouped.map(({ category, types }) => (
               <div key={category}>

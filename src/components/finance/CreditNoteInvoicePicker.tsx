@@ -64,7 +64,7 @@ export function CreditNoteInvoicePicker({ open, onOpenChange }: Props) {
           />
         </div>
 
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto">
           {eligible.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               Sem faturas elegíveis (já têm nota de crédito ou estão anuladas).

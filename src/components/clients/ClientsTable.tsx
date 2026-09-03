@@ -125,7 +125,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                   <TableHead className="hidden lg:table-cell">Empresa</TableHead>
                   <TableHead className="hidden md:table-cell">Contacto</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead className="hidden lg:table-cell">Responsável</TableHead>
                   <TableHead>{labels.statusFieldLabel}</TableHead>
                   <TableHead className="hidden sm:table-cell">Data</TableHead>
                 </>
@@ -134,7 +134,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                   <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">Contacto</TableHead>
                   <TableHead className="hidden lg:table-cell">Empresa</TableHead>
-                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead className="hidden lg:table-cell">Responsável</TableHead>
                   <TableHead>{labels.statusFieldLabel}</TableHead>
                   <TableHead className="hidden sm:table-cell">Data</TableHead>
                 </>
@@ -243,7 +243,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                     </TableCell>
                   </>
                 )}
-                <TableCell className="hidden xl:table-cell">
+                <TableCell className="hidden lg:table-cell">
                   {getTeamMemberName(client.assigned_to) ? (
                     <div className="flex items-center gap-1 text-sm">
                       <User className="h-3 w-3 text-muted-foreground" />

@@ -422,7 +422,7 @@ export function CommissionAnalysisTab() {
       </AlertDialog>
 
       <Dialog open={detailModal !== null} onOpenChange={(open) => !open && setDetailModal(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[80dvh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{detailModal === 'cb' ? 'Chargebacks (CB)' : 'Comissões'}</DialogTitle>
           </DialogHeader>

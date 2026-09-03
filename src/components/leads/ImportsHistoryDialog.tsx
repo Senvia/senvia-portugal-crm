@@ -40,7 +40,7 @@ export function ImportsHistoryDialog({ open, onOpenChange }: ImportsHistoryDialo
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-5xl max-h-[85dvh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Histórico de Importações</DialogTitle>
             <DialogDescription>

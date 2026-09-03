@@ -274,7 +274,7 @@ export function LeadDetailsModal({
   }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, isEditingCpe, editValue, editConsumo]);
 
   // Auto-grow the notes textarea so long notes are fully visible instead of
-  // trapped in a tiny 80px scroll box. Caps at ~60vh, then it scrolls.
+  // trapped in a tiny 80px scroll box. Caps at ~60dvh, then it scrolls.
   useEffect(() => {
     const el = notesRef.current;
     if (!el) return;
@@ -586,7 +586,7 @@ export function LeadDetailsModal({
                         onBlur={() => { setIsEditingNotes(false); handleNotesBlur(); }}
                         placeholder="Notas do lead..."
                         rows={3}
-                        className="min-h-[96px] max-h-[60vh] resize-none overflow-y-auto text-sm leading-relaxed"
+                        className="min-h-[96px] max-h-[60dvh] resize-none overflow-y-auto text-sm leading-relaxed"
                       />
                     </CardContent>
                   </Card>

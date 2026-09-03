@@ -192,7 +192,7 @@ export default function AutomationEditor() {
     return (
       <div className="space-y-4 p-4 md:p-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-[60vh] w-full rounded-2xl" />
+        <Skeleton className="h-[60dvh] w-full rounded-2xl" />
       </div>
     );
   }

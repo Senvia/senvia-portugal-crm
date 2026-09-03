@@ -30,8 +30,14 @@ interface Profile {
 interface CreateTelecomProductModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Names already in the catalog, to reject duplicates. */
-  existingNames: string[];
+  /**
+   * Products already in the catalog, to reject duplicates — scoped per
+   * operator (or per "no operator"), not globally: "1P" can exist both
+   * without an operator (same commission for MEO/Vodafone/NOS) AND again
+   * just for Digi (different commission), because at sale time a product
+   * with no operator shows up for every operator's picker.
+   */
+  existingProducts: Pick<CatalogProduct, 'name' | 'operator_id'>[];
   operators: Operator[];
   members: Member[];
   profiles: Profile[];
@@ -49,7 +55,7 @@ interface CreateTelecomProductModalProps {
 export function CreateTelecomProductModal({
   open,
   onOpenChange,
-  existingNames,
+  existingProducts,
   operators,
   members,
   profiles,
@@ -63,7 +69,12 @@ export function CreateTelecomProductModal({
   }, [open]);
 
   const trimmed = draft.name.trim();
-  const isDuplicate = existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase());
+  // Scoped per operator: "1P" without an operator and "1P" just for Digi can
+  // coexist — only a clash within the SAME operator (or the same "no
+  // operator" bucket) is a real duplicate.
+  const isDuplicate = existingProducts.some(
+    (p) => p.name.toLowerCase() === trimmed.toLowerCase() && (p.operator_id ?? null) === (draft.operator_id ?? null),
+  );
   const { operator, isTiered, scopeLabel } = useProductOperatorContext(draft, operators);
 
   // Nothing is persisted until "Criar Produto", so typing and "committing" a

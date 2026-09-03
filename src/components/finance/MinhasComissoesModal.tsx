@@ -9,7 +9,7 @@ interface MinhasComissoesModalProps {
 export function MinhasComissoesModal({ open, onOpenChange }: MinhasComissoesModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>As Minhas Comissões</DialogTitle>
         </DialogHeader>

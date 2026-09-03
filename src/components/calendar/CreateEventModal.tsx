@@ -270,7 +270,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
         </DialogHeader>

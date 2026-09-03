@@ -187,7 +187,7 @@ export function InboxProductSection({
 
       {showAll && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex h-[80vh] w-full max-w-md flex-col rounded-xl bg-background shadow-lg">
+          <div className="flex h-[80dvh] w-full max-w-md flex-col rounded-xl bg-background shadow-lg">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <h3 className="text-sm font-semibold">Produtos</h3>
               <button

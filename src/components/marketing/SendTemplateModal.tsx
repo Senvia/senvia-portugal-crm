@@ -129,7 +129,7 @@ export function SendTemplateModal({ template, open, onOpenChange }: SendTemplate
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-hidden flex flex-col">
         {step === "select" && (
           <>
             <DialogHeader>

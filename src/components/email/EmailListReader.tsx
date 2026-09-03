@@ -501,15 +501,15 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
       {/* Message list — full-width single column on mobile; resizable side column on md+ */}
       <section
         className={cn(
-          'relative w-full flex-col border-r md:shrink-0',
-          messageId ? 'hidden md:flex' : 'flex',
+          'relative w-full flex-col border-r lg:shrink-0',
+          messageId ? 'hidden lg:flex' : 'flex',
         )}
         style={isMobile ? undefined : { width: listWidth }}
       >
         {/* Drag handle (desktop only) */}
         <div
           onMouseDown={onResizeStart}
-          className="absolute inset-y-0 right-0 z-10 hidden w-[4px] cursor-col-resize transition-colors hover:bg-primary/40 active:bg-primary/60 md:block"
+          className="absolute inset-y-0 right-0 z-10 hidden w-[4px] cursor-col-resize transition-colors hover:bg-primary/40 active:bg-primary/60 lg:block"
         />
         <header className="border-b px-4 pt-5 pb-3 space-y-2">
           {hasSelection ? (
@@ -546,7 +546,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
                 {/* Mobile: reopen the caixa rail (the conversation list with its rail
                     button is hidden in email mode, so without this you can't get back). */}
                 {onOpenRail && (
-                  <Button size="icon" variant="outline" className="h-8 w-8 shrink-0 md:hidden" title="Caixas" onClick={onOpenRail}>
+                  <Button size="icon" variant="outline" className="h-8 w-8 shrink-0 lg:hidden" title="Caixas" onClick={onOpenRail}>
                     <Mailbox className="h-4 w-4" />
                   </Button>
                 )}
@@ -813,7 +813,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
       </section>
 
       {/* Reader — full-width on mobile (shown when a message is open), side column on md+ */}
-      <section className={cn('min-w-0 flex-1 flex-col bg-muted/10', messageId ? 'flex' : 'hidden md:flex')}>
+      <section className={cn('min-w-0 flex-1 flex-col bg-muted/10', messageId ? 'flex' : 'hidden lg:flex')}>
         {isDraftsFolder ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileEdit className="h-10 w-10 opacity-20" />
@@ -833,14 +833,14 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
               <div>
                 <p className="text-base font-semibold text-foreground">Os teus emails</p>
                 <p className="mt-1 max-w-xs text-sm text-muted-foreground">Escolhe um email à esquerda para o ler aqui.</p>
-                <p className="mt-2 hidden text-xs text-muted-foreground/60 md:block">j/k navegar · e arquivar · # apagar · r responder</p>
+                <p className="mt-2 hidden text-xs text-muted-foreground/60 lg:block">j/k navegar · e arquivar · # apagar · r responder</p>
               </div>
             </div>
           )
         ) : (
           <>
             <div className="flex items-center gap-1 border-b bg-background px-2 pt-5 pb-2 sm:px-3">
-              <Button size="sm" variant="outline" className="px-2 md:hidden" onClick={() => setMessageId(null)}>
+              <Button size="sm" variant="outline" className="px-2 lg:hidden" onClick={() => setMessageId(null)}>
                 <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
               </Button>
               <Button size="sm" onClick={() => addCompose('reply', opened.message)}>

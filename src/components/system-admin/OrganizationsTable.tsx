@@ -214,9 +214,9 @@ export function OrganizationsTable({
                   <TableHead className="hidden md:table-cell">Responsável</TableHead>
                   <SortHead label="Última atividade" k="activity" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
                   <SortHead label="€/mês" k="mrr" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
-                  <TableHead className="hidden xl:table-cell text-right">Extra</TableHead>
-                  <SortHead label="Membros" k="members" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" align="right" />
-                  <SortHead label="Criada" k="created" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" align="right" />
+                  <TableHead className="hidden lg:table-cell text-right">Extra</TableHead>
+                  <SortHead label="Membros" k="members" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
+                  <SortHead label="Criada" k="created" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
@@ -284,7 +284,7 @@ export function OrganizationsTable({
                         )}
                       </TableCell>
                       <TableCell
-                        className="hidden xl:table-cell text-right"
+                        className="hidden lg:table-cell text-right"
                         // A linha inteira navega para a organização; sem isto,
                         // clicar em "gerir lugares" saltava para lá em vez de
                         // abrir o diálogo.
@@ -311,10 +311,10 @@ export function OrganizationsTable({
                           )}
                         </button>
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
+                      <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
                         {org.member_count}
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell text-right text-xs text-muted-foreground">
+                      <TableCell className="hidden lg:table-cell text-right text-xs text-muted-foreground">
                         {org.created_at ? format(new Date(org.created_at), "dd MMM yy", { locale: pt }) : "—"}
                       </TableCell>
                       <TableCell className="text-right">

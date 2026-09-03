@@ -162,7 +162,7 @@ export default function RhAdminPanel() {
 
       {/* Balance Management Dialog */}
       <Dialog open={showBalanceDialog} onOpenChange={setShowBalanceDialog}>
-        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[80dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Saldos de Férias — {currentYear}</DialogTitle>
           </DialogHeader>

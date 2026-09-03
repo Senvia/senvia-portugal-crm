@@ -54,7 +54,7 @@ export default function RhAbsenceRequestForm({ open, onOpenChange, holidays }: P
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Marcar Ausência</DialogTitle>
         </DialogHeader>

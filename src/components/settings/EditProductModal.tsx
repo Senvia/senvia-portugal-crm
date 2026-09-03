@@ -73,7 +73,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
           <DialogTitle>Editar Produto</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+          <div className="max-h-[60dvh] space-y-4 overflow-y-auto pr-1">
             <div className="space-y-2">
             <Label htmlFor="edit-name">Nome *</Label>
             <Input

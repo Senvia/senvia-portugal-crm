@@ -2,13 +2,17 @@
  * Shared "Outros Serviços" section for proposals/sales.
  * Supports both legacy (fields-based) and new catalog format.
  */
-import { Wrench, X } from 'lucide-react';
+import { useState } from 'react';
+import { Radio, Wrench, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTeamMembers } from '@/hooks/useTeam';
 import type {
   ServicosDetails,
   ServicosProductDetail,
@@ -16,7 +20,14 @@ import type {
   CatalogProduct,
   ModeloServico,
 } from '@/types/proposals';
-import { FIELD_LABELS, getCatalogCommission, getCatalogCommissionForQuantity, getCatalogPriceForQuantity } from '@/types/proposals';
+import {
+  FIELD_LABELS,
+  getCatalogCommission,
+  getCatalogCommissionForQuantity,
+  getCatalogCommissionForUser,
+  getCatalogCommissionForQuantityForUser,
+  getCatalogPriceForQuantity,
+} from '@/types/proposals';
 
 interface OperatorRef {
   id: string;
@@ -131,32 +142,92 @@ function CatalogProducts({
   onSetProductDetail: (product: string, detail: ServicosProductDetail) => void;
   attempted?: boolean;
 }) {
-  const totalComissao = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
-  const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+  // `detail.comissao` (stored, per product line) stays the POOL total — every
+  // recipient's share combined. It feeds sales.comissao on save, which in turn
+  // drives crm_clients.total_comissao and Finance's payable totals, so it must
+  // keep meaning "what this line costs the company", not "what I get".
+  //
+  // What changes here is purely the DISPLAY: the badge and the per-line text
+  // show only the logged-in seller's own cut (getCatalogCommissionForUser),
+  // computed separately and never written back into `detail.comissao`.
+  const { user } = useAuth();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const currentUserId = user?.id;
+  const currentUserProfileId = teamMembers.find((m) => m.user_id === currentUserId)?.profile_id ?? null;
 
-  // Build combobox options from catalog, excluding already selected. Sublabel
-  // carries the operator name (so it also matches while searching — see
-  // SearchableCombobox) followed by the price, when there is one to show.
   const operatorById = new Map(operators.map((o) => [o.id, o.name]));
-  const comboboxOptions: ComboboxOption[] = catalog
-    .filter((c) => !servicosProdutos.includes(c.name))
-    .map((c) => {
+
+  /**
+   * The catalog entry a product NAME resolves to for a given operator
+   * context — the operator-specific entry when there is one, else the
+   * operator-agnostic one. Now that the same name can exist once per
+   * operator (see CreateTelecomProductModal), a bare `catalog.find(name)`
+   * is ambiguous; every lookup below goes through this instead.
+   */
+  const resolveProduct = (name: string, operatorId: string | null | undefined): CatalogProduct | undefined => {
+    const specific = operatorId ? catalog.find((c) => c.name === name && c.operator_id === operatorId) : undefined;
+    return specific ?? catalog.find((c) => c.name === name && !c.operator_id);
+  };
+
+  // Which operator this "add product" search is shopping for. A product with
+  // no operator_id at all (e.g. "1P" priced the same for MEO/Vodafone/NOS)
+  // shows up no matter which operator is picked here; a product tied to a
+  // SPECIFIC operator (e.g. "1P" for Digi, which pays differently) only shows
+  // up under that one — and, when both exist for the same name, the
+  // operator-specific one wins over the generic one (an explicit override).
+  const [addOperatorId, setAddOperatorId] = useState<string | null>(null);
+
+  const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+  // Shown in the "Comissão Total" box below — the seller's own total, not the
+  // pool (which is still what gets saved to the sale, via detail.comissao).
+  // Resolved by the operator FROZEN on this line, not the current picker —
+  // a line added under Digi stays a Digi line even if the picker moves on.
+  const totalMyComissao = servicosProdutos.reduce((sum, p) => {
+    const catProduct = resolveProduct(p, servicosDetails[p]?.operator_id);
+    if (!catProduct) return sum;
+    const qty = servicosDetails[p]?.quantidade ?? 1;
+    return sum + (catProduct.quantity_tiers?.length
+      ? getCatalogCommissionForQuantityForUser(catProduct, qty, currentUserId, currentUserProfileId)
+      : getCatalogCommissionForUser(catProduct, currentUserId, currentUserProfileId) * qty);
+  }, 0);
+
+  // Build combobox options: for the chosen operator, every product tied to it
+  // plus every operator-agnostic one — deduplicated by name (the specific
+  // entry wins), excluding names already added to this sale/proposta.
+  const comboboxOptions: ComboboxOption[] = (() => {
+    const seen = new Set<string>();
+    const eligible = catalog.filter((c) => c.operator_id === addOperatorId || !c.operator_id);
+    // Operator-specific entries first, so they claim the name before the
+    // operator-agnostic fallback for the same name is considered.
+    const ordered = [...eligible].sort((a, b) => (a.operator_id ? -1 : 0) - (b.operator_id ? -1 : 0));
+    const options: ComboboxOption[] = [];
+    for (const c of ordered) {
+      if (seen.has(c.name) || servicosProdutos.includes(c.name)) continue;
+      seen.add(c.name);
       const operatorName = c.operator_id ? operatorById.get(c.operator_id) : undefined;
       const priceText = c.price ? c.price.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : null;
       const sublabel = [operatorName, priceText].filter(Boolean).join(' · ') || undefined;
-      return { value: c.name, label: c.name, sublabel };
-    });
+      options.push({ value: c.name, label: c.name, sublabel });
+    }
+    return options;
+  })();
 
   const handleAddProduct = (value: string | null) => {
     if (!value) return;
     onToggleProduct(value);
-    const catProduct = catalog.find((c) => c.name === value);
+    const catProduct = resolveProduct(value, addOperatorId);
     if (catProduct) {
       const isTiered = !!catProduct.quantity_tiers?.length;
+      // Pool total (every recipient combined) — this is what gets saved.
       const comissaoVal = isTiered
         ? getCatalogCommissionForQuantity(catProduct, 1)
         : getCatalogCommission(catProduct);
       const priceVal = isTiered ? getCatalogPriceForQuantity(catProduct, 1) : catProduct.price;
+      // The operator explicitly chosen above wins over the product's own
+      // (possibly absent) operator_id — a generic "1P" added while MEO is
+      // selected must freeze onto the sale as a MEO line, not an operatorless
+      // one, or the proposal-number field and telecom lifecycle lose it.
+      const frozenOperatorId = addOperatorId ?? catProduct.operator_id;
       onSetProductDetail(value, {
         price: priceVal,
         commission_pct: catProduct.commission_pct,
@@ -164,10 +235,8 @@ function CatalogProducts({
         commission_fixed: catProduct.commission_fixed ?? 0,
         comissao: comissaoVal,
         quantidade: 1,
-        // Frozen here: the catalog can move this product to another operator
-        // later, and this sale must keep the one it was actually sold under.
-        operator_id: catProduct.operator_id,
-        operator_name: catProduct.operator_id ? operatorById.get(catProduct.operator_id) : undefined,
+        operator_id: frozenOperatorId,
+        operator_name: frozenOperatorId ? operatorById.get(frozenOperatorId) : undefined,
       });
     }
   };
@@ -178,6 +247,30 @@ function CatalogProducts({
         <Label className="text-sm">Produtos do Catálogo</Label>
         {attempted && servicosProdutos.length === 0 && (
           <p className="text-xs text-destructive">Selecione pelo menos 1 produto</p>
+        )}
+
+        {/* Operadora a comprar — filtra a pesquisa abaixo aos produtos dessa
+            operadora + aos que servem para qualquer uma (sem operadora
+            fixada no catálogo). Fica selecionada entre adições, para não
+            obrigar a escolher outra vez a cada produto da mesma operadora. */}
+        {operators.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Radio className="h-3 w-3 shrink-0" /> Operadora
+            </Label>
+            <Select
+              value={addOperatorId ?? '__geral__'}
+              onValueChange={(v) => setAddOperatorId(v === '__geral__' ? null : v)}
+            >
+              <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma (produtos gerais)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__geral__">Nenhuma (produtos gerais)</SelectItem>
+                {operators.map((op) => (
+                  <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {/* Searchable dropdown to add products */}
@@ -194,18 +287,27 @@ function CatalogProducts({
 
         {/* Selected products as editable cards */}
         {servicosProdutos.map((productName) => {
-          const catProduct = catalog.find((c) => c.name === productName);
-          if (!catProduct) return null;
           const detail = servicosDetails[productName] || {};
+          const catProduct = resolveProduct(productName, detail.operator_id);
+          if (!catProduct) return null;
           const price = detail.price ?? catProduct.price;
           const isTiered = !!catProduct.quantity_tiers?.length;
-          // Per unit, from the splits when there are any (see
-          // getCatalogCommission) — the scalar mirror is often stale.
-          const unitCommission = getCatalogCommission(catProduct);
-          const hasCommission = isTiered || unitCommission > 0 || catProduct.has_commission;
+          // Pool unit commission — every recipient combined. Drives what
+          // actually gets saved (detail.comissao) and whether the commission
+          // UI shows up at all.
+          const poolUnitCommission = getCatalogCommission(catProduct);
+          const hasCommission = isTiered || poolUnitCommission > 0 || catProduct.has_commission;
+          // Only THIS seller's own cut — what the badge and the line below
+          // show. A product that pays someone else entirely correctly shows
+          // 0 € here, instead of the whole team's commission as if it were
+          // all theirs.
+          const myUnitCommission = getCatalogCommissionForUser(catProduct, currentUserId, currentUserProfileId);
           const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
           const quantidade = detail.quantidade ?? 1;
           const unitPrice = isTiered ? getCatalogPriceForQuantity(catProduct, quantidade) : (catProduct.price || 0);
+          const myLineCommission = isTiered
+            ? getCatalogCommissionForQuantityForUser(catProduct, quantidade, currentUserId, currentUserProfileId)
+            : myUnitCommission * quantidade;
 
           return (
             <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
@@ -219,7 +321,7 @@ function CatalogProducts({
                   )}
                   {hasCommission && !isTiered && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {unitCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })} comissão/unid.
+                      {myUnitCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })} comissão/unid.
                     </Badge>
                   )}
                   {isTiered && (
@@ -281,7 +383,7 @@ function CatalogProducts({
                       const newQty = Math.max(1, parseInt(e.target.value, 10) || 1);
                       const comissao = isTiered
                         ? getCatalogCommissionForQuantity(catProduct, newQty)
-                        : unitCommission * newQty;
+                        : poolUnitCommission * newQty;
                       const newPrice = isTiered
                         ? getCatalogPriceForQuantity(catProduct, newQty) * newQty
                         : unitPrice * newQty;
@@ -294,7 +396,7 @@ function CatalogProducts({
               {hasCommission && (
                 <div className="text-xs text-muted-foreground">
                   Comissão ({quantidade} unid.): <span className="font-medium text-foreground">
-                    {(detail.comissao ?? 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                    {myLineCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                   </span>
                   {isTiered && !catProduct.quantity_tiers?.some(t => quantidade >= t.min && (t.max == null || quantidade <= t.max)) && (
                     <span className="ml-1 text-destructive">(sem escalão para esta quantidade)</span>
@@ -315,9 +417,9 @@ function CatalogProducts({
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Comissão Total (€)</Label>
+            <Label className="text-xs text-muted-foreground">A Tua Comissão (€)</Label>
             <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
-              {totalComissao ? totalComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—'}
+              {totalMyComissao ? totalMyComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—'}
             </div>
           </div>
         </div>

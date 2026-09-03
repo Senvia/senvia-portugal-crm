@@ -276,7 +276,7 @@ export function LeadsTableView({
                   <SortableHeader field="value">Valor</SortableHeader>
                 )}
               </TableHead>
-              <TableHead className="hidden xl:table-cell">
+              <TableHead className="hidden lg:table-cell">
                 <SortableHeader field="source">Fonte</SortableHeader>
               </TableHead>
               <TableHead className="hidden lg:table-cell">
@@ -456,7 +456,7 @@ export function LeadsTableView({
                         })()
                       )}
                     </TableCell>
-                    <TableCell className="hidden xl:table-cell">
+                    <TableCell className="hidden lg:table-cell">
                       <span className="text-muted-foreground text-sm">
                         {lead.source || '-'}
                       </span>

@@ -112,7 +112,7 @@ export default function Inbox() {
         <InboxCaixaRail {...railProps} />
 
         {/* No telemóvel o mesmo carril vive numa gaveta — o de cima está
-            escondido abaixo de md. */}
+            escondido abaixo de lg (1024px). */}
         <Sheet open={railSheetOpen} onOpenChange={setRailSheetOpen}>
           <SheetContent side="left" className="w-72 p-0">
             <SheetHeader className="border-b p-4 pb-3">

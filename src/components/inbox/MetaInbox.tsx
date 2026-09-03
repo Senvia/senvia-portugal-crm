@@ -77,12 +77,12 @@ export function MetaInbox({
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Lista */}
       <aside className={cn(
-        'w-full flex-col border-r md:flex md:w-80 lg:w-96',
-        selectedId ? 'hidden md:flex' : 'flex',
+        'w-full flex-col border-r lg:flex lg:w-96',
+        selectedId ? 'hidden lg:flex' : 'flex',
       )}>
         <div className="flex items-center gap-2 border-b p-3">
           {onOpenRail && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 md:hidden" onClick={onOpenRail}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 lg:hidden" onClick={onOpenRail}>
               <PanelLeft className="h-4 w-4" />
             </Button>
           )}
@@ -181,7 +181,7 @@ export function MetaInbox({
           onBack={() => setSelectedId(null)}
         />
       ) : (
-        <div className="hidden flex-1 items-center justify-center p-8 text-center md:flex">
+        <div className="hidden flex-1 items-center justify-center p-8 text-center lg:flex">
           <p className="max-w-sm text-sm text-muted-foreground">
             Escolhe uma conversa para a ler e responder.
           </p>
@@ -372,7 +372,7 @@ function MetaThread({
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b p-3">
-        <Button variant="ghost" size="sm" className="md:hidden" onClick={onBack}>Voltar</Button>
+        <Button variant="ghost" size="sm" className="lg:hidden" onClick={onBack}>Voltar</Button>
         <ContactAvatar name={conversation.contact_name} url={conversation.contact_avatar_url} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">

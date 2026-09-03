@@ -141,7 +141,7 @@ export function AddFieldModal({
   if (isEditing) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[480px] max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Campo</DialogTitle>
             <DialogDescription>
@@ -283,7 +283,7 @@ export function AddFieldModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[520px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar Campo</DialogTitle>
           <DialogDescription>

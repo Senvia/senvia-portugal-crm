@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ProductCommissionFields } from './ProductCommissionFields';
 import type { Operator } from '@/hooks/useOperators';
-import type { CatalogProduct } from '@/types/proposals';
+import { catalogProductKey, type CatalogProduct } from '@/types/proposals';
 
 interface Member {
   user_id: string;
@@ -21,10 +21,10 @@ interface ProductEditDialogProps {
   operators: Operator[];
   members: Member[];
   profiles: Profile[];
-  /** Local edit only (typing) — parent debounces the actual save to blur/select-change. */
-  onChange: (name: string, updates: Partial<CatalogProduct>) => void;
-  /** Persists immediately. */
-  onCommit: (name: string, updates: Partial<CatalogProduct>) => void;
+  /** Local edit only (typing) — parent debounces the actual save to blur/select-change. Keyed by catalogProductKey, not name alone. */
+  onChange: (key: string, updates: Partial<CatalogProduct>) => void;
+  /** Persists immediately. Keyed by catalogProductKey, not name alone. */
+  onCommit: (key: string, updates: Partial<CatalogProduct>) => void;
 }
 
 /**
@@ -61,8 +61,8 @@ export function ProductEditDialog({
             operators={operators}
             members={members}
             profiles={profiles}
-            onChange={(updates) => onChange(product.name, updates)}
-            onCommit={(updates) => onCommit(product.name, updates)}
+            onChange={(updates) => onChange(catalogProductKey(product), updates)}
+            onCommit={(updates) => onCommit(catalogProductKey(product), updates)}
           />
         </div>
 

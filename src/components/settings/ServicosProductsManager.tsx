@@ -11,7 +11,7 @@ import { ProductEditDialog } from './ProductEditDialog';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
 import { useOperators, type Operator } from '@/hooks/useOperators';
-import type { CatalogProduct } from '@/types/proposals';
+import { catalogProductKey, type CatalogProduct } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
 
 /** Short summary for the compact row — what the commission column shows. */
@@ -55,7 +55,7 @@ export function ServicosProductsManager() {
   const { data: operators = [] } = useOperators();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   // Orgs still on the old [{name, fields}] shape cannot be edited here. Saving
   // would replace their catalog with an empty one, so we block it instead.
@@ -100,21 +100,21 @@ export function ServicosProductsManager() {
     persist(next);
   };
 
-  const removeProduct = (name: string) => {
-    const next = products.filter(p => p.name !== name);
+  const removeProduct = (key: string) => {
+    const next = products.filter(p => catalogProductKey(p) !== key);
     setProducts(next);
     persist(next);
   };
 
   /** Local edit only. Text fields save on blur, so typing does not hit the DB. */
-  const updateProduct = (name: string, updates: Partial<CatalogProduct>) => {
+  const updateProduct = (key: string, updates: Partial<CatalogProduct>) => {
     dirtyRef.current = true;
-    setProducts(prev => prev.map(p => (p.name === name ? { ...p, ...updates } : p)));
+    setProducts(prev => prev.map(p => (catalogProductKey(p) === key ? { ...p, ...updates } : p)));
   };
 
   /** For controls with no blur of their own: switches, selects, blur handlers. */
-  const updateAndSave = (name: string, updates: Partial<CatalogProduct>) => {
-    const next = products.map(p => (p.name === name ? { ...p, ...updates } : p));
+  const updateAndSave = (key: string, updates: Partial<CatalogProduct>) => {
+    const next = products.map(p => (catalogProductKey(p) === key ? { ...p, ...updates } : p));
     setProducts(next);
     persist(next);
   };
@@ -143,7 +143,7 @@ export function ServicosProductsManager() {
     return ordered;
   }, [products, operators]);
 
-  const editingProduct = products.find(p => p.name === editingName) ?? null;
+  const editingProduct = products.find(p => catalogProductKey(p) === editingKey) ?? null;
 
   return (
     <Card>
@@ -216,25 +216,28 @@ export function ServicosProductsManager() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {groupProducts.map((product) => (
-                        <TableRow key={product.name} className="cursor-pointer" onClick={() => setEditingName(product.name)}>
-                          <TableCell className="py-1.5 text-sm font-medium">{product.name}</TableCell>
-                          <TableCell className="py-1.5 text-sm text-muted-foreground">
-                            {priceSummary(product)}
-                          </TableCell>
-                          <TableCell className="py-1.5 text-xs text-muted-foreground">{commissionSummary(product, operator)}</TableCell>
-                          <TableCell className="py-1.5 text-right">
-                            <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingName(product.name)}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeProduct(product.name)}>
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {groupProducts.map((product) => {
+                        const key = catalogProductKey(product);
+                        return (
+                          <TableRow key={key} className="cursor-pointer" onClick={() => setEditingKey(key)}>
+                            <TableCell className="py-1.5 text-sm font-medium">{product.name}</TableCell>
+                            <TableCell className="py-1.5 text-sm text-muted-foreground">
+                              {priceSummary(product)}
+                            </TableCell>
+                            <TableCell className="py-1.5 text-xs text-muted-foreground">{commissionSummary(product, operator)}</TableCell>
+                            <TableCell className="py-1.5 text-right">
+                              <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingKey(key)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeProduct(key)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </AccordionContent>
@@ -257,7 +260,7 @@ export function ServicosProductsManager() {
       <CreateTelecomProductModal
         open={createOpen}
         onOpenChange={setCreateOpen}
-        existingNames={products.map(p => p.name)}
+        existingProducts={products.map(p => ({ name: p.name, operator_id: p.operator_id }))}
         operators={operators}
         members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
         profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}
@@ -267,7 +270,7 @@ export function ServicosProductsManager() {
 
       <ProductEditDialog
         product={editingProduct}
-        onOpenChange={(open) => !open && setEditingName(null)}
+        onOpenChange={(open) => !open && setEditingKey(null)}
         operators={operators}
         members={(teamMembers ?? []).map(m => ({ user_id: m.user_id, full_name: m.full_name }))}
         profiles={(profiles ?? []).map(p => ({ id: p.id, name: p.name }))}

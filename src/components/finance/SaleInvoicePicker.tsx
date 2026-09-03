@@ -110,7 +110,7 @@ export function SaleInvoicePicker({ open, onOpenChange }: Props) {
           />
         </div>
 
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto">
           {eligible.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               Sem vendas elegíveis (precisam de cliente com NIF, estar entregues e ainda sem fatura).
