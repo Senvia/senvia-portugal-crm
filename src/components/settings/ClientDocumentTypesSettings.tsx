@@ -19,9 +19,11 @@ function slugify(label: string): string {
 }
 
 /**
- * The document checklist every client of this org gets on their record
- * (CTR and whatever else the operator requires). Clients store only the
- * checked keys — see crm_clients.documents_checked.
+ * The document checklist offered when creating/editing a sale or proposal
+ * (CTR and whatever else the operator requires). Each sale/proposal stores
+ * only its own checked keys — see sales.documents_checked and
+ * proposals.documents_checked — since the same client can sign several
+ * contracts over time, each needing its own paperwork.
  */
 export function ClientDocumentTypesSettings() {
   const { data: saved = [] } = useClientDocumentTypes();

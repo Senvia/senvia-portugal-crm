@@ -38,7 +38,6 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { type ProposalStatus, type Proposal } from "@/types/proposals";
 import { type SaleStatus, type TelecomStatus, TELECOM_STATUS_LABELS, TELECOM_STATUS_COLORS } from "@/types/sales";
-import { ClientDocumentsCard } from "@/components/clients/ClientDocumentsCard";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { saleStatusBadge, proposalStatusBadge } from "@/lib/status-badge-maps";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
@@ -373,8 +372,6 @@ export function ClientDetailsDrawer({
                       </div>
                     </CardContent>
                   </Card>
-
-                  <ClientDocumentsCard clientId={client.id} checked={client.documents_checked} />
 
                   {/* Ações Rápidas */}
                   <Card>

@@ -65,6 +65,7 @@ import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getC
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
+import { DocumentsCheckboxField } from '@/components/shared/DocumentsCheckboxField';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -160,6 +161,7 @@ export function EditSaleModal({
   const [activationDate, setActivationDate] = useState<string>("");
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
   const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
+  const [documentsChecked, setDocumentsChecked] = useState(false);
   const [edpProposalNumber, setEdpProposalNumber] = useState<string>("");
 
   // Editable CPEs state
@@ -186,6 +188,7 @@ export function EditSaleModal({
       setActivationDate(sale.activation_date || "");
       setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
       setScheduledInstallDate(sale.scheduled_install_date || "");
+      setDocumentsChecked(!!sale.documents_checked);
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
     }
   }, [open, sale]);
@@ -444,6 +447,7 @@ export function EditSaleModal({
             activation_date: activationDate || null,
             telecom_status: telecomStatus || null,
             scheduled_install_date: scheduledInstallDate || null,
+            documents_checked: documentsChecked,
             // The telecom state IS the sale state here; sales.status is kept
             // in sync behind it so invoicing/finance keep matching on it.
             ...(telecomStatus ? { status: TELECOM_TO_SALE_STATUS[telecomStatus] } : {}),
@@ -672,6 +676,14 @@ export function EditSaleModal({
                                 disabled={isDeliveredLocked}
                               />
                               <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
+                            </div>
+
+                            <div className="col-span-1 sm:col-span-3">
+                              <DocumentsCheckboxField
+                                id="edit-sale-documents"
+                                checked={documentsChecked}
+                                onChange={setDocumentsChecked}
+                              />
                             </div>
                           </>
                         )}

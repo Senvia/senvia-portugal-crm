@@ -129,6 +129,7 @@ interface CreateProposalData {
   
   // Comum
   comissao?: number;
+  documents_checked?: boolean;
 }
 
 export function useCreateProposal() {
@@ -186,6 +187,7 @@ export function useCreateProposal() {
           comissao: data.comissao || null,
           servicos_produtos: data.servicos_produtos || null,
           servicos_details: data.servicos_details || null,
+          documents_checked: data.documents_checked ?? false,
         })
         .select(`
           *,
@@ -244,6 +246,7 @@ interface UpdateProposalData {
   comissao?: number | null;
   servicos_produtos?: string[] | null;
   servicos_details?: Record<string, any> | null;
+  documents_checked?: boolean | null;
 }
 
 export function useUpdateProposal() {

@@ -69,7 +69,9 @@ export interface Proposal {
   
   // Comum
   comissao?: number | null;
-  
+  // Whether the required paperwork for THIS proposal has been handed in.
+  documents_checked?: boolean | null;
+
   products?: ProposalProduct[];
   client?: {
     id: string;

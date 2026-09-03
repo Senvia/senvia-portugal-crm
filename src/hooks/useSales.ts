@@ -20,6 +20,7 @@ import type {
   ModeloServico,
   NegotiationType,
   ServiceStatus,
+  TelecomStatus,
 } from "@/types/sales";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -285,6 +286,14 @@ export function useCreateSale() {
       recurring_status?: 'active' | 'cancelled' | 'paused' | 'pending' | 'pending';
       next_renewal_date?: string;
       activation_date?: string;
+      // Telecom-only lifecycle (see types/sales.ts). Were being silently
+      // dropped here — the explicit insert() below never read them — so a
+      // newly created telecom sale lost its estado/data de instalação until
+      // someone opened EditSaleModal and re-saved (that one already spreads
+      // `updates` straight into .update(), so it was never affected).
+      telecom_status?: TelecomStatus;
+      scheduled_install_date?: string;
+      documents_checked?: boolean;
     }) => {
       if (!organization?.id) throw new Error("Sem organização");
 
@@ -326,6 +335,9 @@ export function useCreateSale() {
           recurring_status: data.recurring_status || 'active',
           next_renewal_date: data.next_renewal_date || null,
           activation_date: data.activation_date || null,
+          telecom_status: data.telecom_status || null,
+          scheduled_install_date: data.scheduled_install_date || null,
+          documents_checked: data.documents_checked ?? false,
         })
         .select()
         .single();
@@ -425,6 +437,10 @@ export function useUpdateSale() {
         recurring_status?: 'active' | 'cancelled' |'pending' |  'paused' | null;
         // Data de ativação
         activation_date?: string | null;
+        // Telecom-only lifecycle
+        telecom_status?: TelecomStatus | null;
+        scheduled_install_date?: string | null;
+        documents_checked?: boolean | null;
       }
     }) => {
       const { error } = await supabase

@@ -248,6 +248,10 @@ export interface Sale {
   scheduled_install_date?: string | null;
   // Units (cards/lines) on this sale, summed from servicos_details by trigger.
   total_cartoes?: number | null;
+  // Whether the required paperwork for THIS sale has been handed in — per
+  // sale, not per client, since the same client can sign several contracts
+  // over time, each needing its own paperwork.
+  documents_checked?: boolean;
 
   // Numero Proposta EDP
   edp_proposal_number?: string | null;
