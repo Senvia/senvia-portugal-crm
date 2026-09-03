@@ -678,7 +678,7 @@ export function EditSaleModal({
                               <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
                             </div>
 
-                            <div className="col-span-1 sm:col-span-3">
+                            <div className="space-y-1.5 flex items-end pb-2">
                               <DocumentsCheckboxField
                                 id="edit-sale-documents"
                                 checked={documentsChecked}

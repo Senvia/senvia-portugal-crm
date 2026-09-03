@@ -1113,7 +1113,7 @@ export function CreateSaleModal({
                             <p className="text-[11px] text-muted-foreground">Opcional — pode ficar por marcar.</p>
                           </div>
 
-                          <div className="col-span-1 sm:col-span-2">
+                          <div className="space-y-2 flex items-end pb-2">
                             <DocumentsCheckboxField
                               id="create-sale-documents"
                               checked={documentsChecked}
