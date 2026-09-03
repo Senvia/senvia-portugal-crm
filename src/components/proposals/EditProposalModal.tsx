@@ -37,7 +37,7 @@ import {
 } from '@/types/proposals';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
-import { DocumentsCheckboxField } from '@/components/shared/DocumentsCheckboxField';
+import { DocumentsCheckboxField, ContractSignedCheckboxField } from '@/components/shared/DocumentsCheckboxField';
 
 interface EditProposalModalProps {
   proposal: Proposal;
@@ -76,6 +76,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
   const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
   const [documentsChecked, setDocumentsChecked] = useState(false);
+  const [contractSigned, setContractSigned] = useState(false);
 
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
@@ -105,6 +106,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setServicosComissao(proposal.comissao?.toString() || '');
       setServicosProdutos(proposal.servicos_produtos || []);
       setDocumentsChecked(!!proposal.documents_checked);
+      setContractSigned(!!proposal.contract_signed);
 
       // Migrar dados legacy: se servicos_details é null mas tem kwp/comissao no nível superior
       const details = (proposal as any).servicos_details || {};
@@ -404,6 +406,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       servicos_produtos: proposalType === 'servicos' ? servicosProdutos : null,
       servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
       documents_checked: isTelecom ? documentsChecked : null,
+      contract_signed: isTelecom ? contractSigned : null,
     });
 
     if (isTelecom && proposalType === 'energia') {
@@ -838,11 +841,12 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                     </Card>
                   )}
 
-                  {/* Documentos (apenas telecom) */}
+                  {/* Documentos / Contrato (apenas telecom) */}
                   {isTelecom && (
                     <Card>
-                      <CardContent className="p-4">
+                      <CardContent className="p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
                         <DocumentsCheckboxField id="edit-proposal-documents" checked={documentsChecked} onChange={setDocumentsChecked} />
+                        <ContractSignedCheckboxField id="edit-proposal-contract" checked={contractSigned} onChange={setContractSigned} />
                       </CardContent>
                     </Card>
                   )}

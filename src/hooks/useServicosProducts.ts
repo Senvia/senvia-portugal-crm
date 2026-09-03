@@ -25,6 +25,7 @@ interface CatalogConfigFromDB {
   splits?: CommissionSplit[];
   operator_id?: string;
   quantity_tiers?: QuantityTier[];
+  extra_card_commission?: number;
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -68,6 +69,7 @@ export function useServicosProducts() {
         splits: c.splits,
         operator_id: c.operator_id,
         quantity_tiers: c.quantity_tiers,
+        extra_card_commission: c.extra_card_commission,
       }));
       return {
         products: catalog.map((c) => c.name),

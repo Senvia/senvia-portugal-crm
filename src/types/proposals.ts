@@ -71,6 +71,7 @@ export interface Proposal {
   comissao?: number | null;
   // Whether the required paperwork for THIS proposal has been handed in.
   documents_checked?: boolean | null;
+  contract_signed?: boolean | null;
 
   products?: ProposalProduct[];
   client?: {
@@ -168,6 +169,13 @@ export interface ServicosProductDetail {
   // from" must read this, not the catalog's current operator_id.
   operator_id?: string;
   operator_name?: string;
+  // Extra SIM cards added on top of the package's included ones (e.g. a 2P
+  // package with 2 included, up to 3 more on the same line) — split by
+  // whether each one ported an existing number or is a brand-new line, since
+  // the operator tracks that regardless of it changing the commission. Both
+  // kinds pay the same product.extra_card_commission per card.
+  extra_cards_portability?: number;
+  extra_cards_new?: number;
 }
 
 export type ServicosDetails = Record<string, ServicosProductDetail>;
@@ -280,6 +288,19 @@ export interface CatalogProduct {
   // splits are used instead. A product that doesn't actually vary by
   // quantity just gets one band spanning everything (min 1, max ∞).
   quantity_tiers?: QuantityTier[];
+  // Flat commission per extra SIM card added on top of the ones the package
+  // already includes (e.g. a Vodafone package with 2 included pays +10€ per
+  // additional card, ported or brand new). Varies per product/operator —
+  // absent or 0 means this product doesn't support extra cards at all, and
+  // the "Cartões extra" fields don't show for it.
+  extra_card_commission?: number;
+}
+
+/** How many extra cards a line carries, and what each one pays — kept
+ * together so every commission function threads the same shape through. */
+export interface ExtraCards {
+  portabilidade?: number;
+  novos?: number;
 }
 
 /**
@@ -308,6 +329,19 @@ export function getCatalogCommission(product: CatalogProduct): number {
 }
 
 /**
+ * Pool total for extra SIM cards on a line — a flat per-card rate (the
+ * product's own `extra_card_commission`) times every extra card, ported or
+ * brand new alike. Not multiplied by `quantidade`: these are literal cards
+ * counted once for the whole line, not a per-package rate.
+ */
+export function getExtraCardCommission(product: CatalogProduct, extraCards?: ExtraCards): number {
+  const rate = product.extra_card_commission ?? 0;
+  if (!rate || !extraCards) return 0;
+  const count = Math.max(0, extraCards.portabilidade || 0) + Math.max(0, extraCards.novos || 0);
+  return Math.round(rate * count * 100) / 100;
+}
+
+/**
  * Commission for `quantity` units of a catalog product. When the product has
  * quantity_tiers (an operator with commission_basis 'per_sale' or
  * 'monthly_volume'), the whole quantity is resolved against ONE band — the
@@ -320,9 +354,9 @@ export function getCatalogCommission(product: CatalogProduct): number {
  * decided server-side from the accumulated monthly total, not from this
  * sale's quantity alone.
  */
-export function getCatalogCommissionForQuantity(product: CatalogProduct, quantity: number): number {
+export function getCatalogCommissionForQuantity(product: CatalogProduct, quantity: number, extraCards?: ExtraCards): number {
   const tiers = product.quantity_tiers;
-  if (!tiers || tiers.length === 0) return getCatalogCommission(product);
+  if (!tiers || tiers.length === 0) return getCatalogCommission(product) + getExtraCardCommission(product, extraCards);
 
   const qty = Math.max(1, Math.round(quantity || 1));
   const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
@@ -340,7 +374,7 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   // above): the real value is awarded to a single sale server-side, computed
   // against the group's accumulated quantity, not this one.
   const bonusAmount = tier.bonus_type === 'pct' ? (base * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
-  return Math.round((base + bonusAmount) * 100) / 100;
+  return Math.round((base + bonusAmount) * 100) / 100 + getExtraCardCommission(product, extraCards);
 }
 
 /** Euro value of one split, at a given unit price ('pct' is % of that price). */
@@ -375,6 +409,54 @@ export function getCatalogCommissionForUser(
 }
 
 /**
+ * This seller's proportional cut of a line's extra-card commission — shared
+ * among the SAME recipients as the base commission, in proportion to each
+ * one's own euro value (same mechanism as the tier Bónus Geral). Resolves
+ * the tier's splits when the product is tiered (the extra-card rate is a
+ * flat per-product amount, but WHO gets it still follows the tier that
+ * matched `quantity`), else the product's own flat splits.
+ */
+export function getExtraCardCommissionForUser(
+  product: CatalogProduct,
+  quantity: number,
+  userId?: string | null,
+  profileId?: string | null,
+  extraCards?: ExtraCards,
+): number {
+  const extraTotal = getExtraCardCommission(product, extraCards);
+  if (extraTotal <= 0) return 0;
+
+  let splits: CommissionSplit[];
+  let unitPrice: number;
+  if (product.quantity_tiers && product.quantity_tiers.length > 0) {
+    const qty = Math.max(1, Math.round(quantity || 1));
+    const tier = product.quantity_tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
+    if (!tier) return 0;
+    splits = tier.splits;
+    unitPrice = tier.price ?? product.price;
+  } else {
+    splits = product.splits ?? [];
+    unitPrice = product.price;
+  }
+  if (splits.length === 0) return 0;
+
+  const totalEuro = splits.reduce((sum, s) => sum + splitEuroValue(s, unitPrice), 0);
+  const mine = splits.filter(s => isMySplit(s, userId, profileId));
+
+  // No euro weight to go by — every split is 0, or they are percentages of a
+  // price that is itself 0 (common: packages priced at 0 whose whole payout
+  // is the commission). Falling through to "nobody gets anything" would drop
+  // the extra-card money entirely, so it is shared equally instead, exactly
+  // like the tier's Bónus Geral does.
+  if (totalEuro <= 0) {
+    return Math.round((extraTotal * mine.length / splits.length) * 100) / 100;
+  }
+
+  const mineEuro = mine.reduce((sum, s) => sum + splitEuroValue(s, unitPrice), 0);
+  return Math.round(extraTotal * (mineEuro / totalEuro) * 100) / 100;
+}
+
+/**
  * Same as `getCatalogCommissionForQuantity`, but only the seller's own share
  * of the tier's splits — including their proportional slice of the tier's
  * Bónus Geral (shared exactly like the server does: in proportion to each
@@ -385,9 +467,13 @@ export function getCatalogCommissionForQuantityForUser(
   quantity: number,
   userId?: string | null,
   profileId?: string | null,
+  extraCards?: ExtraCards,
 ): number {
   const tiers = product.quantity_tiers;
-  if (!tiers || tiers.length === 0) return getCatalogCommissionForUser(product, userId, profileId);
+  if (!tiers || tiers.length === 0) {
+    return getCatalogCommissionForUser(product, userId, profileId)
+      + getExtraCardCommissionForUser(product, quantity, userId, profileId, extraCards);
+  }
 
   const qty = Math.max(1, Math.round(quantity || 1));
   const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
@@ -398,14 +484,15 @@ export function getCatalogCommissionForQuantityForUser(
   const myPerUnit = tier.splits
     .filter(s => isMySplit(s, userId, profileId))
     .reduce((sum, s) => sum + splitEuroValue(s, unitPrice), 0);
-  if (myPerUnit <= 0) return 0;
+  if (myPerUnit <= 0) return getExtraCardCommissionForUser(product, quantity, userId, profileId, extraCards);
 
   const myBase = myPerUnit * qty;
   const totalBase = totalPerUnit * qty;
   const totalBonus = tier.bonus_type === 'pct' ? (totalBase * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
   const myBonusShare = totalBase > 0 ? totalBonus * (myBase / totalBase) : 0;
+  const myExtraShare = getExtraCardCommissionForUser(product, quantity, userId, profileId, extraCards);
 
-  return Math.round((myBase + myBonusShare) * 100) / 100;
+  return Math.round((myBase + myBonusShare + myExtraShare) * 100) / 100;
 }
 
 /**

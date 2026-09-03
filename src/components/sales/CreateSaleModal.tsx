@@ -62,7 +62,7 @@ import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/p
 import { NEGOTIATION_TYPE_LABELS, getCatalogCommission } from "@/types/proposals";
 import { useServicosProducts } from "@/hooks/useServicosProducts";
 import { ServicosSection } from "@/components/proposals/ServicosSection";
-import { DocumentsCheckboxField } from "@/components/shared/DocumentsCheckboxField";
+import { DocumentsCheckboxField, ContractSignedCheckboxField } from "@/components/shared/DocumentsCheckboxField";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
@@ -184,7 +184,9 @@ export function CreateSaleModal({
   const [saleDate, setSaleDate] = useState<Date>(new Date());
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
   const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
+  const [scheduledInstallTime, setScheduledInstallTime] = useState<string>("");
   const [documentsChecked, setDocumentsChecked] = useState(false);
+  const [contractSigned, setContractSigned] = useState(false);
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [discount, setDiscount] = useState<string>("0");
   const [notes, setNotes] = useState("");
@@ -759,8 +761,11 @@ export function CreateSaleModal({
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
           servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
           telecom_status: telecomStatus || undefined,
-          scheduled_install_date: scheduledInstallDate || undefined,
+          scheduled_install_date: scheduledInstallDate
+            ? `${scheduledInstallDate}T${scheduledInstallTime || '00:00'}:00`
+            : undefined,
           documents_checked: documentsChecked,
+          contract_signed: contractSigned,
         } : {}),
         ...(showEnergy && saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || undefined } : {}),
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
@@ -1102,7 +1107,7 @@ export function CreateSaleModal({
                                       variant="ghost"
                                       size="sm"
                                       className="w-full text-xs"
-                                      onClick={() => setScheduledInstallDate('')}
+                                      onClick={() => { setScheduledInstallDate(''); setScheduledInstallTime(''); }}
                                     >
                                       Limpar data
                                     </Button>
@@ -1110,14 +1115,27 @@ export function CreateSaleModal({
                                 )}
                               </PopoverContent>
                             </Popover>
+                            {scheduledInstallDate && (
+                              <Input
+                                type="time"
+                                value={scheduledInstallTime}
+                                onChange={(e) => setScheduledInstallTime(e.target.value)}
+                                className="h-9"
+                              />
+                            )}
                             <p className="text-[11px] text-muted-foreground">Opcional — pode ficar por marcar.</p>
                           </div>
 
-                          <div className="space-y-2 flex items-end pb-2">
+                          <div className="space-y-2 flex flex-wrap items-end gap-x-6 gap-y-2 pb-2">
                             <DocumentsCheckboxField
                               id="create-sale-documents"
                               checked={documentsChecked}
                               onChange={setDocumentsChecked}
+                            />
+                            <ContractSignedCheckboxField
+                              id="create-sale-contract"
+                              checked={contractSigned}
+                              onChange={setContractSigned}
                             />
                           </div>
                         </>

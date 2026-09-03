@@ -294,6 +294,7 @@ export function useCreateSale() {
       telecom_status?: TelecomStatus;
       scheduled_install_date?: string;
       documents_checked?: boolean;
+      contract_signed?: boolean;
     }) => {
       if (!organization?.id) throw new Error("Sem organização");
 
@@ -338,6 +339,7 @@ export function useCreateSale() {
           telecom_status: data.telecom_status || null,
           scheduled_install_date: data.scheduled_install_date || null,
           documents_checked: data.documents_checked ?? false,
+          contract_signed: data.contract_signed ?? false,
         })
         .select()
         .single();
@@ -441,6 +443,7 @@ export function useUpdateSale() {
         telecom_status?: TelecomStatus | null;
         scheduled_install_date?: string | null;
         documents_checked?: boolean | null;
+        contract_signed?: boolean | null;
       }
     }) => {
       const { error } = await supabase

@@ -44,6 +44,13 @@ import {
   matchesRecurringSalesFilters,
   type RecurringSalesFilters as RecurringSalesFilterState,
 } from "@/components/sales/recurring-sales-filter-logic";
+import {
+  TELECOM_VIEW_LABELS,
+  isTelecomViewKey,
+  isTelecomViewPeriodScoped,
+  matchesTelecomView,
+  type TelecomViewKey,
+} from "@/lib/telecom-sale-views";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
@@ -87,7 +94,15 @@ const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [isExporting, setIsExporting] = useState(false);
   // Sale pending deletion — drives the confirmation dialog (admin only).
   const [saleToDelete, setSaleToDelete] = useState<SaleWithDetails | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Filter arriving from a dashboard card (?telecom=ativos&from=…&to=…). Lives
+  // in the URL, not in persisted state: it is a one-off drill-down, and coming
+  // back to Vendas later should not still be filtered by last week's click.
+  const telecomView: TelecomViewKey | null = isTelecomViewKey(searchParams.get("telecom"))
+    ? (searchParams.get("telecom") as TelecomViewKey)
+    : null;
+  const telecomFrom = searchParams.get("from");
+  const telecomTo = searchParams.get("to");
 
   // Delete sale mutation (admin only)
 const deleteSale = useMutation({
@@ -143,7 +158,23 @@ const deleteSale = useMutation({
   const filteredSales = useMemo(() => {
     if (!sales) return [];
 
+    // Reference month for "próximo mês": the period the dashboard card was
+    // showing when it was clicked, so both sides look at the same month.
+    const telecomReference = telecomFrom ? parseISO(telecomFrom) : new Date();
+
     return sales.filter((sale) => {
+      // Drill-down from the dashboard. Its own date window replaces the
+      // page's date filter — except for "próximo mês", which is a forward
+      // look and must not be cut down to the period being analysed.
+      if (telecomView) {
+        if (!matchesTelecomView(sale, telecomView, telecomReference)) return false;
+        if (isTelecomViewPeriodScoped(telecomView) && telecomFrom && telecomTo) {
+          if (!sale.sale_date) return false;
+          const d = parseISO(sale.sale_date);
+          if (d < startOfDay(parseISO(telecomFrom)) || d > endOfDay(parseISO(telecomTo))) return false;
+        }
+      }
+
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
       const matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter;
       const matchesRecurring = matchesRecurringSalesFilters(
@@ -181,7 +212,7 @@ const deleteSale = useMutation({
 
       return matchesSearchTerm && matchesStatus && matchesType && matchesDate && matchesRecurring;
     });
-  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether, recurringFilters]);
+  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether, recurringFilters, telecomView, telecomFrom, telecomTo]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -406,6 +437,27 @@ const deleteSale = useMutation({
 
       {/* Filters */}
       <div className="px-4 md:px-6 pb-4 space-y-3">
+        {/* Drill-down chip: says which dashboard card brought you here, and
+            clears back to the full list. */}
+        {telecomView && (
+          <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">A mostrar:</span>
+            <span className="font-medium">{TELECOM_VIEW_LABELS[telecomView]}</span>
+            {telecomFrom && telecomTo && isTelecomViewPeriodScoped(telecomView) && (
+              <span className="text-xs text-muted-foreground">
+                {format(parseISO(telecomFrom), "d MMM", { locale: pt })} – {format(parseISO(telecomTo), "d MMM yyyy", { locale: pt })}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 px-2 text-xs"
+              onClick={() => setSearchParams({}, { replace: true })}
+            >
+              Limpar filtro
+            </Button>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -461,7 +513,7 @@ const deleteSale = useMutation({
             <Skeleton className="h-24 w-full" />
           </>
         ) : filteredSales.length === 0 ? (
-          (search || statusFilter !== "all" || hasRecurringSalesFilter(recurringFilters)) ? (
+          (search || statusFilter !== "all" || telecomView || hasRecurringSalesFilter(recurringFilters)) ? (
             <EmptyState icon={ShoppingBag} title="Nenhuma venda encontrada" description="Tenta ajustar os filtros de pesquisa." />
           ) : (
             <EmptyState

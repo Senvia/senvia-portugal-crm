@@ -65,7 +65,7 @@ import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getC
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
-import { DocumentsCheckboxField } from '@/components/shared/DocumentsCheckboxField';
+import { DocumentsCheckboxField, ContractSignedCheckboxField } from '@/components/shared/DocumentsCheckboxField';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -161,7 +161,9 @@ export function EditSaleModal({
   const [activationDate, setActivationDate] = useState<string>("");
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
   const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
+  const [scheduledInstallTime, setScheduledInstallTime] = useState<string>("");
   const [documentsChecked, setDocumentsChecked] = useState(false);
+  const [contractSigned, setContractSigned] = useState(false);
   const [edpProposalNumber, setEdpProposalNumber] = useState<string>("");
 
   // Editable CPEs state
@@ -187,8 +189,19 @@ export function EditSaleModal({
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
       setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
-      setScheduledInstallDate(sale.scheduled_install_date || "");
+      // scheduled_install_date is a timestamptz — split it for the separate
+      // date and time inputs (a native <input type="date"> rejects anything
+      // but yyyy-MM-dd).
+      if (sale.scheduled_install_date) {
+        const [datePart, timePart] = sale.scheduled_install_date.split('T');
+        setScheduledInstallDate(datePart || "");
+        setScheduledInstallTime(timePart ? timePart.slice(0, 5) : "");
+      } else {
+        setScheduledInstallDate("");
+        setScheduledInstallTime("");
+      }
       setDocumentsChecked(!!sale.documents_checked);
+      setContractSigned(!!sale.contract_signed);
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
     }
   }, [open, sale]);
@@ -446,8 +459,11 @@ export function EditSaleModal({
           ...(isTelecom ? {
             activation_date: activationDate || null,
             telecom_status: telecomStatus || null,
-            scheduled_install_date: scheduledInstallDate || null,
+            scheduled_install_date: scheduledInstallDate
+              ? `${scheduledInstallDate}T${scheduledInstallTime || '00:00'}:00`
+              : null,
             documents_checked: documentsChecked,
+            contract_signed: contractSigned,
             // The telecom state IS the sale state here; sales.status is kept
             // in sync behind it so invoicing/finance keep matching on it.
             ...(telecomStatus ? { status: TELECOM_TO_SALE_STATUS[telecomStatus] } : {}),
@@ -668,21 +684,37 @@ export function EditSaleModal({
                           <>
                             <div className="space-y-1.5">
                               <Label className="text-xs text-muted-foreground">Data de Instalação</Label>
-                              <Input
-                                type="date"
-                                value={scheduledInstallDate}
-                                onChange={(e) => setScheduledInstallDate(e.target.value)}
-                                className="h-9"
-                                disabled={isDeliveredLocked}
-                              />
+                              <div className="flex gap-2">
+                                <Input
+                                  type="date"
+                                  value={scheduledInstallDate}
+                                  onChange={(e) => setScheduledInstallDate(e.target.value)}
+                                  className="h-9"
+                                  disabled={isDeliveredLocked}
+                                />
+                                {scheduledInstallDate && (
+                                  <Input
+                                    type="time"
+                                    value={scheduledInstallTime}
+                                    onChange={(e) => setScheduledInstallTime(e.target.value)}
+                                    className="h-9"
+                                    disabled={isDeliveredLocked}
+                                  />
+                                )}
+                              </div>
                               <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
                             </div>
 
-                            <div className="space-y-1.5 flex items-end pb-2">
+                            <div className="space-y-1.5 flex flex-wrap items-end gap-x-6 gap-y-2 pb-2">
                               <DocumentsCheckboxField
                                 id="edit-sale-documents"
                                 checked={documentsChecked}
                                 onChange={setDocumentsChecked}
+                              />
+                              <ContractSignedCheckboxField
+                                id="edit-sale-contract"
+                                checked={contractSigned}
+                                onChange={setContractSigned}
                               />
                             </div>
                           </>

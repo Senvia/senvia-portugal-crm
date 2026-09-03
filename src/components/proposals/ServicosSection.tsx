@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
+import { NumberInput } from '@/components/shared/NumberInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import type {
@@ -19,6 +20,7 @@ import type {
   ServicosProductConfig,
   CatalogProduct,
   ModeloServico,
+  ExtraCards,
 } from '@/types/proposals';
 import {
   FIELD_LABELS,
@@ -26,6 +28,8 @@ import {
   getCatalogCommissionForQuantity,
   getCatalogCommissionForUser,
   getCatalogCommissionForQuantityForUser,
+  getExtraCardCommission,
+  getExtraCardCommissionForUser,
   getCatalogPriceForQuantity,
 } from '@/types/proposals';
 
@@ -178,17 +182,24 @@ function CatalogProducts({
   const [addOperatorId, setAddOperatorId] = useState<string | null>(null);
 
   const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+  // The pool that actually gets saved to the sale (sales.comissao), across
+  // every recipient — shown under the seller's own total so the sale can be
+  // checked without logging in as each person who gets paid.
+  const totalPoolComissao = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
   // Shown in the "Comissão Total" box below — the seller's own total, not the
   // pool (which is still what gets saved to the sale, via detail.comissao).
   // Resolved by the operator FROZEN on this line, not the current picker —
   // a line added under Digi stays a Digi line even if the picker moves on.
   const totalMyComissao = servicosProdutos.reduce((sum, p) => {
-    const catProduct = resolveProduct(p, servicosDetails[p]?.operator_id);
+    const detail = servicosDetails[p];
+    const catProduct = resolveProduct(p, detail?.operator_id);
     if (!catProduct) return sum;
-    const qty = servicosDetails[p]?.quantidade ?? 1;
+    const qty = detail?.quantidade ?? 1;
+    const extraCards: ExtraCards = { portabilidade: detail?.extra_cards_portability, novos: detail?.extra_cards_new };
     return sum + (catProduct.quantity_tiers?.length
-      ? getCatalogCommissionForQuantityForUser(catProduct, qty, currentUserId, currentUserProfileId)
-      : getCatalogCommissionForUser(catProduct, currentUserId, currentUserProfileId) * qty);
+      ? getCatalogCommissionForQuantityForUser(catProduct, qty, currentUserId, currentUserProfileId, extraCards)
+      : getCatalogCommissionForUser(catProduct, currentUserId, currentUserProfileId) * qty
+        + getExtraCardCommissionForUser(catProduct, qty, currentUserId, currentUserProfileId, extraCards));
   }, 0);
 
   // Build combobox options: for the chosen operator, every product tied to it
@@ -305,9 +316,16 @@ function CatalogProducts({
           const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
           const quantidade = detail.quantidade ?? 1;
           const unitPrice = isTiered ? getCatalogPriceForQuantity(catProduct, quantidade) : (catProduct.price || 0);
+          // Extra SIM cards on top of the package's included ones — only
+          // relevant for products the admin configured a per-card rate for.
+          const supportsExtraCards = !!catProduct.extra_card_commission;
+          const extraCardsPortab = detail.extra_cards_portability ?? 0;
+          const extraCardsNovos = detail.extra_cards_new ?? 0;
+          const extraCards: ExtraCards = { portabilidade: extraCardsPortab, novos: extraCardsNovos };
           const myLineCommission = isTiered
-            ? getCatalogCommissionForQuantityForUser(catProduct, quantidade, currentUserId, currentUserProfileId)
-            : myUnitCommission * quantidade;
+            ? getCatalogCommissionForQuantityForUser(catProduct, quantidade, currentUserId, currentUserProfileId, extraCards)
+            : myUnitCommission * quantidade
+              + getExtraCardCommissionForUser(catProduct, quantidade, currentUserId, currentUserProfileId, extraCards);
 
           return (
             <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
@@ -354,16 +372,15 @@ function CatalogProducts({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Preço (€)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                  <NumberInput
+                    step={0.01}
+                    min={0}
                     value={price}
-                    onChange={(e) => {
-                      const newPrice = parseFloat(e.target.value) || 0;
+                    onCommit={(newPrice) => {
                       const comissao = isTiered
-                        ? getCatalogCommissionForQuantity({ ...catProduct, price: newPrice }, quantidade)
-                        : getCatalogCommission({ ...catProduct, price: newPrice }) * quantidade;
+                        ? getCatalogCommissionForQuantity({ ...catProduct, price: newPrice }, quantidade, extraCards)
+                        : getCatalogCommission({ ...catProduct, price: newPrice }) * quantidade
+                          + getExtraCardCommission(catProduct, extraCards);
                       onSetProductDetail(productName, { ...detail, price: newPrice, comissao });
                     }}
                     className="h-8"
@@ -374,16 +391,15 @@ function CatalogProducts({
                     their band (and price) from it. */}
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Quantidade</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
+                  <NumberInput
+                    min={1}
+                    step={1}
                     value={quantidade}
-                    onChange={(e) => {
-                      const newQty = Math.max(1, parseInt(e.target.value, 10) || 1);
+                    onCommit={(n) => {
+                      const newQty = Math.max(1, Math.round(n) || 1);
                       const comissao = isTiered
-                        ? getCatalogCommissionForQuantity(catProduct, newQty)
-                        : poolUnitCommission * newQty;
+                        ? getCatalogCommissionForQuantity(catProduct, newQty, extraCards)
+                        : poolUnitCommission * newQty + getExtraCardCommission(catProduct, extraCards);
                       const newPrice = isTiered
                         ? getCatalogPriceForQuantity(catProduct, newQty) * newQty
                         : unitPrice * newQty;
@@ -393,11 +409,55 @@ function CatalogProducts({
                   />
                 </div>
               </div>
+              {supportsExtraCards && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Cartões extra (portabilidade)</Label>
+                    <NumberInput
+                      min={0}
+                      step={1}
+                      value={extraCardsPortab}
+                      onCommit={(n) => {
+                        const newPortab = Math.max(0, Math.round(n) || 0);
+                        const nextExtra: ExtraCards = { portabilidade: newPortab, novos: extraCardsNovos };
+                        const comissao = isTiered
+                          ? getCatalogCommissionForQuantity(catProduct, quantidade, nextExtra)
+                          : poolUnitCommission * quantidade + getExtraCardCommission(catProduct, nextExtra);
+                        onSetProductDetail(productName, { ...detail, extra_cards_portability: newPortab, comissao });
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Cartões extra (novos)</Label>
+                    <NumberInput
+                      min={0}
+                      step={1}
+                      value={extraCardsNovos}
+                      onCommit={(n) => {
+                        const newNovos = Math.max(0, Math.round(n) || 0);
+                        const nextExtra: ExtraCards = { portabilidade: extraCardsPortab, novos: newNovos };
+                        const comissao = isTiered
+                          ? getCatalogCommissionForQuantity(catProduct, quantidade, nextExtra)
+                          : poolUnitCommission * quantidade + getExtraCardCommission(catProduct, nextExtra);
+                        onSetProductDetail(productName, { ...detail, extra_cards_new: newNovos, comissao });
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              )}
               {hasCommission && (
                 <div className="text-xs text-muted-foreground">
-                  Comissão ({quantidade} unid.): <span className="font-medium text-foreground">
+                  A tua parte ({quantidade} unid.): <span className="font-medium text-foreground">
                     {myLineCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                   </span>
+                  {/* The pool this line pays out across everyone — shown next to
+                      the seller's own cut so a sale can be checked without
+                      logging in as each recipient. */}
+                  {Math.abs((detail.comissao ?? 0) - myLineCommission) > 0.005 && (
+                    <span> · total {(detail.comissao ?? 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</span>
+                  )}
                   {isTiered && !catProduct.quantity_tiers?.some(t => quantidade >= t.min && (t.max == null || quantidade <= t.max)) && (
                     <span className="ml-1 text-destructive">(sem escalão para esta quantidade)</span>
                   )}
@@ -421,6 +481,13 @@ function CatalogProducts({
             <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
               {totalMyComissao ? totalMyComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—'}
             </div>
+            {/* What the sale actually costs the company, across every
+                recipient — this is the number saved to sales.comissao. */}
+            {Math.abs(totalPoolComissao - totalMyComissao) > 0.005 && (
+              <p className="text-[11px] text-muted-foreground">
+                Total da venda: {totalPoolComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+              </p>
+            )}
           </div>
         </div>
       )}

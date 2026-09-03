@@ -1,21 +1,27 @@
 import { useMemo } from 'react';
-import { addMonths, endOfMonth, startOfMonth, format } from 'date-fns';
+import { Link } from 'react-router-dom';
+import { addMonths, format, startOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { CalendarClock, CheckCircle2, Wrench, XCircle, CalendarOff, Layers } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Wrench, XCircle, CalendarOff, Layers, FileSignature, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useSales } from '@/hooks/useSales';
 import { useDashboardPeriod, formatPeriodLabel } from '@/stores/useDashboardPeriod';
-import type { TelecomStatus } from '@/types/sales';
+import {
+  TELECOM_VIEW_LABELS,
+  isTelecomViewPeriodScoped,
+  matchesTelecomView,
+  type TelecomViewKey,
+} from '@/lib/telecom-sale-views';
 
 interface Metric {
-  key: string;
-  label: string;
+  key: TelecomViewKey;
   hint: string;
   value: number;
   icon: typeof CheckCircle2;
   tone: string;
+  href: string;
 }
 
 /**
@@ -23,14 +29,19 @@ interface Metric {
  * booked for next month, cancelled before install — and the total those add
  * up to. Sales with no install date booked are counted separately instead of
  * being folded into a month they were never promised for.
+ *
+ * Every card links into the sales list carrying its own filter, so the number
+ * can always be opened and checked. The counts and the list are decided by the
+ * same predicate (see lib/telecom-sale-views.ts).
  */
 export function TelecomLifecyclePanel() {
   const { data: sales = [], isLoading } = useSales();
   const { from, to } = useDashboardPeriod();
 
-  const { metrics, total, undated, nextMonthLabel } = useMemo(() => {
+  const { metrics, undated } = useMemo(() => {
     const start = from ? new Date(from) : null;
     const end = to ? new Date(to) : null;
+    const reference = start ?? new Date();
 
     // The period picks WHICH sales are in play (by sale date); the lifecycle
     // counts below are then the state those sales are in right now.
@@ -41,24 +52,21 @@ export function TelecomLifecyclePanel() {
       return d >= start && d <= end;
     });
 
-    const nextMonthStart = startOfMonth(addMonths(start ?? new Date(), 1));
-    const nextMonthEnd = endOfMonth(nextMonthStart);
+    const nextMonthStart = startOfMonth(addMonths(reference, 1));
 
-    const byStatus = (...statuses: TelecomStatus[]) =>
-      inPeriod.filter((s) => statuses.includes(s.telecom_status as TelecomStatus)).length;
+    // Same date range the panel is showing, handed to the sales list so the
+    // rows there match the number that was clicked.
+    const periodQuery = start && end
+      ? `&from=${format(start, 'yyyy-MM-dd')}&to=${format(end, 'yyyy-MM-dd')}`
+      : '';
+    const linkTo = (view: TelecomViewKey) =>
+      `/sales?telecom=${view}${isTelecomViewPeriodScoped(view) ? periodQuery : ''}`;
 
-    const ativos = byStatus('ativo');
-    const porInstalar = byStatus('pendente', 'em_instalacao');
-    const anulados = byStatus('anulado');
-    const cancelados = byStatus('cancelado');
-
-    // Booked for next month, regardless of the period filter — this is a
-    // forward look, not a slice of the period.
-    const proximoMes = sales.filter((s) => {
-      if (!s.scheduled_install_date) return false;
-      const d = new Date(s.scheduled_install_date);
-      return d >= nextMonthStart && d <= nextMonthEnd;
-    }).length;
+    const count = (view: TelecomViewKey) => {
+      // "Próximo mês" looks forward, so it is never limited to the period.
+      const pool = isTelecomViewPeriodScoped(view) ? inPeriod : sales;
+      return pool.filter((s) => matchesTelecomView(s, view, reference)).length;
+    };
 
     // Still to install and with no date agreed — the number that would
     // silently disappear if we only ever counted scheduled months.
@@ -68,19 +76,16 @@ export function TelecomLifecyclePanel() {
     ).length;
 
     const metrics: Metric[] = [
-      { key: 'ativos', label: 'Ativos', hint: 'Instalados', value: ativos, icon: CheckCircle2, tone: 'text-green-600' },
-      { key: 'por_instalar', label: 'Por instalar', hint: 'Pendentes e em instalação', value: porInstalar, icon: Wrench, tone: 'text-blue-600' },
-      { key: 'proximo_mes', label: 'Instalações no próximo mês', hint: format(nextMonthStart, 'MMMM yyyy', { locale: pt }), value: proximoMes, icon: CalendarClock, tone: 'text-violet-600' },
-      { key: 'anulados', label: 'Anulados', hint: 'Antes da instalação — sem CB', value: anulados, icon: XCircle, tone: 'text-slate-500' },
-      { key: 'cancelados', label: 'Cancelados', hint: 'Após instalação — geram CB', value: cancelados, icon: XCircle, tone: 'text-red-500' },
+      { key: 'ativos', hint: 'Instalados', value: count('ativos'), icon: CheckCircle2, tone: 'text-green-600', href: linkTo('ativos') },
+      { key: 'por_instalar', hint: 'Pendentes e em instalação', value: count('por_instalar'), icon: Wrench, tone: 'text-blue-600', href: linkTo('por_instalar') },
+      { key: 'proximo_mes', hint: format(nextMonthStart, 'MMMM yyyy', { locale: pt }), value: count('proximo_mes'), icon: CalendarClock, tone: 'text-violet-600', href: linkTo('proximo_mes') },
+      { key: 'anulados', hint: 'Antes da instalação — sem CB', value: count('anulados'), icon: XCircle, tone: 'text-slate-500', href: linkTo('anulados') },
+      { key: 'cancelados', hint: 'Após instalação — geram CB', value: count('cancelados'), icon: XCircle, tone: 'text-red-500', href: linkTo('cancelados') },
+      { key: 'por_assinar', hint: 'Ativos, pendentes e em instalação', value: count('por_assinar'), icon: FileSignature, tone: 'text-amber-600', href: linkTo('por_assinar') },
+      { key: 'total', hint: `Ativos + por instalar + anulados + ${format(nextMonthStart, 'MMMM', { locale: pt })}`, value: count('total'), icon: Layers, tone: 'text-foreground', href: linkTo('total') },
     ];
 
-    return {
-      metrics,
-      total: ativos + porInstalar + anulados + proximoMes,
-      undated: semData,
-      nextMonthLabel: format(nextMonthStart, 'MMMM', { locale: pt }),
-    };
+    return { metrics, undated: semData };
   }, [sales, from, to]);
 
   if (isLoading) {
@@ -105,27 +110,24 @@ export function TelecomLifecyclePanel() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-          {metrics.map(({ key, label, hint, value, icon: Icon, tone }) => (
-            <div key={key} className="rounded-lg border p-3">
+          {metrics.map(({ key, hint, value, icon: Icon, tone, href }) => (
+            <Link
+              key={key}
+              to={href}
+              className={cn(
+                'group rounded-lg border p-3 transition-colors hover:bg-accent/50 hover:border-primary/40',
+                key === 'total' && 'bg-muted/40',
+              )}
+            >
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Icon className={cn('h-3.5 w-3.5 shrink-0', tone)} />
-                <span className="truncate">{label}</span>
+                <span className="truncate">{TELECOM_VIEW_LABELS[key]}</span>
+                <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
               <p className="mt-1 text-2xl font-semibold">{value}</p>
               <p className="text-[11px] text-muted-foreground truncate">{hint}</p>
-            </div>
+            </Link>
           ))}
-
-          <div className="rounded-lg border bg-muted/40 p-3">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Layers className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Vendas no total</span>
-            </div>
-            <p className="mt-1 text-2xl font-semibold">{total}</p>
-            <p className="text-[11px] text-muted-foreground truncate">
-              Ativos + por instalar + anulados + {nextMonthLabel}
-            </p>
-          </div>
         </div>
 
         {undated > 0 && (

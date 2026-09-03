@@ -252,6 +252,7 @@ export interface Sale {
   // sale, not per client, since the same client can sign several contracts
   // over time, each needing its own paperwork.
   documents_checked?: boolean;
+  contract_signed?: boolean;
 
   // Numero Proposta EDP
   edp_proposal_number?: string | null;

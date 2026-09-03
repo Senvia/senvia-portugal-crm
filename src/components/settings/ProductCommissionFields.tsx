@@ -93,6 +93,46 @@ export function PriceField({
   );
 }
 
+/**
+ * Flat commission per extra SIM card added on top of the ones the package
+ * already includes — e.g. a Vodafone package with 2 included cards pays
+ * +10€ for each additional one, ported or brand new. Absent/0 means this
+ * product doesn't offer extra cards at all (the fields don't show on the
+ * sale screen). Independent of the commission model above it — applies the
+ * same whether the base commission is flat splits or escalões.
+ */
+export function ExtraCardField({
+  product,
+  onChange,
+  onCommit,
+}: {
+  product: CatalogProduct;
+  onChange: (updates: Partial<CatalogProduct>) => void;
+  onCommit: (updates: Partial<CatalogProduct>) => void;
+}) {
+  return (
+    <div className="space-y-1.5 max-w-xs">
+      <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">
+        Comissão por cartão extra (€)
+      </Label>
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        value={product.extra_card_commission || ''}
+        onChange={(e) => onChange({ extra_card_commission: parseFloat(e.target.value) || 0 })}
+        onBlur={() => onCommit({})}
+        placeholder="0.00"
+        className="h-9"
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Deixe em branco se este produto não permitir cartões extra. Quando preenchido, a venda passa a
+        pedir quantos cartões extra (com portabilidade / novos) foram vendidos, e cada um soma este valor.
+      </p>
+    </div>
+  );
+}
+
 export function CommissionSection({
   product,
   operator,
@@ -140,6 +180,8 @@ export function CommissionSection({
           onCommit={(splits: CommissionSplit[]) => onCommit({ splits, ...deriveCommissionFields(splits) })}
         />
       )}
+
+      <ExtraCardField product={product} onChange={onChange} onCommit={onCommit} />
     </div>
   );
 }

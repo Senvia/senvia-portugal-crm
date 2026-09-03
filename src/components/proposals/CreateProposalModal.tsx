@@ -41,7 +41,7 @@ import {
 } from '@/types/proposals';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
-import { DocumentsCheckboxField } from '@/components/shared/DocumentsCheckboxField';
+import { DocumentsCheckboxField, ContractSignedCheckboxField } from '@/components/shared/DocumentsCheckboxField';
 
 interface CreateProposalModalProps {
   client?: CrmClient | null;
@@ -78,6 +78,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
   const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
   const [documentsChecked, setDocumentsChecked] = useState(false);
+  const [contractSigned, setContractSigned] = useState(false);
   
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
@@ -342,6 +343,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       servicos_produtos: proposalType === 'servicos' && servicosProdutos.length > 0 ? servicosProdutos : undefined,
       servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
       documents_checked: isTelecom ? documentsChecked : undefined,
+      contract_signed: isTelecom ? contractSigned : undefined,
       }, {
         onSuccess: async (createdProposal) => {
           if (proposalType === 'energia' && proposalCpes.length > 0 && createdProposal?.id) {
@@ -717,11 +719,12 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                     </Card>
                   )}
 
-                  {/* Documentos (apenas telecom) */}
+                  {/* Documentos / Contrato (apenas telecom) */}
                   {isTelecom && (
                     <Card>
-                      <CardContent className="p-4">
+                      <CardContent className="p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
                         <DocumentsCheckboxField id="create-proposal-documents" checked={documentsChecked} onChange={setDocumentsChecked} />
+                        <ContractSignedCheckboxField id="create-proposal-contract" checked={contractSigned} onChange={setContractSigned} />
                       </CardContent>
                     </Card>
                   )}
