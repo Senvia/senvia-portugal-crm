@@ -300,6 +300,15 @@ export const readTools: Tool[] = [
         const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
         data.forEach((s: any) => { s.client_name = clientMap[s.client_id] || null; });
       }
+      const userIds = [...new Set(data.flatMap((s: any) => [s.seller_id, s.created_by]).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: profiles } = await ctx.supabaseAdmin.from("profiles").select("id, full_name, email").in("id", userIds);
+        const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p.full_name || p.email]));
+        data.forEach((s: any) => {
+          s.seller_name = s.seller_id ? profileMap[s.seller_id] || null : null;
+          s.created_by_name = s.created_by ? profileMap[s.created_by] || null : null;
+        });
+      }
       return { results: data, count: data.length };
     },
   },
@@ -362,7 +371,7 @@ export const readTools: Tool[] = [
     execute: async (args, ctx) => {
       const { data: sale, error } = await ctx.supabaseAdmin
         .from("sales")
-        .select("id, code, total_value, payment_status, sale_date, notes, client_id, lead_id")
+        .select("id, code, total_value, status, payment_status, sale_date, notes, client_id, lead_id, seller_id, created_by")
         .eq("organization_id", ctx.orgId)
         .eq("id", args.sale_id)
         .maybeSingle();
@@ -376,6 +385,13 @@ export const readTools: Tool[] = [
       if (sale.client_id) {
         const { data: client } = await ctx.supabaseAdmin.from("crm_clients").select("name").eq("id", sale.client_id).maybeSingle();
         (sale as any).client_name = client?.name || null;
+      }
+      const userIds = [sale.seller_id, sale.created_by].filter(Boolean);
+      if (userIds.length > 0) {
+        const { data: profiles } = await ctx.supabaseAdmin.from("profiles").select("id, full_name, email").in("id", userIds);
+        const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p.full_name || p.email]));
+        (sale as any).seller_name = sale.seller_id ? profileMap[sale.seller_id] || null : null;
+        (sale as any).created_by_name = sale.created_by ? profileMap[sale.created_by] || null : null;
       }
       return { sale, payments: payments || [] };
     },
