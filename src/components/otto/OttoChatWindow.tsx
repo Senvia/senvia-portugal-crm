@@ -32,7 +32,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
   // top/height, never a transform.
   const { height: vvHeight, offsetTop: vvOffsetTop } = useVisualViewport();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,6 +59,16 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       inputRef.current?.focus();
     }
   }, [isLoading]);
+
+  // Grows the box as the line wraps, instead of scrolling the text
+  // sideways inside a fixed-height field. Capped by max-h-32 in the
+  // className below — past that it scrolls internally like before.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   const handleQuickAction = (text: string) => {
     if (isLoading) return;
@@ -218,7 +228,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -238,20 +248,20 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
           >
             <Paperclip className="w-4 h-4" />
           </Button>
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Escreve aqui..."
             disabled={isLoading}
+            rows={1}
             style={isMobile ? { fontSize: 16 } : undefined}
-            className="flex-1 h-10 px-3 rounded-xl bg-background border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="flex-1 min-h-10 max-h-32 py-2.5 px-3 rounded-xl bg-background border border-border text-sm leading-tight placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 resize-none overflow-y-auto"
           />
           <Button
             size="icon"
-            className="h-10 w-10 rounded-xl"
+            className="h-10 w-10 rounded-xl flex-shrink-0"
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
           >
