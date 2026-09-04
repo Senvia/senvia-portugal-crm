@@ -83,6 +83,7 @@ Regras: usa um token só quando o utilizador quer FAZER uma ação (não em perg
 CRIAR REGISTOS (lead, cliente, venda, proposta) — NUNCA dês passos em texto ("vai a Leads > Adicionar..."). Em vez disso:
 - Se já tens os dados na conversa, CRIA tu com a ferramenta (create_lead / create_client / create_sale / create_proposal) e confirma o resultado.
 - Se NÃO tens os dados, ou o utilizador prefere preencher ele, ABRE o formulário real com o [modal:...] correspondente, numa frase curta ("Abri o formulário, é só preencheres e gravar.").
+- Para vendas em lote, não abras logo o formulário e não peças todos os dados às cegas. Primeiro usa prepare_sale_creation para consultar clientes/leads/comercial e depois pede só o que faltar.
 - Passos escritos SÓ se ele perguntar explicitamente "onde fica?" / "onde é isso?". Regra de ouro: o utilizador cria a preencher um formulário ou deixando-te fazer, NUNCA a seguir um tutorial em texto.
 Para FATURAÇÃO (InvoiceXpress/KeyInvoice), BREVO e DADOS DA EMPRESA não há guia visual: o valor (ex: a API key) é pedido no chat e guardas-o tu com configure_invoicing / configure_brevo / set_company_info.
 PEDIR CREDENCIAIS (chaves de API) — REGRA PADRÃO, nunca atires "onde a posso encontrar?" para cima do utilizador:
@@ -92,8 +93,13 @@ PEDIR CREDENCIAIS (chaves de API) — REGRA PADRÃO, nunca atires "onde a posso 
 
 const WRITE_RULES = `AÇÕES DE ESCRITA (criar/alterar dados):
 - Tens ferramentas que CRIAM e ALTERAM dados (create_lead, create_client, create_sale, create_proposal, update_lead_status e configurações). Usa-as quando o utilizador pedir uma ação concreta.
-- ANTES de executar uma ação de escrita, confirma os dados essenciais com o utilizador numa frase curta. create_lead precisa de nome, email e telefone; create_sale precisa do valor total; create_proposal precisa da lead (usa search_leads) e do valor.
-- Se faltar um dado obrigatório, pede-o. NÃO inventes valores para preencher.
+- Antes de perguntares dados em falta, CONSULTA PRIMEIRO o banco com as ferramentas disponíveis. O comportamento correto é: procurar → resumir o que encontraste → pedir só confirmação/dados realmente em falta.
+- Para vendas, se o utilizador disser "adiciona/regista vendas para X, Y, Z" ou "mete as vendas na Sara", chama primeiro prepare_sale_creation com os nomes e o comercial mencionado. Só depois respondes.
+- Se prepare_sale_creation mostrar existing_sales/already_has_sales, avisa que a venda já existe e pergunta se ele quer duplicar, corrigir ou apenas confirmar. Nunca cries venda duplicada por impulso.
+- create_sale precisa de valor total, cliente/lead e confirmação. Se o valor não existir em dados retornados por ferramenta, pede o valor. Se existir apenas total histórico do cliente, NÃO uses como valor da nova venda; pergunta se esse é o valor correto.
+- Se o utilizador mencionar um comercial/responsável (ex: Sara), resolve-o com prepare_sale_creation/list_team_members e passa assigned_to_user_id ou assignee_query no create_sale. No sistema atual, a atribuição comercial da venda vem do cliente/lead associado; por isso a ferramenta atribui o cliente/lead ao comercial antes de criar a venda.
+- Não respondas "vou procurar..." sem efetivamente chamares a ferramenta. Se disseste que vais consultar, a próxima ação deve ser uma tool.
+- Se faltar um dado obrigatório após a consulta, pede-o numa pergunta curta com botões quando fizer sentido. NÃO inventes valores para preencher.
 - Após a ação, confirma o resultado com base no que a ferramenta retornou (não afirmes sucesso se a ferramenta deu erro).`;
 
 function onboardingMode(ctx: ToolContext): string {

@@ -19,6 +19,59 @@ async function resolveStageKey(ctx: any, requested?: string): Promise<{ key: str
   return { key: stages[0].key };
 }
 
+async function resolveAssignee(ctx: any, args: Record<string, any>): Promise<{ userId: string | null; label: string | null; error?: string }> {
+  const explicitUserId = typeof args.assigned_to_user_id === "string" ? args.assigned_to_user_id.trim() : "";
+  const query = typeof args.assignee_query === "string" ? args.assignee_query.trim() : "";
+  if (!explicitUserId && !query) return { userId: null, label: null };
+
+  const { data: members, error: membersError } = await ctx.supabaseAdmin
+    .from("organization_members")
+    .select("user_id, role, is_active")
+    .eq("organization_id", ctx.orgId)
+    .eq("is_active", true);
+  if (membersError) return { userId: null, label: null, error: membersError.message };
+
+  const memberIds = (members || []).map((m: any) => m.user_id).filter(Boolean);
+  if (memberIds.length === 0) return { userId: null, label: null, error: "Nenhum membro ativo encontrado na organização." };
+
+  const { data: profiles, error: profilesError } = await ctx.supabaseAdmin
+    .from("profiles")
+    .select("id, full_name, email, phone")
+    .in("id", memberIds);
+  if (profilesError) return { userId: null, label: null, error: profilesError.message };
+
+  const memberIdsSet = new Set(memberIds);
+  const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+  if (explicitUserId) {
+    if (!memberIdsSet.has(explicitUserId)) return { userId: null, label: null, error: "O comercial indicado não pertence a esta organização ou está inativo." };
+    const profile = profileById.get(explicitUserId) || {};
+    return { userId: explicitUserId, label: profile.full_name || profile.email || explicitUserId };
+  }
+
+  const normalized = query.toLowerCase();
+  const matches = memberIds
+    .map((userId: string) => {
+      const profile = profileById.get(userId) || {};
+      return {
+        user_id: userId,
+        full_name: profile.full_name || null,
+        email: profile.email || null,
+        phone: profile.phone || null,
+      };
+    })
+    .filter((m: any) => [m.full_name, m.email, m.phone].filter(Boolean).some((value: string) => value.toLowerCase().includes(normalized)));
+
+  if (matches.length === 0) return { userId: null, label: null, error: `Não encontrei nenhum membro ativo chamado "${query}".` };
+  if (matches.length > 1) {
+    const labels = matches.map((m: any) => m.full_name || m.email || m.user_id).join(", ");
+    return { userId: null, label: null, error: `Encontrei mais de um membro para "${query}": ${labels}.` };
+  }
+
+  const match = matches[0];
+  return { userId: match.user_id, label: match.full_name || match.email || match.user_id };
+}
+
 export const writeTools: Tool[] = [
   {
     name: "create_lead",
@@ -145,13 +198,16 @@ export const writeTools: Tool[] = [
   },
   {
     name: "create_sale",
-    description: "Registar uma nova venda no CRM. É o momento-chave da ativação (o utilizador vê dinheiro a entrar). Usa APENAS depois de confirmares o valor com o utilizador. O valor total é obrigatório.",
+    description: "Registar uma nova venda no CRM. Antes, usa prepare_sale_creation/search_clients/search_leads para consultar o banco. Usa APENAS depois de confirmares cliente/lead, valor e comercial quando existir atribuição.",
     parameters: {
       type: "object",
       properties: {
         total_value: { type: "number", description: "Valor total da venda em euros (obrigatório)" },
         client_id: { type: "string", description: "UUID do cliente associado (opcional, obtém-no com search_clients)" },
         lead_id: { type: "string", description: "UUID da lead de origem (opcional, obtém-no com search_leads)" },
+        assigned_to_user_id: { type: "string", description: "UUID do comercial/responsável a atribuir ao cliente/lead antes de criar a venda (opcional)" },
+        assignee_query: { type: "string", description: "Nome/email do comercial/responsável a resolver, ex: Sara (opcional; prefere assigned_to_user_id quando já foi resolvido)" },
+        assign_entity_to_user: { type: "boolean", description: "Se true, atribui o cliente/lead ao comercial antes de criar a venda. Default: true quando há comercial." },
         notes: { type: "string", description: "Notas sobre a venda (opcional)" },
       },
       required: ["total_value"],
@@ -160,8 +216,18 @@ export const writeTools: Tool[] = [
     isWrite: true,
     execute: async (args, ctx) => {
       if (typeof args.total_value !== "number" || !(args.total_value > 0)) {
-        return { error: "Valor em falta", _instruction: "Pede o valor total da venda (um número maior que zero) antes de a registar. NÃO inventes valores." };
+        return { error: "Valor em falta", _instruction: "Antes de pedir o valor, usa prepare_sale_creation/search_clients/search_leads para mostrar o que já encontraste. Depois pede só o valor que faltar. NÃO inventes valores." };
       }
+      if (!args.client_id && !args.lead_id) {
+        return { error: "Cliente/lead em falta", _instruction: "Usa prepare_sale_creation/search_clients/search_leads para encontrar o cliente ou lead antes de criar a venda. NÃO cries venda solta." };
+      }
+
+      const assignee = await resolveAssignee(ctx, args);
+      if (assignee.error) {
+        return { error: assignee.error, _instruction: "Informa o utilizador que não consegui resolver o comercial/responsável. Mostra opções se existirem e não cries a venda ainda." };
+      }
+      const shouldAssignEntity = !!assignee.userId && args.assign_entity_to_user !== false;
+
       // If a client_id was given, confirm it belongs to this org (avoid cross-tenant linkage).
       if (args.client_id) {
         const { data: client } = await ctx.supabaseAdmin
@@ -171,6 +237,31 @@ export const writeTools: Tool[] = [
           .eq("id", args.client_id)
           .maybeSingle();
         if (!client) return { error: "Cliente não encontrado", _instruction: "O cliente indicado não existe nesta organização. Usa search_clients para confirmar. NÃO inventes." };
+        if (shouldAssignEntity) {
+          const { error: assignError } = await ctx.supabaseAdmin
+            .from("crm_clients")
+            .update({ assigned_to: assignee.userId })
+            .eq("organization_id", ctx.orgId)
+            .eq("id", args.client_id);
+          if (assignError) return { error: assignError.message, _instruction: "ERRO ao atribuir o cliente ao comercial. Não digas que a venda foi registada." };
+        }
+      }
+      if (args.lead_id) {
+        const { data: lead } = await ctx.supabaseAdmin
+          .from("leads")
+          .select("id")
+          .eq("organization_id", ctx.orgId)
+          .eq("id", args.lead_id)
+          .maybeSingle();
+        if (!lead) return { error: "Lead não encontrada", _instruction: "A lead indicada não existe nesta organização. Usa search_leads para confirmar. NÃO inventes." };
+        if (shouldAssignEntity) {
+          const { error: assignError } = await ctx.supabaseAdmin
+            .from("leads")
+            .update({ assigned_to: assignee.userId })
+            .eq("organization_id", ctx.orgId)
+            .eq("id", args.lead_id);
+          if (assignError) return { error: assignError.message, _instruction: "ERRO ao atribuir a lead ao comercial. Não digas que a venda foi registada." };
+        }
       }
       const { data, error } = await ctx.supabaseAdmin
         .from("sales")
@@ -191,7 +282,9 @@ export const writeTools: Tool[] = [
       return {
         success: true,
         sale_id: data.id,
-        _instruction: `Venda de **${data.total_value}€** registada com sucesso. Celebra com o utilizador (este é o momento em que vê dinheiro a entrar no Senvia OS) e oferece um link. [link:Ver Vendas|/sales]`,
+        assigned_to_user_id: assignee.userId,
+        assigned_to_name: assignee.label,
+        _instruction: `Venda de **${data.total_value}€** registada com sucesso${assignee.label ? ` e atribuída a **${assignee.label}**` : ""}. Celebra brevemente e oferece um link. [link:Ver Vendas|/sales]`,
       };
     },
   },

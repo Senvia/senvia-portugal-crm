@@ -16,6 +16,198 @@ const EMPTY = (entity: string) => ({
 
 export const readTools: Tool[] = [
   {
+    name: "list_team_members",
+    description: "Listar membros ativos da equipa da organização para resolver nomes de comerciais/responsáveis antes de atribuir registos.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Nome ou email do membro a procurar (opcional)" },
+        role: { type: "string", description: "Filtrar por role: admin, salesperson, viewer (opcional)" },
+      },
+    },
+    permission: { module: "settings", subarea: "team", action: "view" },
+    execute: async (args, ctx) => {
+      const { data: members, error: membersError } = await ctx.supabaseAdmin
+        .from("organization_members")
+        .select("user_id, role, is_active, profile_id")
+        .eq("organization_id", ctx.orgId)
+        .eq("is_active", true);
+      if (membersError) return ERR(membersError.message);
+      if (!members || members.length === 0) return EMPTY("membros da equipa");
+
+      const profileIds = members.map((m: any) => m.user_id).filter(Boolean);
+      const { data: profiles, error: profilesError } = await ctx.supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email, phone")
+        .in("id", profileIds);
+      if (profilesError) return ERR(profilesError.message);
+
+      const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
+      const normalizedQuery = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+      const normalizedRole = typeof args.role === "string" ? args.role.trim().toLowerCase() : "";
+      const results = members
+        .map((m: any) => {
+          const profile = profileById.get(m.user_id) || {};
+          return {
+            user_id: m.user_id,
+            role: m.role,
+            full_name: profile.full_name || null,
+            email: profile.email || null,
+            phone: profile.phone || null,
+          };
+        })
+        .filter((m: any) => !normalizedRole || m.role === normalizedRole)
+        .filter((m: any) => {
+          if (!normalizedQuery) return true;
+          return [m.full_name, m.email, m.phone]
+            .filter(Boolean)
+            .some((value: string) => value.toLowerCase().includes(normalizedQuery));
+        })
+        .slice(0, 20);
+
+      if (results.length === 0) return EMPTY("membros da equipa");
+      return { results, count: results.length };
+    },
+  },
+  {
+    name: "prepare_sale_creation",
+    description: "Preparar registo de uma ou várias vendas: procura clientes/leads pelo nome, resolve comercial por nome/email e identifica que dados ainda faltam antes de pedir confirmação.",
+    parameters: {
+      type: "object",
+      properties: {
+        customer_names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Lista de nomes de clientes/leads mencionados pelo utilizador",
+        },
+        assignee_query: { type: "string", description: "Nome/email do comercial/responsável mencionado (opcional, ex: Sara)" },
+      },
+      required: ["customer_names"],
+    },
+    permission: { module: "sales", subarea: "sales", action: "view" },
+    execute: async (args, ctx) => {
+      const names = Array.isArray(args.customer_names)
+        ? args.customer_names.map((name: any) => String(name || "").trim()).filter(Boolean)
+        : [];
+      if (names.length === 0) {
+        return { error: "Nomes em falta", _instruction: "Pede os nomes dos clientes/leads antes de preparar as vendas." };
+      }
+
+      let assignee: any = null;
+      let assigneeMatches: any[] = [];
+      if (typeof args.assignee_query === "string" && args.assignee_query.trim()) {
+        const { data: members } = await ctx.supabaseAdmin
+          .from("organization_members")
+          .select("user_id, role, is_active")
+          .eq("organization_id", ctx.orgId)
+          .eq("is_active", true);
+        const memberIds = (members || []).map((m: any) => m.user_id).filter(Boolean);
+        if (memberIds.length > 0) {
+          const { data: profiles } = await ctx.supabaseAdmin
+            .from("profiles")
+            .select("id, full_name, email, phone")
+            .in("id", memberIds);
+          const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
+          const q = args.assignee_query.trim().toLowerCase();
+          assigneeMatches = (members || [])
+            .map((m: any) => ({ ...m, ...(profileById.get(m.user_id) || {}) }))
+            .filter((m: any) => [m.full_name, m.email, m.phone].filter(Boolean).some((value: string) => value.toLowerCase().includes(q)))
+            .map((m: any) => ({ user_id: m.user_id, role: m.role, full_name: m.full_name || null, email: m.email || null }));
+          if (assigneeMatches.length === 1) assignee = assigneeMatches[0];
+        }
+      }
+
+      const prepared = [];
+      for (const name of names) {
+        const [clientsResult, leadsResult] = await Promise.all([
+          ctx.supabaseAdmin.rpc("search_clients_unaccent", { org_id: ctx.orgId, search_term: name, max_results: 5 }),
+          ctx.supabaseAdmin.rpc("search_leads_unaccent", { org_id: ctx.orgId, search_term: name, lead_status: null, max_results: 5 }),
+        ]);
+
+        if (clientsResult.error || leadsResult.error) {
+          prepared.push({
+            query: name,
+            error: clientsResult.error?.message || leadsResult.error?.message,
+            needs: ["resolver cliente/lead", "valor da venda"],
+          });
+          continue;
+        }
+
+        const clients = (clientsResult.data || []).map((c: any) => ({
+          type: "client",
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          company: c.company,
+          total_sales: c.total_sales,
+          historical_total_value: c.total_value,
+        }));
+        const leads = (leadsResult.data || []).map((l: any) => ({
+          type: "lead",
+          id: l.id,
+          name: l.name,
+          email: l.email,
+          phone: l.phone,
+          status: l.status,
+          assigned_to: l.assigned_to,
+          estimated_value: l.value,
+        }));
+        const bestMatch = clients[0] || leads[0] || null;
+        let existingSales: any[] = [];
+        if (bestMatch) {
+          let salesQuery = ctx.supabaseAdmin
+            .from("sales")
+            .select("id, code, total_value, status, payment_status, sale_date, created_at, client_id, lead_id, created_by")
+            .eq("organization_id", ctx.orgId)
+            .order("created_at", { ascending: false })
+            .limit(5);
+          if (bestMatch.type === "client") salesQuery = salesQuery.eq("client_id", bestMatch.id);
+          else salesQuery = salesQuery.eq("lead_id", bestMatch.id);
+
+          const { data: sales } = await salesQuery;
+          existingSales = (sales || []).map((s: any) => ({
+            id: s.id,
+            code: s.code,
+            total_value: s.total_value,
+            status: s.status,
+            payment_status: s.payment_status,
+            sale_date: s.sale_date,
+            created_at: s.created_at,
+            created_by: s.created_by,
+          }));
+        }
+
+        prepared.push({
+          query: name,
+          best_match: bestMatch,
+          client_matches: clients,
+          lead_matches: leads,
+          existing_sales: existingSales,
+          already_has_sales: existingSales.length > 0,
+          suggested_total_value: bestMatch?.type === "lead" && typeof bestMatch.estimated_value === "number" && bestMatch.estimated_value > 0 ? bestMatch.estimated_value : null,
+          needs: [
+            ...(bestMatch ? [] : ["resolver cliente/lead"]),
+            ...(existingSales.length > 0 || (bestMatch?.type === "lead" && typeof bestMatch.estimated_value === "number" && bestMatch.estimated_value > 0) ? [] : ["valor da venda"]),
+          ],
+          recommended_action: existingSales.length > 0
+            ? "confirmar com o utilizador se quer criar uma nova venda duplicada ou apenas confirmar/ajustar a venda existente"
+            : "pedir confirmação e valor antes de criar a venda",
+          note: bestMatch?.type === "client" && Number(bestMatch.historical_total_value || 0) > 0
+            ? "historical_total_value é histórico do cliente, não deve ser usado automaticamente como valor da nova venda."
+            : undefined,
+        });
+      }
+
+      return {
+        assignee,
+        assignee_matches: assigneeMatches,
+        prepared,
+        _instruction: "Usa estes dados para ser prático: mostra o que encontraste no banco e pede APENAS confirmação/dados em falta. Se already_has_sales=true, não cries duplicado sem confirmação explícita. Não cries venda enquanto faltar valor ou houver ambiguidade. Se houver assignee único, usa-o em create_sale.",
+      };
+    },
+  },
+  {
     name: "search_clients",
     description: "Procurar clientes por nome, email, NIF ou empresa. Retorna até 10 resultados.",
     parameters: {
