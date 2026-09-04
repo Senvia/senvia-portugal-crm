@@ -14,6 +14,55 @@ const EMPTY = (entity: string) => ({
   _instruction: `ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste ${entity} com esse termo. NÃO INVENTES DADOS.`,
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function saleReferenceCandidates(value: string): string[] {
+  const raw = value.trim();
+  const compact = raw.replace(/^venda\s+/i, "").trim();
+  const digits = compact.match(/\d+/)?.[0] || "";
+  return [...new Set([
+    raw,
+    compact,
+    digits,
+    digits ? digits.padStart(4, "0") : "",
+    digits ? String(Number(digits)) : "",
+  ].filter(Boolean))];
+}
+
+function normalizeLookup(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}@.+-]+/gu, " ")
+    .trim();
+}
+
+async function resolveSaleId(ctx: any, reference: string): Promise<{ saleId: string | null; error?: string; candidates?: any[] }> {
+  const trimmed = reference.trim();
+  if (!trimmed) return { saleId: null, error: "Referência da venda em falta" };
+  if (UUID_RE.test(trimmed)) return { saleId: trimmed };
+
+  const candidates = saleReferenceCandidates(trimmed);
+  const { data, error } = await ctx.supabaseAdmin
+    .from("sales")
+    .select("id, code, total_value, status, payment_status")
+    .eq("organization_id", ctx.orgId)
+    .in("code", candidates)
+    .limit(10);
+  if (error) return { saleId: null, error: error.message };
+  if ((data || []).length === 1) return { saleId: data![0].id };
+  if ((data || []).length > 1) return { saleId: null, candidates: data || [] };
+
+  const { data: searched, error: searchError } = await ctx.supabaseAdmin
+    .rpc("search_sales_unaccent", { org_id: ctx.orgId, search_term: trimmed, pay_status: null, max_results: 10 });
+  if (searchError) return { saleId: null, error: searchError.message };
+  if ((searched || []).length === 1) return { saleId: searched![0].id };
+  if ((searched || []).length > 1) return { saleId: null, candidates: searched || [] };
+
+  return { saleId: null };
+}
+
 export const readTools: Tool[] = [
   {
     name: "list_team_members",
@@ -43,7 +92,7 @@ export const readTools: Tool[] = [
       if (profilesError) return ERR(profilesError.message);
 
       const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
-      const normalizedQuery = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+      const normalizedQuery = typeof args.query === "string" ? normalizeLookup(args.query) : "";
       const normalizedRole = typeof args.role === "string" ? args.role.trim().toLowerCase() : "";
       const results = members
         .map((m: any) => {
@@ -61,7 +110,8 @@ export const readTools: Tool[] = [
           if (!normalizedQuery) return true;
           return [m.full_name, m.email, m.phone]
             .filter(Boolean)
-            .some((value: string) => value.toLowerCase().includes(normalizedQuery));
+            .map((value: string) => normalizeLookup(value))
+            .some((value: string) => value.includes(normalizedQuery) || normalizedQuery.includes(value));
         })
         .slice(0, 20);
 
@@ -108,10 +158,13 @@ export const readTools: Tool[] = [
             .select("id, full_name, email, phone")
             .in("id", memberIds);
           const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
-          const q = args.assignee_query.trim().toLowerCase();
+          const q = normalizeLookup(args.assignee_query);
           assigneeMatches = (members || [])
             .map((m: any) => ({ ...m, ...(profileById.get(m.user_id) || {}) }))
-            .filter((m: any) => [m.full_name, m.email, m.phone].filter(Boolean).some((value: string) => value.toLowerCase().includes(q)))
+            .filter((m: any) => [m.full_name, m.email, m.phone]
+              .filter(Boolean)
+              .map((value: string) => normalizeLookup(value))
+              .some((value: string) => value.includes(q) || q.includes(value)))
             .map((m: any) => ({ user_id: m.user_id, role: m.role, full_name: m.full_name || null, email: m.email || null }));
           if (assigneeMatches.length === 1) assignee = assigneeMatches[0];
         }
@@ -361,26 +414,37 @@ export const readTools: Tool[] = [
   },
   {
     name: "get_sale_details",
-    description: "Obter detalhes de uma venda específica incluindo pagamentos.",
+    description: "Obter detalhes de uma venda específica incluindo pagamentos. Aceita UUID interno ou código/referência visível da venda, ex: 0002.",
     parameters: {
       type: "object",
-      properties: { sale_id: { type: "string", description: "UUID da venda" } },
+      properties: { sale_id: { type: "string", description: "UUID interno ou código/referência visível da venda, ex: 0002" } },
       required: ["sale_id"],
     },
     permission: { module: "sales", subarea: "sales", action: "view" },
     execute: async (args, ctx) => {
+      const resolved = await resolveSaleId(ctx, String(args.sale_id || ""));
+      if (resolved.error) return { error: resolved.error, _instruction: "ERRO NA PESQUISA. NÃO INVENTES DADOS." };
+      if (resolved.candidates?.length) {
+        return {
+          error: "Mais de uma venda encontrada",
+          candidates: resolved.candidates,
+          _instruction: "Há mais de uma venda possível. Mostra as opções e pede ao utilizador para escolher. NÃO INVENTES.",
+        };
+      }
+      if (!resolved.saleId) return { error: "Venda não encontrada", _instruction: "Venda não existe na base de dados. Informa o utilizador. NÃO INVENTES DADOS." };
+
       const { data: sale, error } = await ctx.supabaseAdmin
         .from("sales")
         .select("id, code, total_value, status, payment_status, sale_date, notes, client_id, lead_id, seller_id, created_by")
         .eq("organization_id", ctx.orgId)
-        .eq("id", args.sale_id)
+        .eq("id", resolved.saleId)
         .maybeSingle();
       if (error) return { error: error.message, _instruction: "ERRO NA PESQUISA. NÃO INVENTES DADOS." };
       if (!sale) return { error: "Venda não encontrada", _instruction: "Venda não existe na base de dados. Informa o utilizador. NÃO INVENTES DADOS." };
       const { data: payments } = await ctx.supabaseAdmin
         .from("sale_payments")
         .select("id, amount, payment_date, payment_method, status, invoice_reference")
-        .eq("sale_id", args.sale_id)
+        .eq("sale_id", resolved.saleId)
         .eq("organization_id", ctx.orgId);
       if (sale.client_id) {
         const { data: client } = await ctx.supabaseAdmin.from("crm_clients").select("name").eq("id", sale.client_id).maybeSingle();

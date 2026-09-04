@@ -2,6 +2,65 @@
 // pipeline stages. All gated by permission (admins bypass) and audited.
 import type { Tool } from "../types.ts";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function saleReferenceCandidates(value: string): string[] {
+  const raw = value.trim();
+  const compact = raw.replace(/^venda\s+/i, "").trim();
+  const digits = compact.match(/\d+/)?.[0] || "";
+  return [...new Set([
+    raw,
+    compact,
+    digits,
+    digits ? digits.padStart(4, "0") : "",
+    digits ? String(Number(digits)) : "",
+  ].filter(Boolean))];
+}
+
+function normalizeLookup(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}@.+-]+/gu, " ")
+    .trim();
+}
+
+async function resolveSaleByReference(ctx: any, reference: string): Promise<{ sale: any | null; error?: string; candidates?: any[] }> {
+  const trimmed = reference.trim();
+  if (!trimmed) return { sale: null, error: "Referência da venda em falta" };
+
+  if (UUID_RE.test(trimmed)) {
+    const { data, error } = await ctx.supabaseAdmin
+      .from("sales")
+      .select("id, code, total_value, seller_id, created_by")
+      .eq("organization_id", ctx.orgId)
+      .eq("id", trimmed)
+      .maybeSingle();
+    if (error) return { sale: null, error: error.message };
+    return { sale: data || null };
+  }
+
+  const candidates = saleReferenceCandidates(trimmed);
+  const { data, error } = await ctx.supabaseAdmin
+    .from("sales")
+    .select("id, code, total_value, seller_id, created_by, sale_date, status, payment_status")
+    .eq("organization_id", ctx.orgId)
+    .in("code", candidates)
+    .limit(10);
+  if (error) return { sale: null, error: error.message };
+  if ((data || []).length === 1) return { sale: data![0] };
+  if ((data || []).length > 1) return { sale: null, candidates: data || [] };
+
+  const { data: searched, error: searchError } = await ctx.supabaseAdmin
+    .rpc("search_sales_unaccent", { org_id: ctx.orgId, search_term: trimmed, pay_status: null, max_results: 10 });
+  if (searchError) return { sale: null, error: searchError.message };
+  if ((searched || []).length === 1) return { sale: searched![0] };
+  if ((searched || []).length > 1) return { sale: null, candidates: searched || [] };
+
+  return { sale: null };
+}
+
 // Resolve the pipeline stage key to use. If the caller passed one, validate it;
 // otherwise fall back to the first stage by position.
 async function resolveStageKey(ctx: any, requested?: string): Promise<{ key: string | null; error?: string }> {
@@ -49,7 +108,7 @@ async function resolveAssignee(ctx: any, args: Record<string, any>): Promise<{ u
     return { userId: explicitUserId, label: profile.full_name || profile.email || explicitUserId };
   }
 
-  const normalized = query.toLowerCase();
+  const normalized = normalizeLookup(query);
   const matches = memberIds
     .map((userId: string) => {
       const profile = profileById.get(userId) || {};
@@ -60,7 +119,12 @@ async function resolveAssignee(ctx: any, args: Record<string, any>): Promise<{ u
         phone: profile.phone || null,
       };
     })
-    .filter((m: any) => [m.full_name, m.email, m.phone].filter(Boolean).some((value: string) => value.toLowerCase().includes(normalized)));
+    .filter((m: any) => {
+      const searchable = [m.full_name, m.email, m.phone]
+        .filter(Boolean)
+        .map((value: string) => normalizeLookup(value));
+      return searchable.some((value: string) => value.includes(normalized) || normalized.includes(value));
+    });
 
   if (matches.length === 0) return { userId: null, label: null, error: `Não encontrei nenhum membro ativo chamado "${query}".` };
   if (matches.length > 1) {
@@ -291,11 +355,12 @@ export const writeTools: Tool[] = [
   },
   {
     name: "update_sale_seller",
-    description: "Atribuir/alterar o comercial responsável por uma venda existente. Usa search_sales para encontrar a venda e list_team_members/assignee_query para resolver o comercial. Usa APENAS depois de confirmação explícita do utilizador.",
+    description: "Atribuir/alterar o comercial responsável por uma venda existente. Aceita UUID interno ou código/referência visível da venda (ex: 0002). Usa search_sales/list_team_members quando possível e APENAS depois de confirmação explícita do utilizador.",
     parameters: {
       type: "object",
       properties: {
-        sale_id: { type: "string", description: "UUID da venda existente (obrigatório, obtém-no com search_sales)" },
+        sale_id: { type: "string", description: "UUID interno OU código/referência visível da venda, ex: 0002" },
+        sale_reference: { type: "string", description: "Código/referência visível da venda, ex: 0002 ou venda 0002 (opcional)" },
         assigned_to_user_id: { type: "string", description: "UUID do comercial/responsável (opcional)" },
         assignee_query: { type: "string", description: "Nome/email do comercial/responsável, ex: Sara (opcional; prefere assigned_to_user_id quando já foi resolvido)" },
       },
@@ -304,7 +369,8 @@ export const writeTools: Tool[] = [
     permission: { module: "sales", subarea: "sales", action: "edit" },
     isWrite: true,
     execute: async (args, ctx) => {
-      if (!args.sale_id) {
+      const saleRef = String(args.sale_reference || args.sale_id || "").trim();
+      if (!saleRef) {
         return { error: "Venda em falta", _instruction: "Usa search_sales para encontrar a venda antes de alterar o comercial. NÃO inventes IDs." };
       }
 
@@ -313,20 +379,23 @@ export const writeTools: Tool[] = [
         return { error: assignee.error || "Comercial em falta", _instruction: "Informa que falta resolver o comercial/responsável. Usa list_team_members se precisares de opções. Não alteres a venda." };
       }
 
-      const { data: existingSale, error: saleError } = await ctx.supabaseAdmin
-        .from("sales")
-        .select("id, code, total_value, seller_id, created_by")
-        .eq("organization_id", ctx.orgId)
-        .eq("id", args.sale_id)
-        .maybeSingle();
-      if (saleError) return { error: saleError.message, _instruction: "ERRO ao consultar a venda. Não digas que foi alterada." };
-      if (!existingSale) return { error: "Venda não encontrada", _instruction: "A venda indicada não existe nesta organização. Usa search_sales para confirmar. NÃO inventes." };
+      const resolvedSale = await resolveSaleByReference(ctx, saleRef);
+      if (resolvedSale.error) return { error: resolvedSale.error, _instruction: "ERRO ao consultar a venda. Não digas que foi alterada." };
+      if (resolvedSale.candidates?.length) {
+        return {
+          error: "Mais de uma venda encontrada",
+          candidates: resolvedSale.candidates.map((s: any) => ({ id: s.id, code: s.code, total_value: s.total_value, status: s.status, payment_status: s.payment_status })),
+          _instruction: "Há mais de uma venda possível. Mostra as opções e pede ao utilizador para escolher. NÃO alteres nada.",
+        };
+      }
+      const existingSale = resolvedSale.sale;
+      if (!existingSale) return { error: "Venda não encontrada", _instruction: `Não encontrei nenhuma venda com a referência "${saleRef}" nesta organização. Usa search_sales com outro termo ou pede mais dados. NÃO inventes.` };
 
       const { data, error } = await ctx.supabaseAdmin
         .from("sales")
         .update({ seller_id: assignee.userId })
         .eq("organization_id", ctx.orgId)
-        .eq("id", args.sale_id)
+        .eq("id", existingSale.id)
         .select("id, code, total_value, seller_id")
         .maybeSingle();
       if (error) return { error: error.message, _instruction: "ERRO ao alterar o comercial da venda. Não digas que foi alterada." };

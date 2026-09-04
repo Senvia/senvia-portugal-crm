@@ -22,6 +22,79 @@ const MODULE_LABELS: Record<string, string> = {
   ecommerce: "E-commerce", settings: "Definições",
 };
 
+function normalizeToolCalls(message: any): any[] {
+  if (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0) return message.tool_calls;
+  if (Array.isArray(message?.toolCalls) && message.toolCalls.length > 0) return message.toolCalls;
+
+  const legacyCall = message?.function_call || message?.functionCall;
+  if (legacyCall?.name) {
+    return [{
+      id: `call_${crypto.randomUUID().replace(/-/g, "")}`,
+      type: "function",
+      function: {
+        name: legacyCall.name,
+        arguments: typeof legacyCall.arguments === "string"
+          ? legacyCall.arguments
+          : JSON.stringify(legacyCall.arguments || legacyCall.args || {}),
+      },
+    }];
+  }
+
+  return [];
+}
+
+function fallbackTextFromToolResult(conversationMessages: any[]): string | null {
+  const lastTool = [...conversationMessages].reverse().find((m) => m?.role === "tool" && typeof m.content === "string");
+  if (!lastTool) return null;
+
+  let data: any;
+  try {
+    data = JSON.parse(lastTool.content);
+  } catch {
+    return null;
+  }
+
+  if (data?._instruction && typeof data._instruction === "string" && !data.error) {
+    return data._instruction;
+  }
+
+  if (data?.error) {
+    if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+      const rows = data.candidates.slice(0, 5).map((item: any) => {
+        const code = item.code || item.id || "sem referência";
+        const value = item.total_value ? ` · ${item.total_value}€` : "";
+        const status = item.status ? ` · ${item.status}` : "";
+        return `- **${code}**${value}${status}`;
+      }).join("\n");
+      return `${data.error}:\n${rows}\n\n[botao:Escolher venda][botao:Pesquisar de novo]`;
+    }
+    return `${data.error}\n\n[botao:Pesquisar de novo][botao:Abrir suporte]`;
+  }
+
+  if (data?.sale) {
+    const sale = data.sale;
+    const payments = Array.isArray(data.payments) ? data.payments : [];
+    const seller = sale.seller_name ? `\n- Comercial: **${sale.seller_name}**` : "";
+    const client = sale.client_name ? `\n- Cliente: **${sale.client_name}**` : "";
+    return `Encontrei a venda **${sale.code || sale.id}**:\n\n- Valor: **${sale.total_value}€**\n- Estado: **${sale.status || "sem estado"}**\n- Pagamento: **${sale.payment_status || "sem estado"}**${client}${seller}\n- Pagamentos registados: **${payments.length}**\n\n[link:Ver Vendas|/sales]`;
+  }
+
+  if (Array.isArray(data?.results)) {
+    if (data.results.length === 0) return "Não encontrei resultados para essa pesquisa.\n\n[botao:Pesquisar de novo]";
+    const rows = data.results.slice(0, 5).map((item: any) => {
+      const label = item.code || item.name || item.full_name || item.email || item.id || "resultado";
+      const value = item.total_value ? ` · ${item.total_value}€` : "";
+      const status = item.status || item.payment_status ? ` · ${item.status || item.payment_status}` : "";
+      const seller = item.seller_name ? ` · ${item.seller_name}` : "";
+      return `- **${label}**${value}${status}${seller}`;
+    }).join("\n");
+    return `Encontrei **${data.count ?? data.results.length}** resultado(s):\n\n${rows}`;
+  }
+
+  if (data?.success) return "Feito com sucesso.";
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return jsonError("Método não permitido", 405);
@@ -89,11 +162,16 @@ serve(async (req) => {
       if (!choice) return jsonError("Resposta vazia do modelo.", 500);
 
       const assistantMessage = choice.message;
+      const toolCalls = normalizeToolCalls(assistantMessage);
 
       // Tool calls → execute and loop.
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        conversationMessages.push(assistantMessage);
-        for (const toolCall of assistantMessage.tool_calls) {
+      if (toolCalls.length > 0) {
+        const normalizedAssistantMessage = { ...assistantMessage, tool_calls: toolCalls };
+        delete normalizedAssistantMessage.function_call;
+        delete normalizedAssistantMessage.functionCall;
+        delete normalizedAssistantMessage.toolCalls;
+        conversationMessages.push(normalizedAssistantMessage);
+        for (const toolCall of toolCalls) {
           const fnName = toolCall.function.name;
           let fnArgs: Record<string, any> = {};
           try { fnArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch { fnArgs = {}; }
@@ -116,6 +194,8 @@ serve(async (req) => {
       if (assistantMessage.content) {
         return streamText(assistantMessage.content, providerHeaders);
       }
+      const fallback = fallbackTextFromToolResult(conversationMessages);
+      if (fallback) return streamText(fallback, providerHeaders);
       return jsonError("Resposta vazia do Otto.", 500);
     }
 
