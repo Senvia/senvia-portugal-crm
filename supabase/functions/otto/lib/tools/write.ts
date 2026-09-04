@@ -273,6 +273,7 @@ export const writeTools: Tool[] = [
           lead_id: args.lead_id || null,
           notes: args.notes || null,
           created_by: ctx.userId || null,
+          seller_id: assignee.userId || ctx.userId || null,
         })
         .select("id, total_value")
         .single();
@@ -285,6 +286,60 @@ export const writeTools: Tool[] = [
         assigned_to_user_id: assignee.userId,
         assigned_to_name: assignee.label,
         _instruction: `Venda de **${data.total_value}€** registada com sucesso${assignee.label ? ` e atribuída a **${assignee.label}**` : ""}. Celebra brevemente e oferece um link. [link:Ver Vendas|/sales]`,
+      };
+    },
+  },
+  {
+    name: "update_sale_seller",
+    description: "Atribuir/alterar o comercial responsável por uma venda existente. Usa search_sales para encontrar a venda e list_team_members/assignee_query para resolver o comercial. Usa APENAS depois de confirmação explícita do utilizador.",
+    parameters: {
+      type: "object",
+      properties: {
+        sale_id: { type: "string", description: "UUID da venda existente (obrigatório, obtém-no com search_sales)" },
+        assigned_to_user_id: { type: "string", description: "UUID do comercial/responsável (opcional)" },
+        assignee_query: { type: "string", description: "Nome/email do comercial/responsável, ex: Sara (opcional; prefere assigned_to_user_id quando já foi resolvido)" },
+      },
+      required: ["sale_id"],
+    },
+    permission: { module: "sales", subarea: "sales", action: "edit" },
+    isWrite: true,
+    execute: async (args, ctx) => {
+      if (!args.sale_id) {
+        return { error: "Venda em falta", _instruction: "Usa search_sales para encontrar a venda antes de alterar o comercial. NÃO inventes IDs." };
+      }
+
+      const assignee = await resolveAssignee(ctx, args);
+      if (assignee.error || !assignee.userId) {
+        return { error: assignee.error || "Comercial em falta", _instruction: "Informa que falta resolver o comercial/responsável. Usa list_team_members se precisares de opções. Não alteres a venda." };
+      }
+
+      const { data: existingSale, error: saleError } = await ctx.supabaseAdmin
+        .from("sales")
+        .select("id, code, total_value, seller_id, created_by")
+        .eq("organization_id", ctx.orgId)
+        .eq("id", args.sale_id)
+        .maybeSingle();
+      if (saleError) return { error: saleError.message, _instruction: "ERRO ao consultar a venda. Não digas que foi alterada." };
+      if (!existingSale) return { error: "Venda não encontrada", _instruction: "A venda indicada não existe nesta organização. Usa search_sales para confirmar. NÃO inventes." };
+
+      const { data, error } = await ctx.supabaseAdmin
+        .from("sales")
+        .update({ seller_id: assignee.userId })
+        .eq("organization_id", ctx.orgId)
+        .eq("id", args.sale_id)
+        .select("id, code, total_value, seller_id")
+        .maybeSingle();
+      if (error) return { error: error.message, _instruction: "ERRO ao alterar o comercial da venda. Não digas que foi alterada." };
+      if (!data) return { error: "Venda não encontrada", _instruction: "A venda deixou de estar disponível. Informa o utilizador. NÃO inventes." };
+
+      return {
+        success: true,
+        sale_id: data.id,
+        sale_code: data.code,
+        total_value: data.total_value,
+        assigned_to_user_id: assignee.userId,
+        assigned_to_name: assignee.label,
+        _instruction: `Venda **${data.code || data.id}** atribuída a **${assignee.label}** com sucesso. Informa o utilizador e inclui [link:Ver Vendas|/sales].`,
       };
     },
   },
