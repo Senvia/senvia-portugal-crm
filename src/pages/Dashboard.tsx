@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
+import { EditDashboardModal } from "@/components/dashboard/EditDashboardModal";
 import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { DashboardPeriodFilter } from "@/components/dashboard/DashboardPeriodFilter";
@@ -11,7 +14,8 @@ import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePa
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
 import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
 import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
-import { Loader2, Sparkles, LayoutDashboard } from "lucide-react";
+import { Loader2, Sparkles, LayoutDashboard, SlidersHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Link } from "react-router-dom";
 import { NicheType } from "@/lib/dashboard-templates";
@@ -33,6 +37,8 @@ export default function Dashboard() {
     { table: 'sales', queryKeys: [['sales'], ['dashboard-stats']] },
   ]);
   const { profile, organization } = useAuth();
+  const { isAdmin, isSuperAdmin } = usePermissions();
+  const [editDashboardOpen, setEditDashboardOpen] = useState(false);
   const { modules } = useModules();
   const isTelecom = organization?.niche === 'telecom';
   const clientsModuleEnabled = modules.clients;
@@ -45,6 +51,14 @@ export default function Dashboard() {
     niche,
   } = useDashboardWidgets();
   const isWidgetVisible = (type: string) => visibleWidgets.some((w) => w.widget_type === type);
+  // Full-width panels have their own component above; they must not also be
+  // handed to DynamicWidget, which only knows how to draw the small tiles.
+  const PANEL_WIDGET_TYPES = new Set([
+    'team_performance_table', 'commitment_panel', 'telecom_lifecycle_panel',
+    'sales_performance_panel', 'metrics_panel', 'activations_panel',
+    'fidelization_alerts_widget', 'calendar_alerts_widget', 'tasks_widget',
+    'commissions_widget',
+  ]);
   const { filterKey, setFilter } = usePaidTrafficFilter();
 
   const greeting = profile?.full_name 
@@ -82,6 +96,17 @@ export default function Dashboard() {
                 </SelectContent>
               </Select>
               <TeamMemberFilter className="w-[150px] sm:w-[180px]" />
+              {(isAdmin || isSuperAdmin) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5"
+                  onClick={() => setEditDashboardOpen(true)}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span className="hidden sm:inline">Editar Dashboard</span>
+                </Button>
+              )}
             </>
           }
         />
@@ -132,7 +157,7 @@ export default function Dashboard() {
           
           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <PaidTrafficCard />
-            {visibleWidgets.filter(w => w.widget_type !== 'team_performance_table').map((widget) => (
+            {visibleWidgets.filter(w => !PANEL_WIDGET_TYPES.has(w.widget_type)).map((widget) => (
               <DynamicWidget
                 key={widget.id || widget.widget_type}
                 widgetType={widget.widget_type as any}
@@ -146,10 +171,14 @@ export default function Dashboard() {
       {visibleWidgets.length === 0 && !isLoading && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground">
-            Nenhum widget configurado para o seu perfil. Contacte o administrador para personalizar o dashboard em Definições &gt; Perfis.
+            {isAdmin || isSuperAdmin
+              ? 'Nenhum widget escolhido. Usa "Editar Dashboard" acima para escolher o que queres ver.'
+              : 'Nenhum widget configurado para o seu perfil. Contacte o administrador para personalizar o dashboard.'}
           </p>
         </div>
       )}
+
+      <EditDashboardModal open={editDashboardOpen} onOpenChange={setEditDashboardOpen} />
     </div>
   );
 }

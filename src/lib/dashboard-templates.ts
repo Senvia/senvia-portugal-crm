@@ -70,7 +70,7 @@ export interface WidgetTemplate {
   titleByNiche?: Partial<Record<NicheType, string>>;
   icon: LucideIcon;
   defaultVisible: boolean;
-  requiredModule?: 'proposals' | 'calendar' | 'sales' | 'ecommerce';
+  requiredModule?: 'proposals' | 'calendar' | 'sales' | 'ecommerce' | 'clients' | 'inbox' | 'finance' | 'energy';
   chartType: ChartType;
   description?: string;
 }
@@ -394,7 +394,7 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
     title: 'Alertas de Fidelização',
     icon: Heart,
     defaultVisible: false,
-    requiredModule: 'sales',
+    requiredModule: 'clients',
     chartType: 'none',
     description: 'Clientes a aproximar-se do fim de fidelização',
   },
@@ -412,6 +412,7 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
     title: 'Tarefas',
     icon: CheckCircle,
     defaultVisible: false,
+    requiredModule: 'inbox',
     chartType: 'none',
     description: 'Tarefas pendentes atribuídas',
   },
@@ -547,10 +548,55 @@ export function getAllAvailableWidgets(): WidgetTemplate[] {
   return Object.values(WIDGET_DEFINITIONS);
 }
 
+/**
+ * Which niches each widget belongs to. Anything NOT listed here is generic
+ * and offered to every niche — kept as an exception list so adding a plain
+ * widget needs no entry, and so the mapping is readable in one place instead
+ * of scattered across every definition.
+ *
+ * The telecom panels are listed because Dashboard.tsx only ever renders them
+ * inside `{isTelecom && ...}`: offering them to a clinic would let someone
+ * tick a box that changes nothing on screen.
+ */
+const WIDGET_NICHES: Partial<Record<WidgetType, NicheType[]>> = {
+  // Clinic family
+  appointments_today: ['clinic', 'dental', 'aesthetic', 'education'],
+  patients_in_treatment: ['clinic', 'dental', 'aesthetic'],
+  treatments_completed: ['clinic', 'dental', 'aesthetic'],
+  // Construction / energy projects
+  active_projects: ['construction', 'energy'],
+  pending_quotes: ['construction', 'energy'],
+  completed_projects: ['construction'],
+  // E-commerce
+  orders_today: ['ecommerce'],
+  revenue_today: ['ecommerce'],
+  low_stock_products: ['ecommerce'],
+  // Real estate
+  visits_this_week: ['real_estate'],
+  active_listings: ['real_estate'],
+  deals_closing: ['real_estate'],
+  // Telecom
+  pending_installations: ['telecom'],
+  active_customers: ['telecom'],
+  monthly_commissions: ['telecom'],
+  commitment_panel: ['telecom'],
+  telecom_lifecycle_panel: ['telecom'],
+  sales_performance_panel: ['telecom'],
+  metrics_panel: ['telecom'],
+  activations_panel: ['telecom'],
+  fidelization_alerts_widget: ['telecom'],
+};
+
+/** True when this widget is offered in the given niche. */
+export function isWidgetForNiche(type: WidgetType, niche: NicheType | null | undefined): boolean {
+  const allowed = WIDGET_NICHES[type];
+  return !allowed || allowed.includes(niche || 'generic');
+}
+
 // Filter widgets by enabled modules
 export function filterWidgetsByModules(
   widgets: WidgetType[],
-  enabledModules: { sales?: boolean; proposals?: boolean; calendar?: boolean; ecommerce?: boolean }
+  enabledModules: Record<string, boolean | undefined>
 ): WidgetType[] {
   return widgets.filter(widgetType => {
     const widget = WIDGET_DEFINITIONS[widgetType];

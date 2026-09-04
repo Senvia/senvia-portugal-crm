@@ -23,7 +23,7 @@ import {
   ProfileDashboardWidget,
 } from '@/hooks/useOrganizationProfiles';
 import { useAuth } from '@/contexts/AuthContext';
-import { WIDGET_DEFINITIONS, WidgetType, filterWidgetsByModules, getAllAvailableWidgets } from '@/lib/dashboard-templates';
+import { WIDGET_DEFINITIONS, WidgetType, filterWidgetsByModules, getAllAvailableWidgets, isWidgetForNiche, type NicheType } from '@/lib/dashboard-templates';
 import { Shield, Plus, Pencil, Trash2, Loader2, Eye, LayoutDashboard, ArrowLeft } from 'lucide-react';
 
 const BASE_ROLE_LABELS: Record<string, string> = {
@@ -51,6 +51,9 @@ export function ProfilesTab() {
 
   const availableWidgets = getAllAvailableWidgets().filter(w => {
     if (w.requiredModule && enabledModules[w.requiredModule] === false) return false;
+    // Same rule as the "Editar Dashboard" dialog: don't offer a widget this
+    // org's niche never renders.
+    if (!isWidgetForNiche(w.type, organization?.niche as NicheType)) return false;
     return true;
   });
 
