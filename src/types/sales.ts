@@ -1,3 +1,5 @@
+import type { ServicosDetails } from './proposals';
+
 export type NegotiationType = 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume';
 export type SaleStatus = 'in_progress' | 'fulfilled' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'mbway' | 'transfer' | 'cash' | 'card' | 'check' | 'other';
@@ -203,6 +205,9 @@ export interface Sale {
   sale_date: string;
   notes: string | null;
   created_by: string | null;
+  // Who made the sale and is paid for it. NULL falls back to created_by, so an
+  // admin can enter a sale on behalf of a salesperson without taking the money.
+  seller_id: string | null;
   created_at: string;
   updated_at: string;
   
@@ -220,11 +225,19 @@ export interface Sale {
   kwp: number | null;
   
   // Comum
+  // What the operator pays in gross for this sale.
   comissao: number | null;
-  
+  // What is left for the organization once the seller took his own rate.
+  // Frozen alongside the commission splits.
+  org_commission: number | null;
+
   // Tipo de Negociação e Serviços/Produtos
   negotiation_type: NegotiationType | null;
   servicos_produtos: string[] | null;
+  // Per-product snapshot taken when the sale was made: price, quantity, extra
+  // cards and the operator at that moment. Frozen on purpose — a product can be
+  // moved to another operator later without rewriting past sales.
+  servicos_details: ServicosDetails | null;
   
   // Campos de Recorrência
   has_recurring: boolean;
@@ -246,6 +259,9 @@ export interface Sale {
   // When the install is booked for. Optional — sales without one are counted
   // as "sem data" instead of falling into a month.
   scheduled_install_date?: string | null;
+  // End of the booked install window ("das 9h às 12h") — the date above is
+  // its start. Null when only a start time was agreed.
+  scheduled_install_end?: string | null;
   // Units (cards/lines) on this sale, summed from servicos_details by trigger.
   total_cartoes?: number | null;
   // Whether the required paperwork for THIS sale has been handed in — per

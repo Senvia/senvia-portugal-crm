@@ -65,6 +65,7 @@ import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getC
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
+import { SellerSelect } from '@/components/sales/SellerSelect';
 import { DocumentsCheckboxField, ContractSignedCheckboxField } from '@/components/shared/DocumentsCheckboxField';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
@@ -160,11 +161,31 @@ export function EditSaleModal({
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
   const [activationDate, setActivationDate] = useState<string>("");
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
+  // Reassigning the sale: null keeps it with whoever created it.
+  const [sellerId, setSellerId] = useState<string | null>(null);
   const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
   const [scheduledInstallTime, setScheduledInstallTime] = useState<string>("");
+  const [scheduledInstallEndTime, setScheduledInstallEndTime] = useState<string>("");
   const [documentsChecked, setDocumentsChecked] = useState(false);
   const [contractSigned, setContractSigned] = useState(false);
   const [edpProposalNumber, setEdpProposalNumber] = useState<string>("");
+
+  // Which operator(s) this sale is actually under — from the frozen operator
+  // on each product line, falling back to the catalog for lines added before
+  // that was recorded. Drives the proposal-number field: there is no "EDP
+  // number" unless the sale is an EDP one.
+  const saleOperatorNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const productName of servicosProdutos) {
+      const detail = servicosDetails[productName];
+      const operatorId = detail?.operator_id
+        ?? catalog?.find((c) => c.name === productName)?.operator_id;
+      const name = detail?.operator_name
+        ?? (operatorId ? catalogOperators.find((o) => o.id === operatorId)?.name : undefined);
+      if (name) names.add(name);
+    }
+    return [...names];
+  }, [servicosProdutos, servicosDetails, catalog, catalogOperators]);
 
   // Editable CPEs state
   const [editableCpes, setEditableCpes] = useState<CreateProposalCpeData[]>([]);
@@ -189,6 +210,10 @@ export function EditSaleModal({
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
       setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
+      // Show the sale's real owner — the person it was created by, unless it
+      // was explicitly reassigned. Blank here would look broken and defaulting
+      // it to whichever admin opens the sale would misattribute it silently.
+      setSellerId(sale.seller_id ?? sale.created_by ?? null);
       // scheduled_install_date is a timestamptz — split it for the separate
       // date and time inputs (a native <input type="date"> rejects anything
       // but yyyy-MM-dd).
@@ -200,6 +225,9 @@ export function EditSaleModal({
         setScheduledInstallDate("");
         setScheduledInstallTime("");
       }
+      setScheduledInstallEndTime(
+        sale.scheduled_install_end ? (sale.scheduled_install_end.split('T')[1] ?? "").slice(0, 5) : "",
+      );
       setDocumentsChecked(!!sale.documents_checked);
       setContractSigned(!!sale.contract_signed);
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
@@ -442,6 +470,7 @@ export function EditSaleModal({
         saleId: sale.id,
         updates: {
           client_id: clientId || null,
+          seller_id: sellerId,
           total_value: total,
           subtotal: subtotal,
           discount: discountValue,
@@ -461,6 +490,9 @@ export function EditSaleModal({
             telecom_status: telecomStatus || null,
             scheduled_install_date: scheduledInstallDate
               ? `${scheduledInstallDate}T${scheduledInstallTime || '00:00'}:00`
+              : null,
+            scheduled_install_end: scheduledInstallDate && scheduledInstallEndTime
+              ? `${scheduledInstallDate}T${scheduledInstallEndTime}:00`
               : null,
             documents_checked: documentsChecked,
             contract_signed: contractSigned,
@@ -668,6 +700,14 @@ export function EditSaleModal({
                             </div>
                           )}
                         </div>
+
+                        {/* Reassigning moves the commission to the new seller. */}
+                        <SellerSelect
+                          className="space-y-1.5"
+                          value={sellerId}
+                          onChange={setSellerId}
+                        />
+
                         {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
                           <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Data de Ativação</Label>
@@ -682,30 +722,44 @@ export function EditSaleModal({
                         )}
                         {isTelecom && (
                           <>
-                            <div className="space-y-1.5">
+                            {/* Full row: the date plus its "das X às Y" window
+                                never fits one third of the grid. */}
+                            <div className="space-y-1.5 col-span-1 sm:col-span-3">
                               <Label className="text-xs text-muted-foreground">Data de Instalação</Label>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Input
                                   type="date"
                                   value={scheduledInstallDate}
                                   onChange={(e) => setScheduledInstallDate(e.target.value)}
-                                  className="h-9"
+                                  className="h-9 w-auto"
                                   disabled={isDeliveredLocked}
                                 />
+                                {/* Booked as a window ("das 9h às 12h"). */}
                                 {scheduledInstallDate && (
-                                  <Input
-                                    type="time"
-                                    value={scheduledInstallTime}
-                                    onChange={(e) => setScheduledInstallTime(e.target.value)}
-                                    className="h-9"
-                                    disabled={isDeliveredLocked}
-                                  />
+                                  <>
+                                    <span className="text-xs text-muted-foreground shrink-0">das</span>
+                                    <Input
+                                      type="time"
+                                      value={scheduledInstallTime}
+                                      onChange={(e) => setScheduledInstallTime(e.target.value)}
+                                      className="h-9 w-auto"
+                                      disabled={isDeliveredLocked}
+                                    />
+                                    <span className="text-xs text-muted-foreground shrink-0">às</span>
+                                    <Input
+                                      type="time"
+                                      value={scheduledInstallEndTime}
+                                      onChange={(e) => setScheduledInstallEndTime(e.target.value)}
+                                      className="h-9 w-auto"
+                                      disabled={isDeliveredLocked}
+                                    />
+                                  </>
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
                             </div>
 
-                            <div className="space-y-1.5 flex flex-wrap items-end gap-x-6 gap-y-2 pb-2">
+                            <div className="col-span-1 sm:col-span-3 flex flex-wrap items-center gap-x-8 gap-y-2 pt-1">
                               <DocumentsCheckboxField
                                 id="edit-sale-documents"
                                 checked={documentsChecked}
@@ -827,6 +881,7 @@ export function EditSaleModal({
                           isNewFormat={isNewFormat}
                           catalog={catalog}
                           operators={catalogOperators}
+                          sellerUserId={sellerId ?? sale.created_by}
                           configs={SERVICOS_PRODUCT_CONFIGS}
                           onToggleProduct={(name) => {
                             if (servicosProdutos.includes(name)) {
@@ -1318,18 +1373,25 @@ export function EditSaleModal({
 
                     {/* Notes */}
                     {/* EDP Proposal Number */}
-                    {showEnergy && saleFields?.edp_proposal_number?.visible && (<Card>
+                    {/* Only exists once the sale is actually under an operator,
+                        and is named after that operator — there is no "EDP
+                        number" on a NOS sale. Never required: the number often
+                        only arrives after the sale is closed. */}
+                    {saleFields?.edp_proposal_number?.visible && saleOperatorNames.length > 0 && (<Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
-                          {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}
+                          {saleOperatorNames.length === 1
+                            ? `Número Proposta ${saleOperatorNames[0]}`
+                            : 'Número de Proposta'}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <Input
-                          placeholder="Ex: EDP-2024-001234"
+                          placeholder={saleOperatorNames.length === 1
+                            ? `Nº da proposta na ${saleOperatorNames[0]}`
+                            : 'Nº da proposta na operadora'}
                           value={edpProposalNumber}
                           onChange={(e) => setEdpProposalNumber(e.target.value)}
-                          required={saleFields.edp_proposal_number.required}
                         />
                     </CardContent>
                     </Card>)}

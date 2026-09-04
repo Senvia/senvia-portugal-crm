@@ -261,6 +261,21 @@ export function useMyCommissions() {
         if (p.status === 'paid') paidSum.set(p.sale_id, (paidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
       }
 
+      // What THIS person earns on each sale. sales.comissao is the operator's
+      // gross — showing it here would tell a salesperson he made 210€ on a
+      // sale that pays him 180€. The frozen split rows are his actual pay.
+      const { data: mySplits } = saleIds.length > 0
+        ? await (supabase as any)
+            .from('sale_commission_splits')
+            .select('sale_id, amount')
+            .eq('user_id', userId)
+            .in('sale_id', saleIds)
+        : { data: [] as any[] };
+      const myAmountBySale = new Map<string, number>();
+      for (const sp of (mySplits as any[]) || []) {
+        myAmountBySale.set(sp.sale_id, (myAmountBySale.get(sp.sale_id) || 0) + Number(sp.amount || 0));
+      }
+
       // Resolve client/lead names for ALL returned sales — not only those whose
       // client/lead is assigned to the user (e.g. sales the user created, whose
       // client may be unassigned or assigned to someone else).
@@ -295,7 +310,9 @@ export function useMyCommissions() {
           code: s.code,
           status: s.status,
           total_value: s.total_value,
-          comissao: s.comissao,
+          // The person's own share when the sale has frozen splits; the sale's
+          // own figure only for sales that carry no split rules at all.
+          comissao: myAmountBySale.has(s.id) ? myAmountBySale.get(s.id)! : s.comissao,
           sale_date: s.sale_date,
           activation_date: s.activation_date,
           created_at: s.created_at,

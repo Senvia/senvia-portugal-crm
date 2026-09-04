@@ -51,7 +51,16 @@ export type WidgetType =
   | 'active_customers'
   | 'monthly_commissions'
   // Panel widgets
-  | 'team_performance_table';
+  | 'team_performance_table'
+  | 'commitment_panel'
+  | 'telecom_lifecycle_panel'
+  | 'sales_performance_panel'
+  | 'metrics_panel'
+  | 'activations_panel'
+  | 'fidelization_alerts_widget'
+  | 'calendar_alerts_widget'
+  | 'tasks_widget'
+  | 'commissions_widget';
 
 export type ChartType = 'area' | 'bar' | 'donut' | 'pie' | 'progress' | 'none';
 
@@ -340,6 +349,80 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
     chartType: 'none',
     description: 'Tabela com leads, propostas, vendas e comissões por colaborador',
   },
+  commitment_panel: {
+    type: 'commitment_panel',
+    title: 'Compromisso Mensal',
+    icon: Target,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Metas mensais definidas por cada colaborador (NIFs, instalações, comissão)',
+  },
+  telecom_lifecycle_panel: {
+    type: 'telecom_lifecycle_panel',
+    title: 'Análise do Mês',
+    icon: BarChart3,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Estado das vendas telecom do mês: ativos, por instalar, anulados, cancelados',
+  },
+  sales_performance_panel: {
+    type: 'sales_performance_panel',
+    title: 'Performance de Vendas',
+    icon: TrendingUp,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Evolução de vendas ao longo do período',
+  },
+  metrics_panel: {
+    type: 'metrics_panel',
+    title: 'Métricas',
+    icon: BarChart3,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Indicadores-chave configuráveis do negócio',
+  },
+  activations_panel: {
+    type: 'activations_panel',
+    title: 'Ativações',
+    icon: Zap,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Instalações ativadas recentemente',
+  },
+  fidelization_alerts_widget: {
+    type: 'fidelization_alerts_widget',
+    title: 'Alertas de Fidelização',
+    icon: Heart,
+    defaultVisible: false,
+    requiredModule: 'sales',
+    chartType: 'none',
+    description: 'Clientes a aproximar-se do fim de fidelização',
+  },
+  calendar_alerts_widget: {
+    type: 'calendar_alerts_widget',
+    title: 'Alertas de Calendário',
+    icon: Calendar,
+    defaultVisible: false,
+    requiredModule: 'calendar',
+    chartType: 'none',
+    description: 'Eventos e compromissos próximos',
+  },
+  tasks_widget: {
+    type: 'tasks_widget',
+    title: 'Tarefas',
+    icon: CheckCircle,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Tarefas pendentes atribuídas',
+  },
+  commissions_widget: {
+    type: 'commissions_widget',
+    title: 'Resumo de Comissões',
+    icon: Euro,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Resumo de comissões da equipa',
+  },
 };
 
 // Default widgets by niche
@@ -402,6 +485,15 @@ export const NICHE_DEFAULT_WIDGETS: Record<NicheType, WidgetType[]> = {
     'conversion_rate',
     'monthly_commissions',
     'sales_active',
+    'commitment_panel',
+    'telecom_lifecycle_panel',
+    'sales_performance_panel',
+    'metrics_panel',
+    'activations_panel',
+    'fidelization_alerts_widget',
+    'calendar_alerts_widget',
+    'tasks_widget',
+    'commissions_widget',
   ],
   ecommerce: [
     'orders_today',

@@ -62,6 +62,7 @@ import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/p
 import { NEGOTIATION_TYPE_LABELS, getCatalogCommission } from "@/types/proposals";
 import { useServicosProducts } from "@/hooks/useServicosProducts";
 import { ServicosSection } from "@/components/proposals/ServicosSection";
+import { SellerSelect } from "@/components/sales/SellerSelect";
 import { DocumentsCheckboxField, ContractSignedCheckboxField } from "@/components/shared/DocumentsCheckboxField";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
@@ -140,7 +141,7 @@ export function CreateSaleModal({
   const createCpe = useCreateCpe();
   const updateCpe = useUpdateCpe();
   const { finalPositiveStage } = useFinalStages();
-  const { organization } = useAuth();
+  const { organization, user } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
@@ -182,9 +183,16 @@ export function CreateSaleModal({
   const [clientId, setClientId] = useState<string>("");
   const [proposalId, setProposalId] = useState<string>("");
   const [saleDate, setSaleDate] = useState<Date>(new Date());
+  // Who the sale belongs to. Defaults to whoever is creating it — an admin
+  // reassigns it explicitly when entering a sale on someone else's behalf.
+  const [sellerId, setSellerId] = useState<string | null>(user?.id ?? null);
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
   const [scheduledInstallDate, setScheduledInstallDate] = useState<string>("");
+  // Picking a date shouldn't leave the calendar hanging open over the time
+  // fields it reveals right below it.
+  const [installDatePopoverOpen, setInstallDatePopoverOpen] = useState(false);
   const [scheduledInstallTime, setScheduledInstallTime] = useState<string>("");
+  const [scheduledInstallEndTime, setScheduledInstallEndTime] = useState<string>("");
   const [documentsChecked, setDocumentsChecked] = useState(false);
   const [contractSigned, setContractSigned] = useState(false);
   const [items, setItems] = useState<SaleItemDraft[]>([]);
@@ -747,6 +755,7 @@ export function CreateSaleModal({
         subtotal: subtotal,
         discount: discountValue,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
+        seller_id: sellerId,
         notes: notes.trim() || undefined,
         ...(isTelecom ? {
           proposal_type: proposalType || (servicosProdutos.length > 0 ? 'servicos' : undefined),
@@ -763,6 +772,9 @@ export function CreateSaleModal({
           telecom_status: telecomStatus || undefined,
           scheduled_install_date: scheduledInstallDate
             ? `${scheduledInstallDate}T${scheduledInstallTime || '00:00'}:00`
+            : undefined,
+          scheduled_install_end: scheduledInstallDate && scheduledInstallEndTime
+            ? `${scheduledInstallDate}T${scheduledInstallEndTime}:00`
             : undefined,
           documents_checked: documentsChecked,
           contract_signed: contractSigned,
@@ -1045,6 +1057,14 @@ export function CreateSaleModal({
                         )}
                       </div>
 
+                      {/* An admin often types in a sale for someone else — the
+                          commission has to follow the seller, not the typist. */}
+                      <SellerSelect
+                        className="space-y-2"
+                        value={sellerId}
+                        onChange={setSellerId}
+                      />
+
                       {/* Data de Ativação - quando estado é Concluída (apenas telecom) */}
                       {isTelecom && saleStatus === 'delivered' && (
                         <div className="col-span-1 sm:col-span-2 space-y-2">
@@ -1076,9 +1096,11 @@ export function CreateSaleModal({
 
                       {isTelecom && (
                         <>
-                          <div className="space-y-2">
+                          {/* Full row: the date plus its "das X às Y" window
+                              never fits half the grid. */}
+                          <div className="space-y-2 col-span-1 sm:col-span-2">
                             <Label>Data de Instalação</Label>
-                            <Popover>
+                            <Popover open={installDatePopoverOpen} onOpenChange={setInstallDatePopoverOpen}>
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
@@ -1097,7 +1119,10 @@ export function CreateSaleModal({
                                 <Calendar
                                   mode="single"
                                   selected={scheduledInstallDate ? new Date(scheduledInstallDate) : undefined}
-                                  onSelect={(date) => setScheduledInstallDate(date ? format(date, 'yyyy-MM-dd') : '')}
+                                  onSelect={(date) => {
+                                    setScheduledInstallDate(date ? format(date, 'yyyy-MM-dd') : '');
+                                    setInstallDatePopoverOpen(false);
+                                  }}
                                   locale={pt}
                                 />
                                 {scheduledInstallDate && (
@@ -1107,7 +1132,7 @@ export function CreateSaleModal({
                                       variant="ghost"
                                       size="sm"
                                       className="w-full text-xs"
-                                      onClick={() => { setScheduledInstallDate(''); setScheduledInstallTime(''); }}
+                                      onClick={() => { setScheduledInstallDate(''); setScheduledInstallTime(''); setScheduledInstallEndTime(''); setInstallDatePopoverOpen(false); }}
                                     >
                                       Limpar data
                                     </Button>
@@ -1115,18 +1140,30 @@ export function CreateSaleModal({
                                 )}
                               </PopoverContent>
                             </Popover>
+                            {/* Installs are booked as a window ("das 9h às
+                                12h"), so both ends are asked for. */}
                             {scheduledInstallDate && (
-                              <Input
-                                type="time"
-                                value={scheduledInstallTime}
-                                onChange={(e) => setScheduledInstallTime(e.target.value)}
-                                className="h-9"
-                              />
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-muted-foreground shrink-0">das</span>
+                                <Input
+                                  type="time"
+                                  value={scheduledInstallTime}
+                                  onChange={(e) => setScheduledInstallTime(e.target.value)}
+                                  className="h-9 w-auto"
+                                />
+                                <span className="text-xs text-muted-foreground shrink-0">às</span>
+                                <Input
+                                  type="time"
+                                  value={scheduledInstallEndTime}
+                                  onChange={(e) => setScheduledInstallEndTime(e.target.value)}
+                                  className="h-9 w-auto"
+                                />
+                              </div>
                             )}
                             <p className="text-[11px] text-muted-foreground">Opcional — pode ficar por marcar.</p>
                           </div>
 
-                          <div className="space-y-2 flex flex-wrap items-end gap-x-6 gap-y-2 pb-2">
+                          <div className="col-span-1 sm:col-span-2 flex flex-wrap items-center gap-x-8 gap-y-2 pt-1">
                             <DocumentsCheckboxField
                               id="create-sale-documents"
                               checked={documentsChecked}
@@ -1320,6 +1357,7 @@ export function CreateSaleModal({
                         servicosProdutos={servicosProdutos}
                         servicosDetails={servicosDetails}
                         isNewFormat={isNewFormat}
+                        sellerUserId={sellerId ?? user?.id ?? null}
                         catalog={catalog}
                         operators={catalogOperators}
                         configs={servicosConfigs}
@@ -1626,10 +1664,11 @@ export function CreateSaleModal({
                   {saleFields?.edp_proposal_number?.visible && saleOperatorNames.length > 0 && (<Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {/* Never required: a sale can be closed before the
+                            operator has issued a proposal number. */}
                         {saleOperatorNames.length === 1
                           ? `Número Proposta ${saleOperatorNames[0]}`
                           : 'Número de Proposta'}
-                        {saleFields.edp_proposal_number.required ? ' *' : ''}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
@@ -1639,7 +1678,6 @@ export function CreateSaleModal({
                           : 'Nº da proposta na operadora'}
                         value={edpProposalNumber}
                         onChange={(e) => setEdpProposalNumber(e.target.value)}
-                        required={saleFields.edp_proposal_number.required}
                       />
                     </CardContent>
                   </Card>)}

@@ -18,18 +18,20 @@ export function EditCommitmentModal({ open, onOpenChange, existing }: EditCommit
   const { user, organization } = useAuth();
   const { saveCommitment } = useCommitments(user?.id);
   const { modules } = useModules();
-  const showEnergy = organization?.niche === 'telecom' && modules.energy;
+  const isTelecom = organization?.niche === 'telecom';
+  const showEnergy = isTelecom && modules.energy;
 
   const [totals, setTotals] = useState<CommitmentTotals>({
     total_nifs: 0,
     total_energia_mwh: 0,
     total_solar_kwp: 0,
     total_comissao: 0,
+    total_instalacoes: 0,
   });
 
   useEffect(() => {
     if (open) {
-      setTotals(existing || { total_nifs: 0, total_energia_mwh: 0, total_solar_kwp: 0, total_comissao: 0 });
+      setTotals(existing || { total_nifs: 0, total_energia_mwh: 0, total_solar_kwp: 0, total_comissao: 0, total_instalacoes: 0 });
     }
   }, [open, existing]);
 
@@ -57,6 +59,18 @@ export function EditCommitmentModal({ open, onOpenChange, existing }: EditCommit
               className="h-9 text-sm"
             />
           </div>
+          {isTelecom && (
+            <div>
+              <Label className="text-xs">Nº de Instalações</Label>
+              <Input
+                type="number"
+                value={totals.total_instalacoes || ""}
+                onChange={(e) => setTotals({ ...totals, total_instalacoes: Number(e.target.value) || 0 })}
+                placeholder="Ex: 10"
+                className="h-9 text-sm"
+              />
+            </div>
+          )}
           {showEnergy && (
             <>
               <div>

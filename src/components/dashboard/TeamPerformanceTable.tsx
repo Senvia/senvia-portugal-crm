@@ -4,6 +4,7 @@ import { endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useProposals } from "@/hooks/useProposals";
 import { useTeamMembers, type TeamMember } from "@/hooks/useTeam";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
@@ -48,6 +49,7 @@ interface MemberPerformance {
 
 export function TeamPerformanceTable() {
   const { user, profile, organization } = useAuth();
+  const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { data: pipelineStages = [] } = usePipelineStages();
   const { data: scopedProposals = [], isLoading: proposalsLoading } = useProposals();
@@ -163,7 +165,7 @@ export function TeamPerformanceTable() {
       if (!orgId || memberIds.length === 0) return [];
       const { data, error } = await supabase
         .from("sales")
-        .select("created_by, status, comissao")
+        .select("id, created_by, status, comissao")
         .eq("organization_id", orgId)
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd)
@@ -173,6 +175,44 @@ export function TeamPerformanceTable() {
     },
     enabled: !!orgId && memberIds.length > 0,
   });
+
+  // sales.comissao is what the OPERATOR pays (gross) once a sale carries
+  // frozen per-seller splits — showing it here overstates what a person
+  // actually earned by whatever the org kept. Prefer the split amount for
+  // that specific person; fall back to sale.comissao only for sales with no
+  // split rows at all (e.g. orgs not on the catalog commission model).
+  const deliveredSaleIds = useMemo(
+    () =>
+      (salesData || [])
+        .filter((sale) => sale.status === "delivered" || sale.status === "completed")
+        .map((sale) => sale.id),
+    [salesData],
+  );
+  const { data: splitsData } = useQuery({
+    queryKey: ["team-perf-commission-splits", orgId, deliveredSaleIds],
+    queryFn: async () => {
+      if (deliveredSaleIds.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from("sale_commission_splits")
+        .select("sale_id, user_id, amount")
+        .in("sale_id", deliveredSaleIds);
+      if (error) throw error;
+      return (data || []) as { sale_id: string; user_id: string; amount: number }[];
+    },
+    enabled: deliveredSaleIds.length > 0,
+  });
+  const splitAmountByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const split of splitsData || []) {
+      map.set(`${split.sale_id}:${split.user_id}`, split.amount || 0);
+    }
+    return map;
+  }, [splitsData]);
+  const hasSplitsForSale = useMemo(() => {
+    const set = new Set<string>();
+    for (const split of splitsData || []) set.add(split.sale_id);
+    return set;
+  }, [splitsData]);
 
   const loading = leadsLoading || proposalsLoading || salesLoading;
 
@@ -187,7 +227,12 @@ export function TeamPerformanceTable() {
         .reduce((sum, proposal) => sum + (proposal.total_value || 0), 0);
       const memberSales = (salesData || []).filter((sale) => sale.created_by === member.user_id);
       const delivered = memberSales.filter((sale) => sale.status === "delivered" || sale.status === "completed");
-      const commission = delivered.reduce((sum, sale) => sum + (sale.comissao || 0), 0);
+      const commission = delivered.reduce((sum, sale) => {
+        const amount = hasSplitsForSale.has(sale.id)
+          ? splitAmountByKey.get(`${sale.id}:${member.user_id}`) || 0
+          : sale.comissao || 0;
+        return sum + amount;
+      }, 0);
       // Conversion is lead-based: how many of the member's leads were won.
       const conversionRate = memberLeads > 0 ? (wonLeads / memberLeads) * 100 : 0;
 
@@ -203,7 +248,7 @@ export function TeamPerformanceTable() {
         conversionRate,
       };
     });
-  }, [filteredMembers, trafficFilteredLeads, proposalsInPeriod, salesData, user?.id, convertedStatusKeys]);
+  }, [filteredMembers, trafficFilteredLeads, proposalsInPeriod, salesData, user?.id, convertedStatusKeys, hasSplitsForSale, splitAmountByKey]);
 
   const totals = useMemo(() => {
     return rows.reduce(
@@ -261,19 +306,27 @@ export function TeamPerformanceTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.userId}>
-                    <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5">{row.leads}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5">{row.proposals}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatCurrency(row.openProposalValue)}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5">{row.salesDelivered}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell text-primary font-medium">{formatCurrency(row.commission)}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5 font-medium">
-                      <span className={getConversionTone(row.conversionRate)}>{row.conversionRate.toFixed(0)}%</span>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {rows.map((row) => {
+                  // A team leader sees his team's leads and proposals, but
+                  // never a colleague's pay — that stays between the person
+                  // and an admin.
+                  const canSeeCommission = isAdmin || row.userId === user?.id;
+                  return (
+                    <TableRow key={row.userId}>
+                      <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5">{row.leads}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5">{row.proposals}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatCurrency(row.openProposalValue)}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5">{row.salesDelivered}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell text-primary font-medium">
+                        {canSeeCommission ? formatCurrency(row.commission) : '—'}
+                      </TableCell>
+                      <TableCell className="text-xs text-right py-1.5 font-medium">
+                        <span className={getConversionTone(row.conversionRate)}>{row.conversionRate.toFixed(0)}%</span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {showTotals && (
                   <TableRow className="bg-muted/20 hover:bg-muted/20">
                     <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
@@ -281,7 +334,12 @@ export function TeamPerformanceTable() {
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.proposals}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatCurrency(totals.openProposalValue)}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.salesDelivered}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell text-primary">{formatCurrency(totals.commission)}</TableCell>
+                    <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell text-primary">
+                      {/* A team-wide total is still someone else's money once
+                          the team has more than one member — only an admin
+                          gets the aggregate. */}
+                      {isAdmin ? formatCurrency(totals.commission) : '—'}
+                    </TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">
                       <span className={getConversionTone(totalConversion)}>{totalConversion.toFixed(0)}%</span>
                     </TableCell>

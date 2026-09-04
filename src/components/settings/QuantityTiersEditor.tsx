@@ -215,7 +215,7 @@ function BonusField({
   onCommit,
 }: {
   tier: QuantityTier;
-  updateTier: (id: string, updates: Partial<QuantityTier>) => void;
+  updateTier: (id: string, updates: Partial<QuantityTier>, commit?: boolean) => void;
   onCommit: () => void;
 }) {
   const bonusType = tier.bonus_type ?? 'fixed';

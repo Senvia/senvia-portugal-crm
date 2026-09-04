@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { addMonths, format, startOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { CalendarClock, CheckCircle2, Wrench, XCircle, CalendarOff, Layers, FileSignature, ChevronRight } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Wrench, XCircle, CalendarOff, Layers, FileSignature, ChevronRight, Building2, Banknote } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useSales } from '@/hooks/useSales';
+import { usePermissions } from '@/hooks/usePermissions';
+import { formatCurrency } from '@/lib/format';
 import { useDashboardPeriod, formatPeriodLabel } from '@/stores/useDashboardPeriod';
 import {
   TELECOM_VIEW_LABELS,
@@ -37,8 +39,9 @@ interface Metric {
 export function TelecomLifecyclePanel() {
   const { data: sales = [], isLoading } = useSales();
   const { from, to } = useDashboardPeriod();
+  const { isAdmin } = usePermissions();
 
-  const { metrics, undated } = useMemo(() => {
+  const { metrics, undated, operatorGross, orgMargin } = useMemo(() => {
     const start = from ? new Date(from) : null;
     const end = to ? new Date(to) : null;
     const reference = start ?? new Date();
@@ -85,7 +88,17 @@ export function TelecomLifecyclePanel() {
       { key: 'total', hint: `Ativos + por instalar + anulados + ${format(nextMonthStart, 'MMMM', { locale: pt })}`, value: count('total'), icon: Layers, tone: 'text-foreground', href: linkTo('total') },
     ];
 
-    return { metrics, undated: semData };
+    // Money on the installed sales of the period. sales.comissao is the
+    // operator's gross; org_commission is what no seller took.
+    let operatorGross = 0;
+    let orgMargin = 0;
+    for (const s of inPeriod) {
+      if (s.telecom_status !== 'ativo') continue;
+      operatorGross += Number(s.comissao || 0);
+      orgMargin += Number(s.org_commission || 0);
+    }
+
+    return { metrics, undated: semData, operatorGross, orgMargin };
   }, [sales, from, to]);
 
   if (isLoading) {
@@ -129,6 +142,27 @@ export function TelecomLifecyclePanel() {
             </Link>
           ))}
         </div>
+
+        {/* The operator's gross is only ever shown here and in Financeiro —
+            never on a sale, where it reads as if it were the seller's pay. */}
+        {isAdmin && operatorGross > 0 && (
+          <div className="grid gap-3 grid-cols-2 rounded-lg border bg-muted/30 p-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                Valor da Organização
+              </p>
+              <p className="mt-1 text-xl font-semibold text-amber-600">{formatCurrency(orgMargin)}</p>
+            </div>
+            <div>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Banknote className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                Operadoras pagam
+              </p>
+              <p className="mt-1 text-xl font-semibold">{formatCurrency(operatorGross)}</p>
+            </div>
+          </div>
+        )}
 
         {undated > 0 && (
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-400">

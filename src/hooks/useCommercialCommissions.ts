@@ -45,6 +45,7 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
   const { organization } = useAuth();
   const { data: members } = useTeamMembers();
   const organizationId = organization?.id;
+  const isTelecom = organization?.niche === 'telecom';
 
   return useQuery<CommercialCommissionsData>({
     queryKey: ['commercial-commissions', organizationId, selectedMonth, members?.length],
@@ -58,9 +59,13 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
 
       // --- Direct commissions (delivered/fulfilled sales with commission) ---
-      const { data: sales, error: salesErr } = await supabase
+      // `as any`: the generated Supabase types in this repo are stale (they
+      // predate telecom_status and half a dozen other live columns), and a
+      // column they don't know poisons the whole query's type — the same trap
+      // that once took the product catalog down.
+      const { data: sales, error: salesErr } = await (supabase as any)
         .from('sales')
-        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status, has_recurring')
+        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status, has_recurring, telecom_status')
         .eq('organization_id', organizationId)
         .in('status', ['delivered', 'fulfilled']);
       if (salesErr) throw salesErr;
@@ -102,6 +107,21 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         const tv = Number(s.total_value) || 0;
         const comissao = Number(s.comissao || 0);
         if (comissao <= 0) continue;
+
+        // Telecom is paid by the OPERATOR, not by the client: the commission
+        // is earned the moment the line is installed, and there is no client
+        // payment to wait for. Tying it to sale_payments (as every other
+        // vertical does) left installed sales showing 0 € forever.
+        if (isTelecom) {
+          if (s.telecom_status !== 'ativo') continue;
+          const ref = s.activation_date || s.sale_date;
+          if (!ref) continue;
+          const d = new Date(ref);
+          if (d >= monthStart && d <= monthEnd) {
+            monthItems.push({ sale: s, amount: comissao, date: ref, monthKey, proportional: false });
+          }
+          continue;
+        }
 
         const salePays = (allPays as any[]).filter(
           (p: any) => p.sale_id === s.id && p.status === 'paid' && p.payment_date,
@@ -309,13 +329,14 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
 export function useTeamCommissionTotal(dateRange?: DateRange) {
   const { organization } = useAuth();
   const orgId = organization?.id;
+  const isTelecom = organization?.niche === 'telecom';
   const fromKey = dateRange?.from ? dateRange.from.toISOString() : 'all';
   const toKey = dateRange?.to ? dateRange.to.toISOString() : 'none';
 
-  return useQuery<{ total: number; count: number }>({
+  return useQuery<{ total: number; count: number; orgTotal: number; grossTotal: number }>({
     queryKey: ['team-commission-total', orgId, fromKey, toKey],
     queryFn: async () => {
-      if (!orgId) return { total: 0, count: 0 };
+      if (!orgId) return { total: 0, count: 0, orgTotal: 0, grossTotal: 0 };
 
       const inRange = (dateStr?: string | null) => {
         if (!dateRange?.from) return true;
@@ -326,9 +347,9 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
         return true;
       };
 
-      const { data: sales } = await supabase
+      const { data: sales } = await (supabase as any)
         .from('sales')
-        .select('id, comissao, total_value, sale_date, activation_date, payment_status')
+        .select('id, comissao, org_commission, total_value, sale_date, activation_date, payment_status, telecom_status')
         .eq('organization_id', orgId)
         .in('status', ['delivered', 'fulfilled']);
 
@@ -347,7 +368,28 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
 
       let total = 0;
       let count = 0;
+      // Telecom only: what the operators pay in gross, and what is left for the
+      // organization once each seller has taken his own rate.
+      let orgTotal = 0;
+      let grossTotal = 0;
       for (const s of candidates) {
+        // Telecom is paid by the OPERATOR: the commission is earned the moment
+        // the line is installed, and there is no client payment to prorate
+        // against. Waiting for one left every installed sale at 0 €.
+        // sales.comissao is the operator's GROSS; org_commission is the slice no
+        // seller took. What the team actually earns is the difference.
+        if (isTelecom) {
+          if (s.telecom_status === 'ativo') {
+            const gross = Number(s.comissao || 0);
+            const org = Number(s.org_commission || 0);
+            grossTotal += gross;
+            orgTotal += org;
+            total += Math.max(gross - org, 0);
+            count += 1;
+          }
+          continue;
+        }
+
         // Commission is earned proportionally to what the client has paid:
         // a sale 80€-paid of 150€ contributes 80/150 of its commission.
         const tv = Number(s.total_value) || 0;
@@ -371,7 +413,7 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
         if (!periodEnd || parseISO(r.created_at) <= periodEnd) total += Number(r.commission_amount || 0);
       }
 
-      return { total, count };
+      return { total, count, orgTotal, grossTotal };
     },
     enabled: !!orgId,
   });

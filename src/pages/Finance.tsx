@@ -11,6 +11,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Percent,
+  Building2,
 } from "lucide-react";
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -88,9 +89,17 @@ export default function Finance() {
   const { data: teamCommission } = useTeamCommissionTotal(dateRange);
   const teamCommissionTotal = teamCommission?.total ?? 0;
   const teamSalesCount = teamCommission?.count ?? 0;
+  // Telecom margin: what the operators paid, minus what the sellers took.
+  const orgMarginTotal = teamCommission?.orgTotal ?? 0;
+  const operatorGrossTotal = teamCommission?.grossTotal ?? 0;
 
   // Personal commission totals ("As Minhas Comissões") — filtered by period (sale date).
-  const myInPeriod = (myCommissions || []).filter((s) => inPeriod(s.sale_date));
+  // Telecom is earned on installation, so the period must be read off the
+  // activation date — the same reference the team card uses, otherwise a sale
+  // sold in one month and installed in the next lands on two different months.
+  const myInPeriod = (myCommissions || []).filter((s) =>
+    inPeriod(isTelecom ? (s.activation_date || s.sale_date) : s.sale_date),
+  );
   const myPendingTotal = myInPeriod.reduce((sum, s) => {
     const isPending = s.status === 'pending' || s.status === 'in_progress';
     return isPending ? sum + (Number(s.comissao) || 0) : sum;
@@ -390,6 +399,25 @@ export default function Finance() {
                     {teamSalesCount > 0
                       ? `${teamSalesCount} venda(s) ${hasFilters ? "no período" : "no total"}`
                       : "Equipa"}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* The operator's gross belongs here and nowhere else: this is the
+                only place the margin the organization keeps makes sense. */}
+            {isAdmin && isTelecom && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Valor da Organização</CardTitle>
+                  <Building2 className="h-4 w-4 text-amber-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-amber-600 md:text-2xl">
+                    {formatCurrency(orgMarginTotal)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Operadoras pagam {formatCurrency(operatorGrossTotal)}
                   </p>
                 </CardContent>
               </Card>

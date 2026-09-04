@@ -26,7 +26,7 @@ import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
-import type { SaleWithDetails, SaleStatus } from "@/types/sales";
+import type { SaleWithDetails, SaleStatus, TelecomStatus } from "@/types/sales";
 import {
   BILLING_PROVIDER_LABELS,
   BILLING_STATUS_COLORS,
@@ -34,6 +34,9 @@ import {
   SALE_STATUS_LABELS,
   SALE_STATUS_COLORS,
   SALE_STATUSES,
+  TELECOM_STATUSES,
+  TELECOM_STATUS_LABELS,
+  TELECOM_STATUS_COLORS,
   SERVICE_STATUS_COLORS,
   SERVICE_STATUS_LABELS,
 } from "@/types/sales";
@@ -55,6 +58,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 import { useModules } from "@/hooks/useModules";
+import { useOperators } from "@/hooks/useOperators";
+import type { ServicosDetails } from "@/types/proposals";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -76,11 +81,14 @@ export default function Sales() {
   });
   const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
+  const { data: operators = [] } = useOperators();
   const { isAdmin } = usePermissions();
 const queryClient = useQueryClient();
 const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
+  const [telecomStatusFilter, setTelecomStatusFilter] = usePersistedState<TelecomStatus | "all">("sales-telecom-status-v1", "all");
   const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('sales-type-v1', 'all');
+  const [operatorFilter, setOperatorFilter] = usePersistedState<string>('sales-operator-v1', 'all');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
   const [recurringFilters, setRecurringFilters] = usePersistedState<RecurringSalesFilterState>(
     "sales-recurring-filters-v1",
@@ -175,8 +183,16 @@ const deleteSale = useMutation({
         }
       }
 
-      const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
+      const matchesStatus = isTelecom
+        ? (telecomStatusFilter === "all" || sale.telecom_status === telecomStatusFilter)
+        : (statusFilter === "all" || sale.status === statusFilter);
       const matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter;
+      // The operator is read off the sale's own frozen lines, not the catalog:
+      // a product can be moved to another operator after the sale was made.
+      const matchesOperator = operatorFilter === 'all' || (() => {
+        const details = (sale.servicos_details ?? {}) as ServicosDetails;
+        return Object.values(details).some((d) => d?.operator_id === operatorFilter);
+      })();
       const matchesRecurring = matchesRecurringSalesFilters(
         {
           hasRecurring: sale.has_recurring,
@@ -197,7 +213,7 @@ const deleteSale = useMutation({
       })();
 
       if (!search.trim()) {
-        return matchesStatus && matchesType && matchesDate && matchesRecurring;
+        return matchesStatus && matchesType && matchesOperator && matchesDate && matchesRecurring;
       }
 
       const matchesSearchTerm = matchesSearch(
@@ -210,9 +226,9 @@ const deleteSale = useMutation({
         sale.notes,
       );
 
-      return matchesSearchTerm && matchesStatus && matchesType && matchesDate && matchesRecurring;
+      return matchesSearchTerm && matchesStatus && matchesType && matchesOperator && matchesDate && matchesRecurring;
     });
-  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether, recurringFilters, telecomView, telecomFrom, telecomTo]);
+  }, [sales, search, statusFilter, telecomStatusFilter, isTelecom, typeFilter, operatorFilter, dateRange, isPerfect2Gether, recurringFilters, telecomView, telecomFrom, telecomTo]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -458,8 +474,12 @@ const deleteSale = useMutation({
             </Button>
           </div>
         )}
-        <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+        <div className="space-y-3">
+        {/* Search gets its own row so it never fights the filter grid for
+            width — that's what was squeezing every label down to "Todos
+            as...". Everything below sits in a grid instead of a single flex
+            row, so each control gets a real column instead of shrinking. */}
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Pesquisar por nome, empresa ou código..."
@@ -468,25 +488,62 @@ const deleteSale = useMutation({
             className="pl-9 bg-card/50 border-border/50"
           />
         </div>
-        <TeamMemberFilter className="w-full sm:w-[180px]" />
-        <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as SaleStatus | "all")}>
-          <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os estados</SelectItem>
-            {SALE_STATUSES.map((status) => (
-              <SelectItem key={status} value={status}>
-                {SALE_STATUS_LABELS[status]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <TeamMemberFilter className="w-full bg-card/50 border-border/50" />
+        {/* Telecom filters by its own lifecycle, not the generic sale status —
+            it is the only state that vertical uses. */}
+        {isTelecom ? (
+          <Select
+            value={telecomStatusFilter}
+            onValueChange={(val) => setTelecomStatusFilter(val as TelecomStatus | "all")}
+          >
+            <SelectTrigger className="w-full bg-card/50 border-border/50">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os estados</SelectItem>
+              {TELECOM_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {TELECOM_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as SaleStatus | "all")}>
+            <SelectTrigger className="w-full bg-card/50 border-border/50">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os estados</SelectItem>
+              {SALE_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {SALE_STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {/* A sale can carry lines from more than one operator, so this keeps
+            any sale with at least one line from the chosen one. */}
+        {isTelecom && operators.length > 0 && (
+          <Select value={operatorFilter} onValueChange={setOperatorFilter}>
+            <SelectTrigger className="w-full bg-card/50 border-border/50">
+              <SelectValue placeholder="Filtrar por operadora" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as operadoras</SelectItem>
+              {operators.map((op) => (
+                <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full" />
         {isTelecom && modules.energy && (
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
-            <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
-              <Zap className="h-4 w-4 mr-2" />
+            <SelectTrigger className="w-full bg-card/50 border-border/50">
+              <Zap className="h-4 w-4 mr-2 shrink-0" />
               <SelectValue placeholder="Todos os tipos" />
             </SelectTrigger>
             <SelectContent>
@@ -497,11 +554,15 @@ const deleteSale = useMutation({
           </Select>
         )}
         </div>
-        <RecurringSalesFilters
-          filters={recurringFilters}
-          products={recurringProducts}
-          onChange={setRecurringFilters}
-        />
+        <div className="space-y-1.5 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Vendas recorrentes</p>
+          <RecurringSalesFilters
+            filters={recurringFilters}
+            products={recurringProducts}
+            onChange={setRecurringFilters}
+          />
+        </div>
+        </div>
       </div>
 
       {/* Sales List */}
@@ -513,7 +574,7 @@ const deleteSale = useMutation({
             <Skeleton className="h-24 w-full" />
           </>
         ) : filteredSales.length === 0 ? (
-          (search || statusFilter !== "all" || telecomView || hasRecurringSalesFilter(recurringFilters)) ? (
+          (search || statusFilter !== "all" || telecomStatusFilter !== "all" || telecomView || hasRecurringSalesFilter(recurringFilters)) ? (
             <EmptyState icon={ShoppingBag} title="Nenhuma venda encontrada" description="Tenta ajustar os filtros de pesquisa." />
           ) : (
             <EmptyState
@@ -538,12 +599,23 @@ const deleteSale = useMutation({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge 
-                        variant="outline" 
-                        className={`${SALE_STATUS_COLORS[sale.status]} text-xs`}
-                      >
-                        {SALE_STATUS_LABELS[sale.status]}
-                      </Badge>
+                      {/* Telecom shows its own lifecycle; the generic status
+                          is kept in sync behind it but never displayed here. */}
+                      {isTelecom && sale.telecom_status ? (
+                        <Badge
+                          variant="outline"
+                          className={`${TELECOM_STATUS_COLORS[sale.telecom_status as TelecomStatus]} text-xs`}
+                        >
+                          {TELECOM_STATUS_LABELS[sale.telecom_status as TelecomStatus]}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={`${SALE_STATUS_COLORS[sale.status]} text-xs`}
+                        >
+                          {isTelecom ? 'Sem estado' : SALE_STATUS_LABELS[sale.status]}
+                        </Badge>
+                      )}
                       {isTelecom && modules.energy && (sale as any).proposal_type && (
                         <Badge 
                           variant="outline" 

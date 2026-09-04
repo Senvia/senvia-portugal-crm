@@ -94,6 +94,46 @@ export function PriceField({
 }
 
 /**
+ * How many SIM cards one unit of this product already includes — e.g. a "2P"
+ * package includes 2, while Alarme or Energia Residencial include 0. Rolled
+ * up with the extra cards sold on the same line (see ExtraCardField) into
+ * the client's total card count on their profile. Left blank, most products
+ * count as 0 cards; a product priced by quantity (escalões) still defaults
+ * to 1 per unit, matching how it always counted before this field existed.
+ */
+export function IncludedCardsField({
+  product,
+  onChange,
+  onCommit,
+}: {
+  product: CatalogProduct;
+  onChange: (updates: Partial<CatalogProduct>) => void;
+  onCommit: (updates: Partial<CatalogProduct>) => void;
+}) {
+  return (
+    <div className="space-y-1.5 max-w-xs">
+      <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">
+        Cartões incluídos
+      </Label>
+      <Input
+        type="number"
+        step="1"
+        min="0"
+        value={product.included_cards ?? ''}
+        onChange={(e) => onChange({ included_cards: parseInt(e.target.value, 10) || 0 })}
+        onBlur={() => onCommit({})}
+        placeholder="1"
+        className="h-9"
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Quantos cartões já vêm incluídos em cada unidade vendida deste produto. Deixe em branco se este produto não representa cartões (ex.: Alarme, Energia).
+        Soma-se aos cartões extra da venda para o total no perfil do cliente.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Flat commission per extra SIM card added on top of the ones the package
  * already includes — e.g. a Vodafone package with 2 included cards pays
  * +10€ for each additional one, ported or brand new. Absent/0 means this
@@ -181,7 +221,10 @@ export function CommissionSection({
         />
       )}
 
-      <ExtraCardField product={product} onChange={onChange} onCommit={onCommit} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <IncludedCardsField product={product} onChange={onChange} onCommit={onCommit} />
+        <ExtraCardField product={product} onChange={onChange} onCommit={onCommit} />
+      </div>
     </div>
   );
 }

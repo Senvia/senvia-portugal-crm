@@ -71,9 +71,16 @@ import { formatCurrency } from "@/lib/format";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
 import { useSaleCommissionSplits } from "@/hooks/useCommissionSplits";
-import { useTeamMembers } from "@/hooks/useTeam";
+import { useProfileNames } from "@/hooks/useTeam";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
-import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
+import {
+  SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES,
+  TELECOM_STATUSES, TELECOM_STATUS_LABELS, TELECOM_STATUS_COLORS, TELECOM_STATUS_HINTS,
+  TELECOM_TO_SALE_STATUS, type TelecomStatus,
+} from "@/types/sales";
+
+/** Radix Select can't hold an empty string as a value. */
+const NO_TELECOM_STATUS = "__none__";
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSalePanel } from "./RecurringSalePanel";
 import { useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
@@ -101,7 +108,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const [invoiceCreditNoteModal, setInvoiceCreditNoteModal] = useState(false);
   const [pendingActivationDate, setPendingActivationDate] = useState("");
 
-  const { organization } = useAuth();
+  const { organization, user } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean; lock_fulfilled_sales?: boolean; prevent_payment_deletion?: boolean }) || {};
@@ -163,11 +170,17 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const [showFulfilledConfirm, setShowFulfilledConfirm] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<SaleStatus | null>(null);
+  // Telecom has its own lifecycle and only that one — picking it writes
+  // sales.status behind the scenes (TELECOM_TO_SALE_STATUS) so invoicing and
+  // finance keep matching on it, same as the create/edit modals do.
+  const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
+  const [pendingTelecomStatus, setPendingTelecomStatus] = useState<TelecomStatus | null>(null);
   const { history: activationHistory, addEntry: addActivationEntry } = useSaleActivationHistory(sale?.id);
 
   useEffect(() => {
     if (sale) {
       setStatus(sale.status);
+      setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
       setNotes(sale.notes || "");
     }
   }, [sale]);
@@ -176,9 +189,20 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   // the hook order never changes between renders.
   const { data: commissionSplitsData } = useSaleCommissionSplits(sale?.id);
   const commissionSplits = commissionSplitsData ?? [];
-  const { data: splitMembers } = useTeamMembers();
-  const splitBeneficiaryName = (userId: string) =>
-    (splitMembers ?? []).find((m) => m.user_id === userId)?.full_name || 'Desconhecido';
+  // A salesperson sees only what HE earns on this sale; what the colleagues
+  // and the company make is not his to read. Admins see the whole breakdown.
+  const visibleSplits = isAdmin
+    ? commissionSplits
+    : commissionSplits.filter((s) => s.user_id === user?.id);
+  const myCommissionTotal = visibleSplits.reduce((sum, s) => sum + (s.amount || 0), 0);
+  // Resolved straight from profiles — not from the active team roster, which
+  // would blank out whoever made this sale if they were later deactivated.
+  const { data: beneficiaryNames } = useProfileNames([
+    sale?.seller_id,
+    sale?.created_by,
+    ...commissionSplits.map((s) => s.user_id),
+  ]);
+  const splitBeneficiaryName = (userId: string) => beneficiaryNames?.[userId] || 'Desconhecido';
 
   if (!sale) return null;
 
@@ -210,7 +234,12 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const confirmDelivered = () => {
     setStatus('delivered');
-    updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered', activation_date: pendingActivationDate || null } });
+    if (pendingTelecomStatus) setTelecomStatus(pendingTelecomStatus);
+    updateSale.mutate({ saleId: sale.id, updates: {
+      status: 'delivered',
+      activation_date: pendingActivationDate || null,
+      ...(pendingTelecomStatus ? { telecom_status: pendingTelecomStatus } : {}),
+    } });
     if (pendingActivationDate) {
       addActivationEntry.mutate({ activationDate: pendingActivationDate, notes: 'Concluída' });
     }
@@ -220,12 +249,40 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const confirmFulfilled = () => {
     const newStatus = pendingStatus || 'fulfilled';
     setStatus(newStatus as SaleStatus);
-    updateSale.mutate({ saleId: sale.id, updates: { status: newStatus as SaleStatus, activation_date: pendingActivationDate || null } });
+    if (pendingTelecomStatus) setTelecomStatus(pendingTelecomStatus);
+    updateSale.mutate({ saleId: sale.id, updates: {
+      status: newStatus as SaleStatus,
+      activation_date: pendingActivationDate || null,
+      ...(pendingTelecomStatus ? { telecom_status: pendingTelecomStatus } : {}),
+    } });
     if (pendingActivationDate) {
       const label = newStatus === 'in_progress' ? 'Em Progresso' : 'Entregue';
       addActivationEntry.mutate({ activationDate: pendingActivationDate, notes: label });
     }
     setShowFulfilledConfirm(false);
+  };
+
+  /**
+   * The telecom lifecycle IS the sale state here. Writes telecom_status and,
+   * behind it, the generic sales.status the rest of the app (invoicing,
+   * finance, filters) still matches on. Reuses the same activation-date
+   * confirmations the generic flow already had.
+   */
+  const handleTelecomStatusChange = (next: TelecomStatus) => {
+    const derived = TELECOM_TO_SALE_STATUS[next];
+
+    if (derived === 'delivered' || derived === 'fulfilled' || derived === 'in_progress') {
+      setPendingTelecomStatus(next);
+      setPendingStatus(derived);
+      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+      if (derived === 'delivered') setShowDeliveredConfirm(true);
+      else setShowFulfilledConfirm(true);
+      return;
+    }
+
+    setTelecomStatus(next);
+    setStatus(derived);
+    updateSale.mutate({ saleId: sale.id, updates: { status: derived, telecom_status: next } });
   };
 
   const handleNotesBlur = () => {
@@ -290,7 +347,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     displayComissao != null ||
     proposalCpesHaveEnergyValues
   );
-  const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; commission_type?: string; comissao?: number; name?: string }> | null;
+  const saleServicosDetails = sale?.servicos_details ?? null;
   const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
     sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
   );
@@ -348,21 +405,60 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           </p>
                         </div>
                         <div>
+                          {/* Who is paid for this sale — not necessarily who typed it in. */}
+                          <p className="text-xs text-muted-foreground">Vendedor</p>
+                          <p className="text-sm font-medium">
+                            {sale.seller_id || sale.created_by
+                              ? splitBeneficiaryName(sale.seller_id || sale.created_by!)
+                              : '—'}
+                          </p>
+                        </div>
+                        <div>
                           <p className="text-xs text-muted-foreground">Estado</p>
-                          <Select value={status} onValueChange={handleStatusChange} disabled={isLocked}>
-                            <SelectTrigger className={cn('w-full h-8 text-xs border mt-0.5', SALE_STATUS_COLORS[status])}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {SALE_STATUSES.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
-                                    {SALE_STATUS_LABELS[s]}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {isTelecom ? (
+                            <Select
+                              value={telecomStatus || NO_TELECOM_STATUS}
+                              onValueChange={(v) => v !== NO_TELECOM_STATUS && handleTelecomStatusChange(v as TelecomStatus)}
+                              disabled={isLocked}
+                            >
+                              <SelectTrigger className={cn(
+                                'w-full h-8 text-xs border mt-0.5',
+                                telecomStatus && TELECOM_STATUS_COLORS[telecomStatus],
+                              )}>
+                                <SelectValue placeholder="Sem estado" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NO_TELECOM_STATUS} disabled>Sem estado</SelectItem>
+                                {TELECOM_STATUSES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    <span className="flex flex-col items-start">
+                                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', TELECOM_STATUS_COLORS[s])}>
+                                        {TELECOM_STATUS_LABELS[s]}
+                                      </span>
+                                      {TELECOM_STATUS_HINTS[s] && (
+                                        <span className="mt-0.5 text-[11px] text-muted-foreground">{TELECOM_STATUS_HINTS[s]}</span>
+                                      )}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Select value={status} onValueChange={handleStatusChange} disabled={isLocked}>
+                              <SelectTrigger className={cn('w-full h-8 text-xs border mt-0.5', SALE_STATUS_COLORS[status])}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {SALE_STATUSES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
+                                      {SALE_STATUS_LABELS[s]}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </div>
                         {saleFields?.edp_proposal_number?.visible && (sale as any).edp_proposal_number && (
                           <div>
@@ -569,12 +665,20 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                             <span className="text-sm font-medium">{formatCurrency(detail.price)}</span>
                                           )}
                                         </div>
-                                        {detail?.comissao != null && detail.comissao > 0 && (
-                                          <p className="text-xs text-muted-foreground">
-                                            Comissão: <span className="text-green-500 font-medium">{formatCurrency(detail.comissao)}</span>
-                                            {detail.commission_type !== 'fixed' && detail.commission_pct != null && ` (${detail.commission_pct}%)`}
-                                          </p>
+                                        {/* The operator frozen onto the sale, not the
+                                            catalog's current one — a product can be moved
+                                            between operators after the sale was made. */}
+                                        {detail?.operator_name && (
+                                          <Badge variant="outline" className="text-[11px] font-normal">
+                                            {detail.operator_name}
+                                          </Badge>
                                         )}
+                                        {/* No commission figure here on purpose. What used to sit
+                                            on this line was servicos_details[...].comissao — a value
+                                            frozen into the sale's JSON when it was created, which no
+                                            recalculation ever revisits. It drifted from the real,
+                                            server-frozen numbers shown just below and read as a
+                                            contradiction. Those below are the truth. */}
                                       </div>
                                     );
                                   })}
@@ -602,14 +706,24 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                               <p className="text-sm font-medium">{sale.kwp.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} kWp</p>
                             </div>
                           )}
-                          {sale.comissao && (
+                          {(myCommissionTotal > 0 || (isAdmin && !!sale.comissao)) && (
                             <div className="col-span-2">
+                              {/* The headline number is what people actually earn on this
+                                  sale — never sales.comissao, which is the operator's gross
+                                  and read as if it were the seller's pay. */}
                               <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
-                              {commissionSplits.length > 0 && (
+                              <p className="text-sm font-medium text-green-500">
+                                {formatCurrency(myCommissionTotal)}
+                              </p>
+                              {/* The operator's gross and the org's margin belong to their own
+                                  cards in Financeiro and no Dashboard — not here, where they
+                                  read as if they were the seller's pay. */}
+                              {visibleSplits.length > 0 && (
                                 <div className="mt-2 space-y-1 border-t pt-2">
-                                  <p className="text-xs text-muted-foreground">Repartição</p>
-                                  {commissionSplits.map((split) => (
+                                  <p className="text-xs text-muted-foreground">
+                                    {isAdmin ? 'Repartição' : 'Detalhe'}
+                                  </p>
+                                  {visibleSplits.map((split) => (
                                     <div key={split.id} className="flex items-center justify-between gap-2">
                                       <span className="text-xs">
                                         {splitBeneficiaryName(split.user_id)}
@@ -625,6 +739,17 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                       </span>
                                     </div>
                                   ))}
+                                </div>
+                              )}
+                              {/* What the sale leaves for the company once the seller
+                                  took his own cut — admin-only, so it never reads as
+                                  part of anyone's personal pay. */}
+                              {isAdmin && !!sale.org_commission && (
+                                <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                                  <span className="text-xs text-muted-foreground">Comissão da organização</span>
+                                  <span className="text-xs font-medium text-amber-600">
+                                    {formatCurrency(sale.org_commission)}
+                                  </span>
                                 </div>
                               )}
                             </div>

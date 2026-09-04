@@ -44,6 +44,7 @@ export default function Dashboard() {
     isLoading,
     niche,
   } = useDashboardWidgets();
+  const isWidgetVisible = (type: string) => visibleWidgets.some((w) => w.widget_type === type);
   const { filterKey, setFilter } = usePaidTrafficFilter();
 
   const greeting = profile?.full_name 
@@ -98,28 +99,30 @@ export default function Dashboard() {
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Atividade Comercial</h2>
               <div className="space-y-4">
-                <CommitmentPanel />
-                <TelecomLifecyclePanel />
-                <SalesPerformancePanel />
-                <MetricsPanel />
-                <ActivationsPanel />
+                {isWidgetVisible('commitment_panel') && <CommitmentPanel />}
+                {isWidgetVisible('telecom_lifecycle_panel') && <TelecomLifecyclePanel />}
+                {isWidgetVisible('sales_performance_panel') && <SalesPerformancePanel />}
+                {isWidgetVisible('metrics_panel') && <MetricsPanel />}
+                {isWidgetVisible('activations_panel') && <ActivationsPanel />}
               </div>
             </div>
           )}
 
-          {(isTelecom && clientsModuleEnabled || calendarModuleEnabled || modules.inbox) && (
+          {(isTelecom && clientsModuleEnabled && isWidgetVisible('fidelization_alerts_widget')
+            || calendarModuleEnabled && isWidgetVisible('calendar_alerts_widget')
+            || modules.inbox && isWidgetVisible('tasks_widget')) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {isTelecom && clientsModuleEnabled && (
+              {isTelecom && clientsModuleEnabled && isWidgetVisible('fidelization_alerts_widget') && (
                 <FidelizationAlertsWidget />
               )}
-              {calendarModuleEnabled && (
+              {calendarModuleEnabled && isWidgetVisible('calendar_alerts_widget') && (
                 <CalendarAlertsWidget />
               )}
-              {modules.inbox && <TasksWidget />}
+              {modules.inbox && isWidgetVisible('tasks_widget') && <TasksWidget />}
             </div>
           )}
 
-          {commissionsEnabled && (
+          {commissionsEnabled && isWidgetVisible('commissions_widget') && (
             <CommissionsWidget />
           )}
 

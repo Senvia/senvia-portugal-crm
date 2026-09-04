@@ -28,6 +28,7 @@ interface RowData {
   userId: string;
   name: string;
   nifs: number;
+  instalacoes: number;
   energia: number;
   solar: number;
   comissao: number;
@@ -45,7 +46,8 @@ export function CommitmentPanel() {
   const [editOpen, setEditOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const showEnergy = organization?.niche === 'telecom' && modules.energy;
+  const isTelecom = organization?.niche === 'telecom';
+  const showEnergy = isTelecom && modules.energy;
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
   const buildRows = (): RowData[] => {
@@ -56,6 +58,7 @@ export function CommitmentPanel() {
           userId: m.user_id,
           name: m.full_name + (m.user_id === user?.id ? " (eu)" : ""),
           nifs: Number(mc?.total_nifs || 0),
+          instalacoes: Number(mc?.total_instalacoes || 0),
           energia: Number(mc?.total_energia_mwh || 0),
           solar: Number(mc?.total_solar_kwp || 0),
           comissao: Number(mc?.total_comissao || 0),
@@ -67,6 +70,7 @@ export function CommitmentPanel() {
           userId: user.id,
           name: (profile?.full_name || "Eu") + " (eu)",
           nifs: Number(commitment.total_nifs || 0),
+          instalacoes: Number(commitment.total_instalacoes || 0),
           energia: Number(commitment.total_energia_mwh || 0),
           solar: Number(commitment.total_solar_kwp || 0),
           comissao: Number(commitment.total_comissao || 0),
@@ -79,6 +83,7 @@ export function CommitmentPanel() {
       userId: user?.id || "",
       name: profile?.full_name || "Eu",
       nifs: Number(commitment?.total_nifs || 0),
+      instalacoes: Number(commitment?.total_instalacoes || 0),
       energia: Number(commitment?.total_energia_mwh || 0),
       solar: Number(commitment?.total_solar_kwp || 0),
       comissao: Number(commitment?.total_comissao || 0),
@@ -91,8 +96,14 @@ export function CommitmentPanel() {
   const loading = isLoading || allLoading;
 
   const totals = rows.reduce(
-    (acc, r) => ({ nifs: acc.nifs + r.nifs, energia: acc.energia + r.energia, solar: acc.solar + r.solar, comissao: acc.comissao + r.comissao }),
-    { nifs: 0, energia: 0, solar: 0, comissao: 0 }
+    (acc, r) => ({
+      nifs: acc.nifs + r.nifs,
+      instalacoes: acc.instalacoes + r.instalacoes,
+      energia: acc.energia + r.energia,
+      solar: acc.solar + r.solar,
+      comissao: acc.comissao + r.comissao,
+    }),
+    { nifs: 0, instalacoes: 0, energia: 0, solar: 0, comissao: 0 }
   );
 
   return (
@@ -133,6 +144,7 @@ export function CommitmentPanel() {
                 <TableRow>
                   <TableHead className="text-xs">Colaborador</TableHead>
                   <TableHead className="text-xs text-right">NIFs</TableHead>
+                  {isTelecom && <TableHead className="text-xs text-right">Instalações</TableHead>}
                   {showEnergy && <TableHead className="text-xs text-right">Energia (MWh)</TableHead>}
                   {showEnergy && <TableHead className="text-xs text-right hidden sm:table-cell">Solar (kWp)</TableHead>}
                   <TableHead className="text-xs text-right">Comissão</TableHead>
@@ -143,6 +155,7 @@ export function CommitmentPanel() {
                   <TableRow key={row.userId}>
                     <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
                     <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
+                    {isTelecom && <TableCell className="text-xs text-right py-1.5">{row.instalacoes}</TableCell>}
                     {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
                     {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
                     <TableCell className="text-xs text-right py-1.5 font-medium text-green-500">{formatCurrency(row.comissao)}</TableCell>
@@ -152,6 +165,7 @@ export function CommitmentPanel() {
                   <TableRow className="bg-muted/20 hover:bg-muted/20">
                     <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.nifs}</TableCell>
+                    {isTelecom && <TableCell className="text-xs text-right font-semibold py-1.5">{totals.instalacoes}</TableCell>}
                     {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(totals.energia)}</TableCell>}
                     {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(totals.solar)}</TableCell>}
                     <TableCell className="text-xs text-right font-semibold py-1.5 text-green-500">{formatCurrency(totals.comissao)}</TableCell>
@@ -168,6 +182,7 @@ export function CommitmentPanel() {
         onOpenChange={setEditOpen}
         existing={commitment ? {
           total_nifs: Number(commitment.total_nifs),
+          total_instalacoes: Number(commitment.total_instalacoes),
           total_energia_mwh: Number(commitment.total_energia_mwh),
           total_solar_kwp: Number(commitment.total_solar_kwp),
           total_comissao: Number(commitment.total_comissao),

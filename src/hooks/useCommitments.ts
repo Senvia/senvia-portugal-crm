@@ -9,6 +9,8 @@ export interface CommitmentTotals {
   total_energia_mwh: number;
   total_solar_kwp: number;
   total_comissao: number;
+  // Monthly installation target — telecom only.
+  total_instalacoes: number;
 }
 
 export interface Commitment extends CommitmentTotals {
@@ -81,6 +83,7 @@ export function useCommitments(targetUserId?: string | null, referenceDate?: Dat
             total_energia_mwh: totals.total_energia_mwh,
             total_solar_kwp: totals.total_solar_kwp,
             total_comissao: totals.total_comissao,
+            total_instalacoes: totals.total_instalacoes,
           },
           { onConflict: "organization_id,user_id,month" }
         );

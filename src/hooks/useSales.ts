@@ -123,10 +123,12 @@ export function useSales() {
       
       // Filter by user IDs (admin/leader/single user)
       if (effectiveUserIds) {
-        return enrichedResult.filter(sale =>
-          (sale.created_by && effectiveUserIds.includes(sale.created_by)) || 
-          (sale.lead?.assigned_to && effectiveUserIds.includes(sale.lead.assigned_to))
-        );
+        return enrichedResult.filter(sale => {
+          // A reassigned sale belongs to the seller, not to whoever typed it.
+          const owner = sale.seller_id || sale.created_by;
+          return (owner && effectiveUserIds.includes(owner)) ||
+            (sale.lead?.assigned_to && effectiveUserIds.includes(sale.lead.assigned_to));
+        });
       }
       
       return enrichedResult;
@@ -265,6 +267,7 @@ export function useCreateSale() {
       due_date?: string;
       invoice_reference?: string;
       sale_date?: string;
+      seller_id?: string | null;
       notes?: string;
       // Campos específicos de proposta
       proposal_type?: ProposalType;
@@ -293,6 +296,7 @@ export function useCreateSale() {
       // `updates` straight into .update(), so it was never affected).
       telecom_status?: TelecomStatus;
       scheduled_install_date?: string;
+      scheduled_install_end?: string;
       documents_checked?: boolean;
       contract_signed?: boolean;
     }) => {
@@ -315,6 +319,9 @@ export function useCreateSale() {
           sale_date: data.sale_date || new Date().toISOString().split('T')[0],
           notes: data.notes || null,
           created_by: user?.id || null,
+          // Who the commission is paid to. NULL means the creator, so a sale
+          // entered by the salesperson himself needs nothing set.
+          seller_id: data.seller_id ?? null,
           status: data.status || "pending",
           // Campos específicos de proposta
           proposal_type: data.proposal_type || null,
@@ -338,6 +345,7 @@ export function useCreateSale() {
           activation_date: data.activation_date || null,
           telecom_status: data.telecom_status || null,
           scheduled_install_date: data.scheduled_install_date || null,
+          scheduled_install_end: data.scheduled_install_end || null,
           documents_checked: data.documents_checked ?? false,
           contract_signed: data.contract_signed ?? false,
         })
@@ -420,6 +428,7 @@ export function useUpdateSale() {
         subtotal?: number;
         client_id?: string | null;
         sale_date?: string;
+        seller_id?: string | null;
         proposal_type?: ProposalType | null;
         consumo_anual?: number | null;
         margem?: number | null;
@@ -442,6 +451,7 @@ export function useUpdateSale() {
         // Telecom-only lifecycle
         telecom_status?: TelecomStatus | null;
         scheduled_install_date?: string | null;
+        scheduled_install_end?: string | null;
         documents_checked?: boolean | null;
         contract_signed?: boolean | null;
       }

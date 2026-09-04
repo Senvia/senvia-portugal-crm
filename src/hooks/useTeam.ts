@@ -37,6 +37,31 @@ export interface PendingInvite {
   status: string;
 }
 
+/**
+ * Names by profile id, for attributing something (a sale, a commission) to
+ * whoever it belongs to. useTeamMembers only lists currently ACTIVE members —
+ * a sale made by someone since deactivated or banned would show "Desconhecido"
+ * forever, which reads as data loss on an old record that is still correct.
+ */
+export function useProfileNames(ids: (string | null | undefined)[]) {
+  const { organization } = useAuth();
+  const uniqueIds = [...new Set(ids.filter((id): id is string => !!id))].sort();
+
+  return useQuery({
+    queryKey: ['profile-names', organization?.id, uniqueIds],
+    queryFn: async (): Promise<Record<string, string>> => {
+      if (uniqueIds.length === 0) return {};
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', uniqueIds);
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name || 'Desconhecido']));
+    },
+    enabled: !!organization?.id && uniqueIds.length > 0,
+  });
+}
+
 export function useTeamMembers() {
   const { organization } = useAuth();
 
