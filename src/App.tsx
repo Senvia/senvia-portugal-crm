@@ -68,7 +68,6 @@ const TutorialMakeSenvia = lazy(() => import("./pages/TutorialMakeSenvia"));
 const MetaOAuthDone = lazy(() => import("./pages/MetaOAuthDone"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SystemAdminDashboard = lazy(() => import("./pages/system-admin/Dashboard"));
-const SystemAdminOrganizations = lazy(() => import("./pages/system-admin/Organizations"));
 const SystemAdminUsers = lazy(() => import("./pages/system-admin/Users"));
 const SystemAdminAnnouncements = lazy(() => import("./pages/system-admin/Announcements"));
 const SystemAdminTrialActivation = lazy(() => import("./pages/system-admin/TrialActivation"));
@@ -177,11 +176,6 @@ const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future
                 <Route path="/system-admin" element={
                   <SuperAdminRoute>
                     <SystemAdminDashboard />
-                  </SuperAdminRoute>
-                } />
-                <Route path="/system-admin/organizations" element={
-                  <SuperAdminRoute>
-                    <SystemAdminOrganizations />
                   </SuperAdminRoute>
                 } />
                 <Route path="/system-admin/users" element={

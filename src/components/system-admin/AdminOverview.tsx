@@ -37,7 +37,9 @@ function capMonth(d: Date): string {
 }
 
 export function AdminOverview({ organizations, stripeStats, loading }: AdminOverviewProps) {
-  const now = new Date();
+  // A fresh Date() on every render invalidated the memo below on every render.
+  // Minute precision is plenty for "days until trial ends".
+  const now = useMemo(() => new Date(), []);
 
   const stripeMap = useMemo(() => {
     const m = new Map<string, OrgStripeData>();

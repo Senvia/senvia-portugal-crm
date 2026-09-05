@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AdminTopBar } from "./AdminTopBar";
 
 // Shared chrome for every System Admin page: one header vocabulary, one
 // container, one back affordance. Keeps the surface consistent (product register:
@@ -37,6 +38,7 @@ export function AdminShell({
 }: AdminShellProps) {
   return (
     <div className="min-h-dvh bg-background">
+      <AdminTopBar />
       <div className={cn("mx-auto px-4 py-6 lg:px-8 lg:py-8", MAXW[maxWidth])}>
         <header className="mb-7 flex items-start gap-3 sm:gap-4">
           {back && (

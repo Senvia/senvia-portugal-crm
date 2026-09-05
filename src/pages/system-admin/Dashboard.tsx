@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Activity, Users, Sparkles, MessageCircle } from "lucide-react";
+import { AdminShell } from "@/components/system-admin/AdminShell";
 import { AdminOverview } from "@/components/system-admin/AdminOverview";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
 import type { OrgStripeData, AdminContact } from "@/components/system-admin/OrganizationsTable";
@@ -132,44 +133,39 @@ export default function SystemAdminDashboard() {
   });
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8 lg:py-8">
-        {/* Header */}
-        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Visão geral</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Assinaturas, receita e clientes do Senvia OS.</p>
-          </div>
-          <nav className="flex items-center gap-1">
-            {SECONDARY.map((s) => (
-              <Link
-                key={s.to}
-                to={s.to}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <s.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{s.label}</span>
-              </Link>
-            ))}
-          </nav>
-        </header>
+    <AdminShell
+      title="Visão geral"
+      description="Assinaturas, receita e clientes do Senvia OS."
+      back={false}
+      action={
+        <nav className="flex items-center gap-1">
+          {SECONDARY.map((s) => (
+            <Link
+              key={s.to}
+              to={s.to}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <s.icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{s.label}</span>
+            </Link>
+          ))}
+        </nav>
+      }
+    >
+      {/* Overview: metrics + chart + subscription status */}
+      <AdminOverview organizations={organizations} stripeStats={stripeStats} loading={isLoading} />
 
-        {/* Overview: metrics + chart + subscription status */}
-        <AdminOverview organizations={organizations} stripeStats={stripeStats} loading={isLoading} />
-
-        {/* Clients */}
-        <section className="mt-8 space-y-3">
-          <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
-          <OrganizationsTable
-            organizations={organizations}
-            loading={isLoading}
-            currentOrgId={organization?.id}
-            onAccessOrg={(id) => switchOrganization(id)}
-            stripeData={stripeStats?.org_stats}
-            adminInfo={adminInfo}
-          />
-        </section>
-      </div>
-    </div>
+      {/* Clients */}
+      <section className="mt-8 space-y-3">
+        <OrganizationsTable
+          organizations={organizations}
+          loading={isLoading}
+          currentOrgId={organization?.id}
+          onAccessOrg={(id) => switchOrganization(id)}
+          stripeData={stripeStats?.org_stats}
+          adminInfo={adminInfo}
+        />
+      </section>
+    </AdminShell>
   );
 }

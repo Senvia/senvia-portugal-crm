@@ -5,6 +5,7 @@ import { MobileBottomNav } from "./MobileBottomNav";
 import { MobileMenu } from "./MobileMenu";
 import { TrialBanner } from "./TrialBanner";
 import { PaymentOverdueBanner } from "./PaymentOverdueBanner";
+import { SuperAdminVisitBanner } from "./SuperAdminVisitBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { OttoFAB } from "@/components/otto/OttoFAB";
@@ -69,6 +70,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           className={immersive || hideNav ? undefined : "pb-20"}
           style={immersive || showBanner ? undefined : { paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
+          {!immersive && <SuperAdminVisitBanner />}
           <div className={immersive || hideNav ? undefined : "min-h-[calc(100dvh-8.5rem)]"}>
             {children}
           </div>
@@ -88,6 +90,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
       <main className={cn("transition-[padding] duration-200", sidebarCollapsed ? "pl-16" : "pl-64")}>
         {showTrialBanner && <TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} />}
         {showOverdueBanner && <PaymentOverdueBanner daysUntilBlock={subscriptionStatus!.days_until_block ?? 0} blockAt={subscriptionStatus!.block_at} />}
+        <SuperAdminVisitBanner />
         <div className="min-h-dvh">
           {children}
         </div>
