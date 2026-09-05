@@ -63,6 +63,63 @@ async function resolveSaleId(ctx: any, reference: string): Promise<{ saleId: str
   return { saleId: null };
 }
 
+async function getLatestSaleAssignmentAudit(ctx: any, sale: any): Promise<Record<string, any> | null> {
+  const saleIds = [sale?.id, sale?.code].filter(Boolean).map(String);
+  if (saleIds.length === 0) return null;
+
+  const { data, error } = await ctx.supabaseAdmin
+    .from("otto_action_log")
+    .select("id, tool, args, result, user_id, success, created_at")
+    .eq("organization_id", ctx.orgId)
+    .eq("success", true)
+    .in("tool", ["update_sale_seller", "create_sale"])
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error || !data) return null;
+
+  const related = data.find((entry: any) => {
+    const args = entry.args || {};
+    const result = entry.result || {};
+    const references = [
+      args.sale_id,
+      args.sale_reference,
+      result.sale_id,
+      result.sale_code,
+    ].filter(Boolean).map(String);
+    return references.some((ref) => saleIds.includes(ref));
+  });
+
+  if (!related) return null;
+
+  const result = related.result || {};
+  const args = related.args || {};
+  const userIds = [related.user_id, result.assigned_to_user_id, result.seller_id]
+    .filter(Boolean)
+    .map(String);
+  const profileMap: Record<string, string> = {};
+
+  if (userIds.length > 0) {
+    const { data: profiles } = await ctx.supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", [...new Set(userIds)]);
+    (profiles || []).forEach((profile: any) => {
+      profileMap[profile.id] = profile.full_name || profile.email || profile.id;
+    });
+  }
+
+  return {
+    action: related.tool,
+    changed_at: related.created_at,
+    changed_by_user_id: related.user_id,
+    changed_by_name: related.user_id ? profileMap[related.user_id] || null : null,
+    assigned_to_user_id: result.assigned_to_user_id || result.seller_id || args.assigned_to_user_id || null,
+    assigned_to_name: result.assigned_to_name || (result.assigned_to_user_id ? profileMap[result.assigned_to_user_id] || null : null),
+    audit_log_id: related.id,
+  };
+}
+
 export const readTools: Tool[] = [
   {
     name: "list_team_members",
@@ -457,7 +514,15 @@ export const readTools: Tool[] = [
         (sale as any).seller_name = sale.seller_id ? profileMap[sale.seller_id] || null : null;
         (sale as any).created_by_name = sale.created_by ? profileMap[sale.created_by] || null : null;
       }
-      return { sale, payments: payments || [] };
+      const assignment_audit = await getLatestSaleAssignmentAudit(ctx, sale);
+      return {
+        sale,
+        payments: payments || [],
+        assignment_audit,
+        _instruction: assignment_audit
+          ? "Inclui quem fez a última atribuição quando o utilizador perguntar quem atribuiu/alterou a venda. Usa changed_by_name e changed_at. NÃO inventes autor se assignment_audit vier null."
+          : "Se o utilizador perguntar quem atribuiu/alterou a venda, explica que não há registo de auditoria encontrado para essa alteração. NÃO inventes autor.",
+      };
     },
   },
   {

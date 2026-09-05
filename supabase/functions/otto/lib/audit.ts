@@ -13,12 +13,14 @@ export async function logAction(
     // Strip internal _instruction noise from the stored args/result.
     const cleanArgs = { ...args };
     delete (cleanArgs as any)._attachment_paths;
+    const cleanResult = { ...result };
+    delete (cleanResult as any)._instruction;
     await ctx.supabaseAdmin.from("otto_action_log").insert({
       organization_id: ctx.orgId,
       user_id: ctx.userId,
       tool,
       args: cleanArgs,
-      result: { success: result.success ?? !result.error, ...(result.error ? { error: result.error } : {}) },
+      result: cleanResult,
       success: !result.error,
     });
   } catch (e) {
