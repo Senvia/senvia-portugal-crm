@@ -54,10 +54,6 @@ function fallbackTextFromToolResult(conversationMessages: any[]): string | null 
     return null;
   }
 
-  if (data?._instruction && typeof data._instruction === "string" && !data.error) {
-    return data._instruction;
-  }
-
   if (data?.error) {
     if (Array.isArray(data.candidates) && data.candidates.length > 0) {
       const rows = data.candidates.slice(0, 5).map((item: any) => {
@@ -76,7 +72,15 @@ function fallbackTextFromToolResult(conversationMessages: any[]): string | null 
     const payments = Array.isArray(data.payments) ? data.payments : [];
     const seller = sale.seller_name ? `\n- Comercial: **${sale.seller_name}**` : "";
     const client = sale.client_name ? `\n- Cliente: **${sale.client_name}**` : "";
-    return `Encontrei a venda **${sale.code || sale.id}**:\n\n- Valor: **${sale.total_value}€**\n- Estado: **${sale.status || "sem estado"}**\n- Pagamento: **${sale.payment_status || "sem estado"}**${client}${seller}\n- Pagamentos registados: **${payments.length}**\n\n[link:Ver Vendas|/sales]`;
+    const audit = data.assignment_audit;
+    const assignedBy = audit?.changed_by_name
+      ? `\n- Última atribuição feita por: **${audit.changed_by_name}**${audit.changed_at ? ` em ${new Date(audit.changed_at).toLocaleString("pt-PT")}` : ""}`
+      : "";
+    return `Encontrei a venda **${sale.code || sale.id}**:\n\n- Valor: **${sale.total_value}€**\n- Estado: **${sale.status || "sem estado"}**\n- Pagamento: **${sale.payment_status || "sem estado"}**${client}${seller}${assignedBy}\n- Pagamentos registados: **${payments.length}**\n\n[link:Ver Vendas|/sales]`;
+  }
+
+  if (data?._instruction && typeof data._instruction === "string" && !data.error) {
+    return data._instruction;
   }
 
   if (Array.isArray(data?.results)) {
