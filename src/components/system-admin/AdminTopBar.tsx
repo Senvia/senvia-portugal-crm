@@ -1,6 +1,6 @@
-import { useNavigate } from 'react-router-dom';
-import { Building2, LayoutDashboard, Loader2, Shield } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHomeOrganization } from '@/hooks/useHomeOrganization';
@@ -9,8 +9,12 @@ import { useHomeOrganization } from '@/hooks/useHomeOrganization';
  * The way out of System Admin.
  *
  * These routes live outside AppLayout, so there is no sidebar and no other link
- * back into the CRM. Without this bar the only exit is the browser's back
- * button.
+ * back into the CRM: without this bar the only exit is the browser's back
+ * button. It stays pinned to the top because an exit you have to scroll back up
+ * to find is not an exit.
+ *
+ * One button on purpose. "Go to the CRM" and "back to Senvia" were the same
+ * destination written twice.
  */
 export function AdminTopBar() {
   const navigate = useNavigate();
@@ -19,18 +23,21 @@ export function AdminTopBar() {
   const [switching, setSwitching] = useState(false);
 
   const goHome = async () => {
-    if (!home) return;
+    if (!home) {
+      navigate('/');
+      return;
+    }
     if (isAtHome) {
       navigate('/');
       return;
     }
     setSwitching(true);
-    // switchOrganization reloads the page itself once the JWT is updated.
+    // switchOrganization reloads the page once the JWT carries the new org.
     await switchOrganization(home.organization_id);
   };
 
   return (
-    <div className="border-b bg-card">
+    <div className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2">
           <Shield className="h-4 w-4 shrink-0 text-primary" />
@@ -42,24 +49,16 @@ export function AdminTopBar() {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-            <LayoutDashboard className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Ir para o CRM</span>
-          </Button>
-          {home && (
-            <Button size="sm" onClick={goHome} disabled={switching}>
-              {switching ? (
-                <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
-              ) : (
-                <Building2 className="h-4 w-4 sm:mr-2" />
-              )}
-              <span className="hidden sm:inline">
-                {switching ? 'A mudar...' : `Voltar a ${home.organization_name}`}
-              </span>
-            </Button>
+        <Button size="sm" onClick={goHome} disabled={switching} className="shrink-0">
+          {switching ? (
+            <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
+          ) : (
+            <ArrowLeft className="h-4 w-4 sm:mr-2" />
           )}
-        </div>
+          <span className="hidden sm:inline">
+            {switching ? 'A mudar...' : `Voltar a ${home?.organization_name ?? 'CRM'}`}
+          </span>
+        </Button>
       </div>
     </div>
   );
