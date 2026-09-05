@@ -2,9 +2,11 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHomeOrganization } from "@/hooks/useHomeOrganization";
 import { Activity, Users, Sparkles, MessageCircle } from "lucide-react";
 import { AdminShell } from "@/components/system-admin/AdminShell";
 import { AdminOverview } from "@/components/system-admin/AdminOverview";
+import { HomeOrgCard } from "@/components/system-admin/HomeOrgCard";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
 import type { OrgStripeData, AdminContact } from "@/components/system-admin/OrganizationsTable";
 
@@ -45,6 +47,7 @@ const SECONDARY = [
 
 export default function SystemAdminDashboard() {
   const { switchOrganization, organization } = useAuth();
+  const { home } = useHomeOrganization();
 
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ["super-admin-all-orgs"],
@@ -155,10 +158,20 @@ export default function SystemAdminDashboard() {
       {/* Overview: metrics + chart + subscription status */}
       <AdminOverview organizations={organizations} stripeStats={stripeStats} loading={isLoading} />
 
-      {/* Clients */}
+      {/* Own organization, kept out of the customers list */}
       <section className="mt-8 space-y-3">
+        <h2 className="text-sm font-medium text-foreground/70">A tua organização</h2>
+        <HomeOrgCard
+          memberCount={organizations.find((o) => o.id === home?.organization_id)?.member_count}
+          loading={isLoading}
+        />
+      </section>
+
+      {/* Customers */}
+      <section className="mt-8 space-y-3">
+        <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
         <OrganizationsTable
-          organizations={organizations}
+          organizations={organizations.filter((o) => o.id !== home?.organization_id)}
           loading={isLoading}
           currentOrgId={organization?.id}
           onAccessOrg={(id) => switchOrganization(id)}

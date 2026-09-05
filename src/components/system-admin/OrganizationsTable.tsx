@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { format } from "date-fns";
-import { pt } from "date-fns/locale";
 import { Search, ChevronUp, ChevronDown, ChevronsUpDown, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AdminTableSkeleton } from "@/components/system-admin/AdminShell";
 import { classifyOrg, BUCKET_META, since, until, type OrgBucket } from "@/components/system-admin/orgStatus";
 import { ManageSeatsDialog } from "./ManageSeatsDialog";
+import { OrgDetailSheet } from "./OrgDetailSheet";
 
 interface Organization {
   id: string;
@@ -96,10 +95,13 @@ export function OrganizationsTable({
 }: OrganizationsTableProps) {
   const [query, setQuery] = useState("");
   const [seatsDialog, setSeatsDialog] = useState<{ id: string; name: string; seats: number } | null>(null);
+  // Clicking a row opens the detail panel. Entering another organization is a
+  // deliberate act with consequences, so it lives behind its own button there.
+  const [detailOrg, setDetailOrg] = useState<Organization | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
 
   const stripeMap = useMemo(() => {
     const m = new Map<string, OrgStripeData>();
@@ -211,12 +213,8 @@ export function OrganizationsTable({
                 <TableRow>
                   <SortHead label="Empresa" k="name" sort={sort} onSort={toggleSort} />
                   <TableHead>Estado</TableHead>
-                  <TableHead className="hidden md:table-cell">Responsável</TableHead>
-                  <SortHead label="Última atividade" k="activity" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
-                  <SortHead label="€/mês" k="mrr" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
-                  <TableHead className="hidden lg:table-cell text-right">Extra</TableHead>
-                  <SortHead label="Membros" k="members" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
-                  <SortHead label="Criada" k="created" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" align="right" />
+                  <SortHead label="Última atividade" k="activity" sort={sort} onSort={toggleSort} />
+                  <SortHead label="€/mês" k="mrr" sort={sort} onSort={toggleSort} align="right" />
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
@@ -236,19 +234,21 @@ export function OrganizationsTable({
                   return (
                     <TableRow
                       key={org.id}
-                      onClick={() => onAccessOrg(org.id)}
-                      title={`Aceder a ${org.name}`}
+                      onClick={() => setDetailOrg(org)}
+                      title={`Ver ${org.name}`}
                       className={cn("group cursor-pointer", isCurrent && "bg-primary/5")}
                     >
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="flex items-center gap-1.5 font-medium">
-                            <span className="max-w-[200px] truncate">{org.name}</span>
+                            <span className="max-w-[220px] truncate">{org.name}</span>
                             {isCurrent && (
                               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">atual</span>
                             )}
                           </span>
-                          <span className="text-xs text-muted-foreground">{org.slug}</span>
+                          <span className="max-w-[220px] truncate text-xs text-muted-foreground">
+                            {contact.email || contact.name || org.slug}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -257,65 +257,18 @@ export function OrganizationsTable({
                           <span className="text-[11px] text-muted-foreground">{contextLine(status, org, now)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="flex max-w-[220px] flex-col gap-0.5">
-                          <span className="truncate text-sm font-medium">{contact.name || "—"}</span>
-                          {contact.email && (
-                            <span className="truncate text-[11px] text-muted-foreground" title={contact.email}>{contact.email}</span>
-                          )}
-                          {org.contact_phone && (
-                            <span className="truncate text-[11px] text-emerald-600 dark:text-emerald-400" title={org.contact_phone}>
-                              📱 {org.contact_phone}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
+                      <TableCell>
                         <span className={cn("inline-flex items-center gap-1.5 text-sm", dormant ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
                           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dormant ? "bg-amber-500" : "bg-emerald-500")} />
                           {activityLabel}
                         </span>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">
+                      <TableCell className="text-right">
                         {stripeInfo?.has_stripe_subscription ? (
                           <span className="text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400">€{stripeInfo.stripe_amount}</span>
                         ) : (
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
-                      </TableCell>
-                      <TableCell
-                        className="hidden lg:table-cell text-right"
-                        // A linha inteira navega para a organização; sem isto,
-                        // clicar em "gerir lugares" saltava para lá em vez de
-                        // abrir o diálogo.
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-cyan-500/20"
-                          title="Gerir utilizadores extra"
-                          onClick={() =>
-                            setSeatsDialog({
-                              id: org.id,
-                              name: org.name,
-                              seats: org.extra_seats ?? 0,
-                            })
-                          }
-                        >
-                          {org.extra_seats && org.extra_seats > 0 ? (
-                            <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-cyan-600 dark:text-cyan-400">
-                              +{org.extra_seats} ({org.extra_seats * 5}€)
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">+ lugares</span>
-                          )}
-                        </button>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
-                        {org.member_count}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right text-xs text-muted-foreground">
-                        {org.created_at ? format(new Date(org.created_at), "dd MMM yy", { locale: pt }) : "—"}
                       </TableCell>
                       <TableCell className="text-right">
                         <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
@@ -328,6 +281,18 @@ export function OrganizationsTable({
           </div>
         )}
       </div>
+
+      <OrgDetailSheet
+        org={detailOrg}
+        onOpenChange={(open) => !open && setDetailOrg(null)}
+        contact={detailOrg ? adminInfo[detailOrg.id] : undefined}
+        stripe={detailOrg ? stripeMap.get(detailOrg.id) : undefined}
+        isCurrent={!!detailOrg && currentOrgId === detailOrg.id}
+        onAccess={(id) => onAccessOrg(id)}
+        onManageSeats={(org) =>
+          setSeatsDialog({ id: org.id, name: org.name, seats: org.extra_seats ?? 0 })
+        }
+      />
 
       {seatsDialog && (
         <ManageSeatsDialog
