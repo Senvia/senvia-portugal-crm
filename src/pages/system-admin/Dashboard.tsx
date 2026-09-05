@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +9,7 @@ import { AdminShell } from "@/components/system-admin/AdminShell";
 import { AdminOverview } from "@/components/system-admin/AdminOverview";
 import { HomeOrgCard } from "@/components/system-admin/HomeOrgCard";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
-import type { OrgStripeData, AdminContact } from "@/components/system-admin/OrganizationsTable";
+import type { OrgStripeData, AdminContact, OrgFilter } from "@/components/system-admin/OrganizationsTable";
 
 interface OrgRow {
   id: string;
@@ -48,6 +49,8 @@ const SECONDARY = [
 export default function SystemAdminDashboard() {
   const { switchOrganization, organization } = useAuth();
   const { home } = useHomeOrganization();
+  // The attention strip focuses the list below instead of just reporting.
+  const [orgFilter, setOrgFilter] = useState<OrgFilter>("all");
 
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ["super-admin-all-orgs"],
@@ -156,7 +159,15 @@ export default function SystemAdminDashboard() {
       }
     >
       {/* Overview: metrics + chart + subscription status */}
-      <AdminOverview organizations={organizations} stripeStats={stripeStats} loading={isLoading} />
+      <AdminOverview
+        organizations={organizations}
+        stripeStats={stripeStats}
+        loading={isLoading}
+        onFocus={(f) => {
+          setOrgFilter(f);
+          document.getElementById("admin-clients")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
 
       {/* Own organization, kept out of the customers list */}
       <section className="mt-8 space-y-3">
@@ -168,7 +179,7 @@ export default function SystemAdminDashboard() {
       </section>
 
       {/* Customers */}
-      <section className="mt-8 space-y-3">
+      <section id="admin-clients" className="mt-8 scroll-mt-20 space-y-3">
         <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
         <OrganizationsTable
           organizations={organizations.filter((o) => o.id !== home?.organization_id)}
@@ -177,6 +188,8 @@ export default function SystemAdminDashboard() {
           onAccessOrg={(id) => switchOrganization(id)}
           stripeData={stripeStats?.org_stats}
           adminInfo={adminInfo}
+          filter={orgFilter}
+          onFilterChange={setOrgFilter}
         />
       </section>
     </AdminShell>

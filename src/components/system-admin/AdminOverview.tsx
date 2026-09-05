@@ -1,16 +1,11 @@
 import { useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
-import { Euro, CreditCard, Sparkles, AlertTriangle } from "lucide-react";
+import { Euro, CreditCard, Sparkles, AlertTriangle, TrendingUp, TrendingDown, Clock, CreditCard as CardIcon, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { OrgStripeData } from "@/components/system-admin/OrganizationsTable";
 import { classifyOrg, BUCKET_META, type OrgBucket } from "@/components/system-admin/orgStatus";
-
-// Light-theme token values (recharts SVG attrs don't resolve CSS var()).
-const INK = "hsl(220 9% 46%)";
-const GRID = "hsl(220 13% 91%)";
-const PRIMARY = "hsl(217 91% 60%)";
 
 const ORDER: OrgBucket[] = ["paying", "trial", "overdue", "blocked", "expired", "canceled", "exempt"];
 
@@ -29,6 +24,14 @@ interface AdminOverviewProps {
   organizations: OverviewOrg[];
   stripeStats?: { mrr: number; paying_count: number; total_subscriptions: number; org_stats: OrgStripeData[] } | null;
   loading?: boolean;
+  /** Focus the organizations list on a bucket. Renders the attention strip. */
+  onFocus?: (filter: "trial" | "overdue" | "expired") => void;
+}
+
+function inMonth(date: string | null | undefined, ref: Date): boolean {
+  if (!date) return false;
+  const d = new Date(date);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 }
 
 function capMonth(d: Date): string {
@@ -36,7 +39,7 @@ function capMonth(d: Date): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function AdminOverview({ organizations, stripeStats, loading }: AdminOverviewProps) {
+export function AdminOverview({ organizations, stripeStats, loading, onFocus }: AdminOverviewProps) {
   // A fresh Date() on every render invalidated the memo below on every render.
   // Minute precision is plenty for "days until trial ends".
   const now = useMemo(() => new Date(), []);
@@ -47,7 +50,7 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
     return m;
   }, [stripeStats]);
 
-  const { buckets, trialExpiringSoon, monthly } = useMemo(() => {
+  const { buckets, trialExpiringSoon, monthly, newPayingThisMonth, newPayingLastMonth, newOrgsDelta, mrrAddedThisMonth } = useMemo(() => {
     const counts: Record<OrgBucket, number> = { paying: 0, trial: 0, overdue: 0, blocked: 0, expired: 0, canceled: 0, exempt: 0 };
     let trialExpiringSoon = 0;
 
@@ -74,7 +77,23 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
       monthly.push({ label: capMonth(d), value });
     }
 
-    return { buckets: counts, trialExpiringSoon, monthly };
+    // Movement, so the numbers stop reading as a printed report.
+    const thisMonth = now;
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    let newPayingThisMonth = 0;
+    let newPayingLastMonth = 0;
+    let mrrAddedThisMonth = 0;
+    for (const o of organizations) {
+      if (inMonth(o.first_paid_at, thisMonth)) {
+        newPayingThisMonth++;
+        mrrAddedThisMonth += stripeMap.get(o.id)?.stripe_amount ?? 0;
+      } else if (inMonth(o.first_paid_at, lastMonth)) {
+        newPayingLastMonth++;
+      }
+    }
+    const newOrgsDelta = (monthly[5]?.value ?? 0) - (monthly[4]?.value ?? 0);
+
+    return { buckets: counts, trialExpiringSoon, monthly, newPayingThisMonth, newPayingLastMonth, newOrgsDelta, mrrAddedThisMonth };
   }, [organizations, stripeMap, now]);
 
   const mrr = stripeStats?.mrr ?? 0;
@@ -83,14 +102,61 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
   const payingPct = activeTotal > 0 ? Math.round((buckets.paying / activeTotal) * 100) : 0;
   const barTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.blocked + buckets.expired + buckets.canceled;
 
+  const attention = onFocus
+    ? [
+        trialExpiringSoon > 0 && {
+          key: "trial" as const,
+          icon: Clock,
+          label: `${trialExpiringSoon} ${trialExpiringSoon === 1 ? "trial expira" : "trials expiram"} em ≤3 dias`,
+          tone: "amber",
+        },
+        buckets.overdue + buckets.blocked > 0 && {
+          key: "overdue" as const,
+          icon: CardIcon,
+          label: `${buckets.overdue + buckets.blocked} com pagamento em falha`,
+          tone: "red",
+        },
+        buckets.expired > 0 && {
+          key: "expired" as const,
+          icon: AlertTriangle,
+          label: `${buckets.expired} ${buckets.expired === 1 ? "trial expirado" : "trials expirados"} por converter`,
+          tone: "amber",
+        },
+      ].filter(Boolean as unknown as (v: unknown) => boolean)
+    : [];
+
   return (
     <div className="space-y-6">
+      {/* What needs you today. Absent when nothing does. */}
+      {!loading && attention.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {(attention as { key: "trial" | "overdue" | "expired"; icon: typeof Clock; label: string; tone: string }[]).map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={() => onFocus?.(a.key)}
+              className={cn(
+                "group inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                a.tone === "red"
+                  ? "border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                  : "border-amber-500/30 bg-amber-500/5 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400",
+              )}
+            >
+              <a.icon className="h-3.5 w-3.5 shrink-0" />
+              {a.label}
+              <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           label="MRR"
           value={`€${mrr.toLocaleString("pt-PT")}`}
           subtitle={`≈ €${arr.toLocaleString("pt-PT")} ARR`}
+          delta={mrrAddedThisMonth > 0 ? { value: `+€${mrrAddedThisMonth.toLocaleString("pt-PT")}`, up: true, note: "novos este mês" } : undefined}
           icon={<Euro className="h-4 w-4" />}
           loading={loading}
         />
@@ -98,6 +164,15 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
           label="Clientes a pagar"
           value={buckets.paying}
           subtitle={activeTotal > 0 ? `${payingPct}% das contas ativas` : "sem contas ativas"}
+          delta={
+            newPayingThisMonth > 0 || newPayingLastMonth > 0
+              ? {
+                  value: `${newPayingThisMonth >= newPayingLastMonth ? "+" : ""}${newPayingThisMonth - newPayingLastMonth}`,
+                  up: newPayingThisMonth >= newPayingLastMonth,
+                  note: `${newPayingThisMonth} este mês vs ${newPayingLastMonth}`,
+                }
+              : undefined
+          }
           icon={<CreditCard className="h-4 w-4" />}
           tone="success"
           loading={loading}
@@ -124,7 +199,14 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Novas empresas por mês</CardTitle>
-            <p className="text-xs text-muted-foreground">Últimos 6 meses</p>
+            <p className="text-xs text-muted-foreground">
+              Últimos 6 meses
+              {!loading && newOrgsDelta !== 0 && (
+                <span className={cn("ml-1.5 font-medium", newOrgsDelta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                  {newOrgsDelta > 0 ? "+" : ""}{newOrgsDelta} vs mês anterior
+                </span>
+              )}
+            </p>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -132,16 +214,22 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={monthly} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: INK }} />
-                  <YAxis allowDecimals={false} width={32} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: INK }} />
+                  <CartesianGrid vertical={false} className="stroke-border" strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} className="fill-muted-foreground" />
+                  <YAxis allowDecimals={false} width={32} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} className="fill-muted-foreground" />
                   <Tooltip
-                    cursor={{ fill: "hsl(220 14% 96%)" }}
-                    contentStyle={{ borderRadius: 10, border: `1px solid ${GRID}`, fontSize: 12, boxShadow: "0 4px 12px hsl(222 47% 11% / 0.08)" }}
-                    labelStyle={{ color: "hsl(222 47% 11%)", fontWeight: 600 }}
+                    cursor={{ className: "fill-muted" }}
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: "1px solid hsl(var(--border))",
+                      background: "hsl(var(--card))",
+                      color: "hsl(var(--card-foreground))",
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "hsl(var(--card-foreground))", fontWeight: 600 }}
                     formatter={(v: number) => [`${v}`, "Novas"]}
                   />
-                  <Bar dataKey="value" fill={PRIMARY} radius={[6, 6, 0, 0]} maxBarSize={44} />
+                  <Bar dataKey="value" className="fill-primary" radius={[6, 6, 0, 0]} maxBarSize={44} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -195,7 +283,7 @@ export function AdminOverview({ organizations, stripeStats, loading }: AdminOver
 }
 
 function MetricCard({
-  label, value, subtitle, icon, tone = "default", loading,
+  label, value, subtitle, icon, tone = "default", loading, delta,
 }: {
   label: string;
   value: React.ReactNode;
@@ -203,6 +291,7 @@ function MetricCard({
   icon?: React.ReactNode;
   tone?: "default" | "success" | "danger";
   loading?: boolean;
+  delta?: { value: string; up: boolean; note?: string };
 }) {
   const toneClass = tone === "success" ? "text-emerald-600 dark:text-emerald-400" : tone === "danger" ? "text-destructive" : "text-foreground";
   return (
@@ -215,6 +304,20 @@ function MetricCard({
         <Skeleton className="mt-2 h-9 w-24" />
       ) : (
         <div className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", toneClass)}>{value}</div>
+      )}
+      {!loading && delta && (
+        <div className="mt-1.5 flex items-center gap-1 text-xs">
+          <span
+            className={cn(
+              "inline-flex items-center gap-0.5 font-medium",
+              delta.up ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+            )}
+          >
+            {delta.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {delta.value}
+          </span>
+          {delta.note && <span className="text-muted-foreground">{delta.note}</span>}
+        </div>
       )}
       {subtitle && !loading && <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>}
     </div>

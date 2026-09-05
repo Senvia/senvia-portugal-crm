@@ -42,7 +42,8 @@ export interface AdminContact {
   email?: string;
 }
 
-type Filter = "all" | "paying" | "trial" | "overdue" | "blocked" | "expired" | "exempt";
+export type OrgFilter = "all" | "paying" | "trial" | "overdue" | "blocked" | "expired" | "exempt";
+type Filter = OrgFilter;
 type SortKey = "name" | "activity" | "mrr" | "members" | "created";
 
 interface OrganizationsTableProps {
@@ -50,6 +51,9 @@ interface OrganizationsTableProps {
   loading?: boolean;
   currentOrgId?: string;
   onAccessOrg: (orgId: string) => void;
+  /** Controlled filter, so the attention strip above can focus the list. */
+  filter?: Filter;
+  onFilterChange?: (filter: Filter) => void;
   stripeData?: OrgStripeData[];
   adminInfo?: Record<string, AdminContact>;
 }
@@ -92,13 +96,17 @@ export function OrganizationsTable({
   onAccessOrg,
   stripeData,
   adminInfo = {},
+  filter: filterProp,
+  onFilterChange,
 }: OrganizationsTableProps) {
   const [query, setQuery] = useState("");
   const [seatsDialog, setSeatsDialog] = useState<{ id: string; name: string; seats: number } | null>(null);
   // Clicking a row opens the detail panel. Entering another organization is a
   // deliberate act with consequences, so it lives behind its own button there.
   const [detailOrg, setDetailOrg] = useState<Organization | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filterState, setFilterState] = useState<Filter>("all");
+  const filter = filterProp ?? filterState;
+  const setFilter = onFilterChange ?? setFilterState;
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const now = useMemo(() => new Date(), []);
