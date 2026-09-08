@@ -15,7 +15,6 @@ import { NumberInput } from '@/components/shared/NumberInput';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { usePermissions } from '@/hooks/usePermissions';
 import type {
   ServicosDetails,
   ServicosProductDetail,
@@ -171,7 +170,6 @@ function CatalogProducts({
   const viewerIsSeller = sellerId === currentUserId;
   // The operator gross and the org's margin are the company's numbers, not a
   // salesperson's. He sees what he earns; only an admin sees the rest.
-  const { isAdmin } = usePermissions();
 
   const lineCommission = (product: CatalogProduct, qty: number, extraCards?: ExtraCards, tech?: TelecomTechnology) =>
     getSaleLineCommission(product, qty, extraCards, sellerId, sellerProfileId, tech);
@@ -207,7 +205,7 @@ function CatalogProducts({
   // pool (which is still what gets saved to the sale, via detail.comissao).
   // Resolved by the operator FROZEN on this line, not the current picker —
   // a line added under Digi stays a Digi line even if the picker moves on.
-  const { totalSellerComissao, totalOrgComissao, totalGrossComissao } = servicosProdutos.reduce(
+  const { totalSellerComissao } = servicosProdutos.reduce(
     (acc, p) => {
       const detail = servicosDetails[p];
       const catProduct = resolveProduct(p, detail?.operator_id);
@@ -502,16 +500,9 @@ function CatalogProducts({
                   A tua parte ({quantidade} unid.): <span className="font-medium text-foreground">
                     {myLineCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                   </span>
-                  {/* The pool this line pays out across everyone — shown next to
-                      the seller's own cut so a sale can be checked without
-                      logging in as each recipient. */}
-                  {/* line.gross, not detail.comissao: the stored figure is
-                      frozen from whenever the line was added and drifts as soon
-                      as the catalog changes — one sale here still carried 540 €
-                      from a configuration that pays 210 € today. */}
-                  {isAdmin && Math.abs(line.gross - myLineCommission) > 0.005 && (
-                    <span> · total {line.gross.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</span>
-                  )}
+                  {/* The operator gross used to sit here. It is the
+                      organization's number, not the sale's — it belongs to the
+                      Financeiro cards, where only an admin ever looks. */}
                   {isTiered && !catProduct.quantity_tiers?.some(t => quantidade >= t.min && (t.max == null || quantidade <= t.max)) && (
                     <span className="ml-1 text-destructive">(sem escalão para esta quantidade)</span>
                   )}
@@ -537,17 +528,10 @@ function CatalogProducts({
             <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
               {totalSellerComissao ? totalSellerComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—'}
             </div>
-            {/* What the operator pays, and what is left over for the org once
-                the seller has taken his rate. */}
-            {/* Admin only, and computed — not detail.comissao, which is frozen
-                at the moment the line was added and goes stale the instant the
-                catalog changes. */}
-            {isAdmin && totalOrgComissao > 0.005 && (
-              <p className="text-[11px] text-muted-foreground">
-                Operadora paga {totalGrossComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
-                {' · '}Organização fica com {totalOrgComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
-              </p>
-            )}
+            {/* No operator gross or org margin here. A sale shows what it pays
+                the seller and nothing else — those two numbers belong to the
+                organization's own cards (Financeiro, painel), not to a screen
+                the seller has open in front of the client. */}
           </div>
         </div>
       )}

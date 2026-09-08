@@ -131,7 +131,10 @@ export default function Sales() {
   // which belongs to the organization's cards alone. A non-admin still only
   // ever sees his own row, so a sale someone else sold reads 0 for him.
   const { data: comissoesPorVenda } = useQuery({
-    queryKey: ["commission-by-sale", organization?.id, profile?.id, isAdmin],
+    // Prefixed with "sales" on purpose: these amounts are rewritten by a
+    // trigger whenever a sale is saved, so the query has to ride on every
+    // existing sales invalidation instead of sitting stale on screen.
+    queryKey: ["sales", "commission-by-sale", organization?.id, profile?.id, isAdmin],
     queryFn: async () => {
       const doVendedor = new Map<string, number>();
       const minha = new Map<string, number>();

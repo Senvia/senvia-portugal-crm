@@ -35,7 +35,9 @@ export function useSaleCommissionSplits(saleId?: string | null) {
   const orgId = organization?.id;
 
   return useQuery<SaleCommissionSplit[]>({
-    queryKey: ['sale-commission-splits', saleId],
+    // See the note in Sales.tsx: the 'sales' prefix keeps these amounts in
+    // step with the trigger that rewrites them.
+    queryKey: ['sales', 'sale-commission-splits', saleId],
     queryFn: async () => {
       if (!saleId) return [];
       const { data, error } = await (supabase as any)

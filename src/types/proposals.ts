@@ -427,7 +427,7 @@ export function getCatalogCommission(product: CatalogProduct): number {
   if (product.splits && product.splits.length > 0) {
     const fixedSum = product.splits.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
     const pctSum = product.splits.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
-    return fixedSum + Math.round(product.price * pctSum) / 100;
+    return fixedSum + Math.round((product.operator_pays ?? product.price) * pctSum) / 100;
   }
   if (!product.has_commission) return 0;
   const fixedPart = product.commission_fixed ?? 0;
@@ -480,7 +480,8 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   const unitPrice = tier.price ?? product.price;
   const fixedPerUnit = tier.splits.filter(s => s.type === 'fixed').reduce((sum, s) => sum + (s.value || 0), 0);
   const pctPerUnit = tier.splits.filter(s => s.type === 'pct').reduce((sum, s) => sum + (s.value || 0), 0);
-  const perUnit = fixedPerUnit + Math.round(unitPrice * pctPerUnit) / 100;
+  const pctBase = tier.operator_pays ?? product.operator_pays ?? unitPrice;
+  const perUnit = fixedPerUnit + Math.round(pctBase * pctPerUnit) / 100;
   const base = perUnit * qty;
   // The bonus is a flat, once-off reward for reaching the band, not a
   // per-unit rate — added once, never multiplied by quantity. 'pct' is a
@@ -492,10 +493,18 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   return Math.round((base + bonusAmount) * 100) / 100 + getExtraCardCommission(product, extraCards);
 }
 
-/** Euro value of one split, at a given unit price ('pct' is % of that price). */
-function splitEuroValue(split: CommissionSplit, unitPrice: number, tech?: TelecomTechnology): number {
+/**
+ * Euro value of one split, where 'pct' is a percentage of `pctBase`.
+ *
+ * That base is what the OPERATOR PAYS the org for the unit, not the price
+ * the client pays — in telecom the client pays the operator, the product's
+ * own price is 0, and a percentage of 0 is 0. Callers fall back to the unit
+ * price for a product with no operator payment configured (every non-telecom
+ * product), so a plain catalog keeps meaning "% of the sale".
+ */
+function splitEuroValue(split: CommissionSplit, pctBase: number, tech?: TelecomTechnology): number {
   const value = pickByTech(split.value, split.value_fibra, split.value_satelite, tech) || 0;
-  return splitTypeForTech(split, tech) === 'fixed' ? value : Math.round(unitPrice * value) / 100;
+  return splitTypeForTech(split, tech) === 'fixed' ? value : Math.round(pctBase * value) / 100;
 }
 
 /**
@@ -507,7 +516,7 @@ function splitEuroValue(split: CommissionSplit, unitPrice: number, tech?: Teleco
  */
 function sellerRatePerUnit(
   splits: CommissionSplit[] | undefined,
-  unitPrice: number,
+  pctBase: number,
   sellerUserId?: string | null,
   sellerProfileId?: string | null,
   tech?: TelecomTechnology,
@@ -516,11 +525,11 @@ function sellerRatePerUnit(
   const named = sellerUserId
     ? splits.find(s => s.kind === 'user' && s.user_id === sellerUserId)
     : undefined;
-  if (named) return splitEuroValue(named, unitPrice, tech);
+  if (named) return splitEuroValue(named, pctBase, tech);
   const byProfile = sellerProfileId
     ? splits.find(s => s.kind === 'profile' && s.profile_id === sellerProfileId)
     : undefined;
-  return byProfile ? splitEuroValue(byProfile, unitPrice, tech) : 0;
+  return byProfile ? splitEuroValue(byProfile, pctBase, tech) : 0;
 }
 
 /** What one sale line is worth, split three ways. */
@@ -569,7 +578,12 @@ export function getSaleLineCommission(
   const unitPrice = tier?.price ?? product.price;
   const splits = tier ? tier.splits : product.splits;
 
-  const sellerPerUnit = sellerRatePerUnit(splits, unitPrice, sellerUserId, sellerProfileId, tech);
+  const operatorPerUnit =
+    pickByTech(tier?.operator_pays, tier?.operator_pays_fibra, tier?.operator_pays_satelite, tech)
+    ?? pickByTech(product.operator_pays, product.operator_pays_fibra, product.operator_pays_satelite, tech)
+    ?? null;
+
+  const sellerPerUnit = sellerRatePerUnit(splits, operatorPerUnit ?? unitPrice, sellerUserId, sellerProfileId, tech);
   const sellerBase = sellerPerUnit * qty;
 
   const bonus = tier
@@ -579,10 +593,6 @@ export function getSaleLineCommission(
     : 0;
   const extra = getExtraCardCommission(product, extraCards);
 
-  const operatorPerUnit =
-    pickByTech(tier?.operator_pays, tier?.operator_pays_fibra, tier?.operator_pays_satelite, tech)
-    ?? pickByTech(product.operator_pays, product.operator_pays_fibra, product.operator_pays_satelite, tech)
-    ?? null;
   const grossBase = operatorPerUnit != null ? operatorPerUnit * qty : sellerBase;
 
   const round = (n: number) => Math.round(n * 100) / 100;

@@ -193,7 +193,9 @@ export function TeamPerformanceTable() {
     [salesData],
   );
   const { data: splitsData } = useQuery({
-    queryKey: ["team-perf-commission-splits", orgId, deliveredSaleIds],
+    // See the note in Sales.tsx: the "sales" prefix keeps these amounts in
+    // step with the trigger that rewrites them.
+    queryKey: ["sales", "team-perf-commission-splits", orgId, deliveredSaleIds],
     queryFn: async () => {
       if (deliveredSaleIds.length === 0) return [];
       const { data, error } = await (supabase as any)
