@@ -159,6 +159,11 @@ export function EditSaleModal({
 
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
+  // What this sale pays the person it is assigned to, reported up by
+  // ServicosSection. In telecom this — not total_value — is the number the
+  // summary shows: the client pays the operator, so the sale's own value is
+  // not money anyone in this org ever sees.
+  const [sellerCommissionTotal, setSellerCommissionTotal] = useState(0);
   const [activationDate, setActivationDate] = useState<string>("");
   const [telecomStatus, setTelecomStatus] = useState<TelecomStatus | "">("");
   // Reassigning the sale: null keeps it with whoever created it.
@@ -901,6 +906,7 @@ export function EditSaleModal({
                           catalog={catalog}
                           operators={catalogOperators}
                           sellerUserId={sellerId ?? sale.created_by}
+                          onSellerCommissionChange={setSellerCommissionTotal}
                           configs={SERVICOS_PRODUCT_CONFIGS}
                           onToggleProduct={(name) => {
                             if (servicosProdutos.includes(name)) {
@@ -1289,7 +1295,12 @@ export function EditSaleModal({
                           </CardTitle>
                         </CardHeader>
                          <CardContent className="p-4 pt-0 space-y-3">
-                          {!hasItems ? (
+                          {isTelecom ? (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Comissão</span>
+                              <span className="font-medium">{formatCurrency(sellerCommissionTotal)}</span>
+                            </div>
+                          ) : !hasItems ? (
                             <div className="space-y-1.5">
                               <Label className="text-sm text-muted-foreground">Valor Total</Label>
                               <div className="flex items-center gap-2">
@@ -1301,7 +1312,6 @@ export function EditSaleModal({
                                   className="h-8 text-right"
                                   step="0.01"
                                   min="0"
-                                  readOnly={isTelecom}
                                 />
                               </div>
                             </div>
@@ -1339,8 +1349,10 @@ export function EditSaleModal({
                           )}
                           
                           <div className="flex justify-between text-lg font-semibold">
-                            <span>{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
-                            <span className="text-primary">{formatCurrency(total)}</span>
+                            <span>{isTelecom ? 'Comissão' : ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
+                            <span className="text-primary">
+                              {formatCurrency(isTelecom ? sellerCommissionTotal : total)}
+                            </span>
                           </div>
 
                           {ixActive && (

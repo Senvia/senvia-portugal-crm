@@ -197,6 +197,11 @@ export function CreateSaleModal({
   const [contractSigned, setContractSigned] = useState(false);
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [discount, setDiscount] = useState<string>("0");
+  // What this sale will pay the person it is assigned to, reported up by
+  // ServicosSection. In telecom the summary shows this, not the price: the
+  // client pays the operator, so the sale's own value is money nobody here
+  // ever sees.
+  const [sellerCommissionTotal, setSellerCommissionTotal] = useState(0);
   const [notes, setNotes] = useState("");
   
   // Track which proposal we've already initialized items for
@@ -1371,6 +1376,7 @@ export function CreateSaleModal({
                         servicosDetails={servicosDetails}
                         isNewFormat={isNewFormat}
                         sellerUserId={sellerId ?? user?.id ?? null}
+                        onSellerCommissionChange={setSellerCommissionTotal}
                         catalog={catalog}
                         operators={catalogOperators}
                         configs={servicosConfigs}
@@ -1628,8 +1634,10 @@ export function CreateSaleModal({
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">{formatCurrency(subtotal)}</span>
+                        <span className="text-muted-foreground">{isTelecom ? 'Comissão' : 'Subtotal'}</span>
+                        <span className="font-medium">
+                          {formatCurrency(isTelecom ? sellerCommissionTotal : subtotal)}
+                        </span>
                       </div>
                       
                       <div className="flex items-center justify-between gap-4">
@@ -1658,8 +1666,12 @@ export function CreateSaleModal({
                       )}
 
                       <div className="flex justify-between">
-                        <span className="font-semibold">{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
-                        <span className="text-xl font-bold text-primary">{formatCurrency(total)}</span>
+                        <span className="font-semibold">
+                          {isTelecom ? 'Comissão' : ixActive ? 'Total (s/ IVA)' : 'Total'}
+                        </span>
+                        <span className="text-xl font-bold text-primary">
+                          {formatCurrency(isTelecom ? sellerCommissionTotal : total)}
+                        </span>
                       </div>
 
                       {ixActive && (

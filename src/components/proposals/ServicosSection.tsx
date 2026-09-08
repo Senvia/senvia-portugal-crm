@@ -2,7 +2,7 @@
  * Shared "Outros Serviços" section for proposals/sales.
  * Supports both legacy (fields-based) and new catalog format.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Radio, Wrench, X, Package } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,9 @@ interface ServicosSectionProps {
   onUpdateDetail: (product: string, field: string, value: number | undefined) => void;
   /** For new format: set the full details for a product */
   onSetProductDetail: (product: string, detail: ServicosProductDetail) => void;
+  /** Reports the seller's commission total up (catalog format only), so the
+   *  sale's summary can show it instead of a price the client never pays. */
+  onSellerCommissionChange?: (total: number) => void;
   isAutoCalculated?: (product: string) => boolean;
   totalKwp?: number;
   totalComissao?: number;
@@ -79,6 +82,7 @@ export function ServicosSection({
   onToggleProduct,
   onUpdateDetail,
   onSetProductDetail,
+  onSellerCommissionChange,
   isAutoCalculated,
   totalKwp,
   totalComissao,
@@ -115,6 +119,7 @@ export function ServicosSection({
           servicosDetails={servicosDetails}
           onToggleProduct={onToggleProduct}
           onSetProductDetail={onSetProductDetail}
+          onSellerCommissionChange={onSellerCommissionChange}
           attempted={attempted}
         />
       ) : (
@@ -144,6 +149,7 @@ function CatalogProducts({
   servicosDetails,
   onToggleProduct,
   onSetProductDetail,
+  onSellerCommissionChange,
   attempted,
 }: {
   catalog: CatalogProduct[];
@@ -153,6 +159,9 @@ function CatalogProducts({
   servicosDetails: ServicosDetails;
   onToggleProduct: (name: string) => void;
   onSetProductDetail: (product: string, detail: ServicosProductDetail) => void;
+  /** Reports the seller's total up, so the sale's summary can show the
+   *  commission instead of a price the client never pays. */
+  onSellerCommissionChange?: (total: number) => void;
   attempted?: boolean;
 }) {
   // Three numbers per line, each with one meaning (see getSaleLineCommission):
@@ -226,6 +235,10 @@ function CatalogProducts({
     },
     { totalSellerComissao: 0, totalOrgComissao: 0, totalGrossComissao: 0 },
   );
+
+  useEffect(() => {
+    onSellerCommissionChange?.(totalSellerComissao);
+  }, [totalSellerComissao, onSellerCommissionChange]);
 
   // Build combobox options: for the chosen operator, every product tied to it
   // plus every operator-agnostic one — deduplicated by name (the specific
@@ -362,9 +375,11 @@ function CatalogProducts({
           const tecnologia = detail.tecnologia;
           const line = lineCommission(catProduct, quantidade, extraCards, tecnologia);
           const hasCommission = line.gross > 0 || isTiered || catProduct.has_commission;
-          // The seller's own take, per unit and for the whole line. Someone
-          // who is not the seller sees zero — it is not their money.
-          const myLineCommission = viewerIsSeller ? line.seller : 0;
+          // What the SELLER takes on this line — the same number the box at
+          // the foot of the card totals up. It used to read 0 for anyone who
+          // was not the seller, so an admin saw "0,00 €" per line above a
+          // "70,00 €" total on the same card.
+          const myLineCommission = line.seller;
           const myUnitCommission = quantidade > 0 ? myLineCommission / quantidade : 0;
 
           return (
@@ -497,7 +512,7 @@ function CatalogProducts({
               )}
               {hasCommission && (
                 <div className="text-xs text-muted-foreground">
-                  A tua parte ({quantidade} unid.): <span className="font-medium text-foreground">
+                  {viewerIsSeller ? 'A tua parte' : 'Comissão do vendedor'} ({quantidade} unid.): <span className="font-medium text-foreground">
                     {myLineCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                   </span>
                   {/* The operator gross used to sit here. It is the
