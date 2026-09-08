@@ -169,6 +169,11 @@ export interface ServicosProductDetail {
   // from" must read this, not the catalog's current operator_id.
   operator_id?: string;
   operator_name?: string;
+  // Which technology this install actually is, frozen when the line was added
+  // — the catalog can later stop offering one of them, and the commission
+  // already paid must not move. Absent on every sale made before this field
+  // existed, which then falls back to the product's single rate.
+  tecnologia?: TelecomTechnology;
   // How many SIM cards this whole line carries (e.g. a 2P package with 2
   // included, sold with 5 total = 3 extra). Whatever is over the product's
   // own `included_cards` pays product.extra_card_commission per card — see
@@ -212,6 +217,43 @@ export const FIELD_LABELS: Record<string, string> = {
 export type CommissionType = 'pct' | 'fixed';
 
 /**
+ * How a telecom service reaches the client. The same offer pays a different
+ * commission depending on which one was installed, so it is chosen on the
+ * product (which technologies it can be sold as) and frozen on the sale line
+ * (which one this install actually is).
+ */
+export type TelecomTechnology = 'fibra' | 'satelite';
+
+export const TELECOM_TECHNOLOGY_LABELS: Record<TelecomTechnology, string> = {
+  fibra: 'Fibra',
+  satelite: 'Satélite',
+};
+
+export const TELECOM_TECHNOLOGIES: TelecomTechnology[] = ['fibra', 'satelite'];
+
+/**
+ * The rate for one technology, falling back to the single value when the
+ * product doesn't distinguish — which is every product configured before
+ * technologies existed. Returns undefined only when nothing is set at all,
+ * so callers can tell "not configured" from "configured as zero".
+ */
+export function pickByTech(
+  base: number | undefined,
+  fibra: number | undefined,
+  satelite: number | undefined,
+  tech: TelecomTechnology | undefined,
+): number | undefined {
+  if (tech === 'fibra' && fibra != null) return fibra;
+  if (tech === 'satelite' && satelite != null) return satelite;
+  return base;
+}
+
+/** True when the product is sold as more than one technology, so the sale has to pick. */
+export function productNeedsTechnologyChoice(technologies: TelecomTechnology[] | undefined): boolean {
+  return (technologies?.length ?? 0) > 1;
+}
+
+/**
  * One line of a product's commission table.
  *
  * These are NOT simultaneous beneficiaries — they are a rate table keyed by
@@ -230,6 +272,24 @@ export interface CommissionSplit {
   profile_id?: string;
   type: CommissionType;
   value: number;
+  // Per-technology rates, for a product sold as both Fibra and Satélite: the
+  // same line pays differently depending on which one was installed. Absent
+  // falls back to `value`, so a product with no technology split — every
+  // product until now — keeps paying exactly what it always paid.
+  value_fibra?: number;
+  value_satelite?: number;
+  // ...and how to read those rates. The same recipient is often paid a flat
+  // fee on fibre and a percentage on satellite, so the €/% choice belongs to
+  // the technology, not to the line. Absent falls back to `type`.
+  type_fibra?: CommissionType;
+  type_satelite?: CommissionType;
+}
+
+/** The €/% mode that applies to a split for a given technology. */
+export function splitTypeForTech(split: CommissionSplit, tech?: TelecomTechnology): CommissionType {
+  if (tech === 'fibra') return split.type_fibra ?? split.type;
+  if (tech === 'satelite') return split.type_satelite ?? split.type;
+  return split.type;
 }
 
 /**
@@ -257,6 +317,11 @@ export interface QuantityTier {
   // lives here rather than on the product. Falls back to the product's own
   // `operator_pays` when a band doesn't set it.
   operator_pays?: number;
+  // Same rate, per technology — the operator pays a different amount for a
+  // fibre install than for a satellite one. Absent falls back to
+  // `operator_pays` above.
+  operator_pays_fibra?: number;
+  operator_pays_satelite?: number;
   splits: CommissionSplit[];
   // One-off company-wide reward for REACHING this band (e.g. 15-19 contracts
   // this month earns +300€, 20-24 earns +600€) — added once, not per unit,
@@ -307,6 +372,14 @@ export interface CatalogProduct {
   // whatever is left over is the org's margin — see getSaleLineCommission.
   // No commission line may be configured above it.
   operator_pays?: number;
+  // Same, per technology. Absent falls back to `operator_pays`.
+  operator_pays_fibra?: number;
+  operator_pays_satelite?: number;
+  // Which technologies this product can be sold as. Absent or a single entry
+  // means the sale doesn't ask — the line just takes that one (or none, for
+  // products that predate this). Two entries make the choice mandatory on
+  // the sale, since the commission depends on it.
+  technologies?: TelecomTechnology[];
   // Flat commission per extra SIM card added on top of the ones the package
   // already includes (e.g. a Vodafone package with 2 included pays +10€ per
   // additional card, ported or brand new). Varies per product/operator —
@@ -420,8 +493,9 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
 }
 
 /** Euro value of one split, at a given unit price ('pct' is % of that price). */
-function splitEuroValue(split: CommissionSplit, unitPrice: number): number {
-  return split.type === 'fixed' ? (split.value || 0) : Math.round(unitPrice * (split.value || 0)) / 100;
+function splitEuroValue(split: CommissionSplit, unitPrice: number, tech?: TelecomTechnology): number {
+  const value = pickByTech(split.value, split.value_fibra, split.value_satelite, tech) || 0;
+  return splitTypeForTech(split, tech) === 'fixed' ? value : Math.round(unitPrice * value) / 100;
 }
 
 /**
@@ -436,16 +510,17 @@ function sellerRatePerUnit(
   unitPrice: number,
   sellerUserId?: string | null,
   sellerProfileId?: string | null,
+  tech?: TelecomTechnology,
 ): number {
   if (!splits || splits.length === 0) return 0;
   const named = sellerUserId
     ? splits.find(s => s.kind === 'user' && s.user_id === sellerUserId)
     : undefined;
-  if (named) return splitEuroValue(named, unitPrice);
+  if (named) return splitEuroValue(named, unitPrice, tech);
   const byProfile = sellerProfileId
     ? splits.find(s => s.kind === 'profile' && s.profile_id === sellerProfileId)
     : undefined;
-  return byProfile ? splitEuroValue(byProfile, unitPrice) : 0;
+  return byProfile ? splitEuroValue(byProfile, unitPrice, tech) : 0;
 }
 
 /** What one sale line is worth, split three ways. */
@@ -480,6 +555,7 @@ export function getSaleLineCommission(
   extraCards?: ExtraCards,
   sellerUserId?: string | null,
   sellerProfileId?: string | null,
+  tech?: TelecomTechnology,
 ): SaleLineCommission {
   const qty = Math.max(1, Math.round(quantity || 1));
   const tiers = product.quantity_tiers;
@@ -493,7 +569,7 @@ export function getSaleLineCommission(
   const unitPrice = tier?.price ?? product.price;
   const splits = tier ? tier.splits : product.splits;
 
-  const sellerPerUnit = sellerRatePerUnit(splits, unitPrice, sellerUserId, sellerProfileId);
+  const sellerPerUnit = sellerRatePerUnit(splits, unitPrice, sellerUserId, sellerProfileId, tech);
   const sellerBase = sellerPerUnit * qty;
 
   const bonus = tier
@@ -503,7 +579,10 @@ export function getSaleLineCommission(
     : 0;
   const extra = getExtraCardCommission(product, extraCards);
 
-  const operatorPerUnit = tier?.operator_pays ?? product.operator_pays ?? null;
+  const operatorPerUnit =
+    pickByTech(tier?.operator_pays, tier?.operator_pays_fibra, tier?.operator_pays_satelite, tech)
+    ?? pickByTech(product.operator_pays, product.operator_pays_fibra, product.operator_pays_satelite, tech)
+    ?? null;
   const grossBase = operatorPerUnit != null ? operatorPerUnit * qty : sellerBase;
 
   const round = (n: number) => Math.round(n * 100) / 100;

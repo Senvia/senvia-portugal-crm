@@ -237,13 +237,17 @@ export function useMyCommissions() {
         leads.map((l: any) => [l.id as string, (l.name as string) || null])
       );
 
-      const filters: string[] = [`created_by.eq.${userId}`];
+      // A sale belongs to whoever it is ASSIGNED to, not whoever typed it in:
+      // an admin often enters a sale on someone else's behalf. seller_id is
+      // that assignment; created_by is only the fallback for sales made before
+      // it existed, and must not claim a sale that was handed to someone else.
+      const filters: string[] = [`seller_id.eq.${userId}`, `and(seller_id.is.null,created_by.eq.${userId})`];
       if (clients.length > 0) filters.push(`client_id.in.(${clients.map(c => c.id).join(',')})`);
       if (leads.length > 0) filters.push(`lead_id.in.(${leads.map(l => l.id).join(',')})`);
 
-      const { data: sales, error } = await supabase
+      const { data: sales, error } = await (supabase as any)
         .from('sales')
-        .select('id, code, status, total_value, comissao, sale_date, activation_date, created_at, approved_at, client_id, lead_id, payment_status')
+        .select('id, code, status, total_value, comissao, sale_date, activation_date, created_at, approved_at, client_id, lead_id, payment_status, created_by, seller_id')
         .eq('organization_id', organizationId)
         .or(filters.join(','))
         .order('created_at', { ascending: false });
@@ -264,13 +268,21 @@ export function useMyCommissions() {
       // What THIS person earns on each sale. sales.comissao is the operator's
       // gross — showing it here would tell a salesperson he made 210€ on a
       // sale that pays him 180€. The frozen split rows are his actual pay.
-      const { data: mySplits } = saleIds.length > 0
+      //
+      // Fetched for EVERYONE, not just this user, to tell two different cases
+      // apart: a sale nobody has a split on (an org with no commission rules —
+      // fall back to the sale's own figure) versus a sale whose splits pay
+      // someone ELSE. The second is the common one — a sale typed in by one
+      // person and assigned to another — and treating it like the first showed
+      // the typist his colleague's commission as if it were his own.
+      const { data: allSplits } = saleIds.length > 0
         ? await (supabase as any)
             .from('sale_commission_splits')
-            .select('sale_id, amount')
-            .eq('user_id', userId)
+            .select('sale_id, user_id, amount')
             .in('sale_id', saleIds)
         : { data: [] as any[] };
+      const saleHasSplits = new Set<string>(((allSplits as any[]) || []).map((sp) => sp.sale_id));
+      const mySplits = ((allSplits as any[]) || []).filter((sp) => sp.user_id === userId);
       const myAmountBySale = new Map<string, number>();
       for (const sp of (mySplits as any[]) || []) {
         myAmountBySale.set(sp.sale_id, (myAmountBySale.get(sp.sale_id) || 0) + Number(sp.amount || 0));
@@ -279,8 +291,8 @@ export function useMyCommissions() {
       // Resolve client/lead names for ALL returned sales — not only those whose
       // client/lead is assigned to the user (e.g. sales the user created, whose
       // client may be unassigned or assigned to someone else).
-      const saleClientIds = [...new Set(sales.map((s: any) => s.client_id).filter(Boolean))];
-      const saleLeadIds = [...new Set(sales.map((s: any) => s.lead_id).filter(Boolean))];
+      const saleClientIds = [...new Set(sales.map((s: any) => s.client_id).filter(Boolean))] as string[];
+      const saleLeadIds = [...new Set(sales.map((s: any) => s.lead_id).filter(Boolean))] as string[];
       const [moreClientsRes, moreLeadsRes] = await Promise.all([
         saleClientIds.length > 0
           ? supabase.from('crm_clients').select('id, name, company').in('id', saleClientIds)
@@ -310,9 +322,10 @@ export function useMyCommissions() {
           code: s.code,
           status: s.status,
           total_value: s.total_value,
-          // The person's own share when the sale has frozen splits; the sale's
-          // own figure only for sales that carry no split rules at all.
-          comissao: myAmountBySale.has(s.id) ? myAmountBySale.get(s.id)! : s.comissao,
+          // His own share once the sale pays anybody; the sale's own figure
+          // only when it carries no split rules at all. A sale that pays
+          // someone else contributes 0 to HIS commissions, not its gross.
+          comissao: saleHasSplits.has(s.id) ? (myAmountBySale.get(s.id) ?? 0) : s.comissao,
           sale_date: s.sale_date,
           activation_date: s.activation_date,
           created_at: s.created_at,

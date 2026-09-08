@@ -69,7 +69,8 @@ import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix"
 import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
-import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
+import {
+  TELECOM_TECHNOLOGY_LABELS, MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
 import { useSaleCommissionSplits } from "@/hooks/useCommissionSplits";
 import { useProfileNames } from "@/hooks/useTeam";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
@@ -168,6 +169,16 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
+  // The install is booked as a window ("das 9h às 12h"): the date column
+  // carries the start, scheduled_install_end the end. A midnight start with
+  // no end means only a day was agreed, so there is no window to show.
+  const installWindow = (() => {
+    const start = (sale?.scheduled_install_date?.split('T')[1] ?? '').slice(0, 5);
+    const end = (sale?.scheduled_install_end?.split('T')[1] ?? '').slice(0, 5);
+    if (!start || start === '00:00') return end ? `até ${end}` : '';
+    return end ? `das ${start} às ${end}` : `às ${start}`;
+  })();
+
   const [showFulfilledConfirm, setShowFulfilledConfirm] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<SaleStatus | null>(null);
   // Telecom has its own lifecycle and only that one — picking it writes
@@ -195,6 +206,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     ? commissionSplits
     : commissionSplits.filter((s) => s.user_id === user?.id);
   const myCommissionTotal = visibleSplits.reduce((sum, s) => sum + (s.amount || 0), 0);
+  // What the SELLER earns on this sale — the sum of every frozen row, which in
+  // this model is his alone. Unlike myCommissionTotal it doesn't depend on who
+  // is looking, so an admin checking the sale sees the seller's real number.
+  const sellerCommissionTotal = commissionSplits.reduce((sum, s) => sum + (s.amount || 0), 0);
   // Resolved straight from profiles — not from the active team roster, which
   // would blank out whoever made this sale if they were later deactivated.
   const { data: beneficiaryNames } = useProfileNames([
@@ -369,9 +384,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               <div className="lg:hidden mb-4">
                 <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                   <p className="text-sm text-muted-foreground">
-                    {hasInvoiceXpress ? 'Valor Total (s/ IVA)' : 'Valor Total'}
+                    {/* Telecom is paid by the operator, not the client: the
+                        contracted monthly price is not what this sale is worth
+                        to us. Show the commission the seller earns on it. */}
+                    {isTelecom ? 'Comissão' : hasInvoiceXpress ? 'Valor Total (s/ IVA)' : 'Valor Total'}
                   </p>
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(sale.total_value)}</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {formatCurrency(isTelecom ? sellerCommissionTotal : sale.total_value)}
+                  </p>
                   {hasInvoiceXpress && (
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-primary/10">
                       <span className="text-xs text-muted-foreground">IVA: {formatCurrency(vatCalc.totalVat)}</span>
@@ -472,6 +492,23 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <p className="text-sm font-medium">
                               {format(new Date(sale.activation_date), "d MMM yyyy", { locale: pt })}
                             </p>
+                          </div>
+                        )}
+                        {/* Always shown in telecom: the booked install slot is the
+                            single most asked-about field on a sale. */}
+                        {isTelecom && (
+                          <div className="col-span-2">
+                            <p className="text-xs text-muted-foreground">Data de Instalação</p>
+                            {sale.scheduled_install_date ? (
+                              <p className="text-sm font-medium">
+                                {format(new Date(sale.scheduled_install_date), "d MMM yyyy", { locale: pt })}
+                                {installWindow && (
+                                  <span className="text-muted-foreground font-normal"> · {installWindow}</span>
+                                )}
+                              </p>
+                            ) : (
+                              <p className="text-sm font-medium text-muted-foreground">Sem data marcada</p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -669,8 +706,21 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                             catalog's current one — a product can be moved
                                             between operators after the sale was made. */}
                                         {detail?.operator_name && (
-                                          <Badge variant="outline" className="text-[11px] font-normal">
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-primary/10 text-primary border-primary/30 text-[11px] font-semibold"
+                                          >
                                             {detail.operator_name}
+                                          </Badge>
+                                        )}
+                                        {/* Which technology was installed — the same
+                                            product pays differently on each. */}
+                                        {detail?.tecnologia && (
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-sky-500/10 text-sky-600 border-sky-500/30 text-[11px] font-medium"
+                                          >
+                                            {TELECOM_TECHNOLOGY_LABELS[detail.tecnologia]}
                                           </Badge>
                                         )}
                                         {/* No commission figure here on purpose. What used to sit
@@ -966,9 +1016,11 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     <div className="hidden lg:block">
                       <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                         <p className="text-sm text-muted-foreground">
-                          {hasInvoiceXpress ? 'Valor Total (s/ IVA)' : 'Valor Total'}
+                          {isTelecom ? 'Comissão' : hasInvoiceXpress ? 'Valor Total (s/ IVA)' : 'Valor Total'}
                         </p>
-                        <p className="text-2xl font-bold text-primary">{formatCurrency(sale.total_value)}</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {formatCurrency(isTelecom ? sellerCommissionTotal : sale.total_value)}
+                        </p>
                         {hasInvoiceXpress && (
                           <div className="flex items-center justify-between mt-2 pt-2 border-t border-primary/10">
                             <span className="text-xs text-muted-foreground">IVA: {formatCurrency(vatCalc.totalVat)}</span>

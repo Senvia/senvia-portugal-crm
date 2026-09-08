@@ -1,14 +1,22 @@
-import { Radio } from 'lucide-react';
+import { Radio, Cable } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CommissionSplitsEditor } from './CommissionSplitsEditor';
 import { QuantityTiersEditor } from './QuantityTiersEditor';
 import type { Operator } from '@/hooks/useOperators';
-import type { CatalogProduct, CommissionSplit, QuantityTier } from '@/types/proposals';
-import { deriveCommissionFields } from '@/types/proposals';
+import type { CatalogProduct, CommissionSplit, QuantityTier, TelecomTechnology } from '@/types/proposals';
+import {
+  deriveCommissionFields,
+  productNeedsTechnologyChoice,
+  TELECOM_TECHNOLOGIES,
+  TELECOM_TECHNOLOGY_LABELS,
+} from '@/types/proposals';
 
 const NO_OPERATOR = '__none__';
+// Radix Select needs a non-empty value for every option.
+const NO_TECHNOLOGY = '__none__';
+const BOTH_TECHNOLOGIES = '__both__';
 
 interface Member {
   user_id: string;
@@ -173,6 +181,100 @@ export function ExtraCardField({
   );
 }
 
+/**
+ * Which technologies this product can be sold as. Picking both is what turns
+ * every commission line into two rates — the operator pays differently for a
+ * fibre install than for a satellite one, and so does the seller's cut.
+ */
+export function TechnologyField({
+  product,
+  onCommit,
+}: {
+  product: CatalogProduct;
+  onCommit: (updates: Partial<CatalogProduct>) => void;
+}) {
+  const current = product.technologies ?? [];
+  const value = current.length === 0 ? NO_TECHNOLOGY
+    : current.length > 1 ? BOTH_TECHNOLOGIES
+    : current[0];
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">
+        <Cable className="h-3 w-3 shrink-0" /> Tecnologia
+      </Label>
+      <Select
+        value={value}
+        onValueChange={(v) => onCommit({
+          technologies: v === NO_TECHNOLOGY ? undefined
+            : v === BOTH_TECHNOLOGIES ? [...TELECOM_TECHNOLOGIES]
+            : [v as TelecomTechnology],
+        })}
+      >
+        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_TECHNOLOGY}>Não se aplica</SelectItem>
+          {TELECOM_TECHNOLOGIES.map((t) => (
+            <SelectItem key={t} value={t}>{TELECOM_TECHNOLOGY_LABELS[t]}</SelectItem>
+          ))}
+          <SelectItem value={BOTH_TECHNOLOGIES}>Ambas</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/**
+ * What the operator pays the org per unit — the number the org's margin is
+ * measured against. It had no field until now: the only way to set it was to
+ * run SQL by hand. Only for products without escalões; a tiered product sets
+ * it per band, where the operator's rate actually moves.
+ */
+export function OperatorPaysField({
+  product,
+  onChange,
+  onCommit,
+}: {
+  product: CatalogProduct;
+  onChange: (updates: Partial<CatalogProduct>) => void;
+  onCommit: (updates: Partial<CatalogProduct>) => void;
+}) {
+  const byTech = productNeedsTechnologyChoice(product.technologies);
+  const fields: { key: 'operator_pays' | 'operator_pays_fibra' | 'operator_pays_satelite'; label: string }[] =
+    byTech
+      ? [
+          { key: 'operator_pays_fibra', label: `Operadora paga — ${TELECOM_TECHNOLOGY_LABELS.fibra} (€)` },
+          { key: 'operator_pays_satelite', label: `Operadora paga — ${TELECOM_TECHNOLOGY_LABELS.satelite} (€)` },
+        ]
+      : [{ key: 'operator_pays', label: 'Operadora paga (€)' }];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {fields.map((f) => (
+          <div key={f.key} className="space-y-1.5 max-w-xs">
+            <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">{f.label}</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={product[f.key] ?? ''}
+              onChange={(e) => onChange({ [f.key]: e.target.value ? parseFloat(e.target.value) : undefined })}
+              onBlur={() => onCommit({})}
+              placeholder="0.00"
+              className="h-9"
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Quanto a operadora paga à organização por unidade. A comissão do vendedor sai daqui; o que sobra
+        é o Valor da Organização. Em branco, a venda não sabe dizer quanto fica para a empresa.
+      </p>
+    </div>
+  );
+}
+
 export function CommissionSection({
   product,
   operator,
@@ -210,6 +312,7 @@ export function CommissionSection({
           scopeLabel={scopeLabel}
           onChange={(quantity_tiers: QuantityTier[]) => onChange({ quantity_tiers })}
           onCommit={(quantity_tiers: QuantityTier[]) => onCommit({ quantity_tiers })}
+          technologies={product.technologies}
         />
       ) : (
         <CommissionSplitsEditor
@@ -218,8 +321,11 @@ export function CommissionSection({
           profiles={profiles}
           onChange={(splits: CommissionSplit[]) => onChange({ splits, ...deriveCommissionFields(splits) })}
           onCommit={(splits: CommissionSplit[]) => onCommit({ splits, ...deriveCommissionFields(splits) })}
+          technologies={product.technologies}
         />
       )}
+
+      {!isTiered && <OperatorPaysField product={product} onChange={onChange} onCommit={onCommit} />}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <IncludedCardsField product={product} onChange={onChange} onCommit={onCommit} />
@@ -256,8 +362,9 @@ export function ProductCommissionFields({
 
   return (
     <>
-      <div className={isTiered ? 'max-w-xs' : 'grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl'}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
         <OperatorField product={product} operators={operators} onCommit={onCommit} />
+        <TechnologyField product={product} onCommit={onCommit} />
         {!isTiered && <PriceField product={product} onChange={onChange} onCommit={onCommit} />}
       </div>
       {isTiered && (

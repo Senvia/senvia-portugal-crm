@@ -59,7 +59,7 @@ import {
   Trash2
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/proposals";
-import { NEGOTIATION_TYPE_LABELS, getCatalogCommission } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, getCatalogCommission, productNeedsTechnologyChoice } from "@/types/proposals";
 import { useServicosProducts } from "@/hooks/useServicosProducts";
 import { ServicosSection } from "@/components/proposals/ServicosSection";
 import { SellerSelect } from "@/components/sales/SellerSelect";
@@ -713,6 +713,19 @@ export function CreateSaleModal({
       return;
     }
 
+    // A product sold as both Fibra and Satélite pays a different commission
+    // for each, so the line cannot be priced until someone says which one was
+    // installed. Blocking here beats freezing the wrong rate onto the sale.
+    const semTecnologia = servicosProdutos.filter((p) => {
+      const detail = servicosDetails[p];
+      const cat = catalog?.find((c) => c.name === p && (detail?.operator_id ? c.operator_id === detail.operator_id : !c.operator_id))
+        ?? catalog?.find((c) => c.name === p);
+      return productNeedsTechnologyChoice(cat?.technologies) && !detail?.tecnologia;
+    });
+    if (semTecnologia.length > 0) {
+      toast.error(`Escolhe a tecnologia (Fibra ou Satélite) em: ${semTecnologia.join(", ")}.`);
+      return;
+    }
     // Date sanity for energy/telecom contracts.
     for (const cpe of proposalCpes) {
       if (cpe.contrato_inicio && cpe.contrato_fim && cpe.contrato_inicio > cpe.contrato_fim) {

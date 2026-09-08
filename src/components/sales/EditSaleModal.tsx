@@ -61,7 +61,7 @@ import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getCatalogCommission } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getCatalogCommission, productNeedsTechnologyChoice } from "@/types/proposals";
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
@@ -298,16 +298,22 @@ export function EditSaleModal({
     }
   }, [open, existingItems]);
 
-  // Sync manualTotalValue when editable CPEs or comissao change (telecom sales)
+  // Sync manualTotalValue when editable CPEs change (telecom energia sales).
+  //
+  // The 'servicos' branch used to do `setManualTotalValue(comissao)`, which
+  // meant every save overwrote the sale's own value with its commission: a
+  // 53,50 € contract was stored as a 210 € sale. It hit all ten telecom sales
+  // in this org. The commission is not the sale's value — it is what the
+  // operator pays us for it, it is already stored in sales.comissao, and it
+  // moves whenever the catalog changes. Showing it is a job for the screen
+  // (see SaleDetailsModal), never for the stored figure.
   useEffect(() => {
     if (!open || !sale || !isTelecom) return;
     if (sale.proposal_type === 'energia' && editableCpes.length > 0) {
       const margemTotal = editableCpes.reduce((sum, cpe) => sum + (cpe.margem || 0), 0);
       setManualTotalValue(margemTotal.toString());
-    } else if (sale.proposal_type === 'servicos' && comissao) {
-      setManualTotalValue(comissao);
     }
-  }, [open, sale, isTelecom, editableCpes, comissao]);
+  }, [open, sale, isTelecom, editableCpes]);
 
   // Auto-recalculate commission when relevant fields change (servicos only)
   useEffect(() => {
@@ -448,6 +454,19 @@ export function EditSaleModal({
     e.preventDefault();
     if (!sale) return;
 
+    // A product sold as both Fibra and Satélite pays a different commission
+    // for each, so the line cannot be priced until someone says which one was
+    // installed. Blocking here beats freezing the wrong rate onto the sale.
+    const semTecnologia = servicosProdutos.filter((p) => {
+      const detail = servicosDetails[p];
+      const cat = catalog?.find((c) => c.name === p && (detail?.operator_id ? c.operator_id === detail.operator_id : !c.operator_id))
+        ?? catalog?.find((c) => c.name === p);
+      return productNeedsTechnologyChoice(cat?.technologies) && !detail?.tecnologia;
+    });
+    if (semTecnologia.length > 0) {
+      toast.error(`Escolhe a tecnologia (Fibra ou Satélite) em: ${semTecnologia.join(", ")}.`);
+      return;
+    }
     // Date sanity for energy/telecom contracts.
     for (const cpe of editableCpes) {
       if (cpe.contrato_inicio && cpe.contrato_fim && cpe.contrato_inicio > cpe.contrato_fim) {

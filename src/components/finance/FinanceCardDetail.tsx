@@ -27,6 +27,7 @@ import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { AddExpenseModal } from "@/components/finance/AddExpenseModal";
 import { EditExpenseModal } from "@/components/finance/EditExpenseModal";
 import type { Expense } from "@/types/expenses";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -50,7 +51,7 @@ interface FinanceCardDetailProps {
 const isPlanPayment = (p: PaymentWithSale) => Boolean(p.sale?.client_org_id);
 
 const TITLES: Record<FinanceDetailType, string> = {
-  faturado: "Total Faturado",
+  faturado: "Total Faturado",   // telecom overrides this to "Total de Comissão"
   received: "Recebido",
   pending: "Pendente",
   overdue: "Atrasados",
@@ -259,17 +260,26 @@ interface RenewalRow { id: string; date: string; label: string; amount: number; 
 
 function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange; renewals?: RenewalRow[] }) {
   const { data: sales = [], isLoading } = useSales();
+  const { organization } = useAuth();
+  // Telecom shows the commission instead of the invoiced value — same rows,
+  // different money column. The row set must stay identical to
+  // useFinanceStats (cancelled dropped, filtered by sale_date), or the total
+  // at the bottom would not match the card that opened this.
+  const isTelecom = organization?.niche === "telecom";
   const filtered = useMemo(
     // Exclude cancelled sales so this detail's total matches the card, which also
-    // drops them (useFinanceStats).
+    // drops them (useFinanceStats). Both telecom cancellations map onto it.
     () => sales.filter((s) => s.status !== "cancelled" && inRange(s.sale_date, dateRange)),
     [sales, dateRange],
   );
   if (isLoading) return <Skeleton className="h-64 w-full" />;
-  const salesTotal = filtered.reduce((s, v) => s + (Number(v.total_value) || 0), 0);
-  const renewalsTotal = renewals.reduce((s, r) => s + r.amount, 0);
+  const valueOf = (s: any) => isTelecom ? Number(s.comissao) || 0 : Number(s.total_value) || 0;
+  const salesTotal = filtered.reduce((sum, v) => sum + valueOf(v), 0);
+  // Renewals are client billing — they have no place in a commission total.
+  const shownRenewals = isTelecom ? [] : renewals;
+  const renewalsTotal = shownRenewals.reduce((s, r) => s + r.amount, 0);
   const total = salesTotal + renewalsTotal;
-  const count = filtered.length + renewals.length;
+  const count = filtered.length + shownRenewals.length;
   return (
     <div className="rounded-md border">
       <Table>
@@ -279,7 +289,7 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
             <TableHead>Cliente</TableHead>
             <TableHead>Código</TableHead>
             <TableHead>Estado</TableHead>
-            <TableHead className="text-right">Valor</TableHead>
+            <TableHead className="text-right">{isTelecom ? "Comissão" : "Valor"}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -295,10 +305,10 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
                   <TableCell>
                     <StatusBadge {...saleStatusBadge(s.status)} />
                   </TableCell>
-                  <TableCell className="text-right font-medium">{formatCurrency(s.total_value)}</TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(valueOf(s))}</TableCell>
                 </TableRow>
               ))}
-              {renewals.map((r) => (
+              {shownRenewals.map((r) => (
                 <TableRow key={`renewal-${r.id}`}>
                   <TableCell className="whitespace-nowrap">{fmtDate(r.date)}</TableCell>
                   <TableCell>{r.label}</TableCell>
@@ -473,13 +483,18 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
     [payments],
   );
 
+  const { organization: orgForTitle } = useAuth();
+  const orgIsTelecom = orgForTitle?.niche === "telecom";
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
-        <h2 className="text-lg font-semibold">{TITLES[type]}</h2>
+        <h2 className="text-lg font-semibold">
+          {/* Same override as the card that opened this. */}
+          {type === "faturado" && orgIsTelecom ? "Total de Comissão" : TITLES[type]}
+        </h2>
 
         {type === "expenses" && (
           <Button size="sm" className="ml-auto gap-1.5" onClick={() => setAddExpenseOpen(true)}>

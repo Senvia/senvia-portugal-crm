@@ -95,9 +95,14 @@ export function CalendarView() {
     setCurrentDate(new Date());
   };
 
+  // In day view the day being shown IS the day navigated to — the side list
+  // would otherwise keep showing whatever was last clicked in the month grid,
+  // which is usually a different day than the one on screen.
+  const listDate = view === 'day' ? currentDate : selectedDayForList;
+
   const selectedDayEvents = useMemo(() => {
-    return events.filter(e => isSameDay(new Date(e.start_time), selectedDayForList));
-  }, [events, selectedDayForList]);
+    return events.filter(e => isSameDay(new Date(e.start_time), listDate));
+  }, [events, listDate]);
 
   const handleDayClick = (date: Date) => {
     setSelectedDayForList(date);
@@ -143,44 +148,51 @@ export function CalendarView() {
         isAdmin={canFilterByTeam}
       />
 
-      {view === 'month' && (
-        <MonthView
-          currentDate={currentDate}
-          events={events}
-          selectedDay={selectedDayForList}
-          onDayClick={handleDayClick}
-          onEventClick={handleEventClick}
-        />
-      )}
+      {/* Calendar on the left, the selected day's events in a narrow column
+          beside it. Stacks back to one column below lg, where 320px of side
+          panel would leave the grid itself unusable. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="min-w-0">
+          {view === 'month' && (
+            <MonthView
+              currentDate={currentDate}
+              events={events}
+              selectedDay={selectedDayForList}
+              onDayClick={handleDayClick}
+              onEventClick={handleEventClick}
+            />
+          )}
 
-      {view === 'week' && (
-        <WeekView
-          currentDate={currentDate}
-          events={events}
-          selectedDay={selectedDayForList}
-          onDayClick={handleDayClick}
-          onEventClick={handleEventClick}
-        />
-      )}
+          {view === 'week' && (
+            <WeekView
+              currentDate={currentDate}
+              events={events}
+              selectedDay={selectedDayForList}
+              onDayClick={handleDayClick}
+              onEventClick={handleEventClick}
+            />
+          )}
 
-      {view === 'day' && (
-        <DayView
-          currentDate={currentDate}
-          events={events}
-          onEventClick={handleEventClick}
-        />
-      )}
+          {view === 'day' && (
+            <DayView
+              currentDate={currentDate}
+              events={events}
+              onEventClick={handleEventClick}
+            />
+          )}
+        </div>
 
-      <DayEventsList
-        selectedDate={selectedDayForList}
-        events={selectedDayEvents}
-        onEventClick={handleEventClick}
-        onCreateEvent={() => {
-          setSelectedDate(selectedDayForList);
-          setSelectedEvent(null);
-          setCreateModalOpen(true);
-        }}
-      />
+        <DayEventsList
+          selectedDate={listDate}
+          events={selectedDayEvents}
+          onEventClick={handleEventClick}
+          onCreateEvent={() => {
+            setSelectedDate(listDate);
+            setSelectedEvent(null);
+            setCreateModalOpen(true);
+          }}
+        />
+      </div>
 
       <CreateEventModal
         open={createModalOpen}

@@ -69,6 +69,8 @@ export interface CashflowPoint {
 
 export interface FinanceStats {
   totalBilled: number;
+  /** Telecom only: commission on the sales installed in the period (operator gross). */
+  totalCommission: number;
   totalReceived: number;
   totalPending: number;
   dueSoon: number;

@@ -14,14 +14,16 @@ interface DayEventsListProps {
 
 export function DayEventsList({ selectedDate, events, onEventClick, onCreateEvent }: DayEventsListProps) {
   return (
-    <div className="mt-4 bg-card rounded-lg border p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold">
-          Eventos de {format(selectedDate, "d 'de' MMMM", { locale: pt })}
+    // Follows the page as the calendar scrolls, and keeps a long day's list
+    // inside its own scroll instead of stretching the column past the grid.
+    <div className="bg-card rounded-lg border p-4 lg:sticky lg:top-4 flex flex-col lg:max-h-[calc(100vh-7rem)]">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h3 className="text-sm font-semibold min-w-0 truncate">
+          {format(selectedDate, "d 'de' MMMM", { locale: pt })}
         </h3>
-        <Button size="sm" variant="outline" onClick={onCreateEvent} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={onCreateEvent} className="gap-1.5 shrink-0">
           <CalendarPlus className="h-4 w-4" />
-          <span className="hidden sm:inline">Novo Evento</span>
+          <span className="lg:hidden xl:inline">Novo</span>
         </Button>
       </div>
 
@@ -31,7 +33,7 @@ export function DayEventsList({ selectedDate, events, onEventClick, onCreateEven
           <p className="text-sm">Sem eventos agendados</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 overflow-y-auto -mr-1 pr-1">
           {events.map((event) => (
             <EventCard
               key={event.id}

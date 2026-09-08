@@ -211,7 +211,7 @@ export default function Finance() {
               onClick={() => setDetailView("faturado")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
+                <CardTitle className="text-sm font-medium">{isTelecom ? "Total de Comissão" : "Total Faturado"}</CardTitle>
                 <div className="flex items-center gap-1">
                   <Wallet className="h-4 w-4 text-muted-foreground" />
                   <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -221,7 +221,7 @@ export default function Finance() {
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <div className="text-xl font-bold md:text-2xl">{formatCurrency(stats.totalBilled)}</div>
+                  <div className="text-xl font-bold md:text-2xl">{formatCurrency(isTelecom ? stats.totalCommission : stats.totalBilled)}</div>
                 )}
                 <p className="text-xs text-muted-foreground">{hasFilters ? "No período" : "Histórico total"}</p>
               </CardContent>

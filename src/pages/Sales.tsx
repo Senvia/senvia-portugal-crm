@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { matchesSearch } from "@/lib/utils";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2, Trash2 } from "lucide-react";
+import { matchesSearch, cn } from "@/lib/utils";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2, Trash2, CalendarClock } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,15 +58,58 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 import { useModules } from "@/hooks/useModules";
+import { TELECOM_TECHNOLOGY_LABELS, type TelecomTechnology } from "@/types/proposals";
 import { useOperators } from "@/hooks/useOperators";
 import type { ServicosDetails } from "@/types/proposals";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+/**
+ * The operators a sale is under, read off the lines frozen on it. A sale can
+ * carry more than one, so this returns a de-duplicated list rather than a
+ * single name. Falls back to the operators table for older lines that only
+ * kept the id.
+ */
+function buildSaleOperatorNames(operatorNameById: Map<string, string>) {
+  return (sale: SaleWithDetails): string[] => {
+    const details = (sale.servicos_details ?? {}) as ServicosDetails;
+    const names = Object.values(details)
+      .map((d) => d?.operator_name || (d?.operator_id ? operatorNameById.get(d.operator_id) : undefined))
+      .filter((n): n is string => !!n);
+    return [...new Set(names)];
+  };
+}
+
+/**
+ * The technologies frozen on a sale's lines. Only products sold as both
+ * Fibra and Satélite carry one, so most sales return an empty list.
+ */
+function saleTechnologies(sale: SaleWithDetails): TelecomTechnology[] {
+  const details = (sale.servicos_details ?? {}) as ServicosDetails;
+  const techs = Object.values(details)
+    .map((d) => d?.tecnologia)
+    .filter((t): t is TelecomTechnology => !!t);
+  return [...new Set(techs)];
+}
+
+/**
+ * The booked install slot as one line. The date column carries the start of
+ * the window and scheduled_install_end its end; a midnight start means only
+ * a day was agreed, so no hours are shown.
+ */
+function saleInstallSlot(sale: SaleWithDetails): { day: string; hours: string } | null {
+  if (!sale.scheduled_install_date) return null;
+  const day = format(new Date(sale.scheduled_install_date), "d MMM yyyy", { locale: pt });
+  const start = (sale.scheduled_install_date.split('T')[1] ?? '').slice(0, 5);
+  const end = (sale.scheduled_install_end?.split('T')[1] ?? '').slice(0, 5);
+  if (!start || start === '00:00') return { day, hours: end ? `até ${end}` : '' };
+  return { day, hours: end ? `${start} — ${end}` : `${start}` };
+}
 
 export default function Sales() {
   // Subscribe to realtime updates
@@ -83,6 +126,35 @@ export default function Sales() {
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const { data: operators = [] } = useOperators();
   const { isAdmin } = usePermissions();
+  // The commission a sale is worth. A sale shows what it pays the SELLER —
+  // the same number the sale's own screen shows — never the operator gross,
+  // which belongs to the organization's cards alone. A non-admin still only
+  // ever sees his own row, so a sale someone else sold reads 0 for him.
+  const { data: comissoesPorVenda } = useQuery({
+    queryKey: ["commission-by-sale", organization?.id, profile?.id, isAdmin],
+    queryFn: async () => {
+      const doVendedor = new Map<string, number>();
+      const minha = new Map<string, number>();
+      if (!organization?.id) return { doVendedor, minha };
+      const { data, error } = await (supabase as any)
+        .from("sale_commission_splits")
+        .select("sale_id, user_id, amount")
+        .eq("organization_id", organization.id);
+      if (error) throw error;
+      for (const row of (data ?? []) as { sale_id: string; user_id: string; amount: number }[]) {
+        const v = Number(row.amount || 0);
+        doVendedor.set(row.sale_id, (doVendedor.get(row.sale_id) ?? 0) + v);
+        if (row.user_id === profile?.id) minha.set(row.sale_id, (minha.get(row.sale_id) ?? 0) + v);
+      }
+      return { doVendedor, minha };
+    },
+    enabled: !!organization?.id && isTelecom,
+  });
+
+  const saleOperatorNames = useMemo(
+    () => buildSaleOperatorNames(new Map(operators.map((o) => [o.id, o.name]))),
+    [operators],
+  );
 const queryClient = useQueryClient();
 const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
@@ -648,6 +720,28 @@ const deleteSale = useMutation({
                       {sale.code && (
                         <span className="text-xs font-medium text-primary">{sale.code}</span>
                       )}
+                      {/* Which operator(s) the sale is under, read off the lines
+                          frozen on it — until now this needed opening the sale. */}
+                      {saleOperatorNames(sale).map((op) => (
+                        <Badge
+                          key={op}
+                          variant="outline"
+                          className="bg-primary/10 text-primary border-primary/30 text-xs font-semibold"
+                        >
+                          {op}
+                        </Badge>
+                      ))}
+                      {/* Which technology was sold — the same product pays a
+                          different commission on Fibra and on Satélite. */}
+                      {isTelecom && saleTechnologies(sale).map((tech) => (
+                        <Badge
+                          key={tech}
+                          variant="outline"
+                          className="bg-sky-500/10 text-sky-600 border-sky-500/30 text-xs font-medium"
+                        >
+                          {TELECOM_TECHNOLOGY_LABELS[tech]}
+                        </Badge>
+                      ))}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(sale.created_at), "d MMM yyyy", { locale: pt })}
                       </span>
@@ -655,6 +749,36 @@ const deleteSale = useMutation({
                     <p className="font-medium truncate">
                       {sale.client?.name || sale.lead?.name || "Sem identificação"}
                     </p>
+                    {/* The booked install slot — the field the team chases
+                        every day, until now only visible inside the sale. */}
+                    {isTelecom && (() => {
+                      const slot = saleInstallSlot(sale);
+                      return (
+                        <div
+                          className={cn(
+                            'mt-1.5 inline-flex items-center gap-1.5 rounded-md border px-2 py-1',
+                            slot
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400',
+                          )}
+                        >
+                          <CalendarClock className="h-4 w-4 shrink-0" />
+                          <span className="text-[10px] uppercase tracking-wide font-semibold opacity-70">
+                            Instalação
+                          </span>
+                          {slot ? (
+                            <>
+                              <span className="text-sm font-bold">{slot.day}</span>
+                              {slot.hours && (
+                                <span className="text-sm font-semibold tabular-nums">{slot.hours}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-sm font-bold">Sem data marcada</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {sale.notes && (
                       <p className="text-sm text-muted-foreground truncate mt-1">
                         {sale.notes}
@@ -662,7 +786,21 @@ const deleteSale = useMutation({
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-semibold">{formatCurrency(sale.total_value)}</p>
+                    {/* Telecom bills the operator, not the client: total_value is
+                        a number nobody acts on. Show the commission instead —
+                        the gross for an admin, the person's own cut otherwise. */}
+                    {isTelecom ? (
+                      <>
+                        <p className="text-lg font-semibold">
+                          {formatCurrency(isAdmin
+                            ? comissoesPorVenda?.doVendedor.get(sale.id) ?? 0
+                            : comissoesPorVenda?.minha.get(sale.id) ?? 0)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">Comissão</p>
+                      </>
+                    ) : (
+                      <p className="text-lg font-semibold">{formatCurrency(sale.total_value)}</p>
+                    )}
                     {sale.recurrence && (
                       <p className="text-xs text-muted-foreground">
                         {formatCurrency(sale.recurrence.amount)}/mês

@@ -4,7 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import type { CommissionSplit } from '@/types/proposals';
+import {
+  TELECOM_TECHNOLOGIES,
+  TELECOM_TECHNOLOGY_LABELS,
+  productNeedsTechnologyChoice,
+  splitTypeForTech,
+  type CommissionSplit,
+  type TelecomTechnology,
+} from '@/types/proposals';
 
 interface Member {
   user_id: string;
@@ -26,6 +33,8 @@ interface CommissionSplitRowProps {
   onRemove: () => void;
   /** Extra field rendered on the same line, before the remove button (e.g. a tier's Bónus Geral). */
   trailing?: React.ReactNode;
+  /** Which technologies the product is sold as. Two of them split the value into one box each. */
+  technologies?: TelecomTechnology[];
 }
 
 /** One "who gets paid, how much" line — Tipo / Quem recebe / Valor / remove. Shared
@@ -39,7 +48,9 @@ export function CommissionSplitRow({
   onCommit,
   onRemove,
   trailing,
+  technologies,
 }: CommissionSplitRowProps) {
+  const byTech = productNeedsTechnologyChoice(technologies);
   return (
     <div className="flex flex-wrap items-end gap-2">
       <div className="space-y-1 w-[110px] shrink-0">
@@ -107,6 +118,64 @@ export function CommissionSplitRow({
         )}
       </div>
 
+      {/* One box per technology when the product is sold as both: the same
+          recipient is paid a different rate for a fibre install than for a
+          satellite one. A per-technology box left empty falls back to the
+          single value, so switching a product to "ambos" never zeroes a rate
+          that was already configured. */}
+      {byTech && (
+        <div className="flex items-end gap-2">
+          {TELECOM_TECHNOLOGIES.map((tech) => {
+            const field = tech === 'fibra' ? 'value_fibra' : 'value_satelite';
+            const typeField = tech === 'fibra' ? 'type_fibra' : 'type_satelite';
+            const shown = split[field] ?? split.value;
+            // Each technology carries its own €/% mode: the same operator
+            // often pays a flat fee on fibre and a percentage on satellite.
+            const mode = splitTypeForTech(split, tech);
+            return (
+              <div key={tech} className="space-y-1">
+                {showLabels && (
+                  <Label className="text-[10px] text-muted-foreground">
+                    {TELECOM_TECHNOLOGY_LABELS[tech]} {mode === 'fixed' ? '(€)' : '(%)'}
+                  </Label>
+                )}
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    step={mode === 'fixed' ? '0.01' : '0.1'}
+                    min="0"
+                    max={mode === 'fixed' ? undefined : '100'}
+                    value={shown || ''}
+                    onChange={(e) => onChange({ [field]: parseFloat(e.target.value) || 0 })}
+                    onBlur={onCommit}
+                    placeholder="0"
+                    className="h-8 w-[72px] text-xs"
+                  />
+                  <div className="flex overflow-hidden rounded-md border shrink-0">
+                    {(['fixed', 'pct'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => onChange({ [typeField]: m }, true)}
+                        className={cn(
+                          'px-1.5 py-1 text-[11px] leading-4 transition-colors',
+                          mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        {m === 'fixed' ? '€' : '%'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Only for a product with a single technology — when it is sold as
+          both, each technology above carries its own value AND its own €/%. */}
+      {!byTech && (
       <div className="space-y-1">
         {showLabels && (
           <Label className="text-[10px] text-muted-foreground">
@@ -114,17 +183,19 @@ export function CommissionSplitRow({
           </Label>
         )}
         <div className="flex items-center gap-1">
-          <Input
-            type="number"
-            step={split.type === 'fixed' ? '0.01' : '0.1'}
-            min="0"
-            max={split.type === 'fixed' ? undefined : '100'}
-            value={split.value || ''}
-            onChange={(e) => onChange({ value: parseFloat(e.target.value) || 0 })}
-            onBlur={onCommit}
-            placeholder="0"
-            className="h-8 w-[90px] text-xs"
-          />
+          {!byTech && (
+            <Input
+              type="number"
+              step={split.type === 'fixed' ? '0.01' : '0.1'}
+              min="0"
+              max={split.type === 'fixed' ? undefined : '100'}
+              value={split.value || ''}
+              onChange={(e) => onChange({ value: parseFloat(e.target.value) || 0 })}
+              onBlur={onCommit}
+              placeholder="0"
+              className="h-8 w-[90px] text-xs"
+            />
+          )}
           <div className="flex overflow-hidden rounded-md border shrink-0">
             <button
               type="button"
@@ -149,6 +220,7 @@ export function CommissionSplitRow({
           </div>
         </div>
       </div>
+      )}
 
       {trailing}
 

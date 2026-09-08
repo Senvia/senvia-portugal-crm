@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { CommissionSplitRow } from './CommissionSplitRow';
-import type { CommissionSplit } from '@/types/proposals';
+import type { CommissionSplit, TelecomTechnology } from '@/types/proposals';
 
 interface Member {
   user_id: string;
@@ -21,6 +21,8 @@ interface CommissionSplitsEditorProps {
   onChange: (splits: CommissionSplit[]) => void;
   /** Called when an edit is finished and should be persisted. */
   onCommit: (splits: CommissionSplit[]) => void;
+  /** Passed down so each line shows one value box per technology when there are two. */
+  technologies?: TelecomTechnology[];
 }
 
 /**
@@ -33,6 +35,7 @@ export function CommissionSplitsEditor({
   profiles,
   onChange,
   onCommit,
+  technologies,
 }: CommissionSplitsEditorProps) {
   const addLine = () => {
     onCommit([...splits, { kind: 'user', type: 'fixed', value: 0 }]);
@@ -73,6 +76,7 @@ export function CommissionSplitsEditor({
               onChange={(updates, commit) => updateLine(index, updates, commit)}
               onCommit={() => onCommit(splits)}
               onRemove={() => removeLine(index)}
+              technologies={technologies}
             />
           ))}
 

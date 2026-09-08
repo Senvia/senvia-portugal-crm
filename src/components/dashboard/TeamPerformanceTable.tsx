@@ -163,13 +163,17 @@ export function TeamPerformanceTable() {
     queryKey: ["team-perf-sales", orgId, monthStart, monthEnd, memberIds],
     queryFn: async () => {
       if (!orgId || memberIds.length === 0) return [];
-      const { data, error } = await supabase
+      // Cast: seller_id is newer than the generated types, and one unknown
+      // column poisons the whole query inferred type.
+      const { data, error } = await (supabase as any)
         .from("sales")
-        .select("id, created_by, status, comissao")
+        .select("id, created_by, seller_id, status, comissao")
         .eq("organization_id", orgId)
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd)
-        .in("created_by", memberIds);
+        // Assigned OR created by one of them: a sale handed to a member by
+        // somebody outside this list is still that member's sale.
+        .or(`created_by.in.(${memberIds.join(",")}),seller_id.in.(${memberIds.join(",")})`);
       if (error) throw error;
       return data || [];
     },
@@ -225,7 +229,11 @@ export function TeamPerformanceTable() {
       const openProposalValue = memberProposals
         .filter((proposal) => proposal.status === "draft" || proposal.status === "sent" || proposal.status === "negotiating")
         .reduce((sum, proposal) => sum + (proposal.total_value || 0), 0);
-      const memberSales = (salesData || []).filter((sale) => sale.created_by === member.user_id);
+      // The sale belongs to whoever it was assigned to; created_by is only
+      // the fallback for sales made before assignment existed.
+      const memberSales = (salesData || []).filter(
+        (sale: any) => (sale.seller_id || sale.created_by) === member.user_id,
+      );
       const delivered = memberSales.filter((sale) => sale.status === "delivered" || sale.status === "completed");
       const commission = delivered.reduce((sum, sale) => {
         const amount = hasSplitsForSale.has(sale.id)

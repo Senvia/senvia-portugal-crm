@@ -12,8 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { NumberInput } from '@/components/shared/NumberInput';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
+import { usePermissions } from '@/hooks/usePermissions';
 import type {
   ServicosDetails,
   ServicosProductDetail,
@@ -21,11 +23,15 @@ import type {
   CatalogProduct,
   ModeloServico,
   ExtraCards,
+  TelecomTechnology,
 } from '@/types/proposals';
 import {
   FIELD_LABELS,
   getSaleLineCommission,
   getCatalogPriceForQuantity,
+  TELECOM_TECHNOLOGIES,
+  TELECOM_TECHNOLOGY_LABELS,
+  productNeedsTechnologyChoice,
 } from '@/types/proposals';
 
 interface OperatorRef {
@@ -163,9 +169,12 @@ function CatalogProducts({
   const sellerId = sellerUserId ?? currentUserId;
   const sellerProfileId = teamMembers.find((m) => m.user_id === sellerId)?.profile_id ?? null;
   const viewerIsSeller = sellerId === currentUserId;
+  // The operator gross and the org's margin are the company's numbers, not a
+  // salesperson's. He sees what he earns; only an admin sees the rest.
+  const { isAdmin } = usePermissions();
 
-  const lineCommission = (product: CatalogProduct, qty: number, extraCards?: ExtraCards) =>
-    getSaleLineCommission(product, qty, extraCards, sellerId, sellerProfileId);
+  const lineCommission = (product: CatalogProduct, qty: number, extraCards?: ExtraCards, tech?: TelecomTechnology) =>
+    getSaleLineCommission(product, qty, extraCards, sellerId, sellerProfileId, tech);
 
   const operatorById = new Map(operators.map((o) => [o.id, o.name]));
 
@@ -198,7 +207,7 @@ function CatalogProducts({
   // pool (which is still what gets saved to the sale, via detail.comissao).
   // Resolved by the operator FROZEN on this line, not the current picker —
   // a line added under Digi stays a Digi line even if the picker moves on.
-  const { totalSellerComissao, totalOrgComissao } = servicosProdutos.reduce(
+  const { totalSellerComissao, totalOrgComissao, totalGrossComissao } = servicosProdutos.reduce(
     (acc, p) => {
       const detail = servicosDetails[p];
       const catProduct = resolveProduct(p, detail?.operator_id);
@@ -209,13 +218,15 @@ function CatalogProducts({
         detail?.total_cards != null
           ? { total: detail.total_cards }
           : { portabilidade: detail?.extra_cards_portability, novos: detail?.extra_cards_new },
+        detail?.tecnologia,
       );
       return {
         totalSellerComissao: acc.totalSellerComissao + line.seller,
         totalOrgComissao: acc.totalOrgComissao + line.org,
+        totalGrossComissao: acc.totalGrossComissao + line.gross,
       };
     },
-    { totalSellerComissao: 0, totalOrgComissao: 0 },
+    { totalSellerComissao: 0, totalOrgComissao: 0, totalGrossComissao: 0 },
   );
 
   // Build combobox options: for the chosen operator, every product tied to it
@@ -262,6 +273,10 @@ function CatalogProducts({
         quantidade: 1,
         operator_id: frozenOperatorId,
         operator_name: frozenOperatorId ? operatorById.get(frozenOperatorId) : undefined,
+        // One technology means there is nothing to ask: freeze it now.
+        // Two leaves it undefined on purpose, so the sale cannot be saved
+        // until someone says which one was installed.
+        tecnologia: catProduct.technologies?.length === 1 ? catProduct.technologies[0] : undefined,
       });
     }
   };
@@ -334,10 +349,20 @@ function CatalogProducts({
           // How many cards this line already includes by default — what the
           // seller sees pre-filled, and the baseline extras are counted from.
           const includedCards = catProduct.included_cards ?? 1;
-          const totalCards = detail.total_cards ?? includedCards;
+          // A sale made before this field existed stored the EXTRAS instead of
+          // the total. Ignoring them showed "1 cartão" on a line that is being
+          // paid for two — the screen disagreeing with the commission it earns.
+          const legacyExtras = (detail.extra_cards_portability ?? 0) + (detail.extra_cards_new ?? 0);
+          const totalCards = detail.total_cards ?? includedCards + legacyExtras;
           const extraCardsCount = Math.max(0, totalCards - includedCards);
           const extraCards: ExtraCards = { total: totalCards };
-          const line = lineCommission(catProduct, quantidade, extraCards);
+          // Which technology this line is. Undefined on a product sold as both
+          // until someone picks — and until then the line pays nothing, which is
+          // the point: a wrong default would quietly pay the fibre rate on a
+          // satellite install.
+          const needsTech = productNeedsTechnologyChoice(catProduct.technologies);
+          const tecnologia = detail.tecnologia;
+          const line = lineCommission(catProduct, quantidade, extraCards, tecnologia);
           const hasCommission = line.gross > 0 || isTiered || catProduct.has_commission;
           // The seller's own take, per unit and for the whole line. Someone
           // who is not the seller sees zero — it is not their money.
@@ -394,7 +419,7 @@ function CatalogProducts({
                     min={0}
                     value={price}
                     onCommit={(newPrice) => {
-                      const comissao = lineCommission({ ...catProduct, price: newPrice }, quantidade, extraCards).gross;
+                      const comissao = lineCommission({ ...catProduct, price: newPrice }, quantidade, extraCards, tecnologia).gross;
                       onSetProductDetail(productName, { ...detail, price: newPrice, comissao });
                     }}
                     className="h-8"
@@ -411,7 +436,7 @@ function CatalogProducts({
                     value={quantidade}
                     onCommit={(n) => {
                       const newQty = Math.max(1, Math.round(n) || 1);
-                      const comissao = lineCommission(catProduct, newQty, extraCards).gross;
+                      const comissao = lineCommission(catProduct, newQty, extraCards, tecnologia).gross;
                       const newPrice = isTiered
                         ? getCatalogPriceForQuantity(catProduct, newQty) * newQty
                         : unitPrice * newQty;
@@ -420,7 +445,34 @@ function CatalogProducts({
                     className="h-8"
                   />
                 </div>
+                {needsTech && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tecnologia</Label>
+                    <Select
+                      value={tecnologia ?? ""}
+                      onValueChange={(v) => {
+                        const tech = v as TelecomTechnology;
+                        const comissao = lineCommission(catProduct, quantidade, extraCards, tech).gross;
+                        onSetProductDetail(productName, { ...detail, tecnologia: tech, comissao });
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-8 text-sm", !tecnologia && "border-destructive text-muted-foreground")}>
+                        <SelectValue placeholder="Escolher" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(catProduct.technologies ?? TELECOM_TECHNOLOGIES).map((t) => (
+                          <SelectItem key={t} value={t}>{TELECOM_TECHNOLOGY_LABELS[t]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
+              {needsTech && !tecnologia && (
+                <p className="text-[11px] text-destructive">
+                  Escolhe a tecnologia — a comissão desta linha depende dela.
+                </p>
+              )}
               {supportsExtraCards && (
                 <div className="space-y-1 max-w-[200px]">
                   <Label className="text-xs text-muted-foreground">Número de Cartões</Label>
@@ -431,7 +483,7 @@ function CatalogProducts({
                     onCommit={(n) => {
                       const newTotal = Math.max(0, Math.round(n) || 0);
                       const nextExtra: ExtraCards = { total: newTotal };
-                      const comissao = lineCommission(catProduct, quantidade, nextExtra).gross;
+                      const comissao = lineCommission(catProduct, quantidade, nextExtra, tecnologia).gross;
                       onSetProductDetail(productName, { ...detail, total_cards: newTotal, comissao });
                     }}
                     className="h-8"
@@ -453,8 +505,12 @@ function CatalogProducts({
                   {/* The pool this line pays out across everyone — shown next to
                       the seller's own cut so a sale can be checked without
                       logging in as each recipient. */}
-                  {Math.abs((detail.comissao ?? 0) - myLineCommission) > 0.005 && (
-                    <span> · total {(detail.comissao ?? 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</span>
+                  {/* line.gross, not detail.comissao: the stored figure is
+                      frozen from whenever the line was added and drifts as soon
+                      as the catalog changes — one sale here still carried 540 €
+                      from a configuration that pays 210 € today. */}
+                  {isAdmin && Math.abs(line.gross - myLineCommission) > 0.005 && (
+                    <span> · total {line.gross.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</span>
                   )}
                   {isTiered && !catProduct.quantity_tiers?.some(t => quantidade >= t.min && (t.max == null || quantidade <= t.max)) && (
                     <span className="ml-1 text-destructive">(sem escalão para esta quantidade)</span>
@@ -483,9 +539,12 @@ function CatalogProducts({
             </div>
             {/* What the operator pays, and what is left over for the org once
                 the seller has taken his rate. */}
-            {totalOrgComissao > 0.005 && (
+            {/* Admin only, and computed — not detail.comissao, which is frozen
+                at the moment the line was added and goes stale the instant the
+                catalog changes. */}
+            {isAdmin && totalOrgComissao > 0.005 && (
               <p className="text-[11px] text-muted-foreground">
-                Operadora paga {totalPoolComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                Operadora paga {totalGrossComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                 {' · '}Organização fica com {totalOrgComissao.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
               </p>
             )}

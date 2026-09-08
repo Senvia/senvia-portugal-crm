@@ -81,7 +81,9 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
       </div>
       <span
         className={cn(
-          'text-[10px] px-2 py-0.5 rounded-full font-medium',
+          // shrink-0: in the narrow side column the badge was being squeezed
+          // and wrapping its own label instead of the title truncating.
+          'text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0',
           event.status === 'completed' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
           event.status === 'pending' && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
           event.status === 'cancelled' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'

@@ -65,7 +65,7 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       // that once took the product catalog down.
       const { data: sales, error: salesErr } = await (supabase as any)
         .from('sales')
-        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status, has_recurring, telecom_status')
+        .select('id, code, comissao, total_value, client_id, lead_id, created_by, seller_id, sale_date, activation_date, commission_paid_at, payment_status, has_recurring, telecom_status')
         .eq('organization_id', organizationId)
         .in('status', ['delivered', 'fulfilled']);
       if (salesErr) throw salesErr;
@@ -184,6 +184,10 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       const leadMap = new Map<string, any>((leadsRes.data || []).map((l: any) => [l.id, l]));
 
       const getCommercial = (s: any): string => {
+        // An explicit assignment wins over everything: a sale typed in by one
+        // person and handed to another belongs to the person it was handed to,
+        // whoever the client happens to be assigned to.
+        if (s.seller_id) return s.seller_id as string;
         if (s.client_id && clientMap.get(s.client_id)?.assigned_to) return clientMap.get(s.client_id).assigned_to;
         if (s.lead_id && leadMap.get(s.lead_id)?.assigned_to) return leadMap.get(s.lead_id).assigned_to;
         return (s.created_by as string) || 'unassigned';

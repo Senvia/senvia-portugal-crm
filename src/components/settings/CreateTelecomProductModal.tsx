@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { OperatorField, PriceField, CommissionSection, useProductOperatorContext } from './ProductCommissionFields';
+import { OperatorField, PriceField, TechnologyField, CommissionSection, useProductOperatorContext } from './ProductCommissionFields';
 import type { Operator } from '@/hooks/useOperators';
 import type { CatalogProduct } from '@/types/proposals';
 
@@ -118,6 +118,7 @@ export function CreateTelecomProductModal({
                   <p className="text-xs text-destructive">Já existe um produto com este nome.</p>
                 )}
               </div>
+              <TechnologyField product={draft} onCommit={patch} />
             </div>
 
             {!isTiered && (

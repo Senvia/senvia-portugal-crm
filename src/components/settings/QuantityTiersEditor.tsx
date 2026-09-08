@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { CommissionSplitRow } from './CommissionSplitRow';
-import type { CommissionSplit, QuantityTier } from '@/types/proposals';
+import {  TELECOM_TECHNOLOGIES,  TELECOM_TECHNOLOGY_LABELS,  productNeedsTechnologyChoice,  type CommissionSplit,  type QuantityTier,  type TelecomTechnology,} from '@/types/proposals';
 
 interface Member {
   user_id: string;
@@ -26,6 +26,8 @@ interface QuantityTiersEditorProps {
   scopeLabel: string;
   onChange: (tiers: QuantityTier[]) => void;
   onCommit: (tiers: QuantityTier[]) => void;
+  /** Which technologies the product is sold as — drives one rate box per technology. */
+  technologies?: TelecomTechnology[];
 }
 
 /**
@@ -44,7 +46,9 @@ export function QuantityTiersEditor({
   scopeLabel,
   onChange,
   onCommit,
+  technologies,
 }: QuantityTiersEditorProps) {
+  const byTech = productNeedsTechnologyChoice(technologies);
   const addTier = () => {
     const lastMax = tiers.length > 0 ? tiers[tiers.length - 1].max : 0;
     const nextMin = (lastMax ?? 0) + 1;
@@ -142,6 +146,30 @@ export function QuantityTiersEditor({
                     className="h-8 text-xs"
                   />
                 </div>
+                {/* What the operator pays the org per unit in this band. It had
+                    no field at all until now — the only way to set it was SQL —
+                    yet it is what decides the org margin. */}
+                {(byTech ? TELECOM_TECHNOLOGIES : [null]).map((tech) => {
+                  const field = tech === "fibra" ? "operator_pays_fibra"
+                    : tech === "satelite" ? "operator_pays_satelite" : "operator_pays";
+                  return (
+                    <div key={field} className="space-y-1 w-28 shrink-0">
+                      <Label className="text-[10px] text-muted-foreground">
+                        {tech ? `Operadora paga ${TELECOM_TECHNOLOGY_LABELS[tech]}` : "Operadora paga (€)"}
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={tier[field] ?? ""}
+                        onChange={(e) => updateTier(tier.id, { [field]: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        onBlur={() => onCommit(tiers)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  );
+                })}
                 <div className="flex-1" />
                 <Button
                   type="button"
@@ -185,6 +213,7 @@ export function QuantityTiersEditor({
                       members={members}
                       profiles={profiles}
                       showLabels={false}
+              technologies={technologies}
                       onChange={(updates, commit) => updateSplit(tier.id, index, updates, commit)}
                       onCommit={() => onCommit(tiers)}
                       onRemove={() => removeSplit(tier.id, index)}

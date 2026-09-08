@@ -22,15 +22,16 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     queryKey: ['finance-sales', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
-      const { data, error } = await supabase
+      // Cast: telecom_status/comissao are newer than the generated types.
+      const { data, error } = await (supabase as any)
         .from('sales')
-        .select('id, total_value, created_at, sale_date, status')
+        .select('id, total_value, created_at, sale_date, status, comissao, telecom_status, activation_date')
         .eq('organization_id', organizationId);
       if (error) throw error;
       // Cancelled sales are not real revenue — exclude them from every total.
       return (data || [])
         .filter((sale) => sale.status !== 'cancelled')
-        .map((sale) => ({ ...sale, total_value: Number(sale.total_value || 0) }));
+        .map((sale: any) => ({ ...sale, total_value: Number(sale.total_value || 0) }));
     },
     enabled: !!organizationId,
   });
@@ -172,6 +173,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const stats = useMemo((): FinanceStats => {
     const empty: FinanceStats = {
       totalBilled: 0,
+      totalCommission: 0,
       totalReceived: 0,
       totalPending: 0,
       dueSoon: 0,
@@ -216,6 +218,20 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     }, 0);
 
     const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0) + renewalBilled;
+
+    // Telecom has no client payments — the operator pays. This is the whole
+    // commission booked in the period, which is what "Total de Comissão"
+    // says: every sale except the ones called off. filteredSales already
+    // drops status 'cancelled', and both telecom cancellations (anulado and
+    // cancelado) map onto it, so the set is right as it stands.
+    //
+    // Deliberately NOT the same basis as the "Comissões"/"Valor da
+    // Organização" cards: those answer "what is owed to people", and only
+    // count once a sale is installed. This one answers "what did we sell".
+    const totalCommission = filteredSales.reduce(
+      (sum: number, sale: any) => sum + Number(sale.comissao || 0),
+      0,
+    );
 
     const totalReceived = eligibleFilteredPayments
       .filter((payment) => payment.status === 'paid')
@@ -275,6 +291,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
     return {
       totalBilled,
+      totalCommission,
       totalReceived,
       totalPending,
       dueSoon,

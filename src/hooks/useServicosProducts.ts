@@ -8,6 +8,7 @@ import {
   type CatalogProduct,
   type CommissionSplit,
   type QuantityTier,
+  type TelecomTechnology,
 } from '@/types/proposals';
 
 interface LegacyConfigFromDB {
@@ -27,6 +28,10 @@ interface CatalogConfigFromDB {
   quantity_tiers?: QuantityTier[];
   extra_card_commission?: number;
   included_cards?: number;
+  operator_pays?: number;
+  operator_pays_fibra?: number;
+  operator_pays_satelite?: number;
+  technologies?: TelecomTechnology[];
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -72,6 +77,10 @@ export function useServicosProducts() {
         quantity_tiers: c.quantity_tiers,
         extra_card_commission: c.extra_card_commission,
         included_cards: c.included_cards,
+        operator_pays: c.operator_pays,
+        operator_pays_fibra: c.operator_pays_fibra,
+        operator_pays_satelite: c.operator_pays_satelite,
+        technologies: c.technologies,
       }));
       return {
         products: catalog.map((c) => c.name),
