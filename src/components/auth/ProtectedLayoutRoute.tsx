@@ -46,17 +46,6 @@ export function ProtectedLayoutRoute() {
     );
   }
 
-  if (
-    !onboardingComplete &&
-    !stagesLoading &&
-    organization?.id &&
-    isAdmin &&
-    pipelineStages &&
-    pipelineStages.length === 0
-  ) {
-    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
-  }
-
   // PAYING CUSTOMER past the grace window → "renew your plan" blocker (NOT the
   // trial blocker). Mirrors ProtectedRoute: this is the app's main layout route,
   // so without this branch a paying-overdue customer would never be blocked.
@@ -91,6 +80,17 @@ export function ProtectedLayoutRoute() {
     !location.pathname.startsWith('/settings')
   ) {
     return <TrialExpiredBlocker trialEndsAt={subscriptionStatus.trial_ends_at} />;
+  }
+
+  if (
+    !onboardingComplete &&
+    !stagesLoading &&
+    organization?.id &&
+    isAdmin &&
+    pipelineStages &&
+    pipelineStages.length === 0
+  ) {
+    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
   return (

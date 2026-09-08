@@ -50,18 +50,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Onboarding wizard: show if admin, org exists, no pipeline stages, not already completed
-  if (
-    !onboardingComplete &&
-    !stagesLoading &&
-    organization?.id &&
-    isAdmin &&
-    pipelineStages &&
-    pipelineStages.length === 0
-  ) {
-    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
-  }
-
   // PAYING CUSTOMER overdue past the grace window — show the "renew your plan"
   // blocker (NOT the trial blocker). This branch is keyed off first_paid_at:
   // once an org has paid even once, it is a paying customer forever and never
@@ -105,6 +93,20 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     !location.pathname.startsWith('/settings')
   ) {
     return <TrialExpiredBlocker trialEndsAt={subscriptionStatus.trial_ends_at} />;
+  }
+
+  // Onboarding wizard: show if admin, org exists, no pipeline stages, not already completed.
+  // Payment/trial blockers must run first so blocked orgs never reach an
+  // internal setup flow before renewing.
+  if (
+    !onboardingComplete &&
+    !stagesLoading &&
+    organization?.id &&
+    isAdmin &&
+    pipelineStages &&
+    pipelineStages.length === 0
+  ) {
+    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
   return <>{children}</>;
