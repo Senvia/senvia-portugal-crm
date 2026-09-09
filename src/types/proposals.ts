@@ -494,17 +494,38 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
 }
 
 /**
- * Euro value of one split, where 'pct' is a percentage of `pctBase`.
+ * Euro value of one split, where 'pct' is a percentage of a base.
  *
- * That base is what the OPERATOR PAYS the org for the unit, not the price
- * the client pays — in telecom the client pays the operator, the product's
- * own price is 0, and a percentage of 0 is 0. Callers fall back to the unit
- * price for a product with no operator payment configured (every non-telecom
- * product), so a plain catalog keeps meaning "% of the sale".
+ * Which base depends on the technology:
+ *
+ *   fibre    — what the OPERATOR PAYS the org for the unit, not the price
+ *              the client pays. In telecom the client pays the operator, the
+ *              product's own price is 0, and a percentage of 0 is 0. Callers
+ *              fall back to the unit price for a product with no operator
+ *              payment configured (every non-telecom product), so a plain
+ *              catalog keeps meaning "% of the sale".
+ *
+ *   satellite — a percentage of what THIS SAME LINE pays in fibre. Satellite
+ *              is priced as a cut of the fibre rate: a seller on 170 € of
+ *              fibre earns 30 % of his own 170 €, i.e. 51 €, not 30 % of the
+ *              200 € the operator pays. Getting this wrong paid every seller
+ *              the same 60 € and wiped out the organization's margin.
+ *
+ * `fibraPctBase` is the operator's FIBRE payment, needed only when the fibre
+ * rate is itself a percentage; it defaults to `pctBase`.
  */
-function splitEuroValue(split: CommissionSplit, pctBase: number, tech?: TelecomTechnology): number {
+function splitEuroValue(
+  split: CommissionSplit,
+  pctBase: number,
+  tech?: TelecomTechnology,
+  fibraPctBase?: number,
+): number {
   const value = pickByTech(split.value, split.value_fibra, split.value_satelite, tech) || 0;
-  return splitTypeForTech(split, tech) === 'fixed' ? value : Math.round(pctBase * value) / 100;
+  if (splitTypeForTech(split, tech) === 'fixed') return value;
+  const base = tech === 'satelite'
+    ? splitEuroValue(split, fibraPctBase ?? pctBase, 'fibra')
+    : pctBase;
+  return Math.round(base * value) / 100;
 }
 
 /**
@@ -520,16 +541,17 @@ function sellerRatePerUnit(
   sellerUserId?: string | null,
   sellerProfileId?: string | null,
   tech?: TelecomTechnology,
+  fibraPctBase?: number,
 ): number {
   if (!splits || splits.length === 0) return 0;
   const named = sellerUserId
     ? splits.find(s => s.kind === 'user' && s.user_id === sellerUserId)
     : undefined;
-  if (named) return splitEuroValue(named, pctBase, tech);
+  if (named) return splitEuroValue(named, pctBase, tech, fibraPctBase);
   const byProfile = sellerProfileId
     ? splits.find(s => s.kind === 'profile' && s.profile_id === sellerProfileId)
     : undefined;
-  return byProfile ? splitEuroValue(byProfile, pctBase, tech) : 0;
+  return byProfile ? splitEuroValue(byProfile, pctBase, tech, fibraPctBase) : 0;
 }
 
 /** What one sale line is worth, split three ways. */
@@ -582,8 +604,21 @@ export function getSaleLineCommission(
     pickByTech(tier?.operator_pays, tier?.operator_pays_fibra, tier?.operator_pays_satelite, tech)
     ?? pickByTech(product.operator_pays, product.operator_pays_fibra, product.operator_pays_satelite, tech)
     ?? null;
+  // The fibre payment as well: a satellite percentage is a cut of the fibre
+  // rate, and that rate is itself a percentage on some products.
+  const operatorFibraPerUnit =
+    pickByTech(tier?.operator_pays, tier?.operator_pays_fibra, tier?.operator_pays_satelite, 'fibra')
+    ?? pickByTech(product.operator_pays, product.operator_pays_fibra, product.operator_pays_satelite, 'fibra')
+    ?? null;
 
-  const sellerPerUnit = sellerRatePerUnit(splits, operatorPerUnit ?? unitPrice, sellerUserId, sellerProfileId, tech);
+  const sellerPerUnit = sellerRatePerUnit(
+    splits,
+    operatorPerUnit ?? unitPrice,
+    sellerUserId,
+    sellerProfileId,
+    tech,
+    operatorFibraPerUnit ?? unitPrice,
+  );
   const sellerBase = sellerPerUnit * qty;
 
   const bonus = tier

@@ -136,7 +136,15 @@ export function CommissionSplitRow({
               <div key={tech} className="space-y-1">
                 {showLabels && (
                   <Label className="text-[10px] text-muted-foreground">
-                    {TELECOM_TECHNOLOGY_LABELS[tech]} {mode === 'fixed' ? '(€)' : '(%)'}
+                    {/* A satellite percentage is a cut of THIS line's own fibre
+                        rate, not of what the operator pays — say so, or the
+                        same "30" reads as two different numbers. */}
+                    {TELECOM_TECHNOLOGY_LABELS[tech]}{' '}
+                    {mode === 'fixed'
+                      ? '(€)'
+                      : tech === 'satelite'
+                        ? '(% da fibra)'
+                        : '(%)'}
                   </Label>
                 )}
                 <div className="flex items-center gap-1">

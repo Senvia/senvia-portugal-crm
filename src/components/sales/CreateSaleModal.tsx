@@ -704,7 +704,10 @@ export function CreateSaleModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isTelecom && !isPlanSale && total <= 0 && items.length === 0) return;
+    // No value check here. A sale can be worth 0 € — a telecom contract the
+    // operator pays for, a free installation, a replacement, a gift. This
+    // used to `return` with no message at all, so the form simply did
+    // nothing and nobody could tell why.
 
     // Validate plan sale
     if (isPlanSale && !clientOrgId) {
@@ -872,7 +875,11 @@ export function CreateSaleModal({
     }
   };
 
-  const isValid = (items.length > 0 || total > 0 || isPlanSale);
+  // Deliberately NOT gated on the sale's value. A sale can be worth 0 € —
+  // in telecom every catalog product is priced 0, because the client pays
+  // the operator and not us, and a whole organization sat looking at a dead
+  // grey button that explained nothing. What the sale actually needs is
+  // checked on submit, where each rule can say what is missing.
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1737,7 +1744,7 @@ export function CreateSaleModal({
               className="flex-1"
               size="lg"
               onClick={handleSubmit}
-              disabled={!isValid || createSale.isPending}
+              disabled={createSale.isPending}
             >
               {createSale.isPending ? (
                 <>
