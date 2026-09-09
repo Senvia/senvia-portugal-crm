@@ -6,9 +6,12 @@ import { addDays, endOfDay, format, isWithinInterval, parseISO, startOfDay, subD
 import type { CashflowPoint, FinanceStats, PaymentWithSale } from '@/types/finance';
 import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/types/sales';
 import { DateRange } from 'react-day-picker';
+import { saleMatchesCommissionFilters, type CommissionFilters } from '@/lib/commission-filters';
 
 interface UseFinanceStatsOptions {
   dateRange?: DateRange;
+  /** Telecom: narrows "Total de Comissão" by operator and seller. */
+  commissionFilters?: CommissionFilters;
 }
 
 const isStripePlanPayment = (payment: PaymentWithSale) => Boolean(payment.sale.client_org_id);
@@ -17,6 +20,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const { organization } = useAuth();
   const organizationId = organization?.id;
   const dateRange = options?.dateRange;
+  const commissionFilters = options?.commissionFilters;
 
   const { data: sales, isLoading: loadingSales } = useQuery({
     queryKey: ['finance-sales', organizationId],
@@ -25,7 +29,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       // Cast: telecom_status/comissao are newer than the generated types.
       const { data, error } = await (supabase as any)
         .from('sales')
-        .select('id, total_value, created_at, sale_date, status, comissao, telecom_status, activation_date')
+        .select('id, total_value, created_at, sale_date, status, comissao, telecom_status, activation_date, seller_id, created_by, servicos_details')
         .eq('organization_id', organizationId);
       if (error) throw error;
       // Cancelled sales are not real revenue — exclude them from every total.
@@ -174,6 +178,10 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     const empty: FinanceStats = {
       totalBilled: 0,
       totalCommission: 0,
+      telecomToInstall: 0,
+      telecomToInstallCount: 0,
+      telecomInstalled: 0,
+      telecomInstalledCount: 0,
       totalReceived: 0,
       totalPending: 0,
       dueSoon: 0,
@@ -228,10 +236,32 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     // Deliberately NOT the same basis as the "Comissões"/"Valor da
     // Organização" cards: those answer "what is owed to people", and only
     // count once a sale is installed. This one answers "what did we sell".
-    const totalCommission = filteredSales.reduce(
-      (sum: number, sale: any) => sum + Number(sale.comissao || 0),
-      0,
-    );
+    //
+    // Operator / seller filters apply to THIS number only — they are a
+    // telecom question, and the rest of the page is client billing.
+    const totalCommission = filteredSales
+      .filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters))
+      .reduce((sum: number, sale: any) => sum + Number(sale.comissao || 0), 0);
+
+    // The telecom lifecycle. Client billing has no meaning here — the
+    // operator pays, and it pays on INSTALL — so the money is read off the
+    // telecom state: what is still waiting on an install (counted when it
+    // was sold) and what is already earned (counted when it went live).
+    const inPeriod = (dateStr?: string | null) => {
+      if (!dateRange?.from) return true;
+      if (!dateStr) return false;
+      const d = parseISO(dateStr);
+      if (d < startOfDay(dateRange.from)) return false;
+      if (dateRange.to && d > endOfDay(dateRange.to)) return false;
+      return true;
+    };
+    const telecomSales = (sales || []).filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters));
+    const toInstallRows = telecomSales.filter((sale: any) =>
+      (sale.telecom_status === 'pendente' || sale.telecom_status === 'em_instalacao') && inPeriod(sale.sale_date));
+    const installedRows = telecomSales.filter((sale: any) =>
+      sale.telecom_status === 'ativo' && inPeriod(sale.activation_date || sale.sale_date));
+    const telecomToInstall = toInstallRows.reduce((sum: number, sale: any) => sum + Number(sale.comissao || 0), 0);
+    const telecomInstalled = installedRows.reduce((sum: number, sale: any) => sum + Number(sale.comissao || 0), 0);
 
     const totalReceived = eligibleFilteredPayments
       .filter((payment) => payment.status === 'paid')
@@ -292,6 +322,10 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     return {
       totalBilled,
       totalCommission,
+      telecomToInstall,
+      telecomToInstallCount: toInstallRows.length,
+      telecomInstalled,
+      telecomInstalledCount: installedRows.length,
       totalReceived,
       totalPending,
       dueSoon,
@@ -303,7 +337,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       totalOverdue,
       overdueCount: overduePayments.length,
     };
-  }, [dateRange, filteredExpenses, filteredPayments, filteredSales, payments]);
+  }, [dateRange, filteredExpenses, filteredPayments, filteredSales, payments, sales, commissionFilters]);
 
   return {
     stats,

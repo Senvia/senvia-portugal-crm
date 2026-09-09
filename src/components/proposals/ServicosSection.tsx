@@ -27,6 +27,7 @@ import type {
 import {
   FIELD_LABELS,
   getSaleLineCommission,
+  sellerHasCommissionLine,
   getCatalogPriceForQuantity,
   TELECOM_TECHNOLOGIES,
   TELECOM_TECHNOLOGY_LABELS,
@@ -510,7 +511,15 @@ function CatalogProducts({
                   </p>
                 </div>
               )}
-              {hasCommission && (
+              {hasCommission && !sellerHasCommissionLine(catProduct, quantidade, sellerId, sellerProfileId) ? (
+                // The product pays commission, just not to THIS seller: there is
+                // no line with his name or his profile on it. "0,00 €" here read
+                // as a broken calculation; it is a missing row in the catalog.
+                <p className="text-xs text-amber-600">
+                  {viewerIsSeller ? 'Não tens' : 'O vendedor não tem'} linha de comissão neste produto —
+                  {' '}um admin acrescenta-a em Definições → Produtos.
+                </p>
+              ) : hasCommission && (
                 <div className="text-xs text-muted-foreground">
                   {viewerIsSeller ? 'A tua parte' : 'Comissão do vendedor'} ({quantidade} unid.): <span className="font-medium text-foreground">
                     {myLineCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}

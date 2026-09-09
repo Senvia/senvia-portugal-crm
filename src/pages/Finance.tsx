@@ -46,6 +46,14 @@ import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { ChargebacksTab } from "@/components/finance/ChargebacksTab";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
+import { CommissionFiltersBar } from "@/components/finance/CommissionFilters";
+import { useSaleChargebacks } from "@/hooks/useSaleChargebacks";
+import { Hammer, PlugZap, Undo2 } from "lucide-react";
+import {
+  DEFAULT_COMMISSION_FILTERS,
+  hasCommissionFilters,
+  type CommissionFilters,
+} from "@/lib/commission-filters";
 
 export default function Finance() {
   const { organization, organizations } = useAuth();
@@ -71,6 +79,11 @@ export default function Finance() {
   ];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
   const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", "resumo");
+  // Operator switches + seller for the commission card (telecom only).
+  const [commissionFilters, setCommissionFilters] = usePersistedState<CommissionFilters>(
+    "finance-commission-filters-v1",
+    DEFAULT_COMMISSION_FILTERS,
+  );
   const [myCommissionsModalOpen, setMyCommissionsModalOpen] = useState(false);
   const [detailView, setDetailView] = useState<FinanceDetailType | null>(null);
   const { data: myCommissions } = useMyCommissions();
@@ -91,7 +104,6 @@ export default function Finance() {
   const teamSalesCount = teamCommission?.count ?? 0;
   // Telecom margin: what the operators paid, minus what the sellers took.
   const orgMarginTotal = teamCommission?.orgTotal ?? 0;
-  const operatorGrossTotal = teamCommission?.grossTotal ?? 0;
 
   // Personal commission totals ("As Minhas Comissões") — filtered by period (sale date).
   // Telecom is earned on installation, so the period must be read off the
@@ -115,7 +127,22 @@ export default function Finance() {
     }
   }, [organization, activeTab, setActiveTab, validTabs]);
 
-  const { stats, isLoading, payments, allPayments } = useFinanceStats({ dateRange });
+  const { stats, isLoading, payments, allPayments } = useFinanceStats({
+    dateRange,
+    commissionFilters: isTelecom ? commissionFilters : undefined,
+  });
+
+  // Telecom: chargebacks are commission the operator takes back after a
+  // cancellation post-install. Dismissed ones never happened.
+  const { data: chargebacks = [] } = useSaleChargebacks();
+  const chargebacksInPeriod = isTelecom
+    ? chargebacks.filter((c) => c.status !== "dismissed" && inPeriod(c.created_at))
+    : [];
+  const chargebacksTotal = chargebacksInPeriod.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  // Telecom has no client receipts, so its balance is what the org keeps of
+  // the installed commission, minus what it spends.
+  const balanceShown = isTelecom ? orgMarginTotal - stats.totalExpenses : stats.balance;
+  const teamPaidTotal = teamCommission?.paidTotal ?? 0;
 
   const chartData = stats.cashflowTrend.map((point) => ({
     ...point,
@@ -191,6 +218,15 @@ export default function Finance() {
                   <span className="text-xs text-muted-foreground">(dados filtrados pelo período selecionado)</span>
                 )}
               </div>
+              {/* Operator switches and seller — they narrow the commission
+                  card and its list, nothing else on the page. */}
+              {isTelecom && (
+                <CommissionFiltersBar
+                  value={commissionFilters}
+                  onChange={setCommissionFilters}
+                  className="mt-3 border-t pt-3"
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -201,6 +237,7 @@ export default function Finance() {
               payments={payments}
               allPayments={allPayments}
               dueSoonPayments={stats.dueSoonPayments}
+              commissionFilters={isTelecom ? commissionFilters : undefined}
               onBack={() => setDetailView(null)}
             />
           ) : (
@@ -223,10 +260,89 @@ export default function Finance() {
                 ) : (
                   <div className="text-xl font-bold md:text-2xl">{formatCurrency(isTelecom ? stats.totalCommission : stats.totalBilled)}</div>
                 )}
-                <p className="text-xs text-muted-foreground">{hasFilters ? "No período" : "Histórico total"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasFilters ? "No período" : "Histórico total"}
+                  {isTelecom && hasCommissionFilters(commissionFilters) && " · filtrado"}
+                </p>
               </CardContent>
             </Card>
 
+            {/* The telecom lifecycle, in the operator's money: what still
+                depends on an install, what is already earned, and what the
+                operator took back. Replaces the client-billing cards, which
+                have nothing to count in an org the client never pays. */}
+            {isTelecom && (
+              <>
+                <Card
+                  className="group cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => setDetailView("porInstalar")}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Por instalar</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Hammer className="h-4 w-4 text-amber-500" />
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      <div className="text-xl font-bold text-amber-600 md:text-2xl">{formatCurrency(stats.telecomToInstall)}</div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {stats.telecomToInstallCount} venda{stats.telecomToInstallCount === 1 ? "" : "s"} pendente{stats.telecomToInstallCount === 1 ? "" : "s"} ou em instalação
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card
+                  className="group cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => setDetailView("instalado")}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Instalado</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <PlugZap className="h-4 w-4 text-emerald-500" />
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      <div className="text-xl font-bold text-emerald-600 md:text-2xl">{formatCurrency(stats.telecomInstalled)}</div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {stats.telecomInstalledCount} venda{stats.telecomInstalledCount === 1 ? "" : "s"} ativa{stats.telecomInstalledCount === 1 ? "" : "s"} · comissão ganha
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card
+                  className="group cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => setActiveTab("chargebacks")}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Chargebacks</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Undo2 className="h-4 w-4 text-destructive" />
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-destructive md:text-2xl">{formatCurrency(chargebacksTotal)}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {chargebacksInPeriod.length === 0
+                        ? "Nenhuma devolução"
+                        : `${chargebacksInPeriod.length} devolvida${chargebacksInPeriod.length === 1 ? "" : "s"} pela operadora`}
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {!isTelecom && (
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setDetailView("received")}
@@ -247,7 +363,9 @@ export default function Finance() {
                 <p className="text-xs text-muted-foreground">{hasFilters ? "No período" : "Total recebido"}</p>
               </CardContent>
             </Card>
+            )}
 
+            {!isTelecom && (
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setDetailView("pending")}
@@ -268,7 +386,9 @@ export default function Finance() {
                 <p className="text-xs text-muted-foreground">Total por receber</p>
               </CardContent>
             </Card>
+            )}
 
+            {!isTelecom && (
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setDetailView("overdue")}
@@ -289,6 +409,7 @@ export default function Finance() {
                 <p className="text-xs text-muted-foreground">{stats.overdueCount} pagamento(s)</p>
               </CardContent>
             </Card>
+            )}
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
@@ -313,7 +434,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => setDetailView("balance")}
+              onClick={() => !isTelecom && setDetailView("balance")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Balanço</CardTitle>
@@ -326,14 +447,17 @@ export default function Finance() {
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <div className={`text-xl font-bold md:text-2xl ${stats.balance >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-                    {formatCurrency(stats.balance)}
+                  <div className={`text-xl font-bold md:text-2xl ${balanceShown >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                    {formatCurrency(balanceShown)}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">Recebido - Despesas</p>
+                <p className="text-xs text-muted-foreground">
+                  {isTelecom ? "Valor da Organização − Despesas" : "Recebido - Despesas"}
+                </p>
               </CardContent>
             </Card>
 
+            {!isTelecom && (
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setDetailView("dueSoon")}
@@ -354,6 +478,7 @@ export default function Finance() {
                 <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
               </CardContent>
             </Card>
+            )}
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
@@ -396,9 +521,13 @@ export default function Finance() {
                     {formatCurrency(teamCommissionTotal)}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {teamSalesCount > 0
-                      ? `${teamSalesCount} venda(s) ${hasFilters ? "no período" : "no total"}`
-                      : "Equipa"}
+                    {/* Telecom: "Marcar como paga" already exists on each sale, so
+                        say how much of this has actually left the account. */}
+                    {isTelecom && teamCommissionTotal > 0
+                      ? `${formatCurrency(teamPaidTotal)} pagas · ${formatCurrency(Math.max(teamCommissionTotal - teamPaidTotal, 0))} por pagar`
+                      : teamSalesCount > 0
+                        ? `${teamSalesCount} venda(s) ${hasFilters ? "no período" : "no total"}`
+                        : "Equipa"}
                   </p>
                 </CardContent>
               </Card>
@@ -416,8 +545,11 @@ export default function Finance() {
                   <div className="text-xl font-bold text-amber-600 md:text-2xl">
                     {formatCurrency(orgMarginTotal)}
                   </div>
+                  {/* The basis, not another money figure: this card only counts
+                      INSTALLED sales, which is why it can sit below "Total de
+                      Comissão" — that one counts everything sold. */}
                   <p className="text-xs text-muted-foreground">
-                    Operadoras pagam {formatCurrency(operatorGrossTotal)}
+                    {teamSalesCount} venda{teamSalesCount === 1 ? "" : "s"} instalada{teamSalesCount === 1 ? "" : "s"}
                   </p>
                 </CardContent>
               </Card>

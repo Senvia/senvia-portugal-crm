@@ -7,6 +7,7 @@ import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServicosProductsManager } from './ServicosProductsManager';
+import { ProductTypesManager } from './ProductTypesManager';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import { ProductStripeBadge } from './ProductStripeSync';
@@ -64,6 +65,10 @@ export function ProductsTab() {
 
   return (
     <div className="space-y-6">
+      {/* The types come first: a product is classified into one before its
+          commission form even makes sense. */}
+      {showServicosManager && <ProductTypesManager />}
+
       {/* Telecom orgs never see the products table in Nova Venda / Nova Proposta:
           those modals read the "Outros Serviços" catalog instead. Showing both
           catalogs here would offer a product list that cannot be sold. */}

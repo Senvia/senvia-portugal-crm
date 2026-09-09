@@ -16,10 +16,12 @@ import type { DateRange } from "react-day-picker";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentWithSale } from "@/types/finance";
-import { PAYMENT_METHOD_LABELS } from "@/types/sales";
+import { saleMatchesCommissionFilters, type CommissionFilters } from "@/lib/commission-filters";
+import { PAYMENT_METHOD_LABELS, type TelecomStatus } from "@/types/sales";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { saleStatusBadge, paymentRecordStatusBadge } from "@/lib/status-badge-maps";
 import { useSales } from "@/hooks/useSales";
+import { useProfileNames } from "@/hooks/useTeam";
 import { useExpenses, useDeleteExpense } from "@/hooks/useExpenses";
 import { useUpdateSalePayment, useCreateSalePayment } from "@/hooks/useSalePayments";
 import { MinhasComissoesContent } from "@/components/finance/MinhasComissoesContent";
@@ -34,7 +36,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export type FinanceDetailType =
-  | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions" | "commissions";
+  | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions" | "commissions"
+  | "porInstalar" | "instalado";
 
 interface FinanceCardDetailProps {
   type: FinanceDetailType;
@@ -44,6 +47,8 @@ interface FinanceCardDetailProps {
   /** All payments, unfiltered by period (used by Pendente/Atrasados). */
   allPayments: PaymentWithSale[];
   dueSoonPayments: PaymentWithSale[];
+  /** Telecom: the operator/seller filters the card was showing. */
+  commissionFilters?: CommissionFilters;
   onBack: () => void;
 }
 
@@ -60,6 +65,8 @@ const TITLES: Record<FinanceDetailType, string> = {
   balance: "Balanço",
   myCommissions: "As Minhas Comissões",
   commissions: "Comissões",
+  porInstalar: "Por instalar",
+  instalado: "Instalado",
 };
 
 function inRange(dateStr: string, dateRange?: DateRange) {
@@ -258,7 +265,21 @@ function PaymentsDetailTable({ payments, allowMarkPaid = false }: { payments: Pa
 
 interface RenewalRow { id: string; date: string; label: string; amount: number; }
 
-function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange; renewals?: RenewalRow[] }) {
+function SalesDetailTable({
+  dateRange,
+  renewals = [],
+  commissionFilters,
+  telecomStatuses,
+  dateBasis = "sale",
+}: {
+  dateRange?: DateRange;
+  renewals?: RenewalRow[];
+  commissionFilters?: CommissionFilters;
+  /** Telecom lifecycle cards: keep only these states. */
+  telecomStatuses?: TelecomStatus[];
+  /** "activation" counts a sale when it went live, not when it was sold. */
+  dateBasis?: "sale" | "activation";
+}) {
   const { data: sales = [], isLoading } = useSales();
   const { organization } = useAuth();
   // Telecom shows the commission instead of the invoiced value — same rows,
@@ -269,10 +290,23 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
   const filtered = useMemo(
     // Exclude cancelled sales so this detail's total matches the card, which also
     // drops them (useFinanceStats). Both telecom cancellations map onto it.
-    () => sales.filter((s) => s.status !== "cancelled" && inRange(s.sale_date, dateRange)),
-    [sales, dateRange],
+    () => sales.filter((s) =>
+      s.status !== "cancelled"
+      && inRange(dateBasis === "activation" ? (s.activation_date || s.sale_date) : s.sale_date, dateRange)
+      && saleMatchesCommissionFilters(s, commissionFilters)
+      && (!telecomStatuses || telecomStatuses.includes(s.telecom_status as TelecomStatus))),
+    [sales, dateRange, commissionFilters, telecomStatuses, dateBasis],
+  );
+  // Who gets paid for each sale — the assigned seller, falling back to
+  // whoever registered it. Hook stays above the early return.
+  const { data: sellerNames = {} } = useProfileNames(
+    filtered.map((s) => s.seller_id || s.created_by),
   );
   if (isLoading) return <Skeleton className="h-64 w-full" />;
+  const sellerOf = (s: any) => {
+    const id = s.seller_id || s.created_by;
+    return id ? (sellerNames[id] ?? "—") : "—";
+  };
   const valueOf = (s: any) => isTelecom ? Number(s.comissao) || 0 : Number(s.total_value) || 0;
   const salesTotal = filtered.reduce((sum, v) => sum + valueOf(v), 0);
   // Renewals are client billing — they have no place in a commission total.
@@ -288,13 +322,14 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
             <TableHead>Data</TableHead>
             <TableHead>Cliente</TableHead>
             <TableHead>Código</TableHead>
+            {isTelecom && <TableHead>Vendedor</TableHead>}
             <TableHead>Estado</TableHead>
             <TableHead className="text-right">{isTelecom ? "Comissão" : "Valor"}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {count === 0 ? (
-            <EmptyRow cols={5} />
+            <EmptyRow cols={isTelecom ? 6 : 5} />
           ) : (
             <>
               {filtered.map((s) => (
@@ -302,6 +337,7 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
                   <TableCell className="whitespace-nowrap">{fmtDate(s.sale_date)}</TableCell>
                   <TableCell>{s.client?.name || s.lead?.name || "—"}</TableCell>
                   <TableCell>{s.code}</TableCell>
+                  {isTelecom && <TableCell>{sellerOf(s)}</TableCell>}
                   <TableCell>
                     <StatusBadge {...saleStatusBadge(s.status)} />
                   </TableCell>
@@ -313,6 +349,7 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
                   <TableCell className="whitespace-nowrap">{fmtDate(r.date)}</TableCell>
                   <TableCell>{r.label}</TableCell>
                   <TableCell>—</TableCell>
+                  {isTelecom && <TableCell>—</TableCell>}
                   <TableCell>
                     <Badge variant="outline" className="border-blue-500/30 bg-blue-500/20 text-blue-600">
                       Renovação
@@ -450,7 +487,7 @@ function BalanceDetail({
   );
 }
 
-export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
+export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, commissionFilters, onBack }: FinanceCardDetailProps) {
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
 
   const received = useMemo(() => payments.filter((p) => p.status === "paid"), [payments]);
@@ -505,7 +542,24 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
 
       {type === "expenses" && <AddExpenseModal open={addExpenseOpen} onOpenChange={setAddExpenseOpen} />}
 
-      {type === "faturado" && <SalesDetailTable dateRange={dateRange} renewals={renewals} />}
+      {type === "faturado" && (
+        <SalesDetailTable dateRange={dateRange} renewals={renewals} commissionFilters={commissionFilters} />
+      )}
+      {type === "porInstalar" && (
+        <SalesDetailTable
+          dateRange={dateRange}
+          commissionFilters={commissionFilters}
+          telecomStatuses={["pendente", "em_instalacao"]}
+        />
+      )}
+      {type === "instalado" && (
+        <SalesDetailTable
+          dateRange={dateRange}
+          commissionFilters={commissionFilters}
+          telecomStatuses={["ativo"]}
+          dateBasis="activation"
+        />
+      )}
       {type === "received" && <PaymentsDetailTable payments={received} />}
       {type === "pending" && <PaymentsDetailTable payments={pending} allowMarkPaid />}
       {type === "overdue" && <PaymentsDetailTable payments={overdue} allowMarkPaid />}

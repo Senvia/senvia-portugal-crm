@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Settings2, Check, Loader2, Pencil, Radio, Package } from 'lucide-react';
+import { Plus, Trash2, Settings2, Check, Loader2, Pencil, Radio, Package, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +20,8 @@ function commissionSummary(product: CatalogProduct, operator: Operator | null): 
   // A fixed commission_basis wins regardless of kind — an energia operator
   // can opt out of Matriz de Comissões (see ProductCommissionFields).
   const isTiered = !!operator && !!operator.commission_basis;
-  if (!isTiered && operator?.kind === 'energia') return 'Ver Matriz de Comissões';
+  // A classified product follows its type, whatever the operator's kind.
+  if (!isTiered && operator?.kind === 'energia' && !(product.type_ids?.length)) return 'Ver Matriz de Comissões';
   if (isTiered) {
     const n = product.quantity_tiers?.length ?? 0;
     if (n === 0) return 'Sem escalões';
@@ -47,7 +49,10 @@ function priceSummary(product: CatalogProduct): string {
 const SEM_OPERADORA = '__sem_operadora__';
 
 export function ServicosProductsManager() {
-  const { data: org } = useOrganization();
+  // Loading and failure must not look like an empty catalog: a request that
+  // errors out used to render "Ainda não tem produtos configurados" over a
+  // catalog of 25, and nobody could tell the difference from the screen.
+  const { data: org, isLoading: orgLoading, error: orgError, refetch: refetchOrg } = useOrganization();
   // Saves happen as the user edits, so a toast per field would be noise.
   const updateOrg = useUpdateOrganization({ silent: true });
   const { data: teamMembers } = useTeamMembers();
@@ -246,7 +251,30 @@ export function ServicosProductsManager() {
           </Accordion>
         )}
 
-        {products.length === 0 && !isLegacyConfig && (
+        {products.length === 0 && !isLegacyConfig && orgLoading && (
+          <div className="space-y-2 py-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        )}
+
+        {products.length === 0 && !isLegacyConfig && !orgLoading && orgError && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+            <p className="flex items-center gap-2 font-medium text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Não foi possível carregar o catálogo.
+            </p>
+            <p className="mt-1 break-words font-mono text-xs text-muted-foreground">
+              {(orgError as Error).message}
+            </p>
+            <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => refetchOrg()}>
+              Tentar novamente
+            </Button>
+          </div>
+        )}
+
+        {products.length === 0 && !isLegacyConfig && !orgLoading && !orgError && (
           <div className="py-10 text-center">
             <Settings2 className="mx-auto h-10 w-10 text-muted-foreground/40" />
             <p className="mt-3 text-sm text-muted-foreground">Ainda não tem produtos configurados.</p>

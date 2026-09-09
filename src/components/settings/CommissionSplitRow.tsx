@@ -1,4 +1,5 @@
-import { Trash2, User, Shield } from 'lucide-react';
+import { Trash2, User, Shield, Wallet } from 'lucide-react';
+import { TonedField, tonedInputClass } from './FieldTone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +28,7 @@ interface CommissionSplitRowProps {
   split: CommissionSplit;
   members: Member[];
   profiles: Profile[];
-  showLabels?: boolean;
+
   onChange: (updates: Partial<CommissionSplit>, commit?: boolean) => void;
   onCommit: () => void;
   onRemove: () => void;
@@ -43,7 +44,7 @@ export function CommissionSplitRow({
   split,
   members,
   profiles,
-  showLabels = true,
+
   onChange,
   onCommit,
   onRemove,
@@ -53,8 +54,7 @@ export function CommissionSplitRow({
   const byTech = productNeedsTechnologyChoice(technologies);
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="space-y-1 w-[110px] shrink-0">
-        {showLabels && <Label className="text-[10px] text-muted-foreground">Tipo</Label>}
+      <TonedField tone="neutral" label="Tipo">
         <Select
           value={split.kind}
           onValueChange={(v) =>
@@ -67,7 +67,7 @@ export function CommissionSplitRow({
             )
           }
         >
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className={cn(tonedInputClass, 'w-[110px] font-normal')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -85,17 +85,16 @@ export function CommissionSplitRow({
             </SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </TonedField>
 
-      <div className="space-y-1 flex-1 min-w-[160px]">
-        {showLabels && (
-          <Label className="text-[10px] text-muted-foreground">
-            {split.kind === 'user' ? 'Quem recebe' : 'Perfil do vendedor'}
-          </Label>
-        )}
+      <TonedField
+        tone="neutral"
+        label={split.kind === 'user' ? 'Quem recebe' : 'Perfil do vendedor'}
+        className="flex-1 min-w-[160px]"
+      >
         {split.kind === 'user' ? (
           <Select value={split.user_id || ''} onValueChange={(v) => onChange({ user_id: v }, true)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className={cn(tonedInputClass, 'w-full font-normal')}>
               <SelectValue placeholder="Escolher pessoa..." />
             </SelectTrigger>
             <SelectContent>
@@ -106,7 +105,7 @@ export function CommissionSplitRow({
           </Select>
         ) : (
           <Select value={split.profile_id || ''} onValueChange={(v) => onChange({ profile_id: v }, true)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className={cn(tonedInputClass, 'w-full font-normal')}>
               <SelectValue placeholder="Escolher perfil..." />
             </SelectTrigger>
             <SelectContent>
@@ -116,7 +115,7 @@ export function CommissionSplitRow({
             </SelectContent>
           </Select>
         )}
-      </div>
+      </TonedField>
 
       {/* One box per technology when the product is sold as both: the same
           recipient is paid a different rate for a fibre install than for a
@@ -133,20 +132,15 @@ export function CommissionSplitRow({
             // often pays a flat fee on fibre and a percentage on satellite.
             const mode = splitTypeForTech(split, tech);
             return (
-              <div key={tech} className="space-y-1">
-                {showLabels && (
-                  <Label className="text-[10px] text-muted-foreground">
-                    {/* A satellite percentage is a cut of THIS line's own fibre
-                        rate, not of what the operator pays — say so, or the
-                        same "30" reads as two different numbers. */}
-                    {TELECOM_TECHNOLOGY_LABELS[tech]}{' '}
-                    {mode === 'fixed'
-                      ? '(€)'
-                      : tech === 'satelite'
-                        ? '(% da fibra)'
-                        : '(%)'}
-                  </Label>
-                )}
+              /* A satellite percentage is a cut of THIS line's own fibre rate,
+                 not of what the operator pays — say so, or the same "30" reads
+                 as two different numbers. */
+              <TonedField
+                key={tech}
+                tone="commission"
+                icon={<Wallet className="h-3 w-3 shrink-0" />}
+                label={`${TELECOM_TECHNOLOGY_LABELS[tech]} ${mode === 'fixed' ? '(€)' : tech === 'satelite' ? '(% da fibra)' : '(%)'}`}
+              >
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
@@ -157,7 +151,7 @@ export function CommissionSplitRow({
                     onChange={(e) => onChange({ [field]: parseFloat(e.target.value) || 0 })}
                     onBlur={onCommit}
                     placeholder="0"
-                    className="h-8 w-[72px] text-xs"
+                    className={cn(tonedInputClass, 'w-[72px]')}
                   />
                   <div className="flex overflow-hidden rounded-md border shrink-0">
                     {(['fixed', 'pct'] as const).map((m) => (
@@ -175,7 +169,7 @@ export function CommissionSplitRow({
                     ))}
                   </div>
                 </div>
-              </div>
+              </TonedField>
             );
           })}
         </div>
@@ -184,12 +178,11 @@ export function CommissionSplitRow({
       {/* Only for a product with a single technology — when it is sold as
           both, each technology above carries its own value AND its own €/%. */}
       {!byTech && (
-      <div className="space-y-1">
-        {showLabels && (
-          <Label className="text-[10px] text-muted-foreground">
-            {split.type === 'fixed' ? 'Valor (€)' : '% da venda'}
-          </Label>
-        )}
+      <TonedField
+        tone="commission"
+        icon={<Wallet className="h-3 w-3 shrink-0" />}
+        label={split.type === 'fixed' ? 'Comissão (€)' : 'Comissão (%)'}
+      >
         <div className="flex items-center gap-1">
           {!byTech && (
             <Input
@@ -201,7 +194,7 @@ export function CommissionSplitRow({
               onChange={(e) => onChange({ value: parseFloat(e.target.value) || 0 })}
               onBlur={onCommit}
               placeholder="0"
-              className="h-8 w-[90px] text-xs"
+              className={cn(tonedInputClass, 'w-[90px]')}
             />
           )}
           <div className="flex overflow-hidden rounded-md border shrink-0">
@@ -227,7 +220,7 @@ export function CommissionSplitRow({
             </button>
           </div>
         </div>
-      </div>
+      </TonedField>
       )}
 
       {trailing}

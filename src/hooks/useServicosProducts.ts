@@ -31,7 +31,9 @@ interface CatalogConfigFromDB {
   operator_pays?: number;
   operator_pays_fibra?: number;
   operator_pays_satelite?: number;
+
   technologies?: TelecomTechnology[];
+  type_ids?: string[];
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -80,7 +82,9 @@ export function useServicosProducts() {
         operator_pays: c.operator_pays,
         operator_pays_fibra: c.operator_pays_fibra,
         operator_pays_satelite: c.operator_pays_satelite,
+
         technologies: c.technologies,
+        type_ids: c.type_ids,
       }));
       return {
         products: catalog.map((c) => c.name),

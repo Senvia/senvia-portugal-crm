@@ -69,8 +69,14 @@ export interface CashflowPoint {
 
 export interface FinanceStats {
   totalBilled: number;
-  /** Telecom only: commission on the sales installed in the period (operator gross). */
+  /** Telecom only: operator gross on every non-cancelled sale sold in the period. */
   totalCommission: number;
+  /** Telecom only: gross still waiting on an install (pendente + em instalação), by sale date. */
+  telecomToInstall: number;
+  telecomToInstallCount: number;
+  /** Telecom only: gross already earned (ativo), by activation date. */
+  telecomInstalled: number;
+  telecomInstalledCount: number;
   totalReceived: number;
   totalPending: number;
   dueSoon: number;

@@ -75,7 +75,7 @@ export function CreateTelecomProductModal({
   const isDuplicate = existingProducts.some(
     (p) => p.name.toLowerCase() === trimmed.toLowerCase() && (p.operator_id ?? null) === (draft.operator_id ?? null),
   );
-  const { operator, isTiered, scopeLabel } = useProductOperatorContext(draft, operators);
+  const { operator, isTiered, operatorRequiresTiers, scopeLabel } = useProductOperatorContext(draft, operators);
 
   // Nothing is persisted until "Criar Produto", so typing and "committing" a
   // field are the same action here — unlike the edit dialog, there is no
@@ -131,6 +131,7 @@ export function CreateTelecomProductModal({
               product={draft}
               operator={operator}
               isTiered={isTiered}
+              operatorRequiresTiers={operatorRequiresTiers}
               scopeLabel={scopeLabel}
               members={members}
               profiles={profiles}

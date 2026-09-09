@@ -337,10 +337,10 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
   const fromKey = dateRange?.from ? dateRange.from.toISOString() : 'all';
   const toKey = dateRange?.to ? dateRange.to.toISOString() : 'none';
 
-  return useQuery<{ total: number; count: number; orgTotal: number; grossTotal: number }>({
+  return useQuery<{ total: number; count: number; orgTotal: number; grossTotal: number; paidTotal: number }>({
     queryKey: ['team-commission-total', orgId, fromKey, toKey],
     queryFn: async () => {
-      if (!orgId) return { total: 0, count: 0, orgTotal: 0, grossTotal: 0 };
+      if (!orgId) return { total: 0, count: 0, orgTotal: 0, grossTotal: 0, paidTotal: 0 };
 
       const inRange = (dateStr?: string | null) => {
         if (!dateRange?.from) return true;
@@ -353,7 +353,7 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
 
       const { data: sales } = await (supabase as any)
         .from('sales')
-        .select('id, comissao, org_commission, total_value, sale_date, activation_date, payment_status, telecom_status')
+        .select('id, comissao, org_commission, total_value, sale_date, activation_date, payment_status, telecom_status, commission_paid_at')
         .eq('organization_id', orgId)
         .in('status', ['delivered', 'fulfilled']);
 
@@ -376,6 +376,9 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
       // organization once each seller has taken his own rate.
       let orgTotal = 0;
       let grossTotal = 0;
+      // Telecom only: the slice of `total` already marked as paid to the
+      // team ("Marcar como paga" stamps commission_paid_at on the sale).
+      let paidTotal = 0;
       for (const s of candidates) {
         // Telecom is paid by the OPERATOR: the commission is earned the moment
         // the line is installed, and there is no client payment to prorate
@@ -389,6 +392,7 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
             grossTotal += gross;
             orgTotal += org;
             total += Math.max(gross - org, 0);
+            if (s.commission_paid_at) paidTotal += Math.max(gross - org, 0);
             count += 1;
           }
           continue;
@@ -417,7 +421,7 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
         if (!periodEnd || parseISO(r.created_at) <= periodEnd) total += Number(r.commission_amount || 0);
       }
 
-      return { total, count, orgTotal, grossTotal };
+      return { total, count, orgTotal, grossTotal, paidTotal };
     },
     enabled: !!orgId,
   });

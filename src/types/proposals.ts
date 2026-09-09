@@ -375,6 +375,13 @@ export interface CatalogProduct {
   // Same, per technology. Absent falls back to `operator_pays`.
   operator_pays_fibra?: number;
   operator_pays_satelite?: number;
+
+  // Which product types this product belongs to (see types/product-types.ts).
+  // The type decides the SHAPE of the commission; the numbers stay here.
+  // A product may carry several: one that sells fibre AND cards is on both,
+  // and pays both — except inside an exclusive group (Fibra vs Satélite),
+  // where the sale picks one.
+  type_ids?: string[];
   // Which technologies this product can be sold as. Absent or a single entry
   // means the sale doesn't ask — the line just takes that one (or none, for
   // products that predate this). Two entries make the choice mandatory on
@@ -552,6 +559,32 @@ function sellerRatePerUnit(
     ? splits.find(s => s.kind === 'profile' && s.profile_id === sellerProfileId)
     : undefined;
   return byProfile ? splitEuroValue(byProfile, pctBase, tech, fibraPctBase) : 0;
+}
+
+/**
+ * Whether the product's commission table has ANY line that would pay this
+ * seller — by name, or through his profile. A seller with none earns 0 on
+ * the product, and the screen must say so rather than show "0,00 €" as if
+ * it were a rate: a whole operator's catalog configured for one person
+ * only reads as a bug to everyone else.
+ */
+export function sellerHasCommissionLine(
+  product: CatalogProduct,
+  quantity: number,
+  sellerUserId?: string | null,
+  sellerProfileId?: string | null,
+): boolean {
+  const qty = Math.max(1, Math.round(quantity || 1));
+  const tiers = product.quantity_tiers;
+  const tier = tiers && tiers.length > 0
+    ? tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max))
+    : undefined;
+  const splits = tier ? tier.splits : product.splits;
+  if (!splits || splits.length === 0) return false;
+  return splits.some(s =>
+    (s.kind === 'user' && !!sellerUserId && s.user_id === sellerUserId)
+    || (s.kind === 'profile' && !!sellerProfileId && s.profile_id === sellerProfileId),
+  );
 }
 
 /** What one sale line is worth, split three ways. */

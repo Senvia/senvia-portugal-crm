@@ -1,4 +1,5 @@
-import { Plus, X } from 'lucide-react';
+import { Banknote, Gift, Plus, Tag, X } from 'lucide-react';
+import { TonedField, tonedInputClass } from './FieldTone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -107,56 +108,24 @@ export function QuantityTiersEditor({
         <div className="space-y-2">
           {tiers.map((tier) => (
             <div key={tier.id} className="rounded-lg border bg-muted/20 p-2.5 space-y-2">
-              <div className="flex items-end gap-2">
-                <div className="space-y-1 w-20 shrink-0">
-                  <Label className="text-[10px] text-muted-foreground">De (unid.)</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={tier.min || ''}
-                    onChange={(e) => updateTier(tier.id, { min: parseInt(e.target.value, 10) || 1 })}
-                    onBlur={() => onCommit(tiers)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1 w-20 shrink-0">
-                  <Label className="text-[10px] text-muted-foreground">Até (unid.)</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="∞"
-                    value={tier.max ?? ''}
-                    onChange={(e) => updateTier(tier.id, { max: e.target.value ? parseInt(e.target.value, 10) : null })}
-                    onBlur={() => onCommit(tiers)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1 w-24 shrink-0">
-                  <Label className="text-[10px] text-muted-foreground">Preço de Venda (€)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder={basePrice ? basePrice.toFixed(2) : '0.00'}
-                    value={tier.price ?? ''}
-                    onChange={(e) => updateTier(tier.id, { price: e.target.value ? parseFloat(e.target.value) : undefined })}
-                    onBlur={() => onCommit(tiers)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                {/* What the operator pays the org per unit in this band. It had
-                    no field at all until now — the only way to set it was SQL —
-                    yet it is what decides the org margin. */}
+              {/* Wraps on purpose: with two technologies this row carries six
+                  fields, and without wrapping the "Operadora paga" boxes were
+                  simply cut off the right edge of the dialog. */}
+              <div className="flex flex-wrap items-end gap-2">
+                {/* First in the row and in its own tinted box: this is the
+                    operator's money, and every commission below is carved out
+                    of it. Sitting last among identical grey inputs, it went
+                    unnoticed — the person configuring the product never saw it. */}
                 {(byTech ? TELECOM_TECHNOLOGIES : [null]).map((tech) => {
                   const field = tech === "fibra" ? "operator_pays_fibra"
                     : tech === "satelite" ? "operator_pays_satelite" : "operator_pays";
                   return (
-                    <div key={field} className="space-y-1 w-28 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">
-                        {tech ? `Operadora paga ${TELECOM_TECHNOLOGY_LABELS[tech]}` : "Operadora paga (€)"}
-                      </Label>
+                    <TonedField
+                      key={field}
+                      tone="operator"
+                      icon={<Banknote className="h-3 w-3 shrink-0" />}
+                      label={tech ? `Operadora paga · ${TELECOM_TECHNOLOGY_LABELS[tech]} (€)` : "Operadora paga (€)"}
+                    >
                       <Input
                         type="number"
                         min="0"
@@ -165,12 +134,51 @@ export function QuantityTiersEditor({
                         value={tier[field] ?? ""}
                         onChange={(e) => updateTier(tier.id, { [field]: e.target.value ? parseFloat(e.target.value) : undefined })}
                         onBlur={() => onCommit(tiers)}
-                        className="h-8 text-xs"
+                        className={cn(tonedInputClass, 'w-28')}
                       />
-                    </div>
+                    </TonedField>
                   );
                 })}
-                <div className="flex-1" />
+                <TonedField tone="neutral" label="De (unid.)">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={tier.min || ''}
+                    onChange={(e) => updateTier(tier.id, { min: parseInt(e.target.value, 10) || 1 })}
+                    onBlur={() => onCommit(tiers)}
+                    className={cn(tonedInputClass, 'w-20')}
+                  />
+                </TonedField>
+                <TonedField tone="neutral" label="Até (unid.)">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="∞"
+                    value={tier.max ?? ''}
+                    onChange={(e) => updateTier(tier.id, { max: e.target.value ? parseInt(e.target.value, 10) : null })}
+                    onBlur={() => onCommit(tiers)}
+                    className={cn(tonedInputClass, 'w-20')}
+                  />
+                </TonedField>
+                <TonedField
+                  tone="price"
+                  icon={<Tag className="h-3 w-3 shrink-0" />}
+                  label="Preço de Venda (€)"
+                >
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={basePrice ? basePrice.toFixed(2) : '0.00'}
+                    value={tier.price ?? ''}
+                    onChange={(e) => updateTier(tier.id, { price: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    onBlur={() => onCommit(tiers)}
+                    className={cn(tonedInputClass, 'w-24')}
+                  />
+                </TonedField>
+                <div className="flex-1 min-w-0" />
                 <Button
                   type="button"
                   variant="ghost"
@@ -193,6 +201,12 @@ export function QuantityTiersEditor({
                         ? `Até ${tier.max} unidades`
                         : `De ${tier.min} até ${tier.max} unidades`}
                     {tier.price != null && ` — ${tier.price.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/unid.`}
+                    {tier.operator_pays != null && (
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        {` · a operadora paga ${tier.operator_pays.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/unid.`}
+                      </span>
+                    )}
+
                     {!!tier.bonus && (
                       tier.bonus_type === 'pct'
                         ? ` + bónus único de ${tier.bonus.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}% da comissão ao atingir`
@@ -212,8 +226,7 @@ export function QuantityTiersEditor({
                       split={split}
                       members={members}
                       profiles={profiles}
-                      showLabels={false}
-              technologies={technologies}
+                      technologies={technologies}
                       onChange={(updates, commit) => updateSplit(tier.id, index, updates, commit)}
                       onCommit={() => onCommit(tiers)}
                       onRemove={() => removeSplit(tier.id, index)}
@@ -249,8 +262,7 @@ function BonusField({
 }) {
   const bonusType = tier.bonus_type ?? 'fixed';
   return (
-    <div className="space-y-1 shrink-0">
-      <Label className="text-[10px] text-muted-foreground">Bónus Geral</Label>
+    <TonedField tone="bonus" icon={<Gift className="h-3 w-3 shrink-0" />} label="Bónus Geral">
       <div className="flex items-center gap-1">
         <Input
           type="number"
@@ -261,7 +273,7 @@ function BonusField({
           value={tier.bonus ?? ''}
           onChange={(e) => updateTier(tier.id, { bonus: e.target.value ? parseFloat(e.target.value) : undefined })}
           onBlur={onCommit}
-          className="h-8 w-20 text-xs"
+          className={cn(tonedInputClass, 'w-20')}
         />
         <div className="flex overflow-hidden rounded-md border shrink-0">
           <button
@@ -286,6 +298,6 @@ function BonusField({
           </button>
         </div>
       </div>
-    </div>
+    </TonedField>
   );
 }

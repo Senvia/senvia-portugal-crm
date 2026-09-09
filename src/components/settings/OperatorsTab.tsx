@@ -104,9 +104,11 @@ export function OperatorsTab() {
                             <> · {SCOPE_LABELS[op.volume_scope]}</>
                           )}
                         </p>
-                      ) : op.kind === 'energia' ? (
-                        <p className="text-xs text-muted-foreground mt-0.5">Matriz de Comissões</p>
-                      ) : null}
+                      ) : (
+                        // No fixed basis: each product says what this operator
+                        // pays and what the seller gets, by its own type.
+                        <p className="text-xs text-muted-foreground mt-0.5">Operadora paga + comissão, por produto</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -246,14 +248,14 @@ function OperatorFormModal({
             <Select value={basisChoice} onValueChange={(v) => setBasisChoice(v as CommissionBasis | 'matriz')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {kind === 'energia' && <SelectItem value="matriz">Matriz de Comissões</SelectItem>}
+                {kind === 'energia' && <SelectItem value="matriz">Sem base fixa — por produto</SelectItem>}
                 <SelectItem value="per_sale">Por venda</SelectItem>
                 <SelectItem value="monthly_volume">Volume mensal acumulado</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
               {basisChoice === 'matriz'
-                ? 'Os produtos desta operadora usam a Matriz de Comissões (escalões por kWp/MWh, % da venda) — configura-se lá, não aqui.'
+                ? 'Cada produto desta operadora diz quanto ela paga e quanto fica para quem vende, conforme o tipo do produto. Um produto sem tipo continua a usar a Matriz de Comissões.'
                 : basisChoice === 'per_sale'
                   ? 'Comissão de valor fixo (pessoa/perfil). A quantidade vendida numa proposta/venda decide o escalão de comissão dessa venda.'
                   : 'Comissão de valor fixo (pessoa/perfil). O total acumulado no mês decide o escalão — e vendas anteriores desse mês são atualizadas quando o escalão sobe.'}
