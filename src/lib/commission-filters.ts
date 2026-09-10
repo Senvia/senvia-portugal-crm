@@ -7,10 +7,15 @@
  * with no operator on it (the generic "1P ou 2P" sold under any brand) is its
  * own switch, NO_OPERATOR.
  */
-import type { ServicosDetails } from '@/types/proposals';
+import type { CatalogProduct, ServicosDetails } from '@/types/proposals';
 
 /** Sentinel for sale lines that carry no operator at all. */
 export const NO_OPERATOR = '__none__';
+/** Sentinel for lines whose product has no type yet. */
+export const NO_TYPE = '__notype__';
+
+/** Sale → the product-type ids on its lines (NO_TYPE for untyped ones). */
+export type SaleTypeIdsResolver = (sale: CommissionFilterableSale) => string[];
 
 export interface CommissionFilters {
   /** Operator ids switched OFF, plus NO_OPERATOR for generic lines. Empty = all. */
@@ -19,6 +24,8 @@ export interface CommissionFilters {
   userId: string | null;
   /** Telecom states switched OFF (pendente, em_instalacao, ativo, …). Empty = all. */
   excludedStatuses: string[];
+  /** Product types switched OFF, plus NO_TYPE for untyped products. Empty = all. */
+  excludedTypes?: string[];
 }
 
 export const DEFAULT_COMMISSION_FILTERS: CommissionFilters = {
@@ -28,7 +35,12 @@ export const DEFAULT_COMMISSION_FILTERS: CommissionFilters = {
 };
 
 export function hasCommissionFilters(f: CommissionFilters | undefined): boolean {
-  return !!f && (f.excludedOperators.length > 0 || f.userId !== null || (f.excludedStatuses ?? []).length > 0);
+  return !!f && (
+    f.excludedOperators.length > 0
+    || f.userId !== null
+    || (f.excludedStatuses ?? []).length > 0
+    || (f.excludedTypes ?? []).length > 0
+  );
 }
 
 /** Minimal shape of a sale row the predicate needs. */
@@ -54,9 +66,16 @@ export function saleOperatorKeys(sale: CommissionFilterableSale): string[] {
 export function saleMatchesCommissionFilters(
   sale: CommissionFilterableSale,
   filters: CommissionFilters | undefined,
+  typeIdsOf?: SaleTypeIdsResolver,
 ): boolean {
   if (!hasCommissionFilters(filters)) return true;
   const f = filters as CommissionFilters;
+  // Types, like operators: the sale stays while ANY line's type is still on.
+  const excludedTypes = f.excludedTypes ?? [];
+  if (excludedTypes.length > 0 && typeIdsOf) {
+    const off = new Set(excludedTypes);
+    if (!typeIdsOf(sale).some((t) => !off.has(t))) return false;
+  }
   if (f.userId && (sale.seller_id || sale.created_by) !== f.userId) return false;
   // A sale with no telecom state yet is not in any bucket, so no switch
   // can turn it off. (`?? []` because the filters are persisted and older
@@ -67,4 +86,28 @@ export function saleMatchesCommissionFilters(
     if (!saleOperatorKeys(sale).some((k) => !excluded.has(k))) return false;
   }
   return true;
+}
+
+/**
+ * Builds the sale → type ids resolver from the catalog. A line's product is
+ * found by name, preferring the entry under the line's own operator (the
+ * same name can exist once per operator). A product with no types, or a
+ * line whose product is gone from the catalog, resolves to NO_TYPE.
+ */
+export function buildSaleTypeIds(catalog: CatalogProduct[]): SaleTypeIdsResolver {
+  const find = (name: string, operatorId?: string | null) =>
+    (operatorId ? catalog.find((c) => c.name === name && c.operator_id === operatorId) : undefined)
+    ?? catalog.find((c) => c.name === name && !c.operator_id)
+    ?? catalog.find((c) => c.name === name);
+  return (sale) => {
+    const details = (sale.servicos_details ?? {}) as ServicosDetails;
+    const names = Object.keys(details);
+    if (names.length === 0) return [NO_TYPE];
+    const ids = names.flatMap((name) => {
+      const product = find(name, details[name]?.operator_id);
+      const typeIds = product?.type_ids ?? [];
+      return typeIds.length > 0 ? typeIds : [NO_TYPE];
+    });
+    return [...new Set(ids)];
+  };
 }

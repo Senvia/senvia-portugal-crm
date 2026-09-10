@@ -46,7 +46,8 @@ import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { ChargebacksTab } from "@/components/finance/ChargebacksTab";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
-import { CommissionFiltersBar } from "@/components/finance/CommissionFilters";
+import { CommissionFiltersBar, useCommissionFilterChips } from "@/components/finance/CommissionFilters";
+import { PinnedPageBar } from "@/components/layout/PinnedPageBar";
 import { useSaleChargebacks } from "@/hooks/useSaleChargebacks";
 import { Hammer, PlugZap, Undo2 } from "lucide-react";
 import {
@@ -144,6 +145,9 @@ export default function Finance() {
   const balanceShown = isTelecom ? orgMarginTotal - stats.totalExpenses : stats.balance;
   const teamPaidTotal = teamCommission?.paidTotal ?? 0;
 
+  const commissionChips = useCommissionFilterChips(isTelecom ? commissionFilters : undefined);
+  const financeChips = [...(dateRange?.from ? ["Período"] : []), ...commissionChips];
+
   const chartData = stats.cashflowTrend.map((point) => ({
     ...point,
     dateLabel: format(parseISO(point.date), "dd MMM", { locale: pt }),
@@ -192,20 +196,28 @@ export default function Finance() {
 
   return (
     <div className="space-y-6 p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
-      <PageHeader icon={Wallet} title="Financeiro" subtitle="Visão geral das finanças da sua empresa" />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="resumo">Resumo</TabsTrigger>
-          <TabsTrigger value="contas">Contas</TabsTrigger>
-          <TabsTrigger value="faturas">Faturas</TabsTrigger>
-          {isTelecom && <TabsTrigger value="chargebacks">Chargebacks</TabsTrigger>}
-          <TabsTrigger value="outros">Outros</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="resumo" className="mt-0 space-y-6">
-          <Card>
-            <CardContent className="pt-6">
+        <PinnedPageBar
+          icon={Wallet}
+          title="Financeiro"
+          storageKey="finance-filters-open-v1"
+          tabs={
+            <TabsList className="h-8 flex-wrap">
+              <TabsTrigger value="resumo" className="h-7 text-xs">Resumo</TabsTrigger>
+              <TabsTrigger value="contas" className="h-7 text-xs">Contas</TabsTrigger>
+              <TabsTrigger value="faturas" className="h-7 text-xs">Faturas</TabsTrigger>
+              {isTelecom && <TabsTrigger value="chargebacks" className="h-7 text-xs">Chargebacks</TabsTrigger>}
+              <TabsTrigger value="outros" className="h-7 text-xs">Outros</TabsTrigger>
+            </TabsList>
+          }
+          summary={activeTab === "resumo"
+            ? (isTelecom
+                ? `Total de Comissão ${formatCurrency(stats.totalCommission)} · Instalado ${formatCurrency(stats.telecomInstalled)}`
+                : `Faturado ${formatCurrency(stats.totalBilled)} · Recebido ${formatCurrency(stats.totalReceived)}`)
+            : undefined}
+          chips={activeTab === "resumo" ? financeChips : []}
+          panel={activeTab === "resumo" ? (
+            <div className="space-y-3 px-4 md:px-6 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <span className="text-sm font-medium text-muted-foreground">Período:</span>
                 <DateRangePicker
@@ -214,21 +226,15 @@ export default function Finance() {
                   placeholder="Todo o histórico"
                   className="w-full sm:w-auto"
                 />
-                {hasFilters && (
-                  <span className="text-xs text-muted-foreground">(dados filtrados pelo período selecionado)</span>
-                )}
               </div>
-              {/* Operator switches and seller — they narrow the commission
-                  card and its list, nothing else on the page. */}
               {isTelecom && (
-                <CommissionFiltersBar
-                  value={commissionFilters}
-                  onChange={setCommissionFilters}
-                  className="mt-3 border-t pt-3"
-                />
+                <CommissionFiltersBar value={commissionFilters} onChange={setCommissionFilters} className="border-t pt-3" />
               )}
-            </CardContent>
-          </Card>
+            </div>
+          ) : undefined}
+        />
+
+        <TabsContent value="resumo" className="mt-0 space-y-6">
 
           {detailView ? (
             <FinanceCardDetail

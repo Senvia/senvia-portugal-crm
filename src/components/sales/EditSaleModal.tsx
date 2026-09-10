@@ -61,7 +61,7 @@ import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getCatalogCommission, productNeedsTechnologyChoice } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, getCatalogCommission, productNeedsTechnologyChoice, productTechnologies } from "@/types/proposals";
 import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { ServicosSection } from '@/components/proposals/ServicosSection';
@@ -151,6 +151,7 @@ export function EditSaleModal({
   const [margem, setMargem] = useState<string>("");
   const [dbl, setDbl] = useState<string>("");
   const [anosContrato, setAnosContrato] = useState<string>("");
+  const [fidelizacaoEnd, setFidelizacaoEnd] = useState<string>("");
   const [comissao, setComissao] = useState<string>("");
   const [modeloServico, setModeloServico] = useState<string>("");
   const [kwp, setKwp] = useState<string>("");
@@ -214,6 +215,7 @@ export function EditSaleModal({
       setServicosDetails((sale as any).servicos_details || {});
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
+      setFidelizacaoEnd((sale as any).fidelizacao_end || "");
       setTelecomStatus((sale.telecom_status as TelecomStatus) || "");
       // Show the sale's real owner — the person it was created by, unless it
       // was explicitly reassigned. Blank here would look broken and defaulting
@@ -466,7 +468,7 @@ export function EditSaleModal({
       const detail = servicosDetails[p];
       const cat = catalog?.find((c) => c.name === p && (detail?.operator_id ? c.operator_id === detail.operator_id : !c.operator_id))
         ?? catalog?.find((c) => c.name === p);
-      return productNeedsTechnologyChoice(cat?.technologies) && !detail?.tecnologia;
+      return productNeedsTechnologyChoice(cat ? productTechnologies(cat) : undefined) && !detail?.tecnologia;
     });
     if (semTecnologia.length > 0) {
       toast.error(`Escolhe a tecnologia (Fibra ou Satélite) em: ${semTecnologia.join(", ")}.`);
@@ -510,7 +512,7 @@ export function EditSaleModal({
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
           servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
           ...(isTelecom ? {
-            activation_date: activationDate || null,
+            activation_date: activationDate || (telecomStatus === 'ativo' && scheduledInstallDate ? scheduledInstallDate : null),
             telecom_status: telecomStatus || null,
             scheduled_install_date: scheduledInstallDate
               ? `${scheduledInstallDate}T${scheduledInstallTime || '00:00'}:00`
@@ -519,6 +521,7 @@ export function EditSaleModal({
               ? `${scheduledInstallDate}T${scheduledInstallEndTime}:00`
               : null,
             documents_checked: documentsChecked,
+            fidelizacao_end: fidelizacaoEnd || null,
             contract_signed: contractSigned,
             // The telecom state IS the sale state here; sales.status is kept
             // in sync behind it so invoicing/finance keep matching on it.
@@ -732,18 +735,8 @@ export function EditSaleModal({
                           onChange={setSellerId}
                         />
 
-                        {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Data de Ativação</Label>
-                            <Input
-                              type="date"
-                              value={activationDate}
-                              onChange={(e) => setActivationDate(e.target.value)}
-                              className="h-9"
-                              disabled={isDeliveredLocked}
-                            />
-                          </div>
-                        )}
+                        {/* No activation field: the install date is the activation
+                            once the sale is live (see the save payload). */}
                         {isTelecom && (
                           <>
                             {/* Full row: the date plus its "das X às Y" window
@@ -781,6 +774,35 @@ export function EditSaleModal({
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground">Opcional — sem data conta como "sem data marcada".</p>
+                            </div>
+
+                            <div className="col-span-1 sm:col-span-3 space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Fim da fidelização</Label>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Input
+                                  type="date"
+                                  value={fidelizacaoEnd}
+                                  onChange={(e) => setFidelizacaoEnd(e.target.value)}
+                                  className="h-9 w-auto"
+                                  disabled={isDeliveredLocked}
+                                />
+                                {(activationDate || scheduledInstallDate) && !fidelizacaoEnd && !isDeliveredLocked && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 text-xs"
+                                    onClick={() => {
+                                      const base = new Date(activationDate || scheduledInstallDate);
+                                      base.setFullYear(base.getFullYear() + 2);
+                                      setFidelizacaoEnd(format(base, "yyyy-MM-dd"));
+                                    }}
+                                  >
+                                    +2 anos
+                                  </Button>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">Os alertas de renovação (push e email aos admins) partem desta data.</p>
                             </div>
 
                             <div className="col-span-1 sm:col-span-3 flex flex-wrap items-center gap-x-8 gap-y-2 pt-1">

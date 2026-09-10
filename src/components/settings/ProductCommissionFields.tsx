@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { productTechnologies } from '@/types/proposals';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CommissionSplitsEditor } from './CommissionSplitsEditor';
 import { QuantityTiersEditor } from './QuantityTiersEditor';
@@ -20,8 +22,7 @@ import {
 
 const NO_OPERATOR = '__none__';
 // Radix Select needs a non-empty value for every option.
-const NO_TECHNOLOGY = '__none__';
-const BOTH_TECHNOLOGIES = '__both__';
+
 
 interface Member {
   user_id: string;
@@ -41,6 +42,12 @@ interface Profile {
  * by quantity just gets ONE band covering everything (min 1, max ∞) — same
  * editor, same mechanism, no separate "flat commission" mode to maintain.
  */
+/** Whether the card fields apply: the product is on the Cartões type, or is not classified yet. */
+export function sellsCards(product: Pick<CatalogProduct, 'type_ids'>): boolean {
+  const ids = product.type_ids ?? [];
+  return ids.length === 0 || ids.includes('cartoes');
+}
+
 export function useProductOperatorContext(product: CatalogProduct, operators: Operator[]) {
   const operator = operators.find(o => o.id === product.operator_id) ?? null;
   // An operator can MANDATE bands (Digi resolves them off the monthly
@@ -49,11 +56,16 @@ export function useProductOperatorContext(product: CatalogProduct, operators: Op
   // is as true of a product with no operator attached as of a Digi one.
   const operatorRequiresTiers = !!operator && !!operator.commission_basis;
   const hasTiers = (product.quantity_tiers?.length ?? 0) > 0;
-  const isTiered = operatorRequiresTiers || hasTiers;
-  const scopeLabel = operator?.commission_basis === 'monthly_volume'
-    ? (operator.volume_scope === 'org_total' ? 'volume mensal da organização' : 'volume mensal do vendedor')
+  // The product's own switch wins. Without one, the old rule: an operator
+  // that resolves bands, or bands already configured, means tiered.
+  const isTiered = product.tiered_commission ?? (operatorRequiresTiers || hasTiers);
+  // Which quantity picks the band: the product says, else the operator.
+  const tierBasis = product.tier_basis ?? operator?.commission_basis ?? 'per_sale';
+  const tierScope = product.tier_scope ?? operator?.volume_scope ?? 'org_total';
+  const scopeLabel = tierBasis === 'monthly_volume'
+    ? (tierScope === 'org_total' ? 'volume mensal da organização' : 'volume mensal do vendedor')
     : 'nesta venda';
-  return { operator, isTiered, operatorRequiresTiers, scopeLabel };
+  return { operator, isTiered, operatorRequiresTiers, scopeLabel, tierBasis, tierScope };
 }
 
 export function OperatorField({
@@ -66,15 +78,12 @@ export function OperatorField({
   onCommit: (updates: Partial<CatalogProduct>) => void;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">
-        <Radio className="h-3 w-3 shrink-0" /> Operadora
-      </Label>
+    <TonedField tone="neutral" icon={<Radio className="h-3 w-3 shrink-0" />} label="Operadora">
       <Select
         value={product.operator_id ?? NO_OPERATOR}
         onValueChange={(v) => onCommit({ operator_id: v === NO_OPERATOR ? undefined : v })}
       >
-        <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+        <SelectTrigger className={cn(tonedInputClass, 'w-full font-normal')}><SelectValue placeholder="Nenhuma" /></SelectTrigger>
         <SelectContent>
           <SelectItem value={NO_OPERATOR}>Nenhuma</SelectItem>
           {operators.map(op => (
@@ -82,7 +91,7 @@ export function OperatorField({
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </TonedField>
   );
 }
 
@@ -129,7 +138,7 @@ export function IncludedCardsField({
   onCommit: (updates: Partial<CatalogProduct>) => void;
 }) {
   return (
-    <div className="space-y-1.5 max-w-xs">
+    <div className="space-y-1.5">
       <TonedField tone="cards" icon={<CreditCard className="h-3 w-3 shrink-0" />} label="Cartões incluídos">
         <Input
           type="number"
@@ -168,7 +177,7 @@ export function ExtraCardField({
   onCommit: (updates: Partial<CatalogProduct>) => void;
 }) {
   return (
-    <div className="space-y-1.5 max-w-xs">
+    <div className="space-y-1.5">
       <TonedField tone="commission" icon={<Wallet className="h-3 w-3 shrink-0" />} label="Comissão por cartão extra (€)">
         <Input
           type="number"
@@ -190,49 +199,6 @@ export function ExtraCardField({
 }
 
 /**
- * Which technologies this product can be sold as. Picking both is what turns
- * every commission line into two rates — the operator pays differently for a
- * fibre install than for a satellite one, and so does the seller's cut.
- */
-export function TechnologyField({
-  product,
-  onCommit,
-}: {
-  product: CatalogProduct;
-  onCommit: (updates: Partial<CatalogProduct>) => void;
-}) {
-  const current = product.technologies ?? [];
-  const value = current.length === 0 ? NO_TECHNOLOGY
-    : current.length > 1 ? BOTH_TECHNOLOGIES
-    : current[0];
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">
-        <Cable className="h-3 w-3 shrink-0" /> Tecnologia
-      </Label>
-      <Select
-        value={value}
-        onValueChange={(v) => onCommit({
-          technologies: v === NO_TECHNOLOGY ? undefined
-            : v === BOTH_TECHNOLOGIES ? [...TELECOM_TECHNOLOGIES]
-            : [v as TelecomTechnology],
-        })}
-      >
-        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NO_TECHNOLOGY}>Não se aplica</SelectItem>
-          {TELECOM_TECHNOLOGIES.map((t) => (
-            <SelectItem key={t} value={t}>{TELECOM_TECHNOLOGY_LABELS[t]}</SelectItem>
-          ))}
-          <SelectItem value={BOTH_TECHNOLOGIES}>Ambas</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-/**
  * What the operator pays the org per unit — the number the org's margin is
  * measured against. It had no field until now: the only way to set it was to
  * run SQL by hand. Only for products without escalões; a tiered product sets
@@ -247,27 +213,21 @@ export function OperatorPaysField({
   onChange: (updates: Partial<CatalogProduct>) => void;
   onCommit: (updates: Partial<CatalogProduct>) => void;
 }) {
-  const byTech = productNeedsTechnologyChoice(product.technologies);
-  const fields: { key: 'operator_pays' | 'operator_pays_fibra' | 'operator_pays_satelite'; label: string }[] =
-    byTech
-      ? [
-          { key: 'operator_pays_fibra', label: `Operadora paga — ${TELECOM_TECHNOLOGY_LABELS.fibra} (€)` },
-          { key: 'operator_pays_satelite', label: `Operadora paga — ${TELECOM_TECHNOLOGY_LABELS.satelite} (€)` },
-        ]
-      : [{ key: 'operator_pays', label: 'Operadora paga (€)' }];
+  // One figure, whatever the technology: the operator pays the same for a
+  // fibre install and a satellite one. (The seller's cut does differ, and
+  // keeps its two columns in the commission lines.)
+  const fields: { key: 'operator_pays'; label: string }[] =
+    [{ key: 'operator_pays', label: 'Operadora paga (€)' }];
 
   return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <>
         {fields.map((f) => (
           <TonedField
             key={f.key}
             tone="operator"
             icon={<Banknote className="h-3 w-3 shrink-0" />}
             label={f.label}
-            className="max-w-xs"
           >
-            <Label className="text-xs text-muted-foreground h-4 flex items-center gap-1.5">{f.label}</Label>
             <Input
               type="number"
               step="0.01"
@@ -280,12 +240,17 @@ export function OperatorPaysField({
             />
           </TonedField>
         ))}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Quanto a operadora paga à organização por unidade. A comissão do vendedor sai daqui; o que sobra
-        é o Valor da Organização. Em branco, a venda não sabe dizer quanto fica para a empresa.
-      </p>
-    </div>
+    </>
+  );
+}
+
+/** The one line under the header that says what "Operadora paga" means. */
+export function OperatorPaysHint() {
+  return (
+    <p className="text-[11px] text-muted-foreground">
+      Quanto a operadora paga à organização por unidade. A comissão do vendedor sai daqui; o que sobra
+      é o Valor da Organização. Em branco, a venda não sabe dizer quanto fica para a empresa.
+    </p>
   );
 }
 
@@ -294,6 +259,8 @@ export function CommissionSection({
   operator,
   isTiered,
   operatorRequiresTiers,
+  tierBasis,
+  tierScope,
   scopeLabel,
   members,
   profiles,
@@ -304,6 +271,8 @@ export function CommissionSection({
   operator: Operator | null;
   isTiered: boolean;
   operatorRequiresTiers: boolean;
+  tierBasis: NonNullable<CatalogProduct['tier_basis']>;
+  tierScope: NonNullable<CatalogProduct['tier_scope']>;
   scopeLabel: string;
   members: Member[];
   profiles: Profile[];
@@ -312,7 +281,70 @@ export function CommissionSection({
 }) {
   return (
     <div className="space-y-3">
-      <Label className="text-sm font-medium">Comissão</Label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Label className="text-sm font-medium">Comissão</Label>
+        {/* The same switch on every product, Digi included. ON keeps the
+            bands stored while showing them; OFF keeps them stored while the
+            calculator ignores them — flipping back loses nothing. */}
+        <div className="flex items-center gap-2">
+          <Switch
+            id="tiered-commission"
+            checked={isTiered}
+            onCheckedChange={(on) => {
+              if (on) {
+                const existing = product.quantity_tiers ?? [];
+                onCommit({
+                  tiered_commission: true,
+                  quantity_tiers: existing.length > 0 ? existing : [{
+                    id: crypto.randomUUID(),
+                    min: 1,
+                    max: null,
+                    price: product.price,
+                    operator_pays: product.operator_pays,
+                    operator_pays_fibra: product.operator_pays_fibra,
+                    operator_pays_satelite: product.operator_pays_satelite,
+                    splits: product.splits ?? [],
+                  }],
+                });
+              } else {
+                // Flat lines start from the first band when there are none yet.
+                const first = product.quantity_tiers?.[0];
+                const seedSplits = (product.splits?.length ?? 0) === 0 && first ? first.splits : undefined;
+                onCommit({
+                  tiered_commission: false,
+                  ...(seedSplits ? { splits: seedSplits, ...deriveCommissionFields(seedSplits) } : {}),
+                });
+              }
+            }}
+          />
+          <Label htmlFor="tiered-commission" className="text-xs text-muted-foreground">
+            Comissão por escalão de quantidade
+          </Label>
+        </div>
+        {/* Which quantity the band is read off. Per sale: this sale's own
+            units decide its band, bonus included. Per month: the running
+            monthly total decides, and earlier sales that month are re-banded
+            when the total climbs — what Digi does. */}
+        {isTiered && (
+          <Select
+            value={tierBasis === 'monthly_volume' ? `monthly_${tierScope}` : 'per_sale'}
+            onValueChange={(v) =>
+              onCommit(
+                v === 'per_sale'
+                  ? { tier_basis: 'per_sale' }
+                  : { tier_basis: 'monthly_volume', tier_scope: v === 'monthly_org_total' ? 'org_total' : 'per_seller' },
+              )
+            }
+          >
+            <SelectTrigger className="h-8 w-full text-xs sm:w-[300px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="per_sale">Quantidade conta por venda</SelectItem>
+              <SelectItem value="monthly_org_total">Quantidade conta ao mês — organização</SelectItem>
+              <SelectItem value="monthly_per_seller">Quantidade conta ao mês — por vendedor</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
       {/* Only an UNCLASSIFIED product of an energy operator still goes to the
           Matriz. Once it carries a type, the type's shape wins — Energia and
@@ -331,7 +363,8 @@ export function CommissionSection({
           scopeLabel={scopeLabel}
           onChange={(quantity_tiers: QuantityTier[]) => onChange({ quantity_tiers })}
           onCommit={(quantity_tiers: QuantityTier[]) => onCommit({ quantity_tiers })}
-          technologies={product.technologies}
+          technologies={productTechnologies(product)}
+          showCards={sellsCards(product)}
         />
       ) : (
         <CommissionSplitsEditor
@@ -340,48 +373,24 @@ export function CommissionSection({
           profiles={profiles}
           onChange={(splits: CommissionSplit[]) => onChange({ splits, ...deriveCommissionFields(splits) })}
           onCommit={(splits: CommissionSplit[]) => onCommit({ splits, ...deriveCommissionFields(splits) })}
-          technologies={product.technologies}
+          technologies={productTechnologies(product)}
         />
       )}
 
-      {!isTiered && <OperatorPaysField product={product} onChange={onChange} onCommit={onCommit} />}
 
       {/* Opting a plain product into quantity bands. The first band inherits
           everything already configured, so nothing has to be retyped and the
           product keeps paying exactly what it paid a second ago. */}
-      {!isTiered && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => onCommit({
-            quantity_tiers: [{
-              id: crypto.randomUUID(),
-              min: 1,
-              max: null,
-              price: product.price,
-              operator_pays: product.operator_pays,
-              operator_pays_fibra: product.operator_pays_fibra,
-              operator_pays_satelite: product.operator_pays_satelite,
-              splits: product.splits ?? [],
-            }],
-          })}
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Comissão por escalão de quantidade
-        </Button>
-      )}
-      {isTiered && !operatorRequiresTiers && (
-        <p className="text-[11px] text-muted-foreground">
-          Este produto paga por escalão de quantidade. Apaga todos os escalões para voltar a um valor único.
-        </p>
-      )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <IncludedCardsField product={product} onChange={onChange} onCommit={onCommit} />
-        <ExtraCardField product={product} onChange={onChange} onCommit={onCommit} />
-      </div>
+
+      {/* SIM cards only make sense on a product of the Cartões type. A
+          product nobody has classified yet keeps the fields, as before. */}
+      {sellsCards(product) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <IncludedCardsField product={product} onChange={onChange} onCommit={onCommit} />
+          <ExtraCardField product={product} onChange={onChange} onCommit={onCommit} />
+        </div>
+      )}
     </div>
   );
 }
@@ -411,9 +420,12 @@ interface ProductCommissionFieldsProps {
 export function ProductTypesField({
   product,
   onCommit,
+  hint = true,
 }: {
   product: CatalogProduct;
   onCommit: (updates: Partial<CatalogProduct>) => void;
+  /** The explanatory sentence under the chips — off inside the pinned header. */
+  hint?: boolean;
 }) {
   const { active, byId } = useProductTypes();
   const selected = new Set(product.type_ids ?? []);
@@ -461,11 +473,44 @@ export function ProductTypesField({
           );
         })}
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        O tipo decide a forma da comissão e é por ele que a venda começa. Um produto pode ter mais do que um —
-        um pacote que leve fibra e cartões paga os dois.
-      </p>
+      {hint && (
+        <p className="text-[11px] text-muted-foreground">
+          O tipo decide a forma da comissão e é por ele que a venda começa. Um produto pode ter mais do que um —
+          um pacote que leve fibra e cartões paga os dois.
+        </p>
+      )}
     </div>
+  );
+}
+
+/**
+ * The product's identity and its default figures: types, operator, price,
+ * what the operator pays. Both dialogs render this ABOVE their scroll box,
+ * so it stays put while the commission bands scroll underneath — a plain
+ * header, not a sticky element, which had content bleeding through it.
+ */
+export function ProductHeaderFields({
+  product,
+  operators,
+  onChange,
+  onCommit,
+}: {
+  product: CatalogProduct;
+  operators: Operator[];
+  onChange: (updates: Partial<CatalogProduct>) => void;
+  onCommit: (updates: Partial<CatalogProduct>) => void;
+}) {
+  return (
+    <>
+      <ProductTypesField product={product} onCommit={onCommit} hint={false} />
+      {/* One row, equal boxes: who sells it, what the client pays, what the
+          operator pays. On a tiered product these are the defaults a band may override. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <OperatorField product={product} operators={operators} onCommit={onCommit} />
+        <PriceField product={product} onChange={onChange} onCommit={onCommit} />
+        <OperatorPaysField product={product} onChange={onChange} onCommit={onCommit} />
+      </div>
+    </>
   );
 }
 
@@ -477,19 +522,18 @@ export function ProductCommissionFields({
   onChange,
   onCommit,
 }: ProductCommissionFieldsProps) {
-  const { operator, isTiered, operatorRequiresTiers, scopeLabel } = useProductOperatorContext(product, operators);
+  const { operator, isTiered, operatorRequiresTiers, scopeLabel, tierBasis, tierScope } = useProductOperatorContext(product, operators);
 
   return (
     <>
-      <ProductTypesField product={product} onCommit={onCommit} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-        <OperatorField product={product} operators={operators} onCommit={onCommit} />
-        <TechnologyField product={product} onCommit={onCommit} />
-        {!isTiered && <PriceField product={product} onChange={onChange} onCommit={onCommit} />}
-      </div>
+      {/* The header (types, operator, price, operator pays) is rendered by
+          the dialog above its scroll box — see ProductHeaderFields. */}
+      {/* One sentence, not two: on a tiered product the defaults note
+          already says what the figures above are for. */}
+      {!isTiered && <OperatorPaysHint />}
       {isTiered && (
         <p className="text-xs text-muted-foreground -mt-3">
-          O preço passa a definir-se por escalão, abaixo — cada um pode ter o seu próprio valor.
+          Preço e "Operadora paga" acima são os valores por defeito. Cada escalão abaixo pode ter os seus, e esses ganham.
         </p>
       )}
       <CommissionSection
@@ -497,6 +541,8 @@ export function ProductCommissionFields({
         operator={operator}
         isTiered={isTiered}
         operatorRequiresTiers={operatorRequiresTiers}
+        tierBasis={tierBasis}
+        tierScope={tierScope}
         scopeLabel={scopeLabel}
         members={members}
         profiles={profiles}

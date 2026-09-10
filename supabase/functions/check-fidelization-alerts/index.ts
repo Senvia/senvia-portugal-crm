@@ -29,6 +29,10 @@ interface OrganizationSettings {
   fidelization_event_time: string;
   fidelization_email_enabled: boolean;
   fidelization_email: string | null;
+  // Contract loyalty on SALES (telecom): when to warn, and through what.
+  fidelization_sales_alert_days: number[] | null;
+  fidelization_sales_push_enabled: boolean | null;
+  fidelization_sales_email_enabled: boolean | null;
   brevo_api_key: string | null;
   brevo_sender_email: string | null;
 }
@@ -146,6 +150,61 @@ async function sendBrevoEmail(
   }
 }
 
+interface SaleLoyaltyAlert {
+  id: string;
+  code: string | null;
+  client_name: string;
+  products: string[];
+  fidelizacao_end: string;
+  days_until_end: number;
+  urgent: boolean;
+}
+
+async function sendSaleLoyaltyEmail(
+  brevoApiKey: string,
+  senderEmail: string,
+  toEmails: string[],
+  sale: SaleLoyaltyAlert,
+  orgName: string,
+): Promise<boolean> {
+  try {
+    const endDate = new Date(sale.fidelizacao_end).toLocaleDateString('pt-PT');
+    const subject = sale.urgent
+      ? `⚠️ Fidelização termina em ${sale.days_until_end} dias - ${sale.client_name}`
+      : `🔔 Fidelização a terminar - ${sale.client_name}`;
+    const htmlContent = `
+      <!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:20px;background:#f5f5f5}
+        .c{max-width:500px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .h{background:${sale.urgent ? '#ef4444' : '#f59e0b'};color:#fff;padding:20px;text-align:center}.h h1{margin:0;font-size:18px}
+        .b{padding:24px}.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:16px 0}
+        .r{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e2e8f0}.r:last-child{border-bottom:none}
+        .l{color:#64748b;font-size:14px}.v{color:#0f172a;font-weight:500;font-size:14px}.f{text-align:center;padding:16px;color:#94a3b8;font-size:12px}
+      </style></head><body><div class="c">
+        <div class="h"><h1>${sale.urgent ? '⚠️ Fidelização a terminar' : '🔔 Fidelização a terminar'}</h1></div>
+        <div class="b"><p>Olá,</p><p>A fidelização do contrato abaixo termina em <strong>${sale.days_until_end} dias</strong>:</p>
+          <div class="box">
+            <div class="r"><span class="l">Cliente</span><span class="v">${sale.client_name}</span></div>
+            ${sale.code ? `<div class="r"><span class="l">Venda</span><span class="v">${sale.code}</span></div>` : ''}
+            ${sale.products.length ? `<div class="r"><span class="l">Produto</span><span class="v">${sale.products.join(', ')}</span></div>` : ''}
+            <div class="r"><span class="l">Fim da fidelização</span><span class="v">${endDate}</span></div>
+          </div>
+          <p>Recomendamos contactar o cliente para renovar ou renegociar o contrato.</p>
+        </div><div class="f">Enviado por ${orgName} via SENVIA Software House</div>
+      </div></body></html>`;
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': brevoApiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ sender: { email: senderEmail, name: orgName }, to: toEmails.map((email) => ({ email })), subject, htmlContent }),
+    });
+    if (!response.ok) { console.error('Brevo API error (sale loyalty):', await response.text()); return false; }
+    return true;
+  } catch (error) {
+    console.error('Error sending sale loyalty email:', error);
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -161,7 +220,7 @@ serve(async (req) => {
     // Get only telecom organizations with their settings
     const { data: organizations, error: orgsError } = await supabase
       .from('organizations')
-      .select('id, name, niche, fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email, brevo_api_key, brevo_sender_email')
+      .select('id, name, niche, fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email, fidelization_sales_alert_days, fidelization_sales_push_enabled, fidelization_sales_email_enabled, brevo_api_key, brevo_sender_email')
       .eq('niche', 'telecom');
 
     if (orgsError) {
@@ -389,6 +448,80 @@ serve(async (req) => {
           .eq('id', cpe.id);
 
         results.alerts_sent++;
+      }
+
+      // ── Contract loyalty on the SALES themselves (telecom). Two windows,
+      //    each sent once per sale; push to every admin, email to every
+      //    admin's address — the people who renew contracts.
+      const saleDays = (org.fidelization_sales_alert_days as number[] | null) || [60, 15];
+      const [saleFirst, saleSecond] = saleDays;
+      const todayStr = today.toISOString().split('T')[0];
+      const saleWindows: { days: number; flag: 'fidelizacao_alert_1_sent' | 'fidelizacao_alert_2_sent'; urgent: boolean }[] = [
+        { days: saleFirst, flag: 'fidelizacao_alert_1_sent', urgent: false },
+        { days: saleSecond, flag: 'fidelizacao_alert_2_sent', urgent: true },
+      ];
+      let adminIds: string[] | null = null;
+      let adminEmails: string[] | null = null;
+      const loadAdmins = async () => {
+        if (adminIds) return;
+        const { data: admins } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('role', 'admin')
+          .eq('is_active', true);
+        adminIds = (admins || []).map((m: any) => m.user_id);
+        if (adminIds.length === 0) { adminEmails = []; return; }
+        const { data: profiles } = await supabase.from('profiles').select('email').in('id', adminIds);
+        adminEmails = (profiles || []).map((p: any) => p.email).filter((e: string | null): e is string => !!e && e.includes('@'));
+      };
+      for (const w of saleWindows) {
+        if (!w.days || w.days <= 0) continue;
+        const limit = new Date();
+        limit.setDate(today.getDate() + w.days);
+        const { data: dueSales, error: salesError } = await supabase
+          .from('sales')
+          .select('id, code, fidelizacao_end, servicos_produtos, client_id, lead_id, crm_clients:client_id(name), leads:lead_id(name)')
+          .eq('organization_id', org.id)
+          .eq(w.flag, false)
+          .neq('status', 'cancelled')
+          .not('fidelizacao_end', 'is', null)
+          .gte('fidelizacao_end', todayStr)
+          .lte('fidelizacao_end', limit.toISOString().split('T')[0]);
+        if (salesError) { results.errors.push(`Org ${org.id} sales: ${salesError.message}`); continue; }
+        for (const sale of dueSales || []) {
+          await loadAdmins();
+          const endDate = new Date(sale.fidelizacao_end);
+          const alert: SaleLoyaltyAlert = {
+            id: sale.id,
+            code: sale.code,
+            client_name: (sale as any).crm_clients?.name || (sale as any).leads?.name || 'Cliente',
+            products: (sale.servicos_produtos as string[] | null) || [],
+            fidelizacao_end: sale.fidelizacao_end,
+            days_until_end: Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+            urgent: w.urgent,
+          };
+          if ((org.fidelization_sales_push_enabled ?? true) && adminIds && adminIds.length > 0) {
+            const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
+              body: {
+                organization_id: org.id,
+                user_ids: adminIds,
+                title: alert.urgent ? `⚠️ Fidelização termina em ${alert.days_until_end} dias` : '🔔 Fidelização a terminar',
+                body: `${alert.client_name}${alert.code ? ` · ${alert.code}` : ''} — termina a ${endDate.toLocaleDateString('pt-PT')}`,
+                url: '/vendas',
+                tag: `sale-loyalty-${sale.id}`,
+              },
+            });
+            if (pushError) results.errors.push(`Push ${sale.id}: ${pushError.message}`);
+          }
+          const brevoKey = Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key;
+          if ((org.fidelization_sales_email_enabled ?? true) && adminEmails && adminEmails.length > 0 && brevoKey && org.brevo_sender_email) {
+            const sent = await sendSaleLoyaltyEmail(brevoKey, org.brevo_sender_email, adminEmails, alert, org.name);
+            if (sent) results.emails_sent++;
+          }
+          await supabase.from('sales').update({ [w.flag]: true }).eq('id', sale.id);
+          results.alerts_sent++;
+        }
       }
 
       results.processed++;

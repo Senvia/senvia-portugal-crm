@@ -59,7 +59,7 @@ import {
   Trash2
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/proposals";
-import { NEGOTIATION_TYPE_LABELS, getCatalogCommission, productNeedsTechnologyChoice } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, getCatalogCommission, productNeedsTechnologyChoice, productTechnologies } from "@/types/proposals";
 import { useServicosProducts } from "@/hooks/useServicosProducts";
 import { ServicosSection } from "@/components/proposals/ServicosSection";
 import { SellerSelect } from "@/components/sales/SellerSelect";
@@ -213,6 +213,8 @@ export function CreateSaleModal({
   const [margem, setMargem] = useState<string>("");
   const [dbl, setDbl] = useState<string>("");
   const [anosContrato, setAnosContrato] = useState<string>("");
+  // When the contract's loyalty period ends (telecom) — yyyy-MM-dd.
+  const [fidelizacaoEnd, setFidelizacaoEnd] = useState<string>("");
   const [modeloServico, setModeloServico] = useState<ModeloServico | null>(null);
   const [kwp, setKwp] = useState<string>("");
   const [comissao, setComissao] = useState<string>("");
@@ -715,11 +717,6 @@ export function CreateSaleModal({
       return;
     }
 
-    // Validar data de ativação quando estado é Concluída (apenas telecom)
-    if (isTelecom && saleStatus === 'delivered' && !activationDate) {
-      toast.error("A Data de Ativação é obrigatória para vendas com estado Concluída.");
-      return;
-    }
 
     // A product sold as both Fibra and Satélite pays a different commission
     // for each, so the line cannot be priced until someone says which one was
@@ -728,7 +725,7 @@ export function CreateSaleModal({
       const detail = servicosDetails[p];
       const cat = catalog?.find((c) => c.name === p && (detail?.operator_id ? c.operator_id === detail.operator_id : !c.operator_id))
         ?? catalog?.find((c) => c.name === p);
-      return productNeedsTechnologyChoice(cat?.technologies) && !detail?.tecnologia;
+      return productNeedsTechnologyChoice(cat ? productTechnologies(cat) : undefined) && !detail?.tecnologia;
     });
     if (semTecnologia.length > 0) {
       toast.error(`Escolhe a tecnologia (Fibra ou Satélite) em: ${semTecnologia.join(", ")}.`);
@@ -784,6 +781,7 @@ export function CreateSaleModal({
           margem: parseFloat(margem) || undefined,
           dbl: parseFloat(dbl) || undefined,
           anos_contrato: parseInt(anosContrato) || undefined,
+          fidelizacao_end: fidelizacaoEnd || undefined,
           modelo_servico: modeloServico || undefined,
           kwp: parseFloat(kwp) || undefined,
           comissao: parseFloat(comissao) || undefined,
@@ -801,7 +799,11 @@ export function CreateSaleModal({
           contract_signed: contractSigned,
         } : {}),
         ...(showEnergy && saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || undefined } : {}),
-        activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
+        // The install is the activation: a sale that is already live takes
+        // its booked install day as activation date, nobody types a second one.
+        activation_date: activationDate
+          ? format(activationDate, 'yyyy-MM-dd')
+          : (isTelecom && (telecomStatus === 'ativo' || saleStatus === 'delivered') && scheduledInstallDate ? scheduledInstallDate : undefined),
         has_recurring: hasRecurring || false,
         recurring_value: recurringValue,
         recurring_status: isPlanSale ? 'pending' : (hasRecurring ? 'active' : undefined),
@@ -1090,35 +1092,6 @@ export function CreateSaleModal({
                         onChange={setSellerId}
                       />
 
-                      {/* Data de Ativação - quando estado é Concluída (apenas telecom) */}
-                      {isTelecom && saleStatus === 'delivered' && (
-                        <div className="col-span-1 sm:col-span-2 space-y-2">
-                          <Label>Data de Ativação <span className="text-destructive">*</span></Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !activationDate && "text-muted-foreground"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {activationDate ? format(activationDate, "PPP", { locale: pt }) : "Selecionar data de ativação"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={activationDate}
-                                onSelect={(date) => setActivationDate(date || undefined)}
-                                locale={pt}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      )}
-
                       {isTelecom && (
                         <>
                           {/* Full row: the date plus its "das X às Y" window
@@ -1186,6 +1159,36 @@ export function CreateSaleModal({
                               </div>
                             )}
                             <p className="text-[11px] text-muted-foreground">Opcional — pode ficar por marcar.</p>
+                          </div>
+
+                          {/* Every telecom contract carries a loyalty period; its end is
+                              what the renewal alerts (push + email to admins) run off. */}
+                          <div className="col-span-1 sm:col-span-2 space-y-2">
+                            <Label>Fim da fidelização</Label>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Input
+                                type="date"
+                                value={fidelizacaoEnd}
+                                onChange={(e) => setFidelizacaoEnd(e.target.value)}
+                                className="h-9 w-auto"
+                              />
+                              {(activationDate || scheduledInstallDate) && !fidelizacaoEnd && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 text-xs"
+                                  onClick={() => {
+                                    const base = activationDate ? new Date(activationDate) : new Date(scheduledInstallDate);
+                                    base.setFullYear(base.getFullYear() + 2);
+                                    setFidelizacaoEnd(format(base, "yyyy-MM-dd"));
+                                  }}
+                                >
+                                  +2 anos
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">Data em que termina a fidelização do contrato. Os alertas de renovação partem daqui.</p>
                           </div>
 
                           <div className="col-span-1 sm:col-span-2 flex flex-wrap items-center gap-x-8 gap-y-2 pt-1">

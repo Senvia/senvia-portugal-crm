@@ -19,6 +19,7 @@ import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
 
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { SlidersHorizontal } from "lucide-react";
 import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -133,6 +134,8 @@ export default function Leads() {
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
   const [tipologiaFilter, setTipologiaFilter] = usePersistedState<'all' | LeadTipologia>('leads-tipologia-v1', 'all');
+  // The filter block opens under the pinned title row on demand; remembered.
+  const [leadsFiltersOpen, setLeadsFiltersOpen] = usePersistedState<boolean>('leads-filters-open-v1', false);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
     const saved = localStorage.getItem('leads-view-mode');
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
@@ -648,7 +651,8 @@ export default function Leads() {
   return (
     <div className="p-4 lg:p-8">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pipeline' | 'report')} className="space-y-4">
-        <div className="mb-4 lg:mb-6 space-y-3 lg:space-y-4">
+        {/* Pinned: title, count, tabs and actions; the filters open under it. */}
+        <div className="sticky top-14 lg:top-0 z-20 mb-4 space-y-3 border-b bg-background pb-3 pt-1 lg:mb-6">
           {/* Linha 1: Título + Pesquisa */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -667,6 +671,12 @@ export default function Leads() {
               <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Typed search stays here, on the pinned row, whatever the
+                  filter panel is doing. */}
+              <div className="relative w-full sm:w-[220px] lg:w-[300px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
+              </div>
               <TabsList className="h-9">
                 <TabsTrigger value="pipeline" className="text-xs gap-1">
                   <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
@@ -698,6 +708,15 @@ export default function Leads() {
                     </Button>
                   </div>
                   
+                  <Button
+                    variant={leadsFiltersOpen ? "secondary" : "outline"}
+                    className="shrink-0 h-9 lg:h-10"
+                    aria-expanded={leadsFiltersOpen}
+                    onClick={() => setLeadsFiltersOpen(v => !v)}
+                  >
+                    <SlidersHorizontal className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Filtros{hasActiveFilters ? " •" : ""}</span>
+                  </Button>
                   <Button variant="outline" data-otto-target="leads-import-btn" onClick={() => setIsImportModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                     <Upload className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Importar</span>
@@ -742,13 +761,9 @@ export default function Leads() {
             </div>
           </div>
 
-          {activeTab === 'pipeline' && (
+          {activeTab === 'pipeline' && leadsFiltersOpen && (
             <div className="flex flex-col gap-3 pb-1">
               <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:gap-3">
-                <div className="relative w-full min-w-0 md:flex-1 md:min-w-[260px] lg:min-w-[320px]">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
-                </div>
 
                 {/* Team Member Filter (Admin Only) */}
                 <TeamMemberFilter className="w-full md:w-[260px] lg:w-[280px] shrink-0" />

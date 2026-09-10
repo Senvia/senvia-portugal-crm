@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { OperatorField, PriceField, TechnologyField, CommissionSection, useProductOperatorContext } from './ProductCommissionFields';
+import { OperatorField, PriceField, OperatorPaysField, OperatorPaysHint, ProductTypesField, CommissionSection, useProductOperatorContext } from './ProductCommissionFields';
+import { TonedField, tonedInputClass } from './FieldTone';
 import type { Operator } from '@/hooks/useOperators';
 import type { CatalogProduct } from '@/types/proposals';
 
@@ -75,7 +76,7 @@ export function CreateTelecomProductModal({
   const isDuplicate = existingProducts.some(
     (p) => p.name.toLowerCase() === trimmed.toLowerCase() && (p.operator_id ?? null) === (draft.operator_id ?? null),
   );
-  const { operator, isTiered, operatorRequiresTiers, scopeLabel } = useProductOperatorContext(draft, operators);
+  const { operator, isTiered, operatorRequiresTiers, scopeLabel, tierBasis, tierScope } = useProductOperatorContext(draft, operators);
 
   // Nothing is persisted until "Criar Produto", so typing and "committing" a
   // field are the same action here — unlike the edit dialog, there is no
@@ -101,37 +102,43 @@ export function CreateTelecomProductModal({
             <DialogDescription>Operadora, nome, preço e regras de comissão do produto.</DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-              <OperatorField product={draft} operators={operators} onCommit={patch} />
-              <div className="space-y-1.5">
-                <Label htmlFor="telecom-name" className="text-xs text-muted-foreground h-4 flex items-center">Nome *</Label>
+          {/* Fixed header, outside the scroll box — same as the edit dialog,
+              with the name in it. */}
+          <div className="shrink-0 space-y-3 border-b px-4 sm:px-6 py-3">
+            <ProductTypesField product={draft} onCommit={patch} hint={false} />
+
+            {/* Same header as the edit page, with the name in it: one row of
+                equal boxes, in the order the money is read. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <TonedField tone="neutral" label="Nome *">
                 <Input
                   id="telecom-name"
                   value={draft.name}
                   onChange={(e) => patch({ name: e.target.value })}
                   placeholder="Ex: 3P - 34 a 42"
                   autoFocus
-                  className="h-9"
+                  className={`${tonedInputClass} w-full font-normal`}
                 />
                 {isDuplicate && (
                   <p className="text-xs text-destructive">Já existe um produto com este nome.</p>
                 )}
-              </div>
-              <TechnologyField product={draft} onCommit={patch} />
+              </TonedField>
+              <OperatorField product={draft} operators={operators} onCommit={patch} />
+              <PriceField product={draft} onChange={patch} onCommit={patch} />
+              <OperatorPaysField product={draft} onChange={patch} onCommit={patch} />
             </div>
+          </div>
 
-            {!isTiered && (
-              <div className="max-w-xs">
-                <PriceField product={draft} onChange={patch} onCommit={patch} />
-              </div>
-            )}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
+            <OperatorPaysHint />
 
             <CommissionSection
               product={draft}
               operator={operator}
               isTiered={isTiered}
               operatorRequiresTiers={operatorRequiresTiers}
+              tierBasis={tierBasis}
+              tierScope={tierScope}
               scopeLabel={scopeLabel}
               members={members}
               profiles={profiles}

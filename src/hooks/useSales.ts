@@ -275,6 +275,7 @@ export function useCreateSale() {
       margem?: number;
       dbl?: number;
       anos_contrato?: number;
+      fidelizacao_end?: string | null;
       modelo_servico?: ModeloServico;
       kwp?: number;
       comissao?: number;
@@ -329,6 +330,7 @@ export function useCreateSale() {
           margem: data.margem || null,
           dbl: data.dbl || null,
           anos_contrato: data.anos_contrato || null,
+          fidelizacao_end: data.fidelizacao_end || null,
           modelo_servico: data.modelo_servico || null,
           kwp: data.kwp || null,
           comissao: data.comissao || null,

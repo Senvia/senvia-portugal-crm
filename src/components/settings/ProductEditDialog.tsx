@@ -1,7 +1,7 @@
 import { Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ProductCommissionFields } from './ProductCommissionFields';
+import { ProductCommissionFields, ProductHeaderFields } from './ProductCommissionFields';
 import type { Operator } from '@/hooks/useOperators';
 import { catalogProductKey, type CatalogProduct } from '@/types/proposals';
 
@@ -54,6 +54,18 @@ export function ProductEditDialog({
           </div>
           <DialogDescription>Preço, operadora e regras de comissão deste produto.</DialogDescription>
         </DialogHeader>
+
+        {/* Fixed header: what the product is and what it pays by default.
+            Outside the scroll box on purpose, so it can never be scrolled
+            over or have content show through it. */}
+        <div className="shrink-0 space-y-3 border-b px-4 sm:px-6 py-3">
+          <ProductHeaderFields
+            product={product}
+            operators={operators}
+            onChange={(updates) => onChange(catalogProductKey(product), updates)}
+            onCommit={(updates) => onCommit(catalogProductKey(product), updates)}
+          />
+        </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
           <ProductCommissionFields

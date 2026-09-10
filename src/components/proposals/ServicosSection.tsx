@@ -3,7 +3,9 @@
  * Supports both legacy (fields-based) and new catalog format.
  */
 import { useEffect, useState } from 'react';
-import { Radio, Wrench, X, Package } from 'lucide-react';
+import { Radio, Wrench, X, Package, Tags } from 'lucide-react';
+import { useProductTypes } from '@/hooks/useProductTypes';
+import { Toggle } from '@/components/ui/toggle';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,8 @@ import {
   TELECOM_TECHNOLOGIES,
   TELECOM_TECHNOLOGY_LABELS,
   productNeedsTechnologyChoice,
+  productTechnologies,
+  cardConfigFor,
 } from '@/types/proposals';
 
 interface OperatorRef {
@@ -204,7 +208,13 @@ function CatalogProducts({
   // SPECIFIC operator (e.g. "1P" for Digi, which pays differently) only shows
   // up under that one — and, when both exist for the same name, the
   // operator-specific one wins over the generic one (an explicit override).
-  const [addOperatorId, setAddOperatorId] = useState<string | null>(null);
+  // The sale starts from the product TYPE (Fibra, Satélite, Cartões…), which
+  // is also what the sale is about; the operator is a fact about the
+  // product and comes along with it. Only types that actually have a
+  // product are offered.
+  const [addTypeId, setAddTypeId] = useState<string | null>(null);
+  const { active: productTypes, byId: typeById } = useProductTypes();
+  const typesWithProducts = productTypes.filter((t) => catalog.some((c) => (c.type_ids ?? []).includes(t.id)));
 
   const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
   // The pool that actually gets saved to the sale (sales.comissao), across
@@ -246,7 +256,7 @@ function CatalogProducts({
   // entry wins), excluding names already added to this sale/proposta.
   const comboboxOptions: ComboboxOption[] = (() => {
     const seen = new Set<string>();
-    const eligible = catalog.filter((c) => c.operator_id === addOperatorId || !c.operator_id);
+    const eligible = catalog.filter((c) => !addTypeId || (c.type_ids ?? []).includes(addTypeId));
     // Operator-specific entries first, so they claim the name before the
     // operator-agnostic fallback for the same name is considered.
     const ordered = [...eligible].sort((a, b) => (a.operator_id ? -1 : 0) - (b.operator_id ? -1 : 0));
@@ -265,17 +275,27 @@ function CatalogProducts({
   const handleAddProduct = (value: string | null) => {
     if (!value) return;
     onToggleProduct(value);
-    const catProduct = resolveProduct(value, addOperatorId);
+    // Same name once per operator plus once generic: the operator-bound
+    // entry of the chosen type wins, then the generic one.
+    const catProduct =
+      catalog.find((c) => c.name === value && !!c.operator_id && (!addTypeId || (c.type_ids ?? []).includes(addTypeId)))
+      ?? catalog.find((c) => c.name === value && !c.operator_id)
+      ?? catalog.find((c) => c.name === value);
     if (catProduct) {
       const isTiered = !!catProduct.quantity_tiers?.length;
+      const techs = productTechnologies(catProduct);
+      // Picking the Fibra or Satélite TYPE already says which one this line
+      // is; anything else leaves it to the single-technology rule below.
+      const chosenTech = (addTypeId === 'fibra' || addTypeId === 'satelite') && techs?.includes(addTypeId)
+        ? addTypeId
+        : undefined;
+      const tecnologia = chosenTech ?? (techs?.length === 1 ? techs[0] : undefined);
       // Pool total (every recipient combined) — this is what gets saved.
-      const comissaoVal = lineCommission(catProduct, 1).gross;
+      const comissaoVal = lineCommission(catProduct, 1, undefined, tecnologia).gross;
       const priceVal = isTiered ? getCatalogPriceForQuantity(catProduct, 1) : catProduct.price;
-      // The operator explicitly chosen above wins over the product's own
-      // (possibly absent) operator_id — a generic "1P" added while MEO is
-      // selected must freeze onto the sale as a MEO line, not an operatorless
-      // one, or the proposal-number field and telecom lifecycle lose it.
-      const frozenOperatorId = addOperatorId ?? catProduct.operator_id;
+      // The operator comes with the product. A product with none (the
+      // Níveis sold under any brand) gets one on its own line, below.
+      const frozenOperatorId = catProduct.operator_id;
       onSetProductDetail(value, {
         price: priceVal,
         commission_pct: catProduct.commission_pct,
@@ -285,10 +305,10 @@ function CatalogProducts({
         quantidade: 1,
         operator_id: frozenOperatorId,
         operator_name: frozenOperatorId ? operatorById.get(frozenOperatorId) : undefined,
-        // One technology means there is nothing to ask: freeze it now.
-        // Two leaves it undefined on purpose, so the sale cannot be saved
-        // until someone says which one was installed.
-        tecnologia: catProduct.technologies?.length === 1 ? catProduct.technologies[0] : undefined,
+        // Undefined on a two-technology product picked under a non-technology
+        // type (Cartões), on purpose: the sale cannot be saved until someone
+        // says which one was installed.
+        tecnologia,
       });
     }
   };
@@ -301,34 +321,41 @@ function CatalogProducts({
           <p className="text-xs text-destructive">Selecione pelo menos 1 produto</p>
         )}
 
-        {/* Operadora a comprar — filtra a pesquisa abaixo aos produtos dessa
-            operadora + aos que servem para qualquer uma (sem operadora
-            fixada no catálogo). Fica selecionada entre adições, para não
-            obrigar a escolher outra vez a cada produto da mesma operadora. */}
-        {operators.length > 0 && (
+        {/* Step one: the type. It narrows the search below and, for Fibra or
+            Satélite, already settles the line's technology. Stays picked
+            between additions. */}
+        {typesWithProducts.length > 0 && (
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Radio className="h-3 w-3 shrink-0" /> Operadora
+              <Tags className="h-3 w-3 shrink-0" /> Tipo
             </Label>
-            <Select
-              value={addOperatorId ?? '__geral__'}
-              onValueChange={(v) => setAddOperatorId(v === '__geral__' ? null : v)}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma (produtos gerais)" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__geral__">Nenhuma (produtos gerais)</SelectItem>
-                {operators.map((op) => (
-                  <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {typesWithProducts.map((t) => {
+                const on = addTypeId === t.id;
+                return (
+                  <Toggle
+                    key={t.id}
+                    size="sm"
+                    variant="outline"
+                    pressed={on}
+                    onPressedChange={() => setAddTypeId(on ? null : t.id)}
+                    className={cn(
+                      'h-8 rounded-full px-3 text-xs font-medium',
+                      on
+                        ? 'border-primary/40 bg-primary/10 text-primary data-[state=on]:bg-primary/10 data-[state=on]:text-primary'
+                        : 'border-dashed text-muted-foreground',
+                    )}
+                  >
+                    {t.name}
+                  </Toggle>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Own labeled group, separated from Operadora above — that picker
-            only narrows this search, it isn't the same choice as the
-            product itself, and the two read as one control without a
-            border between them. */}
+        {/* Step two: the product, among those of the chosen type (all of
+            them while no type is picked). */}
         <div className="space-y-1.5 border-t pt-3">
           <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Package className="h-3 w-3 shrink-0" /> Produto
@@ -357,10 +384,12 @@ function CatalogProducts({
           const unitPrice = isTiered ? getCatalogPriceForQuantity(catProduct, quantidade) : (catProduct.price || 0);
           // Extra SIM cards on top of the package's included ones — only
           // relevant for products the admin configured a per-card rate for.
-          const supportsExtraCards = !!catProduct.extra_card_commission;
+          // Both can be set on the band this quantity falls in.
+          const cards = cardConfigFor(catProduct, quantidade);
+          const supportsExtraCards = !!cards.extra_card_commission;
           // How many cards this line already includes by default — what the
           // seller sees pre-filled, and the baseline extras are counted from.
-          const includedCards = catProduct.included_cards ?? 1;
+          const includedCards = cards.included_cards ?? 1;
           // A sale made before this field existed stored the EXTRAS instead of
           // the total. Ignoring them showed "1 cartão" on a line that is being
           // paid for two — the screen disagreeing with the commission it earns.
@@ -372,8 +401,11 @@ function CatalogProducts({
           // until someone picks — and until then the line pays nothing, which is
           // the point: a wrong default would quietly pay the fibre rate on a
           // satellite install.
-          const needsTech = productNeedsTechnologyChoice(catProduct.technologies);
+          const needsTech = productNeedsTechnologyChoice(productTechnologies(catProduct));
           const tecnologia = detail.tecnologia;
+          const lineTypeNames = (catProduct.type_ids ?? [])
+            .filter((id) => !(id === 'fibra' || id === 'satelite') || !tecnologia || id === tecnologia)
+            .map((id) => typeById.get(id)?.name ?? id);
           const line = lineCommission(catProduct, quantidade, extraCards, tecnologia);
           const hasCommission = line.gross > 0 || isTiered || catProduct.has_commission;
           // What the SELLER takes on this line — the same number the box at
@@ -388,11 +420,38 @@ function CatalogProducts({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{detail.name ?? productName}</span>
-                  {(detail.operator_name ?? (catProduct.operator_id ? operatorById.get(catProduct.operator_id) : undefined)) && (
+                  {catProduct.operator_id ? (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                      {detail.operator_name ?? operatorById.get(catProduct.operator_id!)}
+                      {detail.operator_name ?? operatorById.get(catProduct.operator_id)}
                     </Badge>
+                  ) : operators.length > 0 && (
+                    // A generic product (the Níveis) is sold under some brand:
+                    // the seller says which, and it is frozen on the line so
+                    // the operator filters and reports can see it.
+                    <Select
+                      value={detail.operator_id ?? '__none__'}
+                      onValueChange={(v) => {
+                        const id = v === '__none__' ? undefined : v;
+                        onSetProductDetail(productName, { ...detail, operator_id: id, operator_name: id ? operatorById.get(id) : undefined });
+                      }}
+                    >
+                      <SelectTrigger className="h-6 w-auto gap-1 px-2 text-[11px]">
+                        <Radio className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <SelectValue placeholder="Operadora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sem operadora</SelectItem>
+                        {operators.map((op) => (
+                          <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
+                  {lineTypeNames.map((name) => (
+                    <Badge key={name} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal border-primary/30 bg-primary/5 text-primary">
+                      {name}
+                    </Badge>
+                  ))}
                   {hasCommission && !isTiered && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                       {myUnitCommission.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })} comissão/unid.
@@ -474,7 +533,7 @@ function CatalogProducts({
                         <SelectValue placeholder="Escolher" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(catProduct.technologies ?? TELECOM_TECHNOLOGIES).map((t) => (
+                        {(productTechnologies(catProduct) ?? TELECOM_TECHNOLOGIES).map((t) => (
                           <SelectItem key={t} value={t}>{TELECOM_TECHNOLOGY_LABELS[t]}</SelectItem>
                         ))}
                       </SelectContent>

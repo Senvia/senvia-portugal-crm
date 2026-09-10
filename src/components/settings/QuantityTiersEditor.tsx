@@ -1,8 +1,9 @@
-import { Banknote, Gift, Plus, Tag, X } from 'lucide-react';
+import { Banknote, CreditCard, Gift, Plus, Tag, Wallet, X } from 'lucide-react';
 import { TonedField, tonedInputClass } from './FieldTone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { CommissionSplitRow } from './CommissionSplitRow';
 import {  TELECOM_TECHNOLOGIES,  TELECOM_TECHNOLOGY_LABELS,  productNeedsTechnologyChoice,  type CommissionSplit,  type QuantityTier,  type TelecomTechnology,} from '@/types/proposals';
@@ -29,6 +30,8 @@ interface QuantityTiersEditorProps {
   onCommit: (tiers: QuantityTier[]) => void;
   /** Which technologies the product is sold as — drives one rate box per technology. */
   technologies?: TelecomTechnology[];
+  /** Product of the Cartões type: each band may include a different number of SIMs. */
+  showCards?: boolean;
 }
 
 /**
@@ -48,6 +51,7 @@ export function QuantityTiersEditor({
   onChange,
   onCommit,
   technologies,
+  showCards = false,
 }: QuantityTiersEditorProps) {
   const byTech = productNeedsTechnologyChoice(technologies);
   const addTier = () => {
@@ -116,7 +120,8 @@ export function QuantityTiersEditor({
                     operator's money, and every commission below is carved out
                     of it. Sitting last among identical grey inputs, it went
                     unnoticed — the person configuring the product never saw it. */}
-                {(byTech ? TELECOM_TECHNOLOGIES : [null]).map((tech) => {
+                {/* One box: the operator pays the same on fibre and satellite. */}
+                {([null] as (TelecomTechnology | null)[]).map((tech) => {
                   const field = tech === "fibra" ? "operator_pays_fibra"
                     : tech === "satelite" ? "operator_pays_satelite" : "operator_pays";
                   return (
@@ -178,7 +183,49 @@ export function QuantityTiersEditor({
                     className={cn(tonedInputClass, 'w-24')}
                   />
                 </TonedField>
+                {showCards && (
+                  <>
+                    <TonedField tone="cards" icon={<CreditCard className="h-3 w-3 shrink-0" />} label="Cartões incluídos">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="produto"
+                        value={tier.included_cards ?? ''}
+                        onChange={(e) => updateTier(tier.id, { included_cards: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                        onBlur={() => onCommit(tiers)}
+                        className={cn(tonedInputClass, 'w-20')}
+                      />
+                    </TonedField>
+                    <TonedField tone="commission" icon={<Wallet className="h-3 w-3 shrink-0" />} label="Cartão extra (€)">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="produto"
+                        value={tier.extra_card_commission ?? ''}
+                        onChange={(e) => updateTier(tier.id, { extra_card_commission: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        onBlur={() => onCommit(tiers)}
+                        className={cn(tonedInputClass, 'w-24')}
+                      />
+                    </TonedField>
+                  </>
+                )}
                 <div className="flex-1 min-w-0" />
+                {/* The bonus belongs to the band, so it lives on the band's row:
+                    a switch, and the amount only while it is on. */}
+                <div className="flex items-center gap-1.5 self-center pt-3">
+                  <Switch
+                    id={`bonus-${tier.id}`}
+                    className="scale-75"
+                    checked={tier.bonus_enabled ?? ((tier.bonus ?? 0) > 0)}
+                    onCheckedChange={(on) => updateTier(tier.id, { bonus_enabled: on }, true)}
+                  />
+                  <Label htmlFor={`bonus-${tier.id}`} className="text-[10px] text-muted-foreground">Bónus</Label>
+                </div>
+                {(tier.bonus_enabled ?? ((tier.bonus ?? 0) > 0)) && (
+                  <BonusField tier={tier} onCommit={() => onCommit(tiers)} updateTier={updateTier} />
+                )}
                 <Button
                   type="button"
                   variant="ghost"
@@ -217,7 +264,7 @@ export function QuantityTiersEditor({
                 {tier.splits.length === 0 ? (
                   <>
                     <p className="text-xs text-muted-foreground">Sem comissão — ninguém recebe por este escalão.</p>
-                    <BonusField tier={tier} onCommit={() => onCommit(tiers)} updateTier={updateTier} />
+
                   </>
                 ) : (
                   tier.splits.map((split, index) => (
@@ -230,7 +277,7 @@ export function QuantityTiersEditor({
                       onChange={(updates, commit) => updateSplit(tier.id, index, updates, commit)}
                       onCommit={() => onCommit(tiers)}
                       onRemove={() => removeSplit(tier.id, index)}
-                      trailing={index === 0 ? <BonusField tier={tier} onCommit={() => onCommit(tiers)} updateTier={updateTier} /> : undefined}
+
                     />
                   ))
                 )}

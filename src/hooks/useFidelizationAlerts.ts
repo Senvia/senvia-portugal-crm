@@ -23,6 +23,10 @@ export interface FidelizationSettings {
   fidelization_event_time: string;
   fidelization_email_enabled: boolean;
   fidelization_email: string | null;
+  // Contract loyalty on sales (telecom): when to warn, and through what.
+  fidelization_sales_alert_days: number[];
+  fidelization_sales_push_enabled: boolean;
+  fidelization_sales_email_enabled: boolean;
 }
 
 export function useFidelizationAlerts() {
@@ -115,12 +119,16 @@ export function useFidelizationSettings() {
           fidelization_event_time: '10:00',
           fidelization_email_enabled: false,
           fidelization_email: null,
+          fidelization_sales_alert_days: [60, 15],
+          fidelization_sales_push_enabled: true,
+          fidelization_sales_email_enabled: true,
         };
       }
 
-      const { data, error } = await supabase
+      // Cast: the generated types predate the fidelization_sales_* columns.
+      const { data, error } = await (supabase as any)
         .from('organizations')
-        .select('fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email')
+        .select('fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email, fidelization_sales_alert_days, fidelization_sales_push_enabled, fidelization_sales_email_enabled')
         .eq('id', organizationId)
         .single();
 
@@ -135,6 +143,9 @@ export function useFidelizationSettings() {
         fidelization_event_time: data.fidelization_event_time || '10:00',
         fidelization_email_enabled: data.fidelization_email_enabled ?? false,
         fidelization_email: data.fidelization_email,
+        fidelization_sales_alert_days: ((data as any).fidelization_sales_alert_days as number[]) || [60, 15],
+        fidelization_sales_push_enabled: (data as any).fidelization_sales_push_enabled ?? true,
+        fidelization_sales_email_enabled: (data as any).fidelization_sales_email_enabled ?? true,
       };
     },
     enabled: !!organizationId,

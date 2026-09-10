@@ -7,6 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
 import { useProposalsRealtime } from '@/hooks/useRealtimeSubscription';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
+import { PinnedPageBar } from '@/components/layout/PinnedPageBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -98,19 +99,37 @@ export default function Proposals() {
   return (
     <>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-        <PageHeader
+        <PinnedPageBar
           icon={FileText}
           title="Propostas"
-          subtitle="Gestão de propostas comerciais."
+          storageKey="proposals-filters-open-v1"
+          search={
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por cliente, empresa ou código..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-9 text-sm"
+              />
+            </div>
+          }
+          summary={`${filteredProposals.length} proposta${filteredProposals.length === 1 ? '' : 's'} · ${formatCurrency(totalValue)}`}
+          chips={[
+            search.trim() ? `“${search.trim()}”` : null,
+            dateRange?.from ? 'Período' : null,
+            statusFilter !== 'all' ? PROPOSAL_STATUS_LABELS[statusFilter] : null,
+            isTelecom && typeFilter !== 'all' ? (typeFilter === 'energia' ? 'Energia' : 'Outros Serviços') : null,
+          ].filter((c): c is string => !!c)}
           actions={
-            <Button onClick={() => setCreateModalOpen(true)}>
+            <Button onClick={() => setCreateModalOpen(true)} size="sm" className="h-8">
               <Plus className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Nova Proposta</span>
               <span className="sm:hidden">Nova</span>
             </Button>
           }
-        />
-
+          panel={
+            <div className="space-y-4 px-4 md:px-6 py-3">
         {/* Summary Cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
@@ -157,15 +176,7 @@ export default function Proposals() {
             placeholder="Período"
             className="w-full sm:w-auto"
           />
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Pesquisar por cliente, empresa ou código..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+
           <TeamMemberFilter className="w-full sm:w-[180px]" />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as ProposalStatus | 'all')}>
             <SelectTrigger className="w-full sm:w-48">
@@ -195,8 +206,9 @@ export default function Proposals() {
             </Select>
           )}
         </div>
-
-
+            </div>
+          }
+        />
         {/* Proposals List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

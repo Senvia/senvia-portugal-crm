@@ -2,7 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch, cn } from "@/lib/utils";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2, Trash2, CalendarClock } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2, Trash2, CalendarClock, SlidersHorizontal } from "lucide-react";
+import { useProductTypes } from "@/hooks/useProductTypes";
+import { useTeamMembers } from "@/hooks/useTeam";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +21,17 @@ import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { EditSaleModal } from "@/components/sales/EditSaleModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { CommissionFiltersBar } from "@/components/finance/CommissionFilters";
+import { PinnedPageBar } from "@/components/layout/PinnedPageBar";
+import { useSaleTypeIds } from "@/hooks/useSaleTypeIds";
+import {
+  DEFAULT_COMMISSION_FILTERS,
+  hasCommissionFilters,
+  saleMatchesCommissionFilters,
+  NO_OPERATOR,
+  NO_TYPE,
+  type CommissionFilters,
+} from "@/lib/commission-filters";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { formatCurrency } from "@/lib/format";
 import { exportToExcel, mapPerfect2GetherSalesForExport } from "@/lib/export";
@@ -40,13 +53,8 @@ import {
   SERVICE_STATUS_COLORS,
   SERVICE_STATUS_LABELS,
 } from "@/types/sales";
-import { RecurringSalesFilters } from "@/components/sales/RecurringSalesFilters";
-import {
-  DEFAULT_RECURRING_SALES_FILTERS,
-  hasRecurringSalesFilter,
-  matchesRecurringSalesFilters,
-  type RecurringSalesFilters as RecurringSalesFilterState,
-} from "@/components/sales/recurring-sales-filter-logic";
+
+
 import {
   TELECOM_VIEW_LABELS,
   isTelecomViewKey,
@@ -116,6 +124,7 @@ export default function Sales() {
   useSalesRealtime();
   const { profile, organization, organizations, isSuperAdmin } = useAuth();
   const { data: sales, isLoading } = useSales();
+
   const isTelecom = organization?.niche === 'telecom';
   const isPerfect2Gether = hasPerfect2GetherAccess({
     organizationId: organization?.id,
@@ -125,6 +134,9 @@ export default function Sales() {
   const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const { data: operators = [] } = useOperators();
+  const { byId: typeById } = useProductTypes();
+  const { data: teamMembers = [] } = useTeamMembers();
+
   const { isAdmin } = usePermissions();
   // The commission a sale is worth. A sale shows what it pays the SELLER —
   // the same number the sale's own screen shows — never the operator gross,
@@ -161,14 +173,35 @@ export default function Sales() {
 const queryClient = useQueryClient();
 const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
-  const [telecomStatusFilter, setTelecomStatusFilter] = usePersistedState<TelecomStatus | "all">("sales-telecom-status-v1", "all");
-  const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('sales-type-v1', 'all');
-  const [operatorFilter, setOperatorFilter] = usePersistedState<string>('sales-operator-v1', 'all');
-  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
-  const [recurringFilters, setRecurringFilters] = usePersistedState<RecurringSalesFilterState>(
-    "sales-recurring-filters-v1",
-    DEFAULT_RECURRING_SALES_FILTERS,
+  // Sale → product-type ids, for the "Tipos" switches.
+  const saleTypeIds = useSaleTypeIds();
+  // Telecom: operators, states and seller as switches — the same bar and
+  // the same rules as the Financeiro, so the two screens agree on what a
+  // filter means. Replaces the old one-value pickers for state and operator.
+  const [commissionFilters, setCommissionFilters] = usePersistedState<CommissionFilters>(
+    "sales-commission-filters-v1",
+    DEFAULT_COMMISSION_FILTERS,
   );
+
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: string[] = [];
+    if (search.trim()) chips.push(`“${search.trim()}”`);
+    if (dateRange?.from) {
+      chips.push(dateRange.to
+        ? `${format(dateRange.from, "d MMM", { locale: pt })} – ${format(dateRange.to, "d MMM", { locale: pt })}`
+        : format(dateRange.from, "d MMM yyyy", { locale: pt }));
+    }
+    const opName = new Map(operators.map((o) => [o.id, o.name]));
+    for (const id of commissionFilters.excludedOperators) chips.push(`− ${id === NO_OPERATOR ? "Sem operadora" : (opName.get(id) ?? id)}`);
+    for (const st of commissionFilters.excludedStatuses ?? []) chips.push(`− ${TELECOM_STATUS_LABELS[st as TelecomStatus] ?? st}`);
+    for (const t of commissionFilters.excludedTypes ?? []) chips.push(`− ${t === NO_TYPE ? "Sem tipo" : (typeById.get(t)?.name ?? t)}`);
+    if (commissionFilters.userId) chips.push(teamMembers.find((m) => m.user_id === commissionFilters.userId)?.full_name ?? "vendedor");
+    return chips;
+  }, [search, dateRange, operators, commissionFilters, typeById, teamMembers]);
+
+
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [salesTab, setSalesTab] = useState<'vendas' | 'comissoes'>('vendas');
@@ -219,15 +252,6 @@ const deleteSale = useMutation({
     }
   }, [sales, pendingSaleId]);
 
-  const recurringProducts = useMemo(() => {
-    const productsById = new Map<string, { id: string; name: string }>();
-    for (const sale of sales ?? []) {
-      for (const product of sale.recurring_products ?? []) {
-        productsById.set(product.id, product);
-      }
-    }
-    return Array.from(productsById.values());
-  }, [sales]);
 
   // Sync selectedSale with fresh data from React Query cache
   useEffect(() => {
@@ -258,24 +282,14 @@ const deleteSale = useMutation({
         }
       }
 
+      // Telecom: operator, state and seller come from the switch bar, through
+      // the same predicate the Financeiro uses (operators read off the sale's
+      // own frozen lines; seller = who the sale is assigned to).
       const matchesStatus = isTelecom
-        ? (telecomStatusFilter === "all" || sale.telecom_status === telecomStatusFilter)
+        ? saleMatchesCommissionFilters(sale, commissionFilters, saleTypeIds)
         : (statusFilter === "all" || sale.status === statusFilter);
-      const matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter;
-      // The operator is read off the sale's own frozen lines, not the catalog:
-      // a product can be moved to another operator after the sale was made.
-      const matchesOperator = operatorFilter === 'all' || (() => {
-        const details = (sale.servicos_details ?? {}) as ServicosDetails;
-        return Object.values(details).some((d) => d?.operator_id === operatorFilter);
-      })();
-      const matchesRecurring = matchesRecurringSalesFilters(
-        {
-          hasRecurring: sale.has_recurring,
-          recurrence: sale.recurrence ?? null,
-          recurringProductIds: sale.recurring_product_ids ?? [],
-        },
-        recurringFilters,
-      );
+      const matchesType = true;
+      const matchesOperator = true;
 
       const matchesDate = (() => {
         if (!dateRange?.from) return true;
@@ -288,7 +302,7 @@ const deleteSale = useMutation({
       })();
 
       if (!search.trim()) {
-        return matchesStatus && matchesType && matchesOperator && matchesDate && matchesRecurring;
+        return matchesStatus && matchesType && matchesOperator && matchesDate;
       }
 
       const matchesSearchTerm = matchesSearch(
@@ -301,9 +315,9 @@ const deleteSale = useMutation({
         sale.notes,
       );
 
-      return matchesSearchTerm && matchesStatus && matchesType && matchesOperator && matchesDate && matchesRecurring;
+      return matchesSearchTerm && matchesStatus && matchesType && matchesOperator && matchesDate;
     });
-  }, [sales, search, statusFilter, telecomStatusFilter, isTelecom, typeFilter, operatorFilter, dateRange, isPerfect2Gether, recurringFilters, telecomView, telecomFrom, telecomTo]);
+  }, [sales, search, statusFilter, commissionFilters, saleTypeIds, isTelecom, dateRange, isPerfect2Gether, telecomView, telecomFrom, telecomTo]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -423,62 +437,18 @@ const deleteSale = useMutation({
     }
   };
 
-  return (
-    <div className="flex flex-col min-h-dvh bg-background">
-        {/* Header */}
-      <div className="p-4 md:p-6 border-b border-border/50">
-        <PageHeader
-          icon={ShoppingBag}
-          title="Vendas"
-          subtitle="Gestão de vendas e entregas."
-          className="mb-0"
-          actions={
-            <>
-              {isPerfect2Gether && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportPerfect2Gether}
-                  disabled={isExporting}
-                >
-                  {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  <span className="hidden sm:inline">Exportar Perfect2Gether</span>
-                  <span className="sm:hidden">Exportar</span>
-                </Button>
-              )}
-              <Button onClick={() => setShowCreateModal(true)} size="sm">
-                <Plus className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Nova Venda</span>
-                <span className="sm:hidden">Nova</span>
-              </Button>
-            </>
-          }
-        />
-      </div>
-
-      {/* Vendas / Comissões */}
-      <div className="px-4 pt-4 md:px-6">
-        <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'vendas' | 'comissoes')}>
-          <TabsList>
-            <TabsTrigger value="vendas">Vendas</TabsTrigger>
-            <TabsTrigger value="comissoes">Comissões</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      {salesTab === 'comissoes' && <CommissionsPanel />}
-
-      {salesTab === 'vendas' && (
-      <>
+  // Cards, search and switches — what opens under the pinned bar.
+  const salesPanel = salesTab === 'vendas' ? (
+    <>
       {/* Summary Cards */}
-      <div className="p-4 md:p-6 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+      <div className="px-4 md:px-6 pt-3 pb-1 grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
         <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Total Vendas</span>
             </div>
-            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-xl font-bold leading-tight">{stats.total}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.totalValue)}</p>
             {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -489,33 +459,33 @@ const deleteSale = useMutation({
         </Card>
 
         <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <Package className="h-4 w-4 text-blue-500" />
               <span className="text-xs text-muted-foreground">Em Progresso</span>
             </div>
-            <p className="text-2xl font-bold text-blue-500">{stats.inProgress}</p>
+            <p className="text-xl font-bold leading-tight text-blue-500">{stats.inProgress}</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <Package className="h-4 w-4 text-purple-500" />
               <span className="text-xs text-muted-foreground">Entregues</span>
             </div>
-            <p className="text-2xl font-bold text-purple-500">{stats.fulfilled}</p>
+            <p className="text-xl font-bold leading-tight text-purple-500">{stats.fulfilled}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.fulfilledValue)}</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <span className="text-xs text-muted-foreground">Concluídas</span>
             </div>
-            <p className="text-2xl font-bold text-green-500">{stats.delivered}</p>
+            <p className="text-xl font-bold leading-tight text-green-500">{stats.delivered}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.deliveredValue)}</p>
             {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -526,8 +496,10 @@ const deleteSale = useMutation({
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="px-4 md:px-6 pb-4 space-y-3">
+      {/* Filters — pinned while the list scrolls. Plain sticky on the
+          window (the page is not inside a scroll box), opaque background,
+          nothing hanging outside its own width. */}
+      <div className="px-4 md:px-6 py-3 space-y-3">
         {/* Drill-down chip: says which dashboard card brought you here, and
             clears back to the full list. */}
         {telecomView && (
@@ -554,37 +526,16 @@ const deleteSale = useMutation({
             width — that's what was squeezing every label down to "Todos
             as...". Everything below sits in a grid instead of a single flex
             row, so each control gets a real column instead of shrinking. */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar por nome, empresa ou código..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-card/50 border-border/50"
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <TeamMemberFilter className="w-full bg-card/50 border-border/50" />
-        {/* Telecom filters by its own lifecycle, not the generic sale status —
-            it is the only state that vertical uses. */}
-        {isTelecom ? (
-          <Select
-            value={telecomStatusFilter}
-            onValueChange={(val) => setTelecomStatusFilter(val as TelecomStatus | "all")}
-          >
-            <SelectTrigger className="w-full bg-card/50 border-border/50">
-              <SelectValue placeholder="Filtrar por estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os estados</SelectItem>
-              {TELECOM_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {TELECOM_STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
+        <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-[260px]" />
+        {/* Telecom: operators, states and seller as switches, same bar as the
+            Financeiro. Its seller picker replaces the team filter here. */}
+        {isTelecom && (
+          <CommissionFiltersBar value={commissionFilters} onChange={setCommissionFilters} />
+        )}
+        {!isTelecom && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {!isTelecom && <TeamMemberFilter className="w-full bg-card/50 border-border/50" />}
+        {!isTelecom && (
           <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as SaleStatus | "all")}>
             <SelectTrigger className="w-full bg-card/50 border-border/50">
               <SelectValue placeholder="Filtrar por estado" />
@@ -599,47 +550,69 @@ const deleteSale = useMutation({
             </SelectContent>
           </Select>
         )}
-        {/* A sale can carry lines from more than one operator, so this keeps
-            any sale with at least one line from the chosen one. */}
-        {isTelecom && operators.length > 0 && (
-          <Select value={operatorFilter} onValueChange={setOperatorFilter}>
-            <SelectTrigger className="w-full bg-card/50 border-border/50">
-              <SelectValue placeholder="Filtrar por operadora" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as operadoras</SelectItem>
-              {operators.map((op) => (
-                <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full" />
-        {isTelecom && modules.energy && (
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
-            <SelectTrigger className="w-full bg-card/50 border-border/50">
-              <Zap className="h-4 w-4 mr-2 shrink-0" />
-              <SelectValue placeholder="Todos os tipos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os tipos</SelectItem>
-              <SelectItem value="energia">Energia</SelectItem>
-              <SelectItem value="servicos">Outros Serviços</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
+
+        {/* The old Energia / Outros Serviços pair is gone: the product
+            types on the switch bar above are the real ones. */}
         </div>
-        <div className="space-y-1.5 border-t pt-3">
-          <p className="text-xs font-medium text-muted-foreground">Vendas recorrentes</p>
-          <RecurringSalesFilters
-            filters={recurringFilters}
-            products={recurringProducts}
-            onChange={setRecurringFilters}
-          />
-        </div>
+        )}
         </div>
       </div>
+    </>
+  ) : undefined;
+  return (
+    <div className="flex flex-col min-h-dvh bg-background">
+      {/* Title, tabs, cards and filters pinned together while the list
+          scrolls. Plain sticky on the window, opaque, nothing outside its
+          own width — the version that behaves. */}
+      <PinnedPageBar
+        icon={ShoppingBag}
+        title="Vendas"
+        storageKey="sales-filters-open-v1"
+        search={
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar por nome, empresa ou código..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 pl-9 text-sm"
+            />
+          </div>
+        }
+        tabs={
+          <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'vendas' | 'comissoes')}>
+            <TabsList className="h-8">
+              <TabsTrigger value="vendas" className="h-7 text-xs">Vendas</TabsTrigger>
+              <TabsTrigger value="comissoes" className="h-7 text-xs">Comissões</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
+        summary={salesTab === 'vendas'
+          ? `${stats.total} venda${stats.total === 1 ? '' : 's'} · ${formatCurrency(stats.totalValue)} · ${stats.inProgress} em progresso · ${stats.delivered} concluída${stats.delivered === 1 ? '' : 's'}`
+          : undefined}
+        chips={salesTab === 'vendas' ? activeFilterChips : []}
+        actions={
+          <>
+            {isPerfect2Gether && (
+              <Button variant="outline" size="sm" className="h-8" onClick={handleExportPerfect2Gether} disabled={isExporting}>
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                <span className="hidden sm:inline">Exportar Perfect2Gether</span>
+                <span className="sm:hidden">Exportar</span>
+              </Button>
+            )}
+            <Button onClick={() => setShowCreateModal(true)} size="sm" className="h-8">
+              <Plus className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Nova Venda</span>
+              <span className="sm:hidden">Nova</span>
+            </Button>
+          </>
+        }
+        panel={salesPanel}
+      />
+      {salesTab === 'comissoes' && <CommissionsPanel />}
 
+      {salesTab === 'vendas' && (
+      <>
       {/* Sales List */}
       <div className="flex-1 px-4 md:px-6 pb-nav-safe md:pb-6 space-y-3">
         {isLoading ? (
@@ -649,7 +622,7 @@ const deleteSale = useMutation({
             <Skeleton className="h-24 w-full" />
           </>
         ) : filteredSales.length === 0 ? (
-          (search || statusFilter !== "all" || telecomStatusFilter !== "all" || telecomView || hasRecurringSalesFilter(recurringFilters)) ? (
+          (search || statusFilter !== "all" || hasCommissionFilters(commissionFilters) || telecomView) ? (
             <EmptyState icon={ShoppingBag} title="Nenhuma venda encontrada" description="Tenta ajustar os filtros de pesquisa." />
           ) : (
             <EmptyState

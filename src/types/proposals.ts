@@ -248,9 +248,37 @@ export function pickByTech(
   return base;
 }
 
+/** The band's bonus as the switch leaves it: the amount when on, nothing when off. */
+export function tierBonusValue(tier: Pick<QuantityTier, 'bonus' | 'bonus_enabled'>): number {
+  const on = tier.bonus_enabled ?? ((tier.bonus ?? 0) > 0);
+  return on ? (tier.bonus || 0) : 0;
+}
+
+/** Whether this product pays by quantity band right now. */
+export function usesQuantityTiers(product: Pick<CatalogProduct, 'tiered_commission' | 'quantity_tiers'>): boolean {
+  return product.tiered_commission ?? ((product.quantity_tiers?.length ?? 0) > 0);
+}
+
 /** True when the product is sold as more than one technology, so the sale has to pick. */
 export function productNeedsTechnologyChoice(technologies: TelecomTechnology[] | undefined): boolean {
   return (technologies?.length ?? 0) > 1;
+}
+
+/**
+ * The technologies a product is sold as, read off its TYPES: a product on the
+ * Fibra type is fibre, one on both Fibra and Satélite makes the sale choose.
+ * There used to be a separate "Tecnologia" field for this; two places to say
+ * the same thing only gave them room to disagree. The old field is still
+ * honoured for a product nobody has classified yet.
+ */
+export function productTechnologies(
+  product: Pick<CatalogProduct, 'type_ids' | 'technologies'>,
+): TelecomTechnology[] | undefined {
+  if (product.type_ids && product.type_ids.length > 0) {
+    const techs = TELECOM_TECHNOLOGIES.filter((t) => product.type_ids!.includes(t));
+    return techs.length > 0 ? techs : undefined;
+  }
+  return product.technologies;
 }
 
 /**
@@ -330,6 +358,14 @@ export interface QuantityTier {
   // carries the group's latest date gets it (server-side); for 'per_sale' it
   // applies to that one sale directly. Absent/0 means no bonus.
   bonus?: number;
+  // Cards for THIS band, when a band includes a different number of SIMs
+  // (one card in the first band, three from the second) or pays a different
+  // rate per extra card. Absent falls back to the product's own values.
+  included_cards?: number;
+  extra_card_commission?: number;
+  // The band's own switch for the bonus. Off keeps the amount stored but
+  // pays nothing; absent = the old rule, a non-zero bonus applies.
+  bonus_enabled?: boolean;
   // 'fixed' (default when absent): `bonus` is euros, paid as-is. 'pct':
   // `bonus` is a percentage of the tier's own combined commission (all
   // splits, at the quantity that matched the band) — e.g. 10 units earning
@@ -382,6 +418,15 @@ export interface CatalogProduct {
   // and pays both — except inside an exclusive group (Fibra vs Satélite),
   // where the sale picks one.
   type_ids?: string[];
+  // Whether commission is paid by quantity band (quantity_tiers) or as flat
+  // lines (splits). Explicit so a product can keep its bands stored while
+  // switched off. Absent = the old rule: bands are used when there are any.
+  tiered_commission?: boolean;
+  // Which quantity picks the band: this sale's own, or the month's running
+  // total (for the whole organization, or per seller). Absent falls back to
+  // the operator's commission_basis / volume_scope, else to this sale's.
+  tier_basis?: 'per_sale' | 'monthly_volume';
+  tier_scope?: 'per_seller' | 'org_total';
   // Which technologies this product can be sold as. Absent or a single entry
   // means the sale doesn't ask — the line just takes that one (or none, for
   // products that predate this). Two entries make the choice mandatory on
@@ -454,13 +499,35 @@ export function getCatalogCommission(product: CatalogProduct): number {
  * ever applies to a product that deals in cards at all). Falls back to the
  * old portabilidade+novos sum for sales frozen before this field existed.
  */
-export function getExtraCardCommission(product: CatalogProduct, extraCards?: ExtraCards): number {
-  const rate = product.extra_card_commission ?? 0;
+export function getExtraCardCommission(product: CatalogProduct, extraCards?: ExtraCards, quantity?: number): number {
+  const cards = cardConfigFor(product, quantity);
+  const rate = cards.extra_card_commission ?? 0;
   if (!rate || !extraCards) return 0;
   const count = extraCards.total != null
-    ? Math.max(0, extraCards.total - (product.included_cards ?? 1))
+    ? Math.max(0, extraCards.total - (cards.included_cards ?? 1))
     : Math.max(0, extraCards.portabilidade || 0) + Math.max(0, extraCards.novos || 0);
   return Math.round(rate * count * 100) / 100;
+}
+
+/**
+ * The card rules that apply at a given quantity: the matching band's own
+ * `included_cards` / `extra_card_commission` when it sets them, else the
+ * product's. The band is looked up on THIS line's quantity — how many cards
+ * come with two units is a fact about those two units, not about the
+ * monthly volume Digi resolves commission bands on.
+ */
+export function cardConfigFor(
+  product: CatalogProduct,
+  quantity?: number,
+): { included_cards?: number; extra_card_commission?: number } {
+  const qty = Math.max(1, Math.round(quantity || 1));
+  const tier = usesQuantityTiers(product)
+    ? product.quantity_tiers?.find((t) => qty >= t.min && (t.max == null || qty <= t.max))
+    : undefined;
+  return {
+    included_cards: tier?.included_cards ?? product.included_cards,
+    extra_card_commission: tier?.extra_card_commission ?? product.extra_card_commission,
+  };
 }
 
 /**
@@ -477,7 +544,7 @@ export function getExtraCardCommission(product: CatalogProduct, extraCards?: Ext
  * sale's quantity alone.
  */
 export function getCatalogCommissionForQuantity(product: CatalogProduct, quantity: number, extraCards?: ExtraCards): number {
-  const tiers = product.quantity_tiers;
+  const tiers = usesQuantityTiers(product) ? product.quantity_tiers : undefined;
   if (!tiers || tiers.length === 0) return getCatalogCommission(product) + getExtraCardCommission(product, extraCards);
 
   const qty = Math.max(1, Math.round(quantity || 1));
@@ -496,8 +563,8 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   // quantity). For 'monthly_volume' this is only an ESTIMATE (same caveat as
   // above): the real value is awarded to a single sale server-side, computed
   // against the group's accumulated quantity, not this one.
-  const bonusAmount = tier.bonus_type === 'pct' ? (base * (tier.bonus || 0)) / 100 : (tier.bonus || 0);
-  return Math.round((base + bonusAmount) * 100) / 100 + getExtraCardCommission(product, extraCards);
+  const bonusAmount = tier.bonus_type === 'pct' ? (base * tierBonusValue(tier)) / 100 : tierBonusValue(tier);
+  return Math.round((base + bonusAmount) * 100) / 100 + getExtraCardCommission(product, extraCards, qty);
 }
 
 /**
@@ -575,7 +642,7 @@ export function sellerHasCommissionLine(
   sellerProfileId?: string | null,
 ): boolean {
   const qty = Math.max(1, Math.round(quantity || 1));
-  const tiers = product.quantity_tiers;
+  const tiers = usesQuantityTiers(product) ? product.quantity_tiers : undefined;
   const tier = tiers && tiers.length > 0
     ? tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max))
     : undefined;
@@ -656,10 +723,10 @@ export function getSaleLineCommission(
 
   const bonus = tier
     ? (tier.bonus_type === 'pct'
-        ? (sellerBase * (tier.bonus || 0)) / 100
-        : (tier.bonus || 0))
+        ? (sellerBase * tierBonusValue(tier)) / 100
+        : tierBonusValue(tier))
     : 0;
-  const extra = getExtraCardCommission(product, extraCards);
+  const extra = getExtraCardCommission(product, extraCards, qty);
 
   const grossBase = operatorPerUnit != null ? operatorPerUnit * qty : sellerBase;
 
@@ -682,8 +749,9 @@ export function getExtraCardCommissionForSeller(
   product: CatalogProduct,
   extraCards: ExtraCards | undefined,
   viewerIsSeller: boolean,
+  quantity?: number,
 ): number {
-  return viewerIsSeller ? getExtraCardCommission(product, extraCards) : 0;
+  return viewerIsSeller ? getExtraCardCommission(product, extraCards, quantity) : 0;
 }
 
 /**

@@ -7,6 +7,7 @@ import type { CashflowPoint, FinanceStats, PaymentWithSale } from '@/types/finan
 import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/types/sales';
 import { DateRange } from 'react-day-picker';
 import { saleMatchesCommissionFilters, type CommissionFilters } from '@/lib/commission-filters';
+import { useSaleTypeIds } from '@/hooks/useSaleTypeIds';
 
 interface UseFinanceStatsOptions {
   dateRange?: DateRange;
@@ -21,6 +22,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const organizationId = organization?.id;
   const dateRange = options?.dateRange;
   const commissionFilters = options?.commissionFilters;
+  const saleTypeIds = useSaleTypeIds();
 
   const { data: sales, isLoading: loadingSales } = useQuery({
     queryKey: ['finance-sales', organizationId],
@@ -240,7 +242,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     // Operator / seller filters apply to THIS number only — they are a
     // telecom question, and the rest of the page is client billing.
     const totalCommission = filteredSales
-      .filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters))
+      .filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters, saleTypeIds))
       .reduce((sum: number, sale: any) => sum + Number(sale.comissao || 0), 0);
 
     // The telecom lifecycle. Client billing has no meaning here — the
@@ -255,7 +257,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       if (dateRange.to && d > endOfDay(dateRange.to)) return false;
       return true;
     };
-    const telecomSales = (sales || []).filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters));
+    const telecomSales = (sales || []).filter((sale: any) => saleMatchesCommissionFilters(sale, commissionFilters, saleTypeIds));
     const toInstallRows = telecomSales.filter((sale: any) =>
       (sale.telecom_status === 'pendente' || sale.telecom_status === 'em_instalacao') && inPeriod(sale.sale_date));
     const installedRows = telecomSales.filter((sale: any) =>
@@ -337,7 +339,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       totalOverdue,
       overdueCount: overduePayments.length,
     };
-  }, [dateRange, filteredExpenses, filteredPayments, filteredSales, payments, sales, commissionFilters]);
+  }, [dateRange, filteredExpenses, filteredPayments, filteredSales, payments, sales, commissionFilters, saleTypeIds]);
 
   return {
     stats,

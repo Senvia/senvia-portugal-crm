@@ -221,23 +221,28 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   if (!sale) return null;
 
+  // The install IS the activation: when a sale goes live, its activation
+  // date is the booked install day. Nobody is asked for a second date.
+  const installDay = sale.scheduled_install_date ? sale.scheduled_install_date.slice(0, 10) : null;
+  const defaultActivation = () => sale.activation_date || installDay || new Date().toISOString().split('T')[0];
+
   const handleStatusChange = (newStatus: SaleStatus) => {
     if (isTelecom) {
       if (newStatus === 'delivered') {
         setPendingStatus('delivered');
-        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setPendingActivationDate(defaultActivation());
         setShowDeliveredConfirm(true);
         return;
       }
       if (newStatus === 'fulfilled') {
         setPendingStatus('fulfilled');
-        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setPendingActivationDate(defaultActivation());
         setShowFulfilledConfirm(true);
         return;
       }
       if (newStatus === 'in_progress') {
         setPendingStatus('in_progress');
-        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setPendingActivationDate(defaultActivation());
         setShowFulfilledConfirm(true);
         return;
       }
@@ -289,7 +294,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     if (derived === 'delivered' || derived === 'fulfilled' || derived === 'in_progress') {
       setPendingTelecomStatus(next);
       setPendingStatus(derived);
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+      setPendingActivationDate(defaultActivation());
       if (derived === 'delivered') setShowDeliveredConfirm(true);
       else setShowFulfilledConfirm(true);
       return;
@@ -486,7 +491,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <p className="text-sm font-medium font-mono">{(sale as any).edp_proposal_number}</p>
                           </div>
                         )}
-                        {isTelecom && sale.activation_date && (
+                        {isTelecom && sale.activation_date && sale.activation_date !== installDay && (
                           <div>
                             <p className="text-xs text-muted-foreground">Data de Ativação</p>
                             <p className="text-sm font-medium">
@@ -511,6 +516,22 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             )}
                           </div>
                         )}
+                        {isTelecom && (sale as any).fidelizacao_end && (() => {
+                          const end = new Date((sale as any).fidelizacao_end);
+                          const days = Math.ceil((end.getTime() - Date.now()) / 86400000);
+                          const tone = days < 0 ? "text-destructive" : days <= 30 ? "text-amber-600" : "";
+                          return (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Fim da fidelização</p>
+                              <p className={`text-sm font-medium ${tone}`}>
+                                {format(end, "d MMM yyyy", { locale: pt })}
+                                <span className="text-muted-foreground font-normal">
+                                  {" · "}{days < 0 ? `terminou há ${-days} dias` : days === 0 ? "termina hoje" : `faltam ${days} dias`}
+                                </span>
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
                       {isLocked && (
                         <p className="text-xs text-muted-foreground mt-3">
@@ -1282,18 +1303,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           <AlertDialogHeader>
             <AlertDialogTitle>Concluir Venda</AlertDialogTitle>
             <AlertDialogDescription>
-              Ao concluir esta venda, ela não poderá mais ser editada (exceto por administradores). Defina a Data de Ativação.
+              Ao concluir esta venda, ela não poderá mais ser editada (exceto por administradores).
+              {installDay ? ` A ativação fica com a data de instalação (${installDay.split('-').reverse().join('/')}).` : ' Sem data de instalação marcada, a ativação fica com a data de hoje.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-2">
-            <Label className="text-sm font-medium">Data de Ativação</Label>
-            <Input
-              type="date"
-              value={pendingActivationDate}
-              onChange={(e) => setPendingActivationDate(e.target.value)}
-              className="mt-1.5"
-            />
-          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelivered}>
@@ -1311,18 +1324,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               {pendingStatus === 'in_progress' ? 'Marcar como Em Progresso' : 'Marcar como Entregue'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Defina ou corrija a Data de Ativação para esta venda.
+              {installDay ? `A ativação fica com a data de instalação (${installDay.split('-').reverse().join('/')}).` : 'Sem data de instalação marcada, a ativação fica com a data de hoje.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-2">
-            <Label className="text-sm font-medium">Data de Ativação</Label>
-            <Input
-              type="date"
-              value={pendingActivationDate}
-              onChange={(e) => setPendingActivationDate(e.target.value)}
-              className="mt-1.5"
-            />
-          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmFulfilled}>

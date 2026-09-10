@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentWithSale } from "@/types/finance";
 import { saleMatchesCommissionFilters, type CommissionFilters } from "@/lib/commission-filters";
+import { useSaleTypeIds } from "@/hooks/useSaleTypeIds";
 import { PAYMENT_METHOD_LABELS, type TelecomStatus } from "@/types/sales";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { saleStatusBadge, paymentRecordStatusBadge } from "@/lib/status-badge-maps";
@@ -281,6 +282,7 @@ function SalesDetailTable({
   dateBasis?: "sale" | "activation";
 }) {
   const { data: sales = [], isLoading } = useSales();
+  const saleTypeIds = useSaleTypeIds();
   const { organization } = useAuth();
   // Telecom shows the commission instead of the invoiced value — same rows,
   // different money column. The row set must stay identical to
@@ -293,9 +295,9 @@ function SalesDetailTable({
     () => sales.filter((s) =>
       s.status !== "cancelled"
       && inRange(dateBasis === "activation" ? (s.activation_date || s.sale_date) : s.sale_date, dateRange)
-      && saleMatchesCommissionFilters(s, commissionFilters)
+      && saleMatchesCommissionFilters(s, commissionFilters, saleTypeIds)
       && (!telecomStatuses || telecomStatuses.includes(s.telecom_status as TelecomStatus))),
-    [sales, dateRange, commissionFilters, telecomStatuses, dateBasis],
+    [sales, dateRange, commissionFilters, saleTypeIds, telecomStatuses, dateBasis],
   );
   // Who gets paid for each sale — the assigned seller, falling back to
   // whoever registered it. Hook stays above the early return.

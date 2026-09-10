@@ -1,11 +1,12 @@
 import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Activity, Radio, Users } from 'lucide-react';
+import { Activity, Radio, Tags, Users } from 'lucide-react';
+import { useProductTypes } from '@/hooks/useProductTypes';
 import { useOperators } from '@/hooks/useOperators';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { cn } from '@/lib/utils';
-import { NO_OPERATOR, type CommissionFilters } from '@/lib/commission-filters';
+import { NO_OPERATOR, NO_TYPE, type CommissionFilters } from '@/lib/commission-filters';
 import { TELECOM_STATUSES, TELECOM_STATUS_LABELS, type TelecomStatus } from '@/types/sales';
 
 /**
@@ -48,6 +49,21 @@ const OFF_TONE = 'border-dashed border-border bg-transparent text-muted-foregrou
  * states start ON; clicking one switches it off, so "everything except Digi"
  * is a single click rather than N-1 of them.
  */
+/** One short label per active commission filter, for a pinned bar's chips. */
+export function useCommissionFilterChips(value: CommissionFilters | undefined): string[] {
+  const { data: operators = [] } = useOperators();
+  const { data: members = [] } = useTeamMembers();
+  const { byId: typeById } = useProductTypes();
+  if (!value) return [];
+  const chips: string[] = [];
+  const opName = new Map(operators.map((o) => [o.id, o.name]));
+  for (const id of value.excludedOperators) chips.push(`− ${id === NO_OPERATOR ? 'Sem operadora' : (opName.get(id) ?? id)}`);
+  for (const st of value.excludedStatuses ?? []) chips.push(`− ${TELECOM_STATUS_LABELS[st as TelecomStatus] ?? st}`);
+  for (const t of value.excludedTypes ?? []) chips.push(`− ${t === NO_TYPE ? 'Sem tipo' : (typeById.get(t)?.name ?? t)}`);
+  if (value.userId) chips.push(members.find((m) => m.user_id === value.userId)?.full_name ?? 'vendedor');
+  return chips;
+}
+
 export function CommissionFiltersBar({
   value,
   onChange,
@@ -59,8 +75,10 @@ export function CommissionFiltersBar({
 }) {
   const { data: operators = [] } = useOperators();
   const { data: members = [] } = useTeamMembers();
+  const { active: productTypes } = useProductTypes();
   const excluded = new Set(value.excludedOperators);
   const excludedStatuses = new Set(value.excludedStatuses ?? []);
+  const excludedTypes = new Set(value.excludedTypes ?? []);
 
   const toggleOperator = (key: string) => {
     const next = new Set(excluded);
@@ -72,6 +90,18 @@ export function CommissionFiltersBar({
     if (next.has(key)) next.delete(key); else next.add(key);
     onChange({ ...value, excludedStatuses: [...next] });
   };
+  const toggleType = (key: string) => {
+    const next = new Set(excludedTypes);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    onChange({ ...value, excludedTypes: [...next] });
+  };
+
+  // The organization's real product types (Fibra, Satélite, Cartões, …),
+  // not the old Energia / Outros Serviços pair.
+  const typeSwitches = [
+    ...productTypes.map((t, i) => ({ key: t.id, label: t.name, tone: OPERATOR_TONES[(i + 3) % OPERATOR_TONES.length] })),
+    { key: NO_TYPE, label: 'Sem tipo', tone: NO_OPERATOR_TONE },
+  ];
 
   const switchClass = (on: boolean, tone: string) =>
     cn('h-8 rounded-full px-3 text-xs font-medium transition-all', on ? tone : OFF_TONE);
@@ -169,6 +199,42 @@ export function CommissionFiltersBar({
               size="sm"
               className="h-8 px-2 text-xs"
               onClick={() => onChange({ ...value, excludedStatuses: [] })}
+            >
+              Todos
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+          <Tags className="h-4 w-4" />
+          Tipos:
+        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {typeSwitches.map((s) => {
+            const on = !excludedTypes.has(s.key);
+            return (
+              <Toggle
+                key={s.key}
+                size="sm"
+                variant="outline"
+                pressed={on}
+                onPressedChange={() => toggleType(s.key)}
+                aria-label={`${on ? 'Esconder' : 'Mostrar'} ${s.label}`}
+                className={switchClass(on, s.tone)}
+              >
+                {s.label}
+              </Toggle>
+            );
+          })}
+          {excludedTypes.size > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => onChange({ ...value, excludedTypes: [] })}
             >
               Todos
             </Button>

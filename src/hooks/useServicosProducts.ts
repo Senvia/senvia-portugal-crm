@@ -34,6 +34,9 @@ interface CatalogConfigFromDB {
 
   technologies?: TelecomTechnology[];
   type_ids?: string[];
+  tiered_commission?: boolean;
+  tier_basis?: CatalogProduct['tier_basis'];
+  tier_scope?: CatalogProduct['tier_scope'];
 }
 
 function isCatalogFormat(item: any): item is CatalogConfigFromDB {
@@ -85,6 +88,9 @@ export function useServicosProducts() {
 
         technologies: c.technologies,
         type_ids: c.type_ids,
+        tiered_commission: c.tiered_commission,
+        tier_basis: c.tier_basis,
+        tier_scope: c.tier_scope,
       }));
       return {
         products: catalog.map((c) => c.name),

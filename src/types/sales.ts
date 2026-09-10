@@ -262,6 +262,9 @@ export interface Sale {
   // End of the booked install window ("das 9h às 12h") — the date above is
   // its start. Null when only a start time was agreed.
   scheduled_install_end?: string | null;
+  // End of the contract loyalty period (telecom). The renewal alerts —
+  // push and email to the org's admins — run off this date.
+  fidelizacao_end?: string | null;
   // Units (cards/lines) on this sale, summed from servicos_details by trigger.
   total_cartoes?: number | null;
   // Whether the required paperwork for THIS sale has been handed in — per
