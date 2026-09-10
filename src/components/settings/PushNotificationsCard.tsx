@@ -56,7 +56,7 @@ export const PushNotificationsCard = ({ organizationId, pushNotifications }: Pus
                   onClick={async () => {
                     if (!organizationId) return;
                     try {
-                      const { error } = await supabase.functions.invoke('send-push-notification', {
+                      const { data, error } = await supabase.functions.invoke('send-push-notification', {
                         body: {
                           organization_id: organizationId,
                           title: '🔔 Teste de Notificação',
@@ -66,7 +66,18 @@ export const PushNotificationsCard = ({ organizationId, pushNotifications }: Pus
                         },
                       });
                       if (error) throw error;
-                      toast({ title: 'Teste enviado!', description: 'Aguarda a notificação no dispositivo.' });
+                      // Say what actually happened per device — "enviado" alone
+                      // hid a tablet that the push service had already dropped.
+                      const sent = Number(data?.sent ?? 0);
+                      const total = Number(data?.total ?? 0);
+                      const failed = (data?.results ?? []).filter((r: { success: boolean }) => !r.success);
+                      toast({
+                        title: total === 0 ? 'Nenhum dispositivo registado' : `Enviado para ${sent} de ${total} dispositivo${total === 1 ? '' : 's'}`,
+                        description: failed.length > 0
+                          ? `${failed.length} falhou (${failed.map((r: { status?: number }) => r.status ?? 'erro').join(', ')}) — esse aparelho foi removido; abre a app nele para o registar de novo.`
+                          : total === 0 ? 'Ativa as notificações neste aparelho primeiro.' : 'Aguarda a notificação nos dispositivos.',
+                        variant: failed.length > 0 ? 'destructive' : undefined,
+                      });
                     } catch (err) {
                       toast({ title: 'Erro', description: 'Não foi possível enviar o teste.', variant: 'destructive' });
                     }

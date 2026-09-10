@@ -107,19 +107,25 @@ export function usePushNotifications() {
           const stale = subKey ? !buffersEqual(new Uint8Array(subKey), currentKey) : false;
           if (stale) {
             try {
-              await supabase.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', subscription.endpoint);
+              // Order matters: get and SAVE the new subscription first, and only
+              // then drop the old one. Deleting first left the device with no
+              // row at all whenever anything after the delete failed.
+              const oldEndpoint = subscription.endpoint;
               await subscription.unsubscribe();
               subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: currentKey });
               const p256dh = subscription.getKey('p256dh');
               const auth = subscription.getKey('auth');
-              if (p256dh && auth) {
-                await supabase.from('push_subscriptions').upsert({
-                  user_id: user.id,
-                  organization_id: organization.id,
-                  endpoint: subscription.endpoint,
-                  p256dh: arrayBufferToBase64(p256dh),
-                  auth: arrayBufferToBase64(auth),
-                }, { onConflict: 'endpoint' });
+              if (!p256dh || !auth) throw new Error('no keys on renewed subscription');
+              const { error: saveError } = await supabase.from('push_subscriptions').upsert({
+                user_id: user.id,
+                organization_id: organization.id,
+                endpoint: subscription.endpoint,
+                p256dh: arrayBufferToBase64(p256dh),
+                auth: arrayBufferToBase64(auth),
+              }, { onConflict: 'endpoint' });
+              if (saveError) throw saveError;
+              if (oldEndpoint !== subscription.endpoint) {
+                await supabase.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', oldEndpoint);
               }
               if (!cancelled) setIsSubscribed(true);
               return;
@@ -136,6 +142,31 @@ export function usePushNotifications() {
             .eq('user_id', user.id)
             .eq('endpoint', subscription.endpoint)
             .maybeSingle();
+
+          // The device still holds a live subscription but the server has no
+          // row for it: the sender drops rows whose push service answered
+          // 404/410, and a device that was re-added or switched organization
+          // ends up here too. Re-register silently instead of showing a dead
+          // "ativas" — the tablet case: switched on, never receiving.
+          if (!error && !data && Notification.permission === 'granted' && organization) {
+            const p256dh = subscription.getKey('p256dh');
+            const auth = subscription.getKey('auth');
+            if (p256dh && auth) {
+              const { error: healError } = await supabase.from('push_subscriptions').upsert({
+                user_id: user.id,
+                organization_id: organization.id,
+                endpoint: subscription.endpoint,
+                p256dh: arrayBufferToBase64(p256dh),
+                auth: arrayBufferToBase64(auth),
+              }, { onConflict: 'endpoint' });
+              if (!healError) {
+                console.info('[push] re-registered this device on the server');
+                if (!cancelled) setIsSubscribed(true);
+                return;
+              }
+              console.error('[push] re-register failed:', healError);
+            }
+          }
 
           if (!cancelled) setIsSubscribed(!error && !!data);
         }
