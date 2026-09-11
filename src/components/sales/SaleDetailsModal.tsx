@@ -68,6 +68,7 @@ import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
+import { formatOperationalUnits } from "@/lib/sale-units";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import {
   TELECOM_TECHNOLOGY_LABELS, MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
@@ -717,11 +718,16 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                     const detail = saleServicosDetails[s];
                                     return (
                                       <div key={s} className="p-2.5 rounded-lg border bg-muted/30 space-y-1">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                           <span className="text-sm font-medium">{detail?.name || s}</span>
-                                          {detail?.price != null && (
-                                            <span className="text-sm font-medium">{formatCurrency(detail.price)}</span>
-                                          )}
+                                          <div className="flex shrink-0 items-center gap-2 text-sm">
+                                            <span className="text-muted-foreground">
+                                              Qtd. {formatOperationalUnits(detail?.quantidade ?? 1)}
+                                            </span>
+                                            {detail?.price != null && (
+                                              <span className="font-medium">{formatCurrency(detail.price)}</span>
+                                            )}
+                                          </div>
                                         </div>
                                         {/* The operator frozen onto the sale, not the
                                             catalog's current one — a product can be moved
