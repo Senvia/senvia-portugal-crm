@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { RecurringStatus } from "@/types/sales";
+import { operationalUnitsForSale } from "@/lib/sale-units";
 
 interface RecurringCycleSummary {
   readonly id: string;
@@ -71,7 +72,7 @@ export function useRecurringSales() {
             id,
             code,
             client_id,
-            operational_units,
+            servicos_details,
             client:crm_clients(id, name)
           ),
           sale_recurring_cycles(
@@ -112,7 +113,7 @@ export function useRecurringSales() {
           next_renewal_date: recurrence.next_cycle_date,
           last_renewal_date: recurrence.last_cycle_date,
           organization_id: recurrence.organization_id,
-          operational_units: Number(sale.operational_units || 1),
+          operational_units: operationalUnitsForSale(sale),
           current_cycle: currentCycle,
           client: sale.client,
         }];
@@ -157,6 +158,8 @@ export function useRenewSale() {
       queryClient.invalidateQueries({ queryKey: ["sale-recurrence"] });
       queryClient.invalidateQueries({ queryKey: ["recurring-cycles"] });
       queryClient.invalidateQueries({ queryKey: ["sale-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["all-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-stats"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("Ciclo de renovação criado com sucesso!");
     },

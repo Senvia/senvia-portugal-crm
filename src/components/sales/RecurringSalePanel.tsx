@@ -12,10 +12,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/format';
 import {
   useSaleCheckout,
+  useCancelSaleRecurrence,
+  useReactivateSaleRecurrence,
   useSaleRecurrence,
   type BillingStatus,
   type CycleStatus,
@@ -74,7 +77,10 @@ function monthLabel(isoDate: string): string {
 export function RecurringSalePanel({ saleId }: { saleId: string }) {
   const { data: recurrence, isLoading } = useSaleRecurrence(saleId);
   const { createCheckout, isCreating } = useSaleCheckout();
+  const cancelRecurrence = useCancelSaleRecurrence();
+  const reactivateRecurrence = useReactivateSaleRecurrence();
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [nextCycleDate, setNextCycleDate] = useState('');
 
   if (isLoading) {
     return (
@@ -97,6 +103,18 @@ export function RecurringSalePanel({ saleId }: { saleId: string }) {
     const url = await createCheckout(recurrence.id);
     setCheckoutUrl(url);
     window.open(url, '_blank');
+  };
+
+  const isClosed = recurrence.service_status === 'cancelled' || recurrence.service_status === 'inactive';
+  const handleReactivate = () => {
+    if (!nextCycleDate) {
+      toast.error('Escolhe a próxima data de renovação');
+      return;
+    }
+    reactivateRecurrence.mutate(
+      { saleId, nextCycleDate },
+      { onSuccess: () => setNextCycleDate('') },
+    );
   };
 
   return (
@@ -133,6 +151,43 @@ export function RecurringSalePanel({ saleId }: { saleId: string }) {
               decisão sua — não acontece automaticamente por um pagamento falhado.
             </p>
           </div>
+        )}
+
+        {isClosed ? (
+          <div className="space-y-2 rounded-md border p-3">
+            <label htmlFor={`reactivate-${saleId}`} className="text-sm font-medium">
+              Próxima data de renovação
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id={`reactivate-${saleId}`}
+                type="date"
+                value={nextCycleDate}
+                onChange={(event) => setNextCycleDate(event.target.value)}
+              />
+              <Button
+                type="button"
+                onClick={handleReactivate}
+                disabled={!nextCycleDate || reactivateRecurrence.isPending}
+              >
+                {reactivateRecurrence.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reativar recorrência
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive"
+            onClick={() => cancelRecurrence.mutate(recurrence.id)}
+            disabled={cancelRecurrence.isPending}
+          >
+            {cancelRecurrence.isPending
+              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              : <XCircle className="mr-2 h-4 w-4" />}
+            Cancelar recorrência
+          </Button>
         )}
 
         <div className="grid grid-cols-3 gap-3 text-sm">

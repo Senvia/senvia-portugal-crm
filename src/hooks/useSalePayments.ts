@@ -140,6 +140,10 @@ export function useUpdateSalePayment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["sale-payments", variables.saleId] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["sale-recurrence", variables.saleId] });
+      queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["all-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-stats"] });
       toast.success("Pagamento atualizado com sucesso");
     },
     onError: (error) => {

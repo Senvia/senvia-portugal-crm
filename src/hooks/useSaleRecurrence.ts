@@ -114,3 +114,43 @@ export function useSaleCheckout() {
     isCreating: mutation.isPending,
   };
 }
+
+export function useCancelSaleRecurrence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (recurrenceId: string) => {
+      const { error } = await supabase.rpc('transition_sale_recurrence', {
+        p_recurrence_id: recurrenceId,
+        p_action: 'cancel',
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sale-recurrence'] });
+      queryClient.invalidateQueries({ queryKey: ['recurring-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      toast.success('Serviço recorrente cancelado');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Não foi possível cancelar a recorrência'),
+  });
+}
+
+export function useReactivateSaleRecurrence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ saleId, nextCycleDate }: { saleId: string; nextCycleDate: string }) => {
+      const { error } = await supabase.rpc('reactivate_sale_recurrence', {
+        p_sale_id: saleId,
+        p_next_cycle_date: nextCycleDate,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sale-recurrence'] });
+      queryClient.invalidateQueries({ queryKey: ['recurring-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      toast.success('Serviço recorrente reativado');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Não foi possível reativar a recorrência'),
+  });
+}
