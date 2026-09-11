@@ -5,7 +5,7 @@ import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import { simpleParser } from 'mailparser';
 import { getEmailCaixa, smtpTransport } from './caixas.js';
 import { getManager } from './idle.js';
-import { syncFolderMessages, syncOlderMessages, syncUnreadMessages, backfillBodies } from './sync.js';
+import { syncFolderMessages, syncOlderMessages, syncUnreadMessages, backfillBodies, fetchMessageBody } from './sync.js';
 import { q } from './db.js';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -252,6 +252,11 @@ async function execute(cmd) {
       await updateCounts(client, target.id, caixa);
       log(`sync_unread: +${n} em ${target.path}`);
       return;
+    }
+    case 'fetch_body': {
+      const m = await getMsg(p.messageId, caixa);
+      if (!m) throw new Error('mensagem inexistente');
+      return fetchMessageBody(client, caixa, m);
     }
     case 'fetch_attachment': return fetchAttachment(client, p.attachmentId, caixa);
     case 'send': return sendMail(caixa, applySignature(caixa, p));

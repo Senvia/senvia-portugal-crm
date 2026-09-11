@@ -247,6 +247,7 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   useEmailRealtime(channelId);
   const { data: falhas = [] } = useEmailCommandFailures(channelId);
   const actions = useEmailActions(channelId, folderId);
+  const { toast } = useToast();
 
   // Falhas já vistas. Sem isto, o aviso reaparecia a cada recarga durante 24
   // horas por causa de uma ação que já ninguém consegue repetir — que foi
@@ -331,6 +332,21 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   }, [messages, searching]);
   const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened, isLoading: loadingMessage } = useEmailMessage(messageId);
+  const requestedBodyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const message = opened?.message;
+    if (!message || message.body_fetched || requestedBodyRef.current === message.id) return;
+    requestedBodyRef.current = message.id;
+    void actions.fetchBody(message.id).catch((error: unknown) => {
+      requestedBodyRef.current = null;
+      toast({
+        title: 'Falha ao carregar o email',
+        description: error instanceof Error ? error.message : 'Tenta novamente.',
+        variant: 'destructive',
+      });
+    });
+  }, [opened?.message, actions, toast]);
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
@@ -460,7 +476,6 @@ export function EmailListReader({ channelId, folderId, onOpenRail }: { channelId
   }, [messages, messageId, opened, isDraftsFolder, selectedIds]);
   // ───────────────────────────────────────────────────────────────────────────
 
-  const { toast } = useToast();
   const [dlId, setDlId] = useState<string | null>(null);
   // Shared attachment-body resolver: checks the DB cache first, else asks the
   // gateway to fetch it (fetch_attachment command) and polls briefly for the

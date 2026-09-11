@@ -163,6 +163,7 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
     markFolderRead: (targetFolderId: string) => { patchAll({ seen: true }); return queue('mark_folder_read', { folderId: targetFolderId }); },
     loadOlder: (targetFolderId: string, batch = 40) => queue('load_older', { folderId: targetFolderId, batch }),
     syncUnread: (targetFolderId: string) => queue('sync_unread', { folderId: targetFolderId }),
+    fetchBody: (messageId: string) => queue('fetch_body', { messageId }),
     fetchAttachment: (attachmentId: string) => queue('fetch_attachment', { attachmentId }),
     send: (payload: SendPayload) => queue('send', payload as unknown as Record<string, unknown>),
     saveDraft,

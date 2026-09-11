@@ -5,13 +5,13 @@ import vm from 'node:vm';
 import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import { fileURLToPath } from 'node:url';
 
-async function commands(query, client) {
+async function commands(query, client, fetchMessageBody = async () => { throw new Error('unexpected body fetch'); }) {
   const code = (await readFile(new URL('./commands.js', import.meta.url), 'utf8'))
     .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   const box = vm.createContext({ q: query, console, Buffer, MailComposer,
     smtpTransport: async () => ({ sendMail() { throw new Error('unexpected send'); } }),
     getEmailCaixa: async () => ({ id: 'channel-a', organization_id: 'org-a', meta: { email_address: 'fixture@example.test' } }),
-    getManager: () => ({ client }) });
+    getManager: () => ({ client }), fetchMessageBody });
   vm.runInContext(code, box);
   return box.execute;
 }
@@ -80,4 +80,20 @@ test('an authorized same-channel mark-read reaches IMAP and the scoped database 
     messageFlagsAdd: async (uid, flags) => { assert.equal(uid, '42'); assert.deepEqual(Array.from(flags), ['\\Seen']); } });
   await execute({ ...cmd, payload: { messageId: 'message-a' } });
   assert.deepEqual(Array.from(changes[0]), ['message-a', true, 'channel-a', 'org-a']);
+});
+
+test('an authorized same-channel body fetch reaches IMAP for the selected message', async () => {
+  let fetched = null;
+  const execute = await commands(async (sql) => {
+    if (sql.includes('organization_members')) return [{ allowed: true }];
+    if (sql.includes('FROM email_messages')) {
+      return [{ id: 'message-a', uid: 42, folder_id: 'folder-a', path: 'INBOX' }];
+    }
+    return [];
+  }, guardedClient, async (_client, caixa, message) => { fetched = { caixa, message }; });
+
+  await execute({ ...cmd, type: 'fetch_body', payload: { messageId: 'message-a' } });
+  assert.equal(fetched.caixa.id, 'channel-a');
+  assert.equal(fetched.message.id, 'message-a');
+  assert.equal(fetched.message.path, 'INBOX');
 });
