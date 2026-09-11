@@ -97,7 +97,7 @@ const App = ({ Router = BrowserRouter }: { Router?: React.ComponentType<{ future
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <Router>
           <AuthProvider>
             <Suspense fallback={null}><PWAInstallButton /></Suspense>
             <Suspense fallback={null}><PWAUpdateBanner /></Suspense>

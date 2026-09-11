@@ -14,6 +14,8 @@ const logStep = (step: string, details?: any) => {
 };
 
 serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -63,7 +65,7 @@ serve(async (req) => {
       // Trial just started — welcome (dia 0/1 do trial de 14 dias → ~13-14 dias por usar).
       // Janela alta para nunca disparar em trials antigos/expirados.
       if (daysLeft >= 12 && !reminders["automation_started"]) {
-        logStep("Trial started", { orgId: org.id, orgName: org.name });
+        logStep("Trial started", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_started", { email: adminEmail, nome: org.name });
         reminders["automation_started"] = true;
         await updateReminders(supabase, org.id, reminders);
@@ -72,7 +74,7 @@ serve(async (req) => {
 
       // Dia 3 do trial (ativação) — ~8-11 dias por usar.
       if (daysLeft <= 11 && daysLeft >= 8 && !reminders["automation_day3"]) {
-        logStep("Trial day 3", { orgId: org.id, orgName: org.name });
+        logStep("Trial day 3", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_day_3", { email: adminEmail, nome: org.name });
         reminders["automation_day3"] = true;
         await updateReminders(supabase, org.id, reminders);
@@ -81,7 +83,7 @@ serve(async (req) => {
 
       // Dia 7 do trial (diferenciadores) — ~4-7 dias por usar.
       if (daysLeft <= 7 && daysLeft >= 4 && !reminders["automation_day7"]) {
-        logStep("Trial day 7", { orgId: org.id, orgName: org.name });
+        logStep("Trial day 7", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_day_7", { email: adminEmail, nome: org.name });
         reminders["automation_day7"] = true;
         await updateReminders(supabase, org.id, reminders);
@@ -90,7 +92,7 @@ serve(async (req) => {
 
       // Trial expiring in 3 days
       if (daysLeft <= 3 && daysLeft > 1 && !reminders["automation_3d"]) {
-        logStep("Trial expiring in 3 days", { orgId: org.id, orgName: org.name });
+        logStep("Trial expiring in 3 days", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_expiring_3d", {
           email: adminEmail,
           nome: org.name,
@@ -103,7 +105,7 @@ serve(async (req) => {
 
       // Trial expiring in 1 day
       if (daysLeft <= 1 && daysLeft > 0 && !reminders["automation_1d"]) {
-        logStep("Trial expiring in 1 day", { orgId: org.id, orgName: org.name });
+        logStep("Trial expiring in 1 day", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_expiring_1d", {
           email: adminEmail,
           nome: org.name,
@@ -116,7 +118,7 @@ serve(async (req) => {
 
       // Trial expired
       if (daysLeft <= 0 && !reminders["automation_expired"]) {
-        logStep("Trial expired", { orgId: org.id, orgName: org.name });
+        logStep("Trial expired", { orgId: org.id });
         await dispatchAutomation(supabase, "trial_expired", {
           email: adminEmail,
           nome: org.name,
@@ -163,7 +165,7 @@ async function getAdminEmail(supabase: any, orgId: string): Promise<string | nul
 
 async function dispatchAutomation(supabase: any, triggerType: string, record: Record<string, string>) {
   try {
-    logStep("Dispatching automation", { triggerType, record });
+    logStep("Dispatching automation", { triggerType });
     const { error } = await supabase.functions.invoke("process-automation", {
       body: {
         trigger_type: triggerType,
@@ -234,8 +236,9 @@ async function moveToExpiredList(supabase: any, email: string, name: string) {
         );
     }
 
-    logStep("Moved contact to Trial Expirado", { email });
+    logStep("Moved contact to Trial Expirado");
   } catch (err) {
     logStep("Failed to move to expired list", { error: (err as Error).message });
   }
 }
+import { internalJobGuard } from "../_shared/internal-auth.ts";

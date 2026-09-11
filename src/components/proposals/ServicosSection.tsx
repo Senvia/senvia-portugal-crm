@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { NumberInput } from '@/components/shared/NumberInput';
 import { cn } from '@/lib/utils';
+import { commissionUnits, normalizeOperationalUnits } from '@/lib/sale-units';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import type {
@@ -413,7 +414,7 @@ function CatalogProducts({
           // was not the seller, so an admin saw "0,00 €" per line above a
           // "70,00 €" total on the same card.
           const myLineCommission = line.seller;
-          const myUnitCommission = quantidade > 0 ? myLineCommission / quantidade : 0;
+          const myUnitCommission = myLineCommission / commissionUnits(quantidade);
 
           return (
             <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
@@ -504,11 +505,11 @@ function CatalogProducts({
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Quantidade</Label>
                   <NumberInput
-                    min={1}
-                    step={1}
+                    min={0.5}
+                    step={0.5}
                     value={quantidade}
                     onCommit={(n) => {
-                      const newQty = Math.max(1, Math.round(n) || 1);
+                      const newQty = normalizeOperationalUnits(n);
                       const comissao = lineCommission(catProduct, newQty, extraCards, tecnologia).gross;
                       const newPrice = isTiered
                         ? getCatalogPriceForQuantity(catProduct, newQty) * newQty

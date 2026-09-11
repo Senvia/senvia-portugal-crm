@@ -97,6 +97,8 @@ async function createUnsubscribeUrl(
 }
 
 serve(async (req: Request): Promise<Response> => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -401,3 +403,4 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 });
+import { internalJobGuard } from "../_shared/internal-auth.ts";

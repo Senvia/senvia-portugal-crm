@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -32,6 +33,9 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError) throw new Error(`Auth error: ${userError.message}`);
+    if (!userData.user) throw new Error("User not authenticated");
+    const mfaResponse = await requestMfaResponse(req, userData.user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const { data: roleData } = await supabaseClient
       .from("user_roles")

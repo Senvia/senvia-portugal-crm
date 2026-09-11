@@ -309,10 +309,10 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     );
   }
 
-  console.log('Webhook mode: org found:', org.name, isIntakeWebhook ? `(intake: ${intakeWebhookName})` : dedicatedUserId ? '(dedicated)' : '(standard)');
+  console.log('Webhook organization resolved', { organizationId: org.id });
 
   const rawBody = await req.json();
-  console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
+  console.log('Webhook payload received');
 
   // Map common field names from Facebook Lead Ads / Zapier / Make
   const name = 
@@ -327,7 +327,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const notes = rawBody.notes || rawBody.message || rawBody.mensagem || rawBody.observacoes || null;
   const source = rawBody.source || rawBody.fonte || intakeWebhookName || 'Webhook Externo';
 
-  console.log('Webhook mapped fields:', { name, email, phone, notes, source });
+  console.log('Webhook fields mapped');
 
   // Strict per-field validation, but lenient at the lead level: if a field
   // is invalid we drop just that field (set to null/placeholder) instead of
@@ -341,7 +341,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     if (r.ok) {
       cleanPhone = r.value; // store E.164 (e.g. +351912345678)
     } else {
-      console.warn('[submit-lead webhook] phone rejected:', r.reason, phone);
+      console.warn('[submit-lead webhook] phone rejected:', r.reason);
     }
   }
 
@@ -351,7 +351,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     if (r.ok) {
       cleanEmail = r.value;
     } else {
-      console.warn('[submit-lead webhook] email rejected:', r.reason, email);
+      console.warn('[submit-lead webhook] email rejected:', r.reason);
     }
   }
 
@@ -500,7 +500,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(webhookPayload),
-    }).catch((err) => console.error(`Webhook failed: ${whUrl}`, err.message));
+    }).catch(() => console.error('Webhook dispatch failed'));
   }
 
   // Push notification - target admins (unless this webhook opted out) + assigned
@@ -611,7 +611,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
 </body>
 </html>`;
 
-          console.log(`[Webhook] Sending new-lead email via ${orgBrevoKey ? 'org Brevo' : 'Senvia global'} from ${senderEmail} to ${recipients.length} recipients`);
+          console.log('[Webhook] Sending new-lead email', { recipientCount: recipients.length });
 
           fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
@@ -685,20 +685,20 @@ Deno.serve(async (req) => {
     if (mode === 'webhook' && token) {
       const rl = await rateLimitDb(limitador, `submit-lead:wh:${token}`, 300, 60);
       if (!rl.allowed) {
-        console.warn('[submit-lead] limite do webhook excedido', { token: token.slice(0, 8), hits: rl.hits });
+        console.warn('[submit-lead] limite do webhook excedido', { hits: rl.hits });
         return respostaLimiteExcedido(rl.retryAfter, corsHeaders,
           'Demasiados envios seguidos para este webhook. Abranda o ritmo e volta a tentar.');
       }
     } else {
       const curto = await rateLimitDb(limitador, `submit-lead:min:${ip}`, 5, 60);
       if (!curto.allowed) {
-        console.warn('[submit-lead] limite por minuto excedido', { ip, hits: curto.hits });
+        console.warn('[submit-lead] limite por minuto excedido', { hits: curto.hits });
         return respostaLimiteExcedido(curto.retryAfter, corsHeaders,
           'Enviaste demasiados formulários seguidos. Espera um minuto e tenta outra vez.');
       }
       const longo = await rateLimitDb(limitador, `submit-lead:hora:${ip}`, 30, 3600);
       if (!longo.allowed) {
-        console.warn('[submit-lead] limite por hora excedido', { ip, hits: longo.hits });
+        console.warn('[submit-lead] limite por hora excedido', { hits: longo.hits });
         return respostaLimiteExcedido(longo.retryAfter, corsHeaders,
           'Demasiados envios desta ligação na última hora.');
       }
@@ -712,7 +712,7 @@ Deno.serve(async (req) => {
     // ===== STANDARD FORM MODE =====
     // Parse request body
     const body: LeadSubmission = await req.json();
-    console.log('Lead submission received:', { ...body, email: '[REDACTED]' });
+    console.log('Lead submission received');
 
     // ===== ARMADILHA PARA ROBÔS =====
     //
@@ -735,7 +735,7 @@ Deno.serve(async (req) => {
 
     if (armadilha) {
       console.warn('[submit-lead] ARMADILHA: campo invisível preenchido', {
-        ip, valor: armadilha.slice(0, 40),
+        detected: true,
       });
       return new Response(
         JSON.stringify({ success: true, message: 'Contacto registado com sucesso' }),
@@ -747,7 +747,7 @@ Deno.serve(async (req) => {
     // campo, e `0` não pode ser lido como "preencheu num instante".
     if (tempoPreenchimento > 0 && tempoPreenchimento < TEMPO_MINIMO_MS) {
       console.warn('[submit-lead] ARMADILHA: preenchido depressa demais', {
-        ip, ms: tempoPreenchimento,
+        ms: tempoPreenchimento,
       });
       return new Response(
         JSON.stringify({ success: true, message: 'Contacto registado com sucesso' }),
@@ -782,7 +782,7 @@ Deno.serve(async (req) => {
     if (body.email) {
       const r = normalizeEmail(body.email);
       if (!r.ok) {
-        console.warn('[submit-lead] email rejected:', r.reason, body.email);
+        console.warn('[submit-lead] email rejected:', r.reason);
         return new Response(
           JSON.stringify({ error: r.reason }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -795,7 +795,7 @@ Deno.serve(async (req) => {
     if (body.phone) {
       const r = normalizeInternationalPhone(body.phone);
       if (!r.ok) {
-        console.warn('[submit-lead] phone rejected:', r.reason, body.phone);
+        console.warn('[submit-lead] phone rejected:', r.reason);
         return new Response(
           JSON.stringify({ error: r.reason }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -828,14 +828,14 @@ Deno.serve(async (req) => {
     }
 
     if (!org) {
-      console.error('Invalid public_key:', body.public_key);
+      console.error('Invalid public_key');
       return new Response(
         JSON.stringify({ error: 'Formulário não encontrado' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Organization found:', org.name);
+    console.log('Organization found:', org.id);
 
     // Get form-specific automation settings if form_id is provided
     let formSettings = {
@@ -877,7 +877,7 @@ Deno.serve(async (req) => {
           rotate_enabled: (form as any).rotate_enabled === true,
           notify_all_admins: (form as any).notify_all_admins !== false,
         };
-        console.log('Form-specific settings loaded for:', form.name);
+        console.log('Form-specific settings loaded for:', form.id);
       }
     }
 
@@ -1149,10 +1149,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify(webhookPayload),
       })
         .then((res) => {
-          console.info(`Webhook dispatched to ${url}, status: ${res.status}`);
+          console.info('Webhook dispatched', { status: res.status });
         })
         .catch((err) => {
-          console.error(`Webhook dispatch to ${url} failed:`, err.message);
+          console.error('Webhook dispatch failed');
         });
     }
 
@@ -1217,7 +1217,7 @@ Deno.serve(async (req) => {
       const fbp = cd?.fbp as string | undefined;
       const externalId = (cd?.external_id as string | undefined) || lead.id;
       
-      if (fbc) console.log('CAPI: fbc constructed from fbclid:', fbc);
+      if (fbc) console.log('CAPI attribution constructed');
       
       // Determine which pixels to fire — form-level overrides org-level. A form that
       // configures pixels (even an empty list = intentionally none) wins; only inherit
@@ -1339,7 +1339,7 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-            console.log(`Sending new-lead email via ${orgBrevoKey ? 'org Brevo' : 'Senvia global'} from ${senderEmail}`);
+            console.log('Sending new-lead email');
 
             fetch('https://api.brevo.com/v3/smtp/email', {
               method: 'POST',

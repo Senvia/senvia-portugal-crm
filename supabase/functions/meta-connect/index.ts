@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // meta-connect — Facebook Login for Business: liga Instagram e Messenger.
 //
 // Substitui o antigo instagram-connect, feito para o Facebook Login NORMAL. A
@@ -141,6 +142,8 @@ async function membroDaOrg(
 
   const { data: { user } } = await admin.auth.getUser(bearer);
   if (!user) return { ok: false, status: 401, error: "Sessão inválida" };
+  const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+  if (mfaResponse) return { ok: false, status: mfaResponse.status, error: "MFA_REQUIRED" };
 
   // O parâmetro chama-se `_org_id` — com o nome errado o Postgres não encontra a
   // função e toda a gente levava um 403 a mentir sobre a causa.
@@ -159,11 +162,13 @@ async function membroDaOrg(
 async function utilizadorDoPedido(
   req: Request,
   admin: ReturnType<typeof createClient>,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string } | Response | null> {
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!bearer) return null;
   const { data: { user } } = await admin.auth.getUser(bearer);
-  return user ? { id: user.id } : null;
+  if (!user) return null;
+  const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+  return mfaResponse ?? { id: user.id };
 }
 
 /** É dono do SaaS? Nem toda a ação desta função é de um cliente. */
@@ -894,6 +899,7 @@ Deno.serve(async (req) => {
     // ou se é dono do SaaS para ver a configuração da app.
     const adminAuth = createClient(supabaseUrl!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const quem = await utilizadorDoPedido(req, adminAuth);
+    if (quem instanceof Response) return quem;
     if (!quem) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1615,6 +1621,7 @@ Deno.serve(async (req) => {
       // nosso token alcançasse para passar a ler e a escrever por um número
       // nosso. O que a autenticação confirmava era a pergunta errada.
       const quem = await utilizadorDoPedido(req, admin);
+      if (quem instanceof Response) return quem;
       if (!quem || !await ehSuperAdmin(admin, quem.id)) {
         return jsonRes({
           error: "Esta ligação manual é reservada à equipa do Senvia. "

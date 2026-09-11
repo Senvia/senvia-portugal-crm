@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useOttoStore } from "@/stores/useOttoStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { buildOttoHistory, ottoSubmission } from '@/lib/paid-client-input';
 
 export type { OttoMessage } from "@/stores/useOttoStore";
 
@@ -20,7 +21,7 @@ export function useOttoChat() {
     const paths: string[] = [];
     for (const file of files) {
       const timestamp = Date.now();
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-180);
       const path = `${organization.id}/${timestamp}_${safeName}`;
       const { error } = await supabase.storage
         .from("support-attachments")
@@ -36,16 +37,19 @@ export function useOttoChat() {
   }, [organization]);
 
   const sendMessage = useCallback(async (input: string, attachments?: File[]) => {
-    const userMsg = { role: "user" as const, content: input };
+    const filesToUpload = attachments || pendingAttachments;
+    const parsed = ottoSubmission.safeParse({ input, attachmentCount: filesToUpload.length });
+    if (!parsed.success) { toast.error(parsed.error.issues[0]?.message || 'Pedido inválido.'); return; }
+    if (!organization?.id || !session?.access_token) { toast.error('Inicie sessão e selecione uma organização.'); return; }
+    const userMsg = { role: "user" as const, content: parsed.data.input };
     addMessage(userMsg);
     setLoading(true);
 
-    const allMessages = [...messages, userMsg];
+    const allMessages = buildOttoHistory(messages, parsed.data.input);
     let assistantSoFar = "";
 
     // Upload attachments if provided
     let attachmentPaths: string[] = [];
-    const filesToUpload = attachments || pendingAttachments;
     if (filesToUpload.length > 0) {
       attachmentPaths = await uploadAttachments(filesToUpload);
       clearAttachments();

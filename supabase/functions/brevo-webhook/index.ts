@@ -11,6 +11,7 @@ serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   try {
     // Rate limit: 60 req/min per IP (Brevo sends bursts during campaigns).
@@ -24,6 +25,10 @@ serve(async (req: Request): Promise<Response> => {
     // require it (via ?key= in the configured webhook URL, or an x-webhook-secret
     // header) so an attacker can't forge delivery/open/bounce/unsubscribe events.
     const webhookSecret = Deno.env.get("BREVO_WEBHOOK_SECRET");
+    if (!webhookSecret?.trim()) {
+      console.error("brevo_webhook_secret_missing");
+      return new Response("Webhook unavailable", { status: 503 });
+    }
     if (webhookSecret) {
       const provided = new URL(req.url).searchParams.get("key") || req.headers.get("x-webhook-secret");
       if (provided !== webhookSecret) {

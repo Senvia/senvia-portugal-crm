@@ -8,6 +8,7 @@ import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/type
 import { DateRange } from 'react-day-picker';
 import { saleMatchesCommissionFilters, type CommissionFilters } from '@/lib/commission-filters';
 import { useSaleTypeIds } from '@/hooks/useSaleTypeIds';
+import { sumOperationalSaleUnits } from '@/lib/sale-units';
 
 interface UseFinanceStatsOptions {
   dateRange?: DateRange;
@@ -31,7 +32,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       // Cast: telecom_status/comissao are newer than the generated types.
       const { data, error } = await (supabase as any)
         .from('sales')
-        .select('id, total_value, created_at, sale_date, status, comissao, telecom_status, activation_date, seller_id, created_by, servicos_details')
+        .select('id, total_value, created_at, sale_date, status, comissao, telecom_status, activation_date, seller_id, created_by, servicos_details, operational_units')
         .eq('organization_id', organizationId);
       if (error) throw error;
       // Cancelled sales are not real revenue — exclude them from every total.
@@ -325,9 +326,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       totalBilled,
       totalCommission,
       telecomToInstall,
-      telecomToInstallCount: toInstallRows.length,
+      telecomToInstallCount: sumOperationalSaleUnits(toInstallRows),
       telecomInstalled,
-      telecomInstalledCount: installedRows.length,
+      telecomInstalledCount: sumOperationalSaleUnits(installedRows),
       totalReceived,
       totalPending,
       dueSoon,

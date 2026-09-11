@@ -24,7 +24,7 @@ export function EnrollMFA({ onSuccess, onCancel }: EnrollMFAProps) {
     try {
       // Limpar fatores TOTP não verificados de tentativas anteriores
       const { data: factors } = await supabase.auth.mfa.listFactors();
-      const unverifiedFactors = factors?.totp?.filter(f => f.status === 'unverified') || [];
+      const unverifiedFactors = factors?.all?.filter(f => f.factor_type === 'totp' && f.status === 'unverified') || [];
       for (const factor of unverifiedFactors) {
         await supabase.auth.mfa.unenroll({ factorId: factor.id });
       }

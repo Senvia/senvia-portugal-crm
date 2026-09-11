@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
 import { CompleteOrganizationSetup } from './CompleteOrganizationSetup';
-import { ChallengeMFA } from './ChallengeMFA';
+import { MfaAccessGate } from './MfaAccessGate';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
 import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
@@ -13,14 +13,11 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { WhatsNewDialog } from '@/components/announcements/WhatsNewDialog';
+import { MfaAdoptionDialog } from './MfaAdoptionDialog';
 
 export function ProtectedLayoutRoute() {
-  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization, profile } = useAuth();
+  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus } = useAuth();
   const location = useLocation();
-  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
-  const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
-  const { isAdmin } = usePermissions();
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   if (isLoading) {
     return (
@@ -34,8 +31,8 @@ export function ProtectedLayoutRoute() {
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  if (mfaStatus === 'pending') {
-    return <ChallengeMFA onSuccess={completeMfaChallenge} />;
+  if (mfaStatus !== 'none' && mfaStatus !== 'verified') {
+    return <MfaAccessGate />;
   }
 
   if (needsOrgSelection && organizations.length > 1) {
@@ -54,6 +51,17 @@ export function ProtectedLayoutRoute() {
   if (organizations.length === 0) {
     return <CompleteOrganizationSetup />;
   }
+
+  return <ProtectedLayoutContent />;
+}
+
+function ProtectedLayoutContent() {
+  const { organization, profile } = useAuth();
+  const location = useLocation();
+  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
+  const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
+  const { isAdmin } = usePermissions();
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   if (
     !onboardingComplete &&
@@ -106,6 +114,7 @@ export function ProtectedLayoutRoute() {
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <Outlet />
       <WhatsNewDialog organizationId={organization?.id} />
+      <MfaAdoptionDialog />
     </AppLayout>
   );
 }

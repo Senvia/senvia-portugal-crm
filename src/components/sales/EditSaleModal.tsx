@@ -72,6 +72,7 @@ import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
+import { normalizeOperationalUnits } from "@/lib/sale-units";
 
 interface SaleItemDraft {
   id: string;
@@ -420,7 +421,7 @@ export function EditSaleModal({
   const handleUpdateQuantity = (itemId: string, delta: number) => {
     setItems(items.map(i => {
       if (i.id === itemId) {
-        const newQty = Math.max(1, i.quantity + delta);
+        const newQty = normalizeOperationalUnits(i.quantity + delta);
         return { ...i, quantity: newQty, isModified: !i.isNew };
       }
       return i;
@@ -1208,11 +1209,11 @@ export function EditSaleModal({
                                     </div>
                                     
                                     <div className="flex items-center gap-1">
-                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, -1)}>
+                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, -0.5)}>
                                         <Minus className="h-3 w-3" />
                                       </Button>
                                       <span className="w-6 text-center text-sm">{item.quantity}</span>
-                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, 1)}>
+                                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, 0.5)}>
                                         <Plus className="h-3 w-3" />
                                       </Button>
                                     </div>

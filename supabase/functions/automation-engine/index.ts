@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 
 // Motor dos fluxos de automação.
 //
@@ -925,13 +926,15 @@ serve(async (req) => {
     const { data: userData } = await db.auth.getUser(bearer);
     const userId = userData?.user?.id;
     if (userId && body.flow_id) {
+      const mfaDenied = await requestMfaResponse(req, userId, corsHeaders);
+      if (mfaDenied) return mfaDenied;
       const { data: flowRow } = await db
         .from("automation_flows").select("organization_id").eq("id", String(body.flow_id)).maybeSingle();
       if (flowRow?.organization_id) {
         const { data: isMember } = await db.rpc("is_org_member", {
           _user_id: userId, _org_id: flowRow.organization_id,
         });
-        const { data: isAdmin } = await db.rpc("has_role", { _user_id: userId, _role: "admin" });
+        const { data: isAdmin } = await db.rpc("is_org_admin", { _user_id: userId, _org_id: flowRow.organization_id });
         authorized = isMember === true && isAdmin === true;
       }
     }

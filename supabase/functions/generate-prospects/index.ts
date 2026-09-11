@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { boundedJson, prospectInput } from "../_shared/paid-input.ts";
+import { paidQuota } from "../_shared/paid-quota.ts";
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +13,7 @@ const APIFY_BASE = "https://api.apify.com/v2";
 const ACTOR_ID = "2Mdma1N6Fd0y3QEjR";
 
 Deno.serve(async (req) => {
+  if (req.method !== "POST" && req.method !== "OPTIONS") return new Response("Method not allowed", { status: 405 });
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -47,15 +51,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json();
-    } catch {
+    const mfaDenied = await requestMfaResponse(req, userData.user.id, corsHeaders);
+    if (mfaDenied) return mfaDenied;
+    const parsed = prospectInput.safeParse(await boundedJson(req, 16384));
+    if (!parsed.success) {
       return new Response(
         JSON.stringify({ error: "Pedido inválido. Envie os parâmetros em JSON." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const body = parsed.data;
 
     const {
       organizationId,
@@ -119,7 +124,7 @@ Deno.serve(async (req) => {
       );
       const { data: membership } = await svc
         .from("organization_members")
-        .select("is_active")
+        .select("is_active, role, profile_id")
         .eq("organization_id", organizationId)
         .eq("user_id", userData.user.id)
         .eq("is_active", true)
@@ -128,6 +133,29 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Sem acesso a esta organização" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: organization, error: organizationError } = await svc.from("organizations")
+        .select("enabled_modules").eq("id", organizationId).maybeSingle();
+      if (organizationError || organization?.enabled_modules?.prospects !== true) {
+        return new Response(JSON.stringify({ error: "Módulo de prospeção não disponível" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      {
+        const { data: canCreate, error: permissionError } = await svc.rpc("has_module_permission", {
+          _user_id: userData.user.id, _org_id: organizationId, _module: "leads", _subarea: "kanban", _action: "add",
+        });
+        if (permissionError || canCreate !== true) {
+          return new Response(JSON.stringify({ error: "Sem permissão para criar leads" }), {
+            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      if (!await paidQuota(svc, `prospects:user:${userData.user.id}`, 3, 3600)
+        || !await paidQuota(svc, `prospects:org:${organizationId}`, 10, 86400)) {
+        return new Response(JSON.stringify({ error: "Limite de utilização atingido ou indisponível" }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
@@ -168,12 +196,12 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(actorInput),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!runRes.ok) {
-      const errText = await runRes.text();
       return new Response(
-        JSON.stringify({ error: `Apify start failed [${runRes.status}]: ${errText}` }),
+        JSON.stringify({ error: `Apify start failed [${runRes.status}]` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

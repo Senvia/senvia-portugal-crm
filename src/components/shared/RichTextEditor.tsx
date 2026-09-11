@@ -4,6 +4,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Palette, Columns2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { insertEmailPaste, safeEmailLink, sanitizeEmailHtml } from '@/lib/email-html';
 
 // Lightweight WYSIWYG editor (contentEditable + execCommand) used for email
 // signatures and the vacation reply body. Produces HTML (innerHTML) that the
@@ -32,7 +33,7 @@ export function RichTextEditor({
 
   // Load the initial value once on mount.
   useEffect(() => {
-    if (ref.current) ref.current.innerHTML = value || '';
+    if (ref.current) ref.current.innerHTML = sanitizeEmailHtml(value || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -45,7 +46,7 @@ export function RichTextEditor({
       img.style.outline = '';
       if (!img.getAttribute('style')?.trim()) img.removeAttribute('style');
     });
-    onChange(clone.innerHTML);
+    onChange(sanitizeEmailHtml(clone.innerHTML));
   };
 
   const clearImgSelection = () => {
@@ -100,14 +101,14 @@ export function RichTextEditor({
     // always land before AND after it (a leading <img> otherwise traps the caret
     // and you can't type in front of it). insertHTML lets us control the markup.
     const html = `​<img src="${dataUrl}" style="display:inline-block;vertical-align:middle;max-width:100%" />​`;
-    document.execCommand('insertHTML', false, html);
+    document.execCommand('insertHTML', false, sanitizeEmailHtml(html));
     emit();
     if (fileRef.current) fileRef.current.value = '';
   };
 
   const addLink = () => {
     const url = window.prompt('URL do link:', 'https://');
-    if (url) exec('createLink', url);
+    if (url && safeEmailLink(url)) exec('createLink', url);
   };
 
   // Read a file to a base64 data URL.
@@ -136,7 +137,7 @@ export function RichTextEditor({
       `<div>+351 ...</div>` +
       `</td></tr></table><br>`;
     ref.current?.focus();
-    document.execCommand('insertHTML', false, html);
+    document.execCommand('insertHTML', false, sanitizeEmailHtml(html));
     emit();
     if (layoutFileRef.current) layoutFileRef.current.value = '';
   };
@@ -232,6 +233,9 @@ export function RichTextEditor({
         suppressContentEditableWarning
         data-placeholder={placeholder}
         onInput={emit}
+        onPaste={(event) => { insertEmailPaste(event); emit(); }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => event.preventDefault()}
         onBlur={emit}
         onClick={onEditorClick}
         className={cn(

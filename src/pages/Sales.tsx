@@ -71,6 +71,7 @@ import { useOperators } from "@/hooks/useOperators";
 import type { ServicosDetails } from "@/types/proposals";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { formatOperationalUnits, sumOperationalSaleUnits } from "@/lib/sale-units";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -328,12 +329,12 @@ const deleteSale = useMutation({
     const fulfilled = filteredSales.filter(s => s.status === 'fulfilled');
 
     return {
-      total: filteredSales.length,
+      total: sumOperationalSaleUnits(filteredSales),
       totalValue: filteredSales.reduce((acc, s) => acc + (s.total_value || 0), 0),
-      delivered: delivered.length,
+      delivered: sumOperationalSaleUnits(delivered),
       deliveredValue: delivered.reduce((acc, s) => acc + (s.total_value || 0), 0),
-      inProgress: inProgress.length,
-      fulfilled: fulfilled.length,
+      inProgress: sumOperationalSaleUnits(inProgress),
+      fulfilled: sumOperationalSaleUnits(fulfilled),
       fulfilledValue: fulfilled.reduce((acc, s) => acc + (s.total_value || 0), 0),
     };
   }, [filteredSales]);
@@ -588,7 +589,7 @@ const deleteSale = useMutation({
           </Tabs>
         }
         summary={salesTab === 'vendas'
-          ? `${stats.total} venda${stats.total === 1 ? '' : 's'} · ${formatCurrency(stats.totalValue)} · ${stats.inProgress} em progresso · ${stats.delivered} concluída${stats.delivered === 1 ? '' : 's'}`
+          ? `${formatOperationalUnits(stats.total)} venda${stats.total === 1 ? '' : 's'} · ${formatCurrency(stats.totalValue)} · ${formatOperationalUnits(stats.inProgress)} em progresso · ${formatOperationalUnits(stats.delivered)} concluída${stats.delivered === 1 ? '' : 's'}`
           : undefined}
         chips={salesTab === 'vendas' ? activeFilterChips : []}
         actions={

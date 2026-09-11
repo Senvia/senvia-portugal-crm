@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { meetsMfaPolicy } from '../_shared/user-authorization.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,6 +41,12 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    if (!await meetsMfaPolicy(authClient, userId)) {
+      return new Response(JSON.stringify({ error: 'MFA_REQUIRED' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // Admin client for accessing DB + auth admin APIs (service role)
@@ -97,14 +104,7 @@ Deno.serve(async (req) => {
         .eq('is_active', true)
         .maybeSingle()
 
-      // Also check if user's profile org matches
-      const { data: profile } = await adminClient
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', userId)
-        .single()
-
-      if (!membership && profile?.organization_id !== organizationId) {
+      if (!membership) {
         return new Response(
           JSON.stringify({ error: 'Access denied to this organization' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -117,7 +117,6 @@ Deno.serve(async (req) => {
       .from('organization_members')
       .select('user_id, role, is_active, profile_id, paused_until')
       .eq('organization_id', organizationId)
-      .eq('is_active', true)
 
     if (membersError) {
       console.error('Error fetching members:', membersError)
@@ -143,45 +142,22 @@ Deno.serve(async (req) => {
       throw profilesError
     }
 
-    // Get roles for these users
-    const { data: roles, error: rolesError } = await adminClient
-      .from('user_roles')
-      .select('user_id, role')
-      .in('user_id', userIds)
-
-    if (rolesError) {
-      console.error('Error fetching roles:', rolesError)
-      throw rolesError
-    }
-
     // Fetch organization profiles to resolve profile names
     const profileIds = members.map((m) => m.profile_id).filter(Boolean)
-    let orgProfiles: any[] = []
+    let orgProfiles: { id: string; name: string }[] = []
     if (profileIds.length > 0) {
       const { data: opData } = await adminClient
         .from('organization_profiles')
         .select('id, name')
         .in('id', profileIds)
+        .eq('organization_id', organizationId)
       orgProfiles = opData || []
     }
 
     const teamMembers = await Promise.all(
       members.map(async (member) => {
         const profileItem = profiles?.find((p) => p.id === member.user_id)
-        const userRole = roles?.find((r) => r.user_id === member.user_id)
         const orgProfile = orgProfiles.find((op) => op.id === member.profile_id)
-
-        const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(
-          member.user_id
-        )
-
-        if (authError) {
-          console.error(`Error fetching auth user ${member.user_id}:`, authError)
-        }
-
-        const isBanned = authUser?.user?.banned_until
-          ? new Date(authUser.user.banned_until) > new Date()
-          : false
 
         const pausedUntil = member.paused_until ? new Date(member.paused_until) : null
         const isPaused = pausedUntil ? pausedUntil > new Date() : false
@@ -194,8 +170,8 @@ Deno.serve(async (req) => {
           phone: profileItem?.phone || null,
           organization_id: organizationId,
           user_id: member.user_id,
-          role: userRole?.role || member.role || 'viewer',
-          is_banned: isBanned,
+          role: member.role || 'viewer',
+          is_banned: !member.is_active,
           paused_until: member.paused_until || null,
           is_paused: isPaused,
           profile_id: member.profile_id || null,

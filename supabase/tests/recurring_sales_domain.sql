@@ -103,6 +103,69 @@ $$;
 do $$
 declare
   v_org_id uuid := '10000000-0000-0000-0000-000000000001';
+  v_sale_id uuid := '20000000-0000-0000-0000-000000000031';
+  v_recurrence_id uuid := '30000000-0000-0000-0000-000000000031';
+  v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
+  v_period_start date;
+  v_period_end date;
+  v_next_cycle_date date;
+begin
+  insert into public.sales (id, organization_id, total_value, status)
+  values (v_sale_id, v_org_id, 54.00, 'pending');
+
+  insert into public.sale_recurrences (
+    id,
+    organization_id,
+    sale_id,
+    amount,
+    anchor_date,
+    service_status,
+    billing_status,
+    billing_provider,
+    next_cycle_date
+  ) values (
+    v_recurrence_id,
+    v_org_id,
+    v_sale_id,
+    54.00,
+    date '2026-01-31',
+    'active',
+    'not_started',
+    'manual',
+    date '2026-02-15'
+  );
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_owner_user_id,
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('active_organization_id', v_org_id)
+    )::text,
+    true
+  );
+
+  select period_start, period_end
+    into v_period_start, v_period_end
+  from public.create_recurring_cycle(v_recurrence_id, date '2026-02-15');
+
+  select next_cycle_date
+    into v_next_cycle_date
+  from public.sale_recurrences
+  where id = v_recurrence_id;
+
+  if v_period_start is distinct from date '2026-02-15'
+     or v_period_end is distinct from date '2026-03-30'
+     or v_next_cycle_date is distinct from date '2026-03-31' then
+    raise exception 'legacy next-cycle compatibility failed: start %, end %, next %',
+      v_period_start, v_period_end, v_next_cycle_date;
+  end if;
+end;
+$$;
+
+do $$
+declare
+  v_org_id uuid := '10000000-0000-0000-0000-000000000001';
   v_owner_user_id uuid := '40000000-0000-0000-0000-000000000001';
   v_recurrence_id uuid := '30000000-0000-0000-0000-000000000001';
   v_cycle_id uuid;

@@ -24,6 +24,7 @@ interface RecurringSaleWithClient {
   readonly next_renewal_date: string;
   readonly last_renewal_date: string | null;
   readonly organization_id: string;
+  readonly operational_units: number;
   readonly current_cycle: RecurringCycleSummary | null;
   readonly client?: {
     readonly id: string;
@@ -70,6 +71,7 @@ export function useRecurringSales() {
             id,
             code,
             client_id,
+            operational_units,
             client:crm_clients(id, name)
           ),
           sale_recurring_cycles(
@@ -110,6 +112,7 @@ export function useRecurringSales() {
           next_renewal_date: recurrence.next_cycle_date,
           last_renewal_date: recurrence.last_cycle_date,
           organization_id: recurrence.organization_id,
+          operational_units: Number(sale.operational_units || 1),
           current_cycle: currentCycle,
           client: sale.client,
         }];

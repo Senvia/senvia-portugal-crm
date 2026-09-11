@@ -1,0 +1,120 @@
+{
+  "scope": "Local source with synthetic fixtures. No production traffic or credentials.",
+  "results": [
+    {
+      "name": "Anonymous reaches privileged database: check-reminders",
+      "reproduced": true,
+      "evidence": {
+        "authorizationHeader": false,
+        "status": 200,
+        "tables": [
+          "calendar_events"
+        ],
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Anonymous reaches privileged database: process-automation-queue",
+      "reproduced": true,
+      "evidence": {
+        "authorizationHeader": false,
+        "status": 200,
+        "tables": [
+          "automation_queue"
+        ],
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Anonymous reaches privileged database: notify-new-trials",
+      "reproduced": true,
+      "evidence": {
+        "authorizationHeader": false,
+        "status": 200,
+        "tables": [
+          "organizations"
+        ],
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Anonymous reaches privileged database: check-trial-status",
+      "reproduced": true,
+      "evidence": {
+        "authorizationHeader": false,
+        "status": 200,
+        "tables": [
+          "organizations"
+        ],
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Anonymous reaches privileged database: check-fidelization-alerts",
+      "reproduced": true,
+      "evidence": {
+        "authorizationHeader": false,
+        "status": 200,
+        "tables": [
+          "organizations"
+        ],
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Store orders accepts customer_id without identity proof",
+      "reproduced": true,
+      "evidence": {
+        "returnedFixtureOrder": true,
+        "customerVerificationQueries": 0,
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Gateway accepts foreign message in own-channel command",
+      "reproduced": true,
+      "evidence": {
+        "cmdChannel": "own-channel",
+        "acceptedMessageChannel": "foreign-channel",
+        "imapAndDatabase": "mocked"
+      }
+    },
+    {
+      "name": "Otto grants admin in another organization using global role",
+      "reproduced": true,
+      "evidence": {
+        "memberRoleAtTarget": "viewer",
+        "globalRoleElsewhere": "admin",
+        "effectiveAdmin": true,
+        "network": "mocked"
+      }
+    },
+    {
+      "name": "Transcription accepts HTTPS loopback URL",
+      "reproduced": true,
+      "evidence": {
+        "blockedBeforeFetch": false,
+        "target": "https://127.0.0.1:8443/audio",
+        "network": "mocked; no socket opened"
+      }
+    },
+    {
+      "name": "Quoted email preserves executable event attribute",
+      "reproduced": true,
+      "evidence": {
+        "untrustedAttributePreserved": true,
+        "sourceFunction": "quoteHtml",
+        "fixture": "xss-fixture.html",
+        "browserExecution": "separate check required"
+      }
+    },
+    {
+      "name": "CSV export preserves formula prefix",
+      "reproduced": true,
+      "evidence": {
+        "csv": "Nome\n=1+1",
+        "spreadsheetExecution": "not executed; formula interpretation depends on spreadsheet client"
+      }
+    }
+  ]
+}

@@ -3,10 +3,10 @@ import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppRole } from '@/types';
 import { safeStorage } from '@/lib/safeStorage';
+import { isMfaEnforcementActive } from '@/lib/mfa-rollout';
+import type { MfaStatus } from '@/lib/mfa-rollout';
 
 const ACTIVE_ORG_KEY = 'senvia_active_organization_id';
-
-type MFAStatus = 'none' | 'pending' | 'verified';
 
 interface Profile {
   id: string;
@@ -28,9 +28,9 @@ interface Organization {
   niche?: string;
   enabled_modules?: unknown;
   logo_url?: string | null;
-  integrations_enabled?: any;
-  tax_config?: any;
-  sales_settings?: any;
+  integrations_enabled?: unknown;
+  tax_config?: unknown;
+  sales_settings?: unknown;
   ai_qualification_rules?: string | null;
   msg_template_hot?: string | null;
   msg_template_warm?: string | null;
@@ -57,7 +57,7 @@ interface AuthContextType {
   isLoading: boolean;
   isSuperAdmin: boolean;
   needsOrgSelection: boolean;
-  mfaStatus: MFAStatus;
+  mfaStatus: MfaStatus;
   completeMfaChallenge: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
@@ -79,33 +79,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingUserData, setIsLoadingUserData] = useState(false);
   const [needsOrgSelection, setNeedsOrgSelection] = useState(false);
-  const [mfaStatus, setMfaStatus] = useState<MFAStatus>('none');
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus>('checking');
 
   const isSuperAdmin = roles.includes('super_admin');
+  const activeMemberRole = organizations.find(member => member.organization_id === organization?.id && member.is_active)?.member_role;
+  const effectiveRoles: AppRole[] = isSuperAdmin ? ['super_admin'] : activeMemberRole ? [activeMemberRole] : [];
 
   // Check MFA assurance level
-  const checkMFAStatus = useCallback(async () => {
+  const checkMFAStatus = useCallback(async (userId: string) => {
+    setMfaStatus('checking');
     try {
-      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (error || !data) {
-        setMfaStatus('none');
+      const [{ data, error }, policy] = await Promise.all([
+        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+        supabase.rpc('meets_mfa_policy', { _user_id: userId }),
+      ]);
+      if (error || !data || policy.error || typeof policy.data !== 'boolean') {
+        setMfaStatus('error');
         return;
       }
       if (data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
         setMfaStatus('pending');
       } else if (data.currentLevel === 'aal2') {
         setMfaStatus('verified');
+      } else if (isMfaEnforcementActive(Date.now())) {
+        setMfaStatus('enrollment');
       } else {
         setMfaStatus('none');
       }
     } catch {
-      setMfaStatus('none');
+      setMfaStatus('error');
     }
   }, []);
 
   const completeMfaChallenge = useCallback(() => {
-    setMfaStatus('verified');
-  }, []);
+    if (user?.id) void checkMFAStatus(user.id);
+  }, [user?.id, checkMFAStatus]);
 
   // Load organization by ID — only safe fields, never API keys/secrets.
   // trial_ends_at / first_paid_at / billing_exempt são indispensáveis: isOrgOnTrial()
@@ -174,13 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const storedOrgId = safeStorage.get(ACTIVE_ORG_KEY);
         
         if (userOrgs.length === 0) {
-          // No organizations - might be new user
-          if (profileData?.organization_id) {
-            await loadOrganization(profileData.organization_id);
-          } else {
-            setOrganization(null);
-            setNeedsOrgSelection(false);
-          }
+          setOrganization(null);
+          setNeedsOrgSelection(false);
         } else if (userOrgs.length === 1) {
           // Only one organization - auto select
           await loadOrganization(userOrgs[0].organization_id);
@@ -201,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (user?.id) {
       fetchUserData(user.id);
-      checkMFAStatus();
+      checkMFAStatus(user.id);
     } else {
       setProfile(null);
       setOrganization(null);
@@ -215,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, loadOrganization, checkMFAStatus]);
+  }, [user?.id, session?.access_token, loadOrganization, checkMFAStatus]);
 
   // Auth state listener
   useEffect(() => {
@@ -366,7 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         organization,
         organizations,
-        roles,
+        roles: effectiveRoles,
         isLoading: isLoading || isLoadingUserData,
         isSuperAdmin,
         needsOrgSelection,

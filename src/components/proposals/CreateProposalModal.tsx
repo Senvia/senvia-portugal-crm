@@ -639,9 +639,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                           <Label className="text-xs text-muted-foreground">Quantidade</Label>
                                           <Input
                                             type="number"
-                                            min="1"
+                                            min="0.5"
+                                            step="0.5"
                                             value={item.quantity}
-                                            onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                            onChange={(e) => handleUpdateProductQuantity(item.product_id, parseFloat(e.target.value) || 0)}
                                             className="h-8"
                                           />
                                         </div>

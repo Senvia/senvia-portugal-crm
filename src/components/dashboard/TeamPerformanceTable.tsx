@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PrintCardButton } from "./PrintCardButton";
+import { formatOperationalUnits, sumOperationalSaleUnits } from "@/lib/sale-units";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
@@ -167,7 +168,7 @@ export function TeamPerformanceTable() {
       // column poisons the whole query inferred type.
       const { data, error } = await (supabase as any)
         .from("sales")
-        .select("id, created_by, seller_id, status, comissao")
+        .select("id, created_by, seller_id, status, comissao, operational_units")
         .eq("organization_id", orgId)
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd)
@@ -253,7 +254,7 @@ export function TeamPerformanceTable() {
         wonLeads,
         proposals: memberProposals.length,
         openProposalValue,
-        salesDelivered: delivered.length,
+        salesDelivered: sumOperationalSaleUnits(delivered),
         commission,
         conversionRate,
       };
@@ -327,7 +328,7 @@ export function TeamPerformanceTable() {
                       <TableCell className="text-xs text-right py-1.5">{row.leads}</TableCell>
                       <TableCell className="text-xs text-right py-1.5">{row.proposals}</TableCell>
                       <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatCurrency(row.openProposalValue)}</TableCell>
-                      <TableCell className="text-xs text-right py-1.5">{row.salesDelivered}</TableCell>
+                      <TableCell className="text-xs text-right py-1.5">{formatOperationalUnits(row.salesDelivered)}</TableCell>
                       <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell text-primary font-medium">
                         {canSeeCommission ? formatCurrency(row.commission) : '—'}
                       </TableCell>
@@ -343,7 +344,7 @@ export function TeamPerformanceTable() {
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.leads}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.proposals}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatCurrency(totals.openProposalValue)}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-1.5">{totals.salesDelivered}</TableCell>
+                    <TableCell className="text-xs text-right font-semibold py-1.5">{formatOperationalUnits(totals.salesDelivered)}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell text-primary">
                       {/* A team-wide total is still someone else's money once
                           the team has more than one member — only an admin

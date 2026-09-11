@@ -12,6 +12,7 @@
 // algo e depois parou (48h após a última ação). O sinal last_active_at é
 // preenchido pelos triggers de 20260622120000_org_activity_signal.sql.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { internalJobGuard } from "../_shared/internal-auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -27,6 +28,8 @@ const log = (s: string, d?: unknown) =>
   console.log(`[trial-inactivity-check] ${s}${d !== undefined ? " - " + JSON.stringify(d) : ""}`);
 
 serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(

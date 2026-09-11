@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -196,6 +197,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+      if (mfaResponse) return mfaResponse;
       const { data: membership } = await supabaseClient
         .from("organization_members")
         .select("is_active")

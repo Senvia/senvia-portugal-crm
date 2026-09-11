@@ -206,6 +206,8 @@ async function sendSaleLoyaltyEmail(
 }
 
 serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -541,3 +543,4 @@ serve(async (req) => {
     );
   }
 });
+import { internalJobGuard } from "../_shared/internal-auth.ts";

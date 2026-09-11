@@ -15,6 +15,8 @@ const MAXW = {
   "4xl": "max-w-4xl",
   "5xl": "max-w-5xl",
   "6xl": "max-w-6xl",
+  /** Dashboard only: overview sidebar + customers list side by side. */
+  wide: "max-w-[1800px]",
 } as const;
 
 interface AdminShellProps {
@@ -38,7 +40,7 @@ export function AdminShell({
 }: AdminShellProps) {
   return (
     <div className="min-h-dvh bg-background">
-      <AdminTopBar />
+      <AdminTopBar containerClass={MAXW[maxWidth]} />
       <div className={cn("mx-auto px-4 py-6 lg:px-8 lg:py-8", MAXW[maxWidth])}>
         <header className="mb-7 flex items-start gap-3 sm:gap-4">
           {back && (

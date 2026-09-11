@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -45,13 +46,15 @@ Deno.serve(async (req) => {
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: authenticationError } = await supabase.auth.getUser(token);
+    if (authenticationError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const { request_id, organization_id, new_status, review_notes } = await req.json();
     if (!request_id || !organization_id || !new_status) {
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
     // AuthZ: the caller must belong to organization_id. Without this, any logged-in
     // user could look up another org's request and email its submitter a forged
     // approval/rejection (financial-fraud / social engineering).
-    const userId = claimsData.claims.sub;
+    const userId = user.id;
     const { data: membership } = await adminClient
       .from("organization_members")
       .select("is_active")

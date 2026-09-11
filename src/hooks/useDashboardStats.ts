@@ -4,6 +4,7 @@ import { usePaidTrafficFilter } from "@/contexts/PaidTrafficFilterContext";
 import { useProposals } from "./useProposals";
 import { useSales } from "./useSales";
 import { startOfDay, subDays, format, parseISO, isWithinInterval } from "date-fns";
+import { sumOperationalSaleUnits } from "@/lib/sale-units";
 
 export function useDashboardStats() {
   const { data: leads = [], isLoading: leadsLoading } = useFilteredLeads();
@@ -34,11 +35,11 @@ export function useDashboardStats() {
     // Trend data for delivered sales (last 7 days)
     const deliveredTrend = last7Days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
-      const count = deliveredSales.filter(s => {
+      const daySales = deliveredSales.filter(s => {
         const saleDate = format(parseISO(s.updated_at), 'yyyy-MM-dd');
         return saleDate === dayStr;
-      }).length;
-      return { value: count, name: format(day, 'EEE') };
+      });
+      return { value: sumOperationalSaleUnits(daySales), name: format(day, 'EEE') };
     });
 
     // Total value of delivered sales
@@ -154,12 +155,12 @@ export function useDashboardStats() {
     return {
       // Vendas
       deliveredSales: {
-        count: deliveredSales.length,
+        count: sumOperationalSaleUnits(deliveredSales),
         value: deliveredValue,
         trend: deliveredTrend,
       },
       activeSales: {
-        count: activeSales.length,
+        count: sumOperationalSaleUnits(activeSales),
         value: activeValue,
       },
       conversionRate,

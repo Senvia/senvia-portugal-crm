@@ -24,8 +24,8 @@ function authed(req, reply, done) {
   done();
 }
 
-// Health / status — handy for monitoring and for confirming caixas are connected.
-app.get('/health', async () => ({ ok: true, caixas: managerStatus() }));
+app.get('/health', async () => ({ ok: true }));
+app.get('/status', { preHandler: authed }, async () => ({ ok: true, caixas: managerStatus() }));
 
 // Detect and start any channels added since gateway startup (also runs automatically every 60s).
 app.post('/channels/refresh', { preHandler: authed }, async () => {
@@ -46,6 +46,7 @@ app.post('/messages/:id/body', { preHandler: authed }, async (req, reply) => {
   const [msg] = await q(
     `SELECT m.id, m.uid, m.channel_id, f.path
        FROM email_messages m JOIN email_folders f ON f.id = m.folder_id
+         AND f.channel_id=m.channel_id AND f.organization_id=m.organization_id
       WHERE m.id=$1`,
     [req.params.id],
   );

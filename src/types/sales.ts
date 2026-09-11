@@ -195,6 +195,7 @@ export interface Sale {
   client_id: string | null;
   status: SaleStatus;
   total_value: number;
+  operational_units?: number | null;
   subtotal: number;
   discount: number;
   payment_method: PaymentMethod | null;

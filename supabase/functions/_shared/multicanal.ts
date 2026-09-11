@@ -1,6 +1,7 @@
 // Shared helpers for the Multicanal feature (WhatsApp via Evolution + Chatwoot).
 // Used by the whatsapp-connect and whatsapp-status edge functions.
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { meetsMfaPolicy } from './user-authorization.ts';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,27 +87,14 @@ export async function authOrgAdmin(
   const { data: { user }, error: userErr } = await userClient.auth.getUser();
   if (userErr || !user) return { error: json({ error: 'Utilizador não autenticado' }, 401) };
 
+  if (!await meetsMfaPolicy(userClient, user.id)) return { error: json({ error: 'MFA_REQUIRED' }, 403) };
+
   const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);
 
-  // Must be an active admin member of THIS organization (multi-tenant check).
-  // Super admins (global) are allowed too. Checks run in parallel.
-  const [{ data: membership }, { data: superRole }] = await Promise.all([
-    admin
-      .from('organization_members')
-      .select('role, is_active')
-      .eq('organization_id', organizationId)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .maybeSingle(),
-    admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'super_admin')
-      .maybeSingle(),
-  ]);
-
-  const isAdmin = membership?.role === 'admin' || !!superRole;
+  const { data: allowed, error: permissionError } = await admin.rpc('is_org_admin', {
+    _user_id: user.id, _org_id: organizationId,
+  });
+  const isAdmin = !permissionError && allowed === true;
   if (!isAdmin) {
     return { error: json({ error: 'Apenas administradores podem gerir canais' }, 403) };
   }
@@ -130,6 +118,8 @@ export async function authOrgMember(
   });
   const { data: { user }, error: userErr } = await userClient.auth.getUser();
   if (userErr || !user) return { error: json({ error: 'Utilizador não autenticado' }, 401) };
+
+  if (!await meetsMfaPolicy(userClient, user.id)) return { error: json({ error: 'MFA_REQUIRED' }, 403) };
 
   const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);
 

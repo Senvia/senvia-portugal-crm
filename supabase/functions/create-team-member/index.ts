@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { meetsMfaPolicy } from '../_shared/user-authorization.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -48,25 +50,18 @@ serve(async (req) => {
       );
     }
 
+    if (!await meetsMfaPolicy(supabaseUser, currentUser.id)) {
+      return new Response(JSON.stringify({ error: 'MFA_REQUIRED' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { email, password, full_name, role, profile_id, organization_id } = await req.json();
+    if (typeof organization_id !== 'string' || !organization_id) {
+      return new Response(JSON.stringify({ error: 'Organização obrigatória' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current user's organization
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', currentUser.id)
-      .single();
-
-    if (profileError || !profile?.organization_id) {
-      console.error('Error getting profile:', profileError);
-      return new Response(
-        JSON.stringify({ error: 'Organização não encontrada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const organizationId = profile.organization_id;
+    const organizationId = organization_id;
 
     // ---- Validate user limit based on subscription plan ----
     // Get org plan (+ per-org override and billing-exempt flag)
@@ -110,31 +105,11 @@ serve(async (req) => {
       }
     }
 
-    // Check the current user is admin of THIS organization specifically.
-    // user_roles is global (not per-org) — checking it alone would let an
-    // admin of some OTHER org pass this check; organization_members.role for
-    // `organizationId` is the actual per-org authority. super_admin is still
-    // checked globally since it's an intentionally cross-org role.
-    const { data: superRoleData } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', currentUser.id)
-      .eq('role', 'super_admin')
-      .maybeSingle();
+    const { data: isAuthorized, error: permissionError } = await supabaseAdmin.rpc('is_org_admin', {
+      _user_id: currentUser.id, _org_id: organizationId,
+    });
 
-    let isAuthorized = !!superRoleData;
-    if (!isAuthorized) {
-      const { data: membership } = await supabaseAdmin
-        .from('organization_members')
-        .select('role')
-        .eq('user_id', currentUser.id)
-        .eq('organization_id', organizationId)
-        .eq('is_active', true)
-        .maybeSingle();
-      isAuthorized = membership?.role === 'admin';
-    }
-
-    if (!isAuthorized) {
+    if (permissionError || isAuthorized !== true) {
       return new Response(
         JSON.stringify({ error: 'Apenas administradores podem adicionar membros' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -142,10 +117,10 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { email, password, full_name, role, profile_id }: CreateMemberRequest & { profile_id?: string } = await req.json();
+
 
     // Validate input
-    if (!email || !password || !full_name || !role) {
+    if (typeof email !== 'string' || typeof password !== 'string' || typeof full_name !== 'string' || !email || !password || !full_name || !role) {
       return new Response(
         JSON.stringify({ error: 'Todos os campos são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -166,7 +141,13 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Creating user: ${email} with role: ${role} for org: ${organizationId}`);
+    if (profile_id) {
+      const { data: orgProfile, error } = await supabaseAdmin.from('organization_profiles')
+        .select('id, base_role').eq('id', profile_id).eq('organization_id', organizationId).maybeSingle();
+      if (error || !orgProfile || orgProfile.base_role !== role) {
+        return new Response(JSON.stringify({ error: 'Perfil inválido para esta organização' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
 
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -186,40 +167,9 @@ serve(async (req) => {
     let userId: string;
 
     if (existingUser) {
-      console.log(`User already exists: ${existingUser.id}, checking organization...`);
-      
-      // Check if user already belongs to an organization
-      const { data: existingProfile, error: existingProfileError } = await supabaseAdmin
-        .from('profiles')
-        .select('organization_id, full_name')
-        .eq('id', existingUser.id)
-        .single();
-
-      if (existingProfileError) {
-        console.error('Error checking existing profile:', existingProfileError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao verificar perfil do utilizador' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (existingProfile?.organization_id) {
-        if (existingProfile.organization_id === organizationId) {
-          return new Response(
-            JSON.stringify({ error: 'Este utilizador já pertence à sua organização' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        } else {
-          return new Response(
-            JSON.stringify({ error: 'Este email já está associado a outra organização' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-
-      // User exists but has no organization - add to this org
-      userId = existingUser.id;
-      console.log(`Adding existing user ${userId} to organization ${organizationId}`);
+      return new Response(JSON.stringify({ error: 'Conta existente. Utilize um convite aceite pelo titular.' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } else {
       // Create new user
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -254,26 +204,13 @@ serve(async (req) => {
     const { error: updateProfileError } = await supabaseAdmin
       .from('profiles')
       .update({
-        organization_id: organizationId,
         full_name: full_name.trim()
       })
       .eq('id', userId);
 
     if (updateProfileError) {
       console.error('Error updating profile:', updateProfileError);
-      // Don't fail completely, the user was created
-    }
-
-    // Add role to user_roles table (upsert to handle existing roles)
-    const { error: roleInsertError } = await supabaseAdmin
-      .from('user_roles')
-      .upsert({
-        user_id: userId,
-        role: role
-      }, { onConflict: 'user_id,role' });
-
-    if (roleInsertError) {
-      console.error('Error inserting role:', roleInsertError);
+      throw updateProfileError;
     }
 
     // Add to organization_members table
@@ -291,10 +228,10 @@ serve(async (req) => {
       .upsert(memberData, { onConflict: 'user_id,organization_id' });
 
     if (memberError) {
-      console.error('Error inserting organization member:', memberError);
+      throw memberError;
     }
 
-    console.log(`Successfully added team member: ${email}`);
+
 
     return new Response(
       JSON.stringify({ 

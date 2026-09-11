@@ -134,7 +134,7 @@ export function SalesPerformancePanel() {
         {objectiveRows.map((row) => (
           <TableRow key={row.userId}>
             <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
-            <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
+            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.nifs)}</TableCell>
             {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
             {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
             <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
@@ -143,7 +143,7 @@ export function SalesPerformancePanel() {
         {showTotals && (
           <TableRow className="bg-muted/20 hover:bg-muted/20">
             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5">{objTotals.nifs}</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(objTotals.nifs)}</TableCell>
             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(objTotals.energia)}</TableCell>}
             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(objTotals.solar)}</TableCell>}
             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(objTotals.comissao)}</TableCell>
@@ -160,7 +160,7 @@ export function SalesPerformancePanel() {
         {salesRows.map((row) => (
           <TableRow key={row.userId}>
             <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
-            <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
+            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.nifs)}</TableCell>
             {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
             {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
             <TableCell className="text-xs text-right py-1.5 font-medium text-green-500">{formatCurrency(row.comissao)}</TableCell>
@@ -169,7 +169,7 @@ export function SalesPerformancePanel() {
         {showTotals && (
           <TableRow className="bg-muted/20 hover:bg-muted/20">
             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5">{salesTotals.nifs}</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(salesTotals.nifs)}</TableCell>
             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(salesTotals.energia)}</TableCell>}
             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(salesTotals.solar)}</TableCell>}
             <TableCell className="text-xs text-right font-semibold py-1.5 text-green-500">{formatCurrency(salesTotals.comissao)}</TableCell>

@@ -1,3 +1,5 @@
+import { commissionUnits } from '@/lib/sale-units';
+
 // Proposal Types for Senvia OS
 
 export type ProposalStatus = 'draft' | 'sent' | 'negotiating' | 'accepted' | 'rejected' | 'expired';
@@ -520,7 +522,7 @@ export function cardConfigFor(
   product: CatalogProduct,
   quantity?: number,
 ): { included_cards?: number; extra_card_commission?: number } {
-  const qty = Math.max(1, Math.round(quantity || 1));
+  const qty = commissionUnits(quantity);
   const tier = usesQuantityTiers(product)
     ? product.quantity_tiers?.find((t) => qty >= t.min && (t.max == null || qty <= t.max))
     : undefined;
@@ -547,7 +549,7 @@ export function getCatalogCommissionForQuantity(product: CatalogProduct, quantit
   const tiers = usesQuantityTiers(product) ? product.quantity_tiers : undefined;
   if (!tiers || tiers.length === 0) return getCatalogCommission(product) + getExtraCardCommission(product, extraCards);
 
-  const qty = Math.max(1, Math.round(quantity || 1));
+  const qty = commissionUnits(quantity);
   const tier = tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max));
   if (!tier) return 0;
 
@@ -641,7 +643,7 @@ export function sellerHasCommissionLine(
   sellerUserId?: string | null,
   sellerProfileId?: string | null,
 ): boolean {
-  const qty = Math.max(1, Math.round(quantity || 1));
+  const qty = commissionUnits(quantity);
   const tiers = usesQuantityTiers(product) ? product.quantity_tiers : undefined;
   const tier = tiers && tiers.length > 0
     ? tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max))
@@ -688,7 +690,7 @@ export function getSaleLineCommission(
   sellerProfileId?: string | null,
   tech?: TelecomTechnology,
 ): SaleLineCommission {
-  const qty = Math.max(1, Math.round(quantity || 1));
+  const qty = commissionUnits(quantity);
   const tiers = product.quantity_tiers;
   const tier = tiers && tiers.length > 0
     ? tiers.find(t => qty >= t.min && (t.max == null || qty <= t.max))

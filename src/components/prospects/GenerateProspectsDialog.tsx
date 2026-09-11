@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useGenerateProspects } from "@/hooks/useProspects";
 import { Loader2, Search, ChevronDown } from "lucide-react";
+import { toast } from 'sonner';
+import { prospectSubmission } from '@/lib/paid-client-input';
 
 interface GenerateProspectsDialogProps {
   open: boolean;
@@ -82,6 +84,9 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
 
     if (!strings.length && !urls.length) return;
     if (strings.length && !location.trim()) return;
+
+    const parsed = prospectSubmission.safeParse({ searchStrings: strings, startUrls: urls, location: location.trim(), maxResults, maxQuestions, maximumLeadsEnrichmentRecords });
+    if (!parsed.success) { toast.error(parsed.error.issues[0]?.message || 'Verifique os parâmetros de pesquisa.'); return; }
 
     setProgressStatus("starting");
 
@@ -160,7 +165,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               onChange={(e) => setSearchStrings(e.target.value)}
               rows={3}
             />
-            <p className="text-xs text-muted-foreground">Um termo por linha. Alternativa: usar URLs directas na secção abaixo.</p>
+            <p className="text-xs text-muted-foreground">Até 3 termos, um por linha (máximo 150 caracteres por termo). Alternativa: usar URLs directas na secção abaixo.</p>
           </div>
 
           <div className="space-y-2">
@@ -180,7 +185,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                 id="max-results"
                 type="number"
                 min={1}
-                max={500}
+                max={50}
                 value={maxResults}
                 onChange={(e) => setMaxResults(Number(e.target.value) || 50)}
               />
@@ -266,7 +271,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               ))}
               <div className="space-y-2">
                 <Label>Perguntas a extrair por local</Label>
-                <Input type="number" min={0} max={100} value={maxQuestions} onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)} />
+                <Input type="number" min={0} max={10} value={maxQuestions} onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = nenhuma pergunta</p>
               </div>
           </CollapsibleSection>
@@ -299,7 +304,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           <CollapsibleSection title="Enriquecimento de leads" open={openLeads} onOpenChange={setOpenLeads}>
               <div className="space-y-2">
                 <Label>Máximo de leads por local</Label>
-                <Input type="number" min={0} max={500} value={maximumLeadsEnrichmentRecords} onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)} />
+                <Input type="number" min={0} max={50} value={maximumLeadsEnrichmentRecords} onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = desativado. Enriquece com dados adicionais de contacto.</p>
               </div>
           </CollapsibleSection>
@@ -313,7 +318,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                   onChange={(e) => setStartUrls(e.target.value)}
                   rows={3}
                 />
-                <p className="text-xs text-muted-foreground">Uma URL por linha. Alternativa aos termos de pesquisa — se preencher URLs, os termos são opcionais.</p>
+                <p className="text-xs text-muted-foreground">Até 3 URLs HTTPS de www.google.com ou maps.google.com, uma por linha. Alternativa aos termos de pesquisa — se preencher URLs, os termos são opcionais.</p>
               </div>
           </CollapsibleSection>
         </div>

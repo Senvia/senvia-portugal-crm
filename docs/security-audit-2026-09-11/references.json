@@ -1,0 +1,258 @@
+[
+  {
+    "file": "supabase/migrations/20260223144451_b52c6dec-2ff3-4224-86ac-05011977ac0d.sql",
+    "line": 12
+  },
+  {
+    "file": "supabase/migrations/20260223145754_c0388fd0-578c-4f88-84df-235165571122.sql",
+    "line": 1
+  },
+  {
+    "file": "supabase/migrations/20260307132400_00b384ab-c279-4df7-9e3f-f36cbc440c2b.sql",
+    "line": 1
+  },
+  {
+    "file": "src/components/email/EmailComposer.tsx",
+    "line": 38
+  },
+  {
+    "file": "src/components/email/EmailComposer.tsx",
+    "line": 297
+  },
+  {
+    "file": "email-gateway/src/sync.js",
+    "line": 73
+  },
+  {
+    "file": "supabase/functions/otto/lib/context.ts",
+    "line": 69
+  },
+  {
+    "file": "supabase/functions/otto/lib/tools/registry.ts",
+    "line": 25
+  },
+  {
+    "file": "supabase/migrations/20260813120000_email_segredos_e_acesso_por_caixa.sql",
+    "line": 95
+  },
+  {
+    "file": "supabase/migrations/20260807100000_automation_flows.sql",
+    "line": 174
+  },
+  {
+    "file": "supabase/migrations/20260107164052_8f035175-4d4f-4623-bd5f-c93d31f5ccd2.sql",
+    "line": 178
+  },
+  {
+    "file": "supabase/migrations/20260107164052_8f035175-4d4f-4623-bd5f-c93d31f5ccd2.sql",
+    "line": 192
+  },
+  {
+    "file": "supabase/migrations/20260115123747_f5d58a5a-eeb2-4843-9df4-6a77a83c5207.sql",
+    "line": 41
+  },
+  {
+    "file": "supabase/migrations/20260813120000_email_segredos_e_acesso_por_caixa.sql",
+    "line": 133
+  },
+  {
+    "file": "email-gateway/src/commands.js",
+    "line": 18
+  },
+  {
+    "file": "email-gateway/src/commands.js",
+    "line": 179
+  },
+  {
+    "file": "supabase/functions/store-api/index.ts",
+    "line": 536
+  },
+  {
+    "file": "supabase/functions/store-api/index.ts",
+    "line": 547
+  },
+  {
+    "file": "supabase/functions/store-api/index.ts",
+    "line": 338
+  },
+  {
+    "file": "supabase/functions/store-api/index.ts",
+    "line": 497
+  },
+  {
+    "file": "supabase/config.toml",
+    "line": 27
+  },
+  {
+    "file": "supabase/functions/check-reminders/index.ts",
+    "line": 8
+  },
+  {
+    "file": "supabase/functions/process-automation-queue/index.ts",
+    "line": 9
+  },
+  {
+    "file": "supabase/functions/notify-new-trials/index.ts",
+    "line": 21
+  },
+  {
+    "file": "supabase/functions/check-trial-status/index.ts",
+    "line": 16
+  },
+  {
+    "file": "supabase/functions/check-fidelization-alerts/index.ts",
+    "line": 208
+  },
+  {
+    "file": "supabase/functions/meta-capi-purchase/index.ts",
+    "line": 17
+  },
+  {
+    "file": "src/contexts/AuthContext.tsx",
+    "line": 89
+  },
+  {
+    "file": "src/components/auth/ProtectedLayoutRoute.tsx",
+    "line": 37
+  },
+  {
+    "file": "supabase/functions/_shared/multicanal.ts",
+    "line": 74
+  },
+  {
+    "file": "supabase/functions/manage-team-member/index.ts",
+    "line": 240
+  },
+  {
+    "file": "supabase/functions/manage-team-member/index.ts",
+    "line": 318
+  },
+  {
+    "file": "supabase/functions/manage-team-member/index.ts",
+    "line": 413
+  },
+  {
+    "file": "supabase/migrations/20260309154707_8d9d73d9-6a4d-40de-b2a4-84d9aa5bf95b.sql",
+    "line": 43
+  },
+  {
+    "file": "supabase/functions/manage-team-member/index.ts",
+    "line": 371
+  },
+  {
+    "file": "supabase/migrations/20260723122000_critical_rls_hardening.sql",
+    "line": 63
+  },
+  {
+    "file": "supabase/migrations/20260907140000_tier_basis_on_product.sql",
+    "line": 9
+  },
+  {
+    "file": "supabase/migrations/20260907140000_tier_basis_on_product.sql",
+    "line": 76
+  },
+  {
+    "file": "supabase/functions/transcribe-audio/index.ts",
+    "line": 18
+  },
+  {
+    "file": "supabase/functions/transcribe-audio/index.ts",
+    "line": 25
+  },
+  {
+    "file": "supabase/functions/email-inbox/index.ts",
+    "line": 80
+  },
+  {
+    "file": "email-gateway/src/caixas.js",
+    "line": 55
+  },
+  {
+    "file": "email-gateway/src/caixas.js",
+    "line": 70
+  },
+  {
+    "file": "package.json",
+    "line": 87
+  },
+  {
+    "file": "package.json",
+    "line": 7
+  },
+  {
+    "file": "email-gateway/package.json",
+    "line": 18
+  },
+  {
+    "file": "chrome-extension/package.json",
+    "line": 24
+  },
+  {
+    "file": "migration/sql/50-grants.sql",
+    "line": 9
+  },
+  {
+    "file": "migration/sql/50-grants.sql",
+    "line": 10
+  },
+  {
+    "file": "supabase/migrations/20260826140000_chaves_da_organizacao_fora_do_browser.sql",
+    "line": 84
+  },
+  {
+    "file": "supabase/functions/brevo-webhook/index.ts",
+    "line": 26
+  },
+  {
+    "file": "supabase/functions/brevo-webhook/index.ts",
+    "line": 27
+  },
+  {
+    "file": "supabase/config.toml",
+    "line": 78
+  },
+  {
+    "file": "supabase/functions/otto/index.ts",
+    "line": 107
+  },
+  {
+    "file": "supabase/functions/otto/index.ts",
+    "line": 143
+  },
+  {
+    "file": "supabase/functions/generate-prospects/index.ts",
+    "line": 146
+  },
+  {
+    "file": "src/lib/export.ts",
+    "line": 239
+  },
+  {
+    "file": "email-gateway/src/server.js",
+    "line": 28
+  },
+  {
+    "file": "email-gateway/src/idle.js",
+    "line": 291
+  },
+  {
+    "file": "vercel.json",
+    "line": 2
+  },
+  {
+    "file": "supabase/functions/submit-lead/index.ts",
+    "line": 315
+  },
+  {
+    "file": "supabase/functions/submit-lead/index.ts",
+    "line": 330
+  },
+  {
+    "file": "supabase/functions/otto/index.ts",
+    "line": 187
+  },
+  {
+    "file": "supabase/functions/check-reminders/index.ts",
+    "line": 75
+  }
+]

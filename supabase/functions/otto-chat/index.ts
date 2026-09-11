@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { ipDoPedido, rateLimitDb, respostaLimiteExcedido } from "../_shared/security.ts";
+import { paidQuota } from "../_shared/paid-quota.ts";
+import { boundedJson, ottoInput } from "../_shared/paid-input.ts";
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -655,7 +658,7 @@ async function executeTool(
         // Sales filtered by sale_date
         const { data: sales } = await supabaseAdmin
           .from("sales")
-          .select("id, total_value, sale_date")
+          .select("id, total_value, sale_date, operational_units")
           .eq("organization_id", orgId)
           .gte("sale_date", startDate)
           .lte("sale_date", endDate);
@@ -687,7 +690,7 @@ async function executeTool(
           total_pending: totalPending,
           total_expenses: totalExpenses,
           balance: totalReceived - totalExpenses,
-          total_sales_count: sales?.length || 0,
+          total_sales_count: (sales || []).reduce((sum, sale) => sum + Number(sale.operational_units || 1), 0),
         });
       }
 
@@ -828,6 +831,7 @@ async function executeTool(
 
 // ─── Main Handler ───
 serve(async (req) => {
+  if (req.method !== "POST" && req.method !== "OPTIONS") return new Response("Method not allowed", { status: 405 });
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -842,7 +846,7 @@ serve(async (req) => {
     );
     const rl = await rateLimitDb(limitador, `otto-chat:${ipDoPedido(req)}`, 20, 60);
     if (!rl.allowed) {
-      console.warn("[otto-chat] limite excedido", { ip: ipDoPedido(req), hits: rl.hits });
+      console.warn("[otto-chat] limite excedido", { hits: rl.hits });
       return respostaLimiteExcedido(
         rl.retryAfter,
         corsHeaders,
@@ -852,7 +856,9 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, organization_id, attachment_paths } = await req.json();
+    const parsed = ottoInput.safeParse(await boundedJson(req));
+    if (!parsed.success) return new Response(JSON.stringify({ error: "Pedido inválido ou demasiado grande" }), { status: 400, headers: corsHeaders });
+    const { messages, organization_id, attachment_paths } = parsed.data;
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
@@ -880,6 +886,10 @@ serve(async (req) => {
         }
       } catch { /* unauthenticated — tools won't be available */ }
     }
+
+    if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    const mfaDenied = await requestMfaResponse(req, userId, corsHeaders);
+    if (mfaDenied) return mfaDenied;
 
     // Create admin client for DB queries
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -909,6 +919,11 @@ serve(async (req) => {
     }
 
     const hasDataAccess = !!userId && !!orgId;
+    if (!hasDataAccess) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+    if (!await paidQuota(supabaseAdmin, `otto:user:${userId}`, 20, 60)
+      || !await paidQuota(supabaseAdmin, `otto:org:${orgId}`, 300, 86400)) {
+      return respostaLimiteExcedido(60, corsHeaders);
+    }
 
     // ── Fetch user permissions for tool filtering ──
     const TOOL_PERMISSION_MAP: Record<string, { module: string; subarea: string; action: string }> = {
@@ -942,13 +957,8 @@ serve(async (req) => {
 
     if (hasDataAccess) {
       // Check admin/super_admin role
-      const { data: adminRole } = await supabaseAdmin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId!)
-        .in("role", ["admin", "super_admin"]);
-
-      isAdminUser = !!(adminRole && adminRole.length > 0);
+      const { data: adminRole, error: adminError } = await supabaseAdmin.rpc("is_org_admin", { _user_id: userId, _org_id: orgId });
+      isAdminUser = !adminError && adminRole === true;
 
       if (!isAdminUser) {
         const { data: member } = await supabaseAdmin
@@ -963,6 +973,7 @@ serve(async (req) => {
             .from("organization_profiles")
             .select("module_permissions")
             .eq("id", member.profile_id)
+            .eq("organization_id", orgId)
             .maybeSingle();
 
           userPermissions = profile?.module_permissions || null;
@@ -1013,7 +1024,7 @@ serve(async (req) => {
     ];
 
     // ── Tool-calling loop (max 3 iterations) ──
-    let conversationMessages = [...allMessages];
+    let conversationMessages: Array<{ role: string; content: string; tool_call_id?: string }> = [...allMessages];
     const MAX_ITERATIONS = 3;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -1051,7 +1062,7 @@ serve(async (req) => {
           );
         }
         const errorText = await resp.text();
-        console.error("AI gateway error:", status, errorText);
+        console.error("AI gateway error:", { status });
         return new Response(
           JSON.stringify({ error: "Erro ao contactar o Otto. Tenta novamente." }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1088,7 +1099,7 @@ serve(async (req) => {
             fnArgs._attachment_paths = attachment_paths;
           }
 
-          console.log(`Executing tool: ${fnName}`, fnArgs);
+          console.log("otto_tool", { tool: fnName });
           const toolResult = await executeTool(fnName, fnArgs, orgId!, supabaseAdmin, userId);
 
           conversationMessages.push({

@@ -15,6 +15,8 @@ const PLACEHOLDER_EMAIL = "nao-fornecido@placeholder.local";
 const PLACEHOLDER_PHONE = "000000000";
 
 Deno.serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -136,3 +138,4 @@ function json(body: Record<string, unknown>, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+import { internalJobGuard } from "../_shared/internal-auth.ts";

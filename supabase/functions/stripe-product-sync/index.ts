@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // Sincroniza um produto recorrente do CRM com o Stripe da organização.
 //
 // Modelo do Stripe: o Product é o serviço (nome, descrição) e é mutável; o Price
@@ -86,6 +87,8 @@ serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     const user = userData?.user;
     if (userError || !user) return json({ error: "Não autenticado" }, 401);
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const body = (await req.json()) as { action?: SyncAction; productId?: string };
     const action = body.action ?? "sync";

@@ -6926,6 +6926,7 @@ export type Database = {
           next_renewal_date: string | null
           notes: string | null
           organization_id: string
+          operational_units: number
           paid_date: string | null
           payment_method: string | null
           payment_status: string | null
@@ -6978,6 +6979,7 @@ export type Database = {
           next_renewal_date?: string | null
           notes?: string | null
           organization_id: string
+          operational_units?: number
           paid_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -7030,6 +7032,7 @@ export type Database = {
           next_renewal_date?: string | null
           notes?: string | null
           organization_id?: string
+          operational_units?: number
           paid_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -7926,6 +7929,10 @@ export type Database = {
       }
     }
     Functions: {
+      meets_mfa_policy: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       accept_invite: {
         Args: { _token: string; _user_id: string }
         Returns: boolean
