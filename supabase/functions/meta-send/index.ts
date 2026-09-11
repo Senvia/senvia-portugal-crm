@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // meta-send — responde a uma conversa de Instagram ou Messenger.
 //
 // O envio tem de ser no servidor: o token da Página nunca pode chegar ao
@@ -236,6 +237,8 @@ Deno.serve(async (req) => {
     // responder em nome da empresa.
     const { data: { user } } = await admin.auth.getUser(bearer);
     if (!user) return json({ error: "Sessão inválida" }, 401);
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const {
       conversation_id, text,

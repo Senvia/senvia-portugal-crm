@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // Gera o Checkout de uma venda recorrente, ligado inequivocamente à venda.
 //
 // O problema que isto resolve: quando o dinheiro chega, é preciso saber a que
@@ -66,6 +67,8 @@ serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     const user = userData?.user;
     if (userError || !user) return json({ error: "Não autenticado" }, 401);
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const body = (await req.json()) as { recurrenceId?: string };
     const recurrenceId = body.recurrenceId ?? "";

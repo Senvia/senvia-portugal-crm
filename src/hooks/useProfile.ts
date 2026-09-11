@@ -15,7 +15,7 @@ export function useUpdateProfile() {
         throw new Error('Utilizador não autenticado');
       }
 
-      const updateData: Record<string, string | null> = { full_name: full_name.trim() };
+      const updateData: { full_name: string; email?: string | null; phone?: string | null; email_signature?: string | null; brevo_sender_email?: string | null } = { full_name: full_name.trim() };
       if (email !== undefined) updateData.email = email.trim() || null;
       if (phone !== undefined) updateData.phone = phone.trim() || null;
       if (email_signature !== undefined) updateData.email_signature = email_signature || null;
@@ -95,7 +95,7 @@ export function useManageTeamMember() {
   return useMutation({
     mutationFn: async (params: ManageTeamMemberParams) => {
       const { data, error } = await supabase.functions.invoke('manage-team-member', {
-        body: params,
+        body: { ...params, organization_id: organization?.id },
       });
 
       if (error) {
@@ -110,14 +110,14 @@ export function useManageTeamMember() {
     },
     onMutate: async (variables) => {
       // Cancelar queries em progresso
-      await queryClient.cancelQueries({ queryKey: ['team-members', organization?.id] });
+      await queryClient.cancelQueries({ queryKey: ['team-members', organization?.id, true] });
       
       // Guardar estado anterior para rollback
-      const previousMembers = queryClient.getQueryData<TeamMember[]>(['team-members', organization?.id]);
+      const previousMembers = queryClient.getQueryData<TeamMember[]>(['team-members', organization?.id, true]);
       
       // Atualizar cache otimisticamente
       if (variables.action === 'toggle_status') {
-        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id, true], (old) => {
           if (!old) return old;
           return old.map(member => 
             member.user_id === variables.user_id 
@@ -128,14 +128,14 @@ export function useManageTeamMember() {
       }
 
       if (variables.action === 'delete_member') {
-        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id, true], (old) => {
           if (!old) return old;
           return old.filter(member => member.user_id !== variables.user_id);
         });
       }
       
       if (variables.action === 'change_role' && variables.new_role) {
-        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id, true], (old) => {
           if (!old) return old;
           return old.map(member => 
             member.user_id === variables.user_id 
@@ -146,7 +146,7 @@ export function useManageTeamMember() {
       }
 
       if (variables.action === 'update_profile') {
-        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id, true], (old) => {
           if (!old) return old;
           return old.map(member => 
             member.user_id === variables.user_id 
@@ -166,7 +166,7 @@ export function useManageTeamMember() {
     onError: (error: Error, _variables, context) => {
       // Reverter para estado anterior se falhar
       if (context?.previousMembers) {
-        queryClient.setQueryData(['team-members', organization?.id], context.previousMembers);
+        queryClient.setQueryData(['team-members', organization?.id, true], context.previousMembers);
       }
       toast({
         title: 'Erro',
@@ -176,7 +176,7 @@ export function useManageTeamMember() {
     },
     onSuccess: (_, variables) => {
       // Revalidar para garantir sincronização
-      queryClient.invalidateQueries({ queryKey: ['team-members', organization?.id] });
+      queryClient.invalidateQueries({ queryKey: ['team-members', organization?.id, true] });
       
       const messages: Record<string, { title: string; description: string }> = {
         change_password: { title: 'Password redefinida', description: 'A password do colaborador foi alterada com sucesso.' },

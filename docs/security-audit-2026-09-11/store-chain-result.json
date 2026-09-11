@@ -1,0 +1,8 @@
+{
+  "test": "Guest checkout overwrites login factor",
+  "reproduced": true,
+  "phoneChangedWithoutOldPhone": true,
+  "loginWithNewSuffix": true,
+  "executionStopped": "TEST_STOP_BEFORE_ORDER_CREATION",
+  "network": "mocked; no order or external message created"
+}

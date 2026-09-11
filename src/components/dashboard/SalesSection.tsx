@@ -4,6 +4,7 @@ import { MiniAreaChart } from "./MiniAreaChart";
 import { MiniBarChart } from "./MiniBarChart";
 import { DonutChart } from "./DonutChart";
 import { formatCurrency } from "@/lib/format";
+import { formatOperationalUnits } from "@/lib/sale-units";
 
 interface SalesSectionProps {
   deliveredSales: {
@@ -45,7 +46,7 @@ export function SalesSection({
         <MetricCardWithChart
           title="Entregues"
           value={formatCurrency(deliveredSales.value)}
-          subtitle={`${deliveredSales.count} venda(s)`}
+          subtitle={`${formatOperationalUnits(deliveredSales.count)} venda(s)`}
           icon={<CheckCircle className="h-4 w-4" />}
           chart={
             <MiniAreaChart 
@@ -57,7 +58,7 @@ export function SalesSection({
         
         <MetricCardWithChart
           title="Entrega Ativa"
-          value={activeSales.count.toString()}
+          value={formatOperationalUnits(activeSales.count)}
           subtitle={formatCurrency(activeSales.value)}
           icon={<TruckIcon className="h-4 w-4" />}
           chart={

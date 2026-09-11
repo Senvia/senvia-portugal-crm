@@ -3,6 +3,7 @@
 // Credentials never leave the server.
 import nodemailer from 'nodemailer';
 import { q } from './db.js';
+import { mailEndpoint } from './egress.js';
 
 // As passwords vivem em `messaging_channel_secrets`, não no metadata.
 //
@@ -49,12 +50,16 @@ export async function getEmailCaixa(channelId) {
 }
 
 // ImapFlow config for a caixa.
-export function imapConfig(caixa) {
+export async function imapConfig(caixa) {
   const m = caixa.meta;
+  const port = Number(m.imap_port ?? 993);
+  const endpoint = await mailEndpoint(m.imap_server, port, 'imap');
+  const secure = m.imap_ssl !== false;
   return {
-    host: m.imap_server,
-    port: Number(m.imap_port) || 993,
-    secure: m.imap_ssl !== false,
+    ...endpoint,
+    secure,
+    doSTARTTLS: secure ? undefined : true,
+    tls: { rejectUnauthorized: true },
     auth: { user: (m.imap_login || m.email_address || '').trim(), pass: m.imap_password },
     logger: false,
     // Don't let a slow mailbox wedge the whole manager.
@@ -63,13 +68,20 @@ export function imapConfig(caixa) {
 }
 
 // Nodemailer transport for a caixa (used by send, Phase 4). Port 465 = SSL/TLS.
-export function smtpTransport(caixa) {
+export async function smtpTransport(caixa) {
   const m = caixa.meta;
-  const port = Number(m.smtp_port) || 587;
+  const port = Number(m.smtp_port ?? 587);
+  const endpoint = await mailEndpoint(m.smtp_server, port, 'smtp');
   return nodemailer.createTransport({
-    host: m.smtp_server,
-    port,
+    ...endpoint,
     secure: port === 465 || m.smtp_ssl === true,
+    requireTLS: true,
+    tls: { servername: endpoint.servername, rejectUnauthorized: true },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 60_000,
+    disableFileAccess: true,
+    disableUrlAccess: true,
     auth: { user: (m.smtp_login || m.email_address || '').trim(), pass: m.smtp_password },
   });
 }

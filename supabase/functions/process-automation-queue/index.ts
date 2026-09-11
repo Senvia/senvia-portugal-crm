@@ -7,6 +7,8 @@ const corsHeaders = {
 };
 
 serve(async (req: Request): Promise<Response> => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -16,13 +18,7 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch pending items whose scheduled_for <= now
-    const { data: items, error } = await supabase
-      .from("automation_queue")
-      .select("*")
-      .eq("status", "pending")
-      .lte("scheduled_for", new Date().toISOString())
-      .limit(50);
+    const { data: items, error } = await supabase.rpc("claim_automation_queue", { p_limit: 50 });
 
     if (error) {
       console.error("Error fetching queue:", error);
@@ -65,15 +61,16 @@ serve(async (req: Request): Promise<Response> => {
 
         if (sendError) {
           console.error(`Failed to send queued item ${item.id}:`, sendError);
-          await supabase.from("automation_queue").update({ status: "failed" }).eq("id", item.id);
+          const { error: updateError } = await supabase.from("automation_queue").update({ status: "failed" }).eq("id", item.id).eq("status", "processing");
+          if (updateError) throw updateError;
           failed++;
         } else {
-          await supabase.from("automation_queue").update({ status: "sent" }).eq("id", item.id);
+          const { error: updateError } = await supabase.from("automation_queue").update({ status: "sent" }).eq("id", item.id).eq("status", "processing");
+          if (updateError) throw updateError;
           sent++;
         }
       } catch (itemError) {
-        console.error(`Error processing item ${item.id}:`, itemError);
-        await supabase.from("automation_queue").update({ status: "failed" }).eq("id", item.id);
+        console.error("automation_queue_reconciliation_required", { id: item.id, kind: itemError instanceof Error ? itemError.name : "database" });
         failed++;
       }
     }
@@ -90,3 +87,4 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 });
+import { internalJobGuard } from "../_shared/internal-auth.ts";

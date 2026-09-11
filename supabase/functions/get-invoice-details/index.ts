@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -330,6 +331,8 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const { document_id, document_type, organization_id, sync, sale_id, payment_id } = await req.json()
 

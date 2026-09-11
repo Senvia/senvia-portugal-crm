@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "description": "Senvia OS — painel de CRM dentro do WhatsApp Web",
   "scripts": {
     "build": "vite build && vite build --config vite.content.config.ts && npm --prefix .. run build:extension",
@@ -21,6 +24,6 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react-swc": "^3.7.2",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^6.4.3"
   }
 }

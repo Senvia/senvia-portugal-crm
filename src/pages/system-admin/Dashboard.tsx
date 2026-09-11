@@ -143,6 +143,7 @@ export default function SystemAdminDashboard() {
       title="Visão geral"
       description="Assinaturas, receita e clientes do Senvia OS."
       back={false}
+      maxWidth="wide"
       action={
         <nav className="flex items-center gap-1">
           {SECONDARY.map((s) => (
@@ -158,29 +159,41 @@ export default function SystemAdminDashboard() {
         </nav>
       }
     >
-      {/* Overview: metrics + chart + subscription status */}
-      <AdminOverview
-        organizations={organizations}
-        stripeStats={stripeStats}
-        loading={isLoading}
-        onFocus={(f) => {
-          setOrgFilter(f);
-          document.getElementById("admin-clients")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }}
-      />
+      {/* From xl the page is two columns, 35/65: the overview (numbers, chart,
+          status) on the left, own org + customers on the right — the list gets
+          the larger share because it has nine columns to draw. The left column
+          is exactly one viewport high and sticks while the list scrolls; the
+          chart inside it absorbs the leftover height, so nothing in it ever
+          needs scrolling. Below xl a sidebar left the table unusable, so it
+          stacks. */}
+      <div className="xl:grid xl:grid-cols-[7fr_13fr] xl:items-start xl:gap-8">
+        <div className="xl:sticky xl:top-20 xl:flex xl:h-[calc(100dvh-6rem)] xl:flex-col">
+          {/* Overview: metrics + chart + subscription status */}
+          <AdminOverview
+            organizations={organizations}
+            stripeStats={stripeStats}
+            loading={isLoading}
+            sidebar
+            onFocus={(f) => {
+              setOrgFilter(f);
+              document.getElementById("admin-clients")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        </div>
 
-      {/* Own organization, kept out of the customers list */}
-      <section className="mt-8 space-y-3">
-        <h2 className="text-sm font-medium text-foreground/70">A tua organização</h2>
-        <HomeOrgCard
-          memberCount={organizations.find((o) => o.id === home?.organization_id)?.member_count}
-          loading={isLoading}
-        />
-      </section>
+        <div className="mt-8 space-y-6 xl:mt-0">
+          {/* Own organization, kept out of the customers list */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-medium text-foreground/70">A tua organização</h2>
+            <HomeOrgCard
+              memberCount={organizations.find((o) => o.id === home?.organization_id)?.member_count}
+              loading={isLoading}
+            />
+          </section>
 
-      {/* Customers */}
-      <section id="admin-clients" className="mt-8 scroll-mt-20 space-y-3">
-        <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
+        {/* Customers */}
+        <section id="admin-clients" className="scroll-mt-20 space-y-3">
+          <h2 className="text-sm font-medium text-foreground/70">Clientes</h2>
         <OrganizationsTable
           organizations={organizations.filter((o) => o.id !== home?.organization_id)}
           loading={isLoading}
@@ -191,7 +204,9 @@ export default function SystemAdminDashboard() {
           filter={orgFilter}
           onFilterChange={setOrgFilter}
         />
-      </section>
+        </section>
+        </div>
+      </div>
     </AdminShell>
   );
 }

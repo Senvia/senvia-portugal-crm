@@ -558,7 +558,7 @@ export const readTools: Tool[] = [
       const endDateDefault = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const endDate = args.end_date || `${endDateDefault.getFullYear()}-${String(endDateDefault.getMonth() + 1).padStart(2, "0")}-${String(endDateDefault.getDate()).padStart(2, "0")}`;
       const { data: sales } = await ctx.supabaseAdmin
-        .from("sales").select("id, total_value, sale_date").eq("organization_id", ctx.orgId).gte("sale_date", startDate).lte("sale_date", endDate);
+        .from("sales").select("id, total_value, sale_date, operational_units").eq("organization_id", ctx.orgId).gte("sale_date", startDate).lte("sale_date", endDate);
       const totalBilled = (sales || []).reduce((s: number, r: any) => s + Number(r.total_value || 0), 0);
       const { data: payments } = await ctx.supabaseAdmin
         .from("sale_payments").select("amount, status").eq("organization_id", ctx.orgId).gte("payment_date", startDate).lte("payment_date", endDate);
@@ -570,7 +570,9 @@ export const readTools: Tool[] = [
       return {
         period: { start: startDate, end: endDate },
         total_billed: totalBilled, total_received: totalReceived, total_pending: totalPending,
-        total_expenses: totalExpenses, balance: totalReceived - totalExpenses, total_sales_count: sales?.length || 0,
+        total_expenses: totalExpenses,
+        balance: totalReceived - totalExpenses,
+        total_sales_count: (sales || []).reduce((sum, sale) => sum + Number(sale.operational_units || 1), 0),
       };
     },
   },

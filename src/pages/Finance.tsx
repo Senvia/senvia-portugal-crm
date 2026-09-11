@@ -16,6 +16,7 @@ import {
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { formatCurrency } from "@/lib/format";
+import { formatOperationalUnits } from "@/lib/sale-units";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AreaChart,
@@ -297,7 +298,7 @@ export default function Finance() {
                       <div className="text-xl font-bold text-amber-600 md:text-2xl">{formatCurrency(stats.telecomToInstall)}</div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      {stats.telecomToInstallCount} venda{stats.telecomToInstallCount === 1 ? "" : "s"} pendente{stats.telecomToInstallCount === 1 ? "" : "s"} ou em instalação
+                      {formatOperationalUnits(stats.telecomToInstallCount)} venda{stats.telecomToInstallCount === 1 ? "" : "s"} pendente{stats.telecomToInstallCount === 1 ? "" : "s"} ou em instalação
                     </p>
                   </CardContent>
                 </Card>
@@ -320,7 +321,7 @@ export default function Finance() {
                       <div className="text-xl font-bold text-emerald-600 md:text-2xl">{formatCurrency(stats.telecomInstalled)}</div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      {stats.telecomInstalledCount} venda{stats.telecomInstalledCount === 1 ? "" : "s"} ativa{stats.telecomInstalledCount === 1 ? "" : "s"} · comissão ganha
+                      {formatOperationalUnits(stats.telecomInstalledCount)} venda{stats.telecomInstalledCount === 1 ? "" : "s"} ativa{stats.telecomInstalledCount === 1 ? "" : "s"} · comissão ganha
                     </p>
                   </CardContent>
                 </Card>

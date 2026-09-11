@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "description": "IMAP/SMTP gateway for Senvia CRM email caixas. Syncs folders/messages into Supabase and sends via SMTP. Runs as a Docker container alongside Chatwoot.",
   "scripts": {
     "test:connect": "node src/imap-test.js",
@@ -12,10 +15,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
-    "fastify": "^4.28.0",
+    "fastify": "^5.12.3",
     "imapflow": "^1.0.164",
+    "ipaddr.js": "^2.5.0",
     "mailparser": "^3.7.1",
-    "nodemailer": "^6.9.14",
+    "nodemailer": "^10.0.3",
     "pg": "^8.12.0"
   }
 }

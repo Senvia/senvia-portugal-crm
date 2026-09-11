@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
 import { cn } from '@/lib/utils';
 import type { EmailAttachment } from '@/hooks/useEmail';
+import { insertEmailPaste, quoteEmailHtml as quoteHtml, sanitizeEmailHtml, toEditorHtml } from '@/lib/email-html';
 
 interface Attached { filename: string; contentType: string; b64: string; size: number; }
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
@@ -33,34 +34,6 @@ function parseAddrs(s: string): EmailAddress[] {
 function ensurePrefix(subject: string, prefix: 'Re:' | 'Fwd:') {
   const s = subject || '';
   return new RegExp(`^${prefix}`, 'i').test(s) ? s : `${prefix} ${s}`;
-}
-
-function quoteHtml(original: EmailMessage) {
-  const who = original.from_name
-    ? `${original.from_name} &lt;${original.from_address}&gt;`
-    : original.from_address || '';
-  const when = original.date ? new Date(original.date).toLocaleString('pt-PT') : '';
-  const body = original.html_body
-    || (original.text_body
-      ? original.text_body
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          .replace(/\n/g, '<br>')
-      : '');
-  // The "senvia-quote" marker lets the gateway's signature guard (commands.js
-  // applySignature) tell apart NEW content from quoted history — an old email
-  // already carrying a signature (from a previous reply in the same thread)
-  // otherwise falsely looks like "this send already has a signature" and the
-  // gateway would skip adding one to content that doesn't actually have it yet.
-  return `<br><br><div class="senvia-quote" style="border-left:3px solid #e5e7eb;padding-left:10px;margin-left:4px;color:#6b7280">
-    <p style="margin:0 0 6px;font-size:13px">Em ${when}, ${who} escreveu:</p>
-    <div style="font-size:13px">${body}</div>
-  </div>`;
-}
-
-function toEditorHtml(s: string | null): string {
-  if (!s) return '';
-  if (/<(br|p|div|b|i|u|ol|ul|blockquote|strong|em|pre)\b/i.test(s)) return s;
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 }
 
 // Email chip input — commit on Enter / comma / semicolon / Tab (when non-empty).
@@ -294,7 +267,7 @@ export function EmailComposer({
     setShowBcc(initial.bcc.length > 0);
     setDraftId(initialDraft?.id ?? null);
     requestAnimationFrame(() => {
-      if (editorRef.current) editorRef.current.innerHTML = initial.bodyHtml;
+      if (editorRef.current) editorRef.current.innerHTML = sanitizeEmailHtml(initial.bodyHtml);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -337,7 +310,7 @@ export function EmailComposer({
         const result = await actions.saveDraft({
           id: draftIdRef.current,
           to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
-          subject, bodyHtml: editorRef.current?.innerHTML || '',
+          subject, bodyHtml: sanitizeEmailHtml(editorRef.current?.innerHTML || ''),
           inReplyTo: original?.message_id ?? initialDraft?.in_reply_to ?? null,
           replyMessageId: initialDraft?.reply_message_id ?? null,
           attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
@@ -383,7 +356,7 @@ export function EmailComposer({
     try {
       const result = await actions.saveDraft({
         id: draftId, to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
-        subject, bodyHtml: editorRef.current?.innerHTML || '',
+        subject, bodyHtml: sanitizeEmailHtml(editorRef.current?.innerHTML || ''),
         inReplyTo: original?.message_id ?? initialDraft?.in_reply_to ?? null,
         replyMessageId: initialDraft?.reply_message_id ?? null,
         attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
@@ -399,7 +372,7 @@ export function EmailComposer({
     if (to.length === 0) { toast({ title: 'Indica pelo menos um destinatário', variant: 'destructive' }); return; }
     setSending(true);
     try {
-      const html = editorRef.current?.innerHTML || '';
+      const html = sanitizeEmailHtml(editorRef.current?.innerHTML || '');
       const text = editorRef.current?.innerText || '';
       const refs = original
         ? [...(original.email_references || []), original.message_id].filter(Boolean) as string[]
@@ -526,6 +499,7 @@ export function EmailComposer({
             suppressContentEditableWarning
             tabIndex={0}
             onInput={() => setBodyVersion((v) => v + 1)}
+            onPaste={(event) => { insertEmailPaste(event); setBodyVersion((v) => v + 1); }}
             className="min-h-[200px] max-h-[400px] overflow-y-auto px-4 py-3 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
             style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif", lineHeight: '1.6' }}
           />

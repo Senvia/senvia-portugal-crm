@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useSales } from '@/hooks/useSales';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCurrency } from '@/lib/format';
+import { formatOperationalUnits, sumOperationalSaleUnits } from '@/lib/sale-units';
 import { useDashboardPeriod, formatPeriodLabel } from '@/stores/useDashboardPeriod';
 import {
   TELECOM_VIEW_LABELS,
@@ -68,15 +69,15 @@ export function TelecomLifecyclePanel() {
     const count = (view: TelecomViewKey) => {
       // "Próximo mês" looks forward, so it is never limited to the period.
       const pool = isTelecomViewPeriodScoped(view) ? inPeriod : sales;
-      return pool.filter((s) => matchesTelecomView(s, view, reference)).length;
+      return sumOperationalSaleUnits(pool.filter((s) => matchesTelecomView(s, view, reference)));
     };
 
     // Still to install and with no date agreed — the number that would
     // silently disappear if we only ever counted scheduled months.
-    const semData = inPeriod.filter(
+    const semData = sumOperationalSaleUnits(inPeriod.filter(
       (s) => !s.scheduled_install_date &&
         (s.telecom_status === 'pendente' || s.telecom_status === 'em_instalacao'),
-    ).length;
+    ));
 
     const metrics: Metric[] = [
       { key: 'ativos', hint: 'Instalados', value: count('ativos'), icon: CheckCircle2, tone: 'text-green-600', href: linkTo('ativos') },
@@ -118,7 +119,7 @@ export function TelecomLifecyclePanel() {
         <CardTitle className="text-base">Análise do mês</CardTitle>
         <CardDescription>
           Estado das vendas de {formatPeriodLabel(from, to)}
-          {undated > 0 && ` · ${undated} instalaç${undated === 1 ? 'ão' : 'ões'} sem data marcada`}
+          {undated > 0 && ` · ${formatOperationalUnits(undated)} instalaç${undated === 1 ? 'ão' : 'ões'} sem data marcada`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -137,7 +138,7 @@ export function TelecomLifecyclePanel() {
                 <span className="truncate">{TELECOM_VIEW_LABELS[key]}</span>
                 <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
-              <p className="mt-1 text-2xl font-semibold">{value}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatOperationalUnits(value)}</p>
               <p className="text-[11px] text-muted-foreground truncate">{hint}</p>
             </Link>
           ))}
@@ -168,7 +169,7 @@ export function TelecomLifecyclePanel() {
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-400">
             <CalendarOff className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
-              {undated} venda{undated === 1 ? '' : 's'} por instalar sem data marcada — não entram na contagem do próximo mês.
+              {formatOperationalUnits(undated)} venda{undated === 1 ? '' : 's'} por instalar sem data marcada — não entram na contagem do próximo mês.
             </span>
           </div>
         )}

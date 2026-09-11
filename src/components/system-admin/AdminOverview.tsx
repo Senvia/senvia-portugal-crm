@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { OrgStripeData } from "@/components/system-admin/OrganizationsTable";
 import { classifyOrg, BUCKET_META, type OrgBucket } from "@/components/system-admin/orgStatus";
+import type { OrgFilter } from "@/components/system-admin/OrganizationsTable";
 
 const ORDER: OrgBucket[] = ["paying", "trial", "overdue", "blocked", "expired", "canceled", "exempt"];
 
@@ -24,8 +25,14 @@ interface AdminOverviewProps {
   organizations: OverviewOrg[];
   stripeStats?: { mrr: number; paying_count: number; total_subscriptions: number; org_stats: OrgStripeData[] } | null;
   loading?: boolean;
-  /** Focus the organizations list on a bucket. Renders the attention strip. */
-  onFocus?: (filter: "trial" | "overdue" | "expired") => void;
+  /** Focus the organizations list on a bucket. Renders the attention strip,
+   *  and makes each metric card click through to what it counts. */
+  onFocus?: (filter: OrgFilter) => void;
+  /** Sidebar mode (dashboard, xl and up): the overview becomes a flex column
+   *  that fills its container; cards shrink, chart and status stack, and the
+   *  chart is the one elastic block — it takes whatever height is left, so
+   *  the column fits the viewport without scrolling. */
+  sidebar?: boolean;
 }
 
 function inMonth(date: string | null | undefined, ref: Date): boolean {
@@ -39,7 +46,7 @@ function capMonth(d: Date): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function AdminOverview({ organizations, stripeStats, loading, onFocus }: AdminOverviewProps) {
+export function AdminOverview({ organizations, stripeStats, loading, onFocus, sidebar }: AdminOverviewProps) {
   // A fresh Date() on every render invalidated the memo below on every render.
   // Minute precision is plenty for "days until trial ends".
   const now = useMemo(() => new Date(), []);
@@ -101,6 +108,7 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
   const activeTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.blocked;
   const payingPct = activeTotal > 0 ? Math.round((buckets.paying / activeTotal) * 100) : 0;
   const barTotal = buckets.paying + buckets.trial + buckets.overdue + buckets.blocked + buckets.expired + buckets.canceled;
+  const chartHeight = 220;
 
   const attention = onFocus
     ? [
@@ -126,7 +134,7 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
     : [];
 
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", sidebar && "xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:gap-3 xl:space-y-0")}>
       {/* What needs you today. Absent when nothing does. */}
       {!loading && attention.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -151,7 +159,10 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
       )}
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className={cn("grid grid-cols-2 gap-4 lg:grid-cols-4", sidebar && "xl:grid-cols-2 xl:gap-3")}>
+        {/* Each card opens the list filtered to exactly what it counted —
+            a number nobody can act on is only half the information. MRR
+            comes from the paying accounts, so it points there. */}
         <MetricCard
           label="MRR"
           value={`€${mrr.toLocaleString("pt-PT")}`}
@@ -159,6 +170,8 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
           delta={mrrAddedThisMonth > 0 ? { value: `+€${mrrAddedThisMonth.toLocaleString("pt-PT")}`, up: true, note: "novos este mês" } : undefined}
           icon={<Euro className="h-4 w-4" />}
           loading={loading}
+          compact={sidebar}
+          onClick={onFocus && buckets.paying > 0 ? () => onFocus("paying") : undefined}
         />
         <MetricCard
           label="Clientes a pagar"
@@ -176,6 +189,8 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
           icon={<CreditCard className="h-4 w-4" />}
           tone="success"
           loading={loading}
+          compact={sidebar}
+          onClick={onFocus && buckets.paying > 0 ? () => onFocus("paying") : undefined}
         />
         <MetricCard
           label="Em trial"
@@ -183,6 +198,8 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
           subtitle={trialExpiringSoon > 0 ? `${trialExpiringSoon} expiram em ≤3 dias` : "a converter"}
           icon={<Sparkles className="h-4 w-4" />}
           loading={loading}
+          compact={sidebar}
+          onClick={onFocus && buckets.trial > 0 ? () => onFocus("trial") : undefined}
         />
         <MetricCard
           label="Trials expirados"
@@ -191,13 +208,15 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
           icon={<AlertTriangle className="h-4 w-4" />}
           tone={buckets.expired > 0 ? "danger" : "default"}
           loading={loading}
+          compact={sidebar}
+          onClick={onFocus && buckets.expired > 0 ? () => onFocus("expired") : undefined}
         />
       </div>
 
       {/* Chart + subscription status */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
+      <div className={cn("grid gap-4 lg:grid-cols-3", sidebar && "xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:gap-3")}>
+        <Card className={cn("lg:col-span-2", sidebar && "xl:flex xl:min-h-0 xl:flex-1 xl:flex-col")}>
+          <CardHeader className={cn("pb-2", sidebar && "xl:px-4 xl:pt-4")}>
             <CardTitle className="text-sm">Novas empresas por mês</CardTitle>
             <p className="text-xs text-muted-foreground">
               Últimos 6 meses
@@ -208,11 +227,14 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
               )}
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className={cn(sidebar && "xl:min-h-0 xl:flex-1 xl:px-4 xl:pb-4")}>
             {loading ? (
-              <Skeleton className="h-[220px] w-full" />
+              <Skeleton className={cn("w-full", sidebar && "xl:h-full")} style={{ height: sidebar ? undefined : chartHeight }} />
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
+              // Fixed 220px pushed the sidebar below the fold on a laptop; as a
+              // sidebar the chart fills whatever height the column has left.
+              <div className={cn(sidebar && "xl:h-full xl:min-h-[80px]")} style={{ height: sidebar ? undefined : chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthly} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                   <CartesianGrid vertical={false} className="stroke-border" strokeDasharray="3 3" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} className="fill-muted-foreground" />
@@ -232,16 +254,17 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
                   <Bar dataKey="value" className="fill-primary" radius={[6, 6, 0, 0]} maxBarSize={44} />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className={cn(sidebar && "xl:shrink-0")}>
+          <CardHeader className={cn("pb-2", sidebar && "xl:px-4 xl:pt-4")}>
             <CardTitle className="text-sm">Estado das assinaturas</CardTitle>
             <p className="text-xs text-muted-foreground">Distribuição atual</p>
           </CardHeader>
-          <CardContent>
+          <CardContent className={cn(sidebar && "xl:px-4 xl:pb-4")}>
             {loading ? (
               <div className="space-y-4">
                 <Skeleton className="h-2.5 w-full rounded-full" />
@@ -264,7 +287,7 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
                       ) : null,
                     )}
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5">
+                <div className={cn("mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5", sidebar && "xl:mt-3 xl:gap-y-1.5")}>
                   {ORDER.map((k) => (
                     <div key={k} className="flex items-center gap-2 text-sm">
                       <span className={cn("h-2 w-2 shrink-0 rounded-full", BUCKET_META[k].dot)} />
@@ -283,7 +306,7 @@ export function AdminOverview({ organizations, stripeStats, loading, onFocus }: 
 }
 
 function MetricCard({
-  label, value, subtitle, icon, tone = "default", loading, delta,
+  label, value, subtitle, icon, tone = "default", loading, delta, onClick, compact,
 }: {
   label: string;
   value: React.ReactNode;
@@ -292,18 +315,32 @@ function MetricCard({
   tone?: "default" | "success" | "danger";
   loading?: boolean;
   delta?: { value: string; up: boolean; note?: string };
+  /** Absent when the card counts nothing — then it stays a plain box. */
+  onClick?: () => void;
+  /** Narrow-column variant: less padding, smaller number (xl and up). */
+  compact?: boolean;
 }) {
   const toneClass = tone === "success" ? "text-emerald-600 dark:text-emerald-400" : tone === "danger" ? "text-destructive" : "text-foreground";
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="rounded-xl border bg-card p-5">
+    <Wrapper
+      {...(onClick ? { type: "button" as const, onClick } : {})}
+      className={cn(
+        "rounded-xl border bg-card p-5 text-left",
+        compact && "xl:p-4",
+        onClick && "group cursor-pointer transition-colors hover:border-primary/40 hover:bg-accent/40",
+      )}
+    >
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">{label}</span>
-        {icon && <span className="text-muted-foreground/50">{icon}</span>}
+        {icon ? (
+          <span className="text-muted-foreground/50">{icon}</span>
+        ) : null}
       </div>
       {loading ? (
         <Skeleton className="mt-2 h-9 w-24" />
       ) : (
-        <div className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", toneClass)}>{value}</div>
+        <div className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", compact && "xl:mt-1 xl:text-2xl", toneClass)}>{value}</div>
       )}
       {!loading && delta && (
         <div className="mt-1.5 flex items-center gap-1 text-xs">
@@ -319,7 +356,14 @@ function MetricCard({
           {delta.note && <span className="text-muted-foreground">{delta.note}</span>}
         </div>
       )}
-      {subtitle && !loading && <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>}
-    </div>
+      {subtitle && !loading && (
+        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          {subtitle}
+          {onClick && (
+            <ArrowRight className="h-3 w-3 shrink-0 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+          )}
+        </div>
+      )}
+    </Wrapper>
   );
 }

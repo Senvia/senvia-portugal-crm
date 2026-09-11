@@ -1,0 +1,75 @@
+CREATE ROLE anon;
+CREATE ROLE authenticated;
+CREATE ROLE service_role BYPASSRLS;
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT (auth.jwt()->>'sub')::uuid $$;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT auth.jwt()->>'role' $$;
+CREATE TYPE public.app_role AS ENUM ('admin','viewer','salesperson','super_admin');
+CREATE TABLE public.organizations(id uuid PRIMARY KEY, name text, slug text, secret text);
+CREATE TABLE public.profiles(id uuid PRIMARY KEY, organization_id uuid);
+CREATE TABLE public.user_roles(user_id uuid, role public.app_role);
+CREATE TABLE public.organization_profiles(id uuid PRIMARY KEY, organization_id uuid, base_role text, module_permissions jsonb, data_scope text);
+CREATE TABLE public.organization_members(user_id uuid, organization_id uuid, role public.app_role, profile_id uuid, is_active boolean, joined_at timestamptz DEFAULT now());
+CREATE TABLE auth.mfa_factors(user_id uuid, status text);
+CREATE FUNCTION public.has_role(_user_id uuid,_role public.app_role) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ SELECT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role=_role) $$;
+CREATE FUNCTION public.is_org_member(_user_id uuid,_org_id uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ SELECT EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=_user_id AND organization_id=_org_id AND is_active) $$;
+CREATE FUNCTION public.immutable_unaccent(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT $1 $$;
+CREATE TABLE public.messaging_channels(id uuid, organization_id uuid, assigned_user_ids uuid[], metadata jsonb, updated_at timestamptz);
+CREATE TABLE public.automation_flows(id uuid, organization_id uuid);
+CREATE TABLE public.automation_queue(id uuid, organization_id uuid);
+CREATE TABLE public.email_commands(id uuid, organization_id uuid, channel_id uuid, created_by uuid);
+ALTER TABLE public.email_commands ENABLE ROW LEVEL SECURITY;
+CREATE TABLE public.orders(id uuid, organization_id uuid);
+CREATE TABLE public.lead_imports(id uuid PRIMARY KEY, organization_id uuid);
+CREATE TABLE public.proposal_products(id uuid, proposal_id uuid);
+CREATE TABLE public.proposal_cpes(id uuid, proposal_id uuid);
+CREATE FUNCTION public.delete_lead_import(p_import_id uuid) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+CREATE FUNCTION public.preview_lead_import_delete(p_import_id uuid) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+DO $$
+DECLARE tbl text;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY['leads','crm_clients','cpes','proposals','sales','sale_payments','invoices','credit_notes','expenses','internal_requests','commission_closings','calendar_events','email_templates'] LOOP
+    EXECUTE format('CREATE TABLE public.%I (id uuid PRIMARY KEY, organization_id uuid, created_by uuid, seller_id uuid, name text)',tbl);
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',tbl);
+    EXECUTE format('CREATE POLICY original_tenant ON public.%I FOR ALL TO authenticated USING (public.is_org_member(auth.uid(),organization_id)) WITH CHECK (public.is_org_member(auth.uid(),organization_id))',tbl);
+  END LOOP;
+END;
+$$;
+ALTER TABLE public.automation_flows ENABLE ROW LEVEL SECURITY;
+CREATE POLICY global_admin ON public.automation_flows FOR ALL TO authenticated USING (public.is_org_member(auth.uid(),organization_id) AND public.has_role(auth.uid(),'admin'));
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lead_imports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.proposal_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.proposal_cpes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY child_insert ON public.proposal_cpes FOR INSERT WITH CHECK(true);
+CREATE POLICY store_original ON public.orders FOR ALL USING (true);
+CREATE TABLE public.teams(id uuid, organization_id uuid, leader_id uuid);
+CREATE TABLE public.team_members(id uuid, team_id uuid, user_id uuid);
+ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY nested_admin ON public.team_members FOR ALL USING (EXISTS(SELECT 1 FROM public.teams t WHERE t.id = team_members.team_id AND public.is_org_member(auth.uid(),t.organization_id) AND public.has_role(auth.uid(),'admin')));
+CREATE FUNCTION public.search_clients_unaccent(uuid,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION public.search_leads_unaccent(uuid,text,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION public.search_invoices_unaccent(uuid,text,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION public.search_sales_unaccent(uuid,text,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION public.search_proposals_unaccent(uuid,text,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION public.search_credit_notes_unaccent(uuid,text,text,integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE TABLE public.commission_calls(sale_id uuid);
+CREATE FUNCTION public.generate_sale_commission_splits(p_sale_id uuid) RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN INSERT INTO public.commission_calls VALUES(p_sale_id); RETURN 1; END $$;
+CREATE FUNCTION public.fixture_commission_trigger() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN PERFORM public.generate_sale_commission_splits(NEW.id); RETURN NEW; END $$;
+CREATE TRIGGER fixture_commission AFTER INSERT ON public.sales FOR EACH ROW EXECUTE FUNCTION public.fixture_commission_trigger();
+GRANT USAGE ON SCHEMA public,auth TO anon,authenticated,service_role;
+GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO authenticated,service_role;
+REVOKE SELECT ON public.organizations,public.messaging_channels FROM authenticated;
+GRANT SELECT(id,name,slug) ON public.organizations TO authenticated;
+GRANT SELECT(id,organization_id,assigned_user_ids) ON public.messaging_channels TO authenticated;
+INSERT INTO public.organizations VALUES('10000000-0000-0000-0000-000000000001','Alpha','alpha','private'),('10000000-0000-0000-0000-000000000002','Beta','beta','private');
+INSERT INTO public.user_roles VALUES('20000000-0000-0000-0000-000000000001','admin');
+INSERT INTO public.organization_members(user_id,organization_id,role,is_active) VALUES
+('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','admin',true),
+('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','viewer',true),
+('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','salesperson',true);
+INSERT INTO public.profiles VALUES('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
+INSERT INTO public.leads(id,organization_id,name) VALUES('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','fixture');
+INSERT INTO public.proposals(id,organization_id,name) VALUES('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','fixture');
+INSERT INTO public.lead_imports VALUES('30000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002');

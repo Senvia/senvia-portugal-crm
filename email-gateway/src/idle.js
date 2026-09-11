@@ -77,12 +77,11 @@ class CaixaManager {
   async connect() {
     if (this.stopped) return;
     this.clearFolderPoll(); // guard against connect() being called again mid-poll-cycle (reconnects)
-    const client = new ImapFlow(imapConfig(this.caixa));
-    this.client = client;
-    client.on('error', (err) => { this.lastError = err.message; });
-    client.on('close', () => { if (!this.stopped) this.scheduleReconnect(); });
-
     try {
+      const client = new ImapFlow(await imapConfig(this.caixa));
+      this.client = client;
+      client.on('error', (err) => { this.lastError = err.message; });
+      client.on('close', () => { if (!this.stopped) this.scheduleReconnect(); });
       await client.connect();
       log(`[${this.caixa.label}] IMAP ligado`);
       this.reconnectMs = 5000;
@@ -248,7 +247,7 @@ class CaixaManager {
       const html = bodyToHtml(vac.message);
       const subject = /^re:/i.test(msg.subject || '') ? msg.subject : `${vac.subject}`;
       try {
-        await smtpTransport(this.caixa).sendMail({
+        await (await smtpTransport(this.caixa)).sendMail({
           from: { name: this.caixa.label || '', address: this.caixa.meta.email_address },
           to,
           subject,

@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Shield } from 'lucide-react';
@@ -16,7 +17,9 @@ import { useHomeOrganization } from '@/hooks/useHomeOrganization';
  * One button on purpose. "Go to the CRM" and "back to Senvia" were the same
  * destination written twice.
  */
-export function AdminTopBar() {
+/** The bar spans the page; its contents align with the page container below,
+ *  so a wide page (the dashboard) gets a wide bar. */
+export function AdminTopBar({ containerClass = "max-w-6xl" }: { containerClass?: string }) {
   const navigate = useNavigate();
   const { organization, switchOrganization } = useAuth();
   const { home, isAtHome } = useHomeOrganization();
@@ -38,7 +41,7 @@ export function AdminTopBar() {
 
   return (
     <div className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 lg:px-8">
+      <div className={cn("mx-auto flex h-14 items-center justify-between gap-3 px-4 lg:px-8", containerClass)}>
         <div className="flex min-w-0 items-center gap-2">
           <Shield className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate text-sm font-semibold tracking-tight">System Admin</span>

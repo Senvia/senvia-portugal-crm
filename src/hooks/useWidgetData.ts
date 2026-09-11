@@ -9,6 +9,7 @@ import { useEcommerceStats } from "@/hooks/ecommerce/useEcommerceStats";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { WidgetType } from "@/lib/dashboard-templates";
 import { startOfDay, startOfWeek, endOfWeek, isToday, isThisWeek, subDays, format } from "date-fns";
+import { formatOperationalUnits, operationalUnitsForSale, sumOperationalSaleUnits } from "@/lib/sale-units";
 
 export interface WidgetData {
   value: string;
@@ -70,7 +71,10 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
     };
 
     // Generate chart data for last 7 days
-    const generateLast7DaysChart = (items: Array<{ created_at?: string | null }>) => {
+    const generateLast7DaysChart = <T extends { created_at?: string | null }>(
+      items: T[],
+      weight: (item: T) => number = () => 1,
+    ) => {
       const data: Array<{ name: string; value: number }> = [];
       for (let i = 6; i >= 0; i--) {
         const date = subDays(today, i);
@@ -80,7 +84,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         });
         data.push({
           name: format(date, 'EEE'),
-          value: dayItems.length,
+          value: dayItems.reduce((sum, item) => sum + weight(item), 0),
         });
       }
       return data;
@@ -245,9 +249,9 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         const totalValue = delivered.reduce((sum, s) => sum + (s.total_value || 0), 0);
 
         return {
-          value: delivered.length.toString(),
+          value: formatOperationalUnits(sumOperationalSaleUnits(delivered)),
           subtitle: `€${totalValue.toLocaleString('pt-PT')} total`,
-          chartData: generateLast7DaysChart(delivered),
+          chartData: generateLast7DaysChart(delivered, operationalUnitsForSale),
           isLoading: salesLoading,
         };
       }
@@ -259,9 +263,9 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         const totalValue = active.reduce((sum, s) => sum + (s.total_value || 0), 0);
 
         return {
-          value: active.length.toString(),
+          value: formatOperationalUnits(sumOperationalSaleUnits(active)),
           subtitle: `€${totalValue.toLocaleString('pt-PT')} em pipeline`,
-          chartData: generateLast7DaysChart(active),
+          chartData: generateLast7DaysChart(active, operationalUnitsForSale),
           isLoading: salesLoading,
         };
       }
@@ -319,9 +323,9 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
       case 'completed_projects': {
         const completed = sales.filter(s => s.status === 'delivered' || s.status === 'fulfilled');
         return {
-          value: completed.length.toString(),
+          value: formatOperationalUnits(sumOperationalSaleUnits(completed)),
           subtitle: 'este mês',
-          chartData: generateLast7DaysChart(completed),
+          chartData: generateLast7DaysChart(completed, operationalUnitsForSale),
           isLoading: salesLoading,
         };
       }
@@ -331,9 +335,9 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
           s.status === 'in_progress' || s.status === 'fulfilled'
         );
         return {
-          value: active.length.toString(),
+          value: formatOperationalUnits(sumOperationalSaleUnits(active)),
           subtitle: 'em execução',
-          chartData: generateLast7DaysChart(active),
+          chartData: generateLast7DaysChart(active, operationalUnitsForSale),
           isLoading: salesLoading,
         };
       }
@@ -343,7 +347,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
           p.status === 'draft' || p.status === 'sent'
         );
         return {
-          value: pending.length.toString(),
+          value: formatOperationalUnits(sumOperationalSaleUnits(pending)),
           subtitle: 'aguardando resposta',
           isLoading: proposalsLoading,
         };

@@ -19,6 +19,8 @@ const log = (s: string, d?: unknown) =>
   console.log(`[notify-new-trials] ${s}${d !== undefined ? " - " + JSON.stringify(d) : ""}`);
 
 serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -153,9 +155,9 @@ serve(async (req) => {
                   `<p>Já foi criado um <b>lead na org SENVIA</b>. Contacta nas primeiras 24-48h.</p>`,
               }),
             });
-            if (!r.ok) log("email falhou", { org: org.name, status: r.status, body: await r.text() });
+            if (!r.ok) log("email falhou", { orgId: org.id, status: r.status });
           } catch (e) {
-            log("email erro", { org: org.name, error: String(e) });
+            log("email erro", { orgId: org.id });
           }
         } else {
           log("Brevo não configurado na org SENVIA — só lead criado");
@@ -168,7 +170,7 @@ serve(async (req) => {
           .eq("id", org.id);
 
         done++;
-        log("notificado", { org: org.name, ownerEmail });
+        log("notificado", { orgId: org.id });
       } catch (e) {
         log("falha numa org (continua)", { org: org.id, error: String(e) });
       }
@@ -187,3 +189,4 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+import { internalJobGuard } from "../_shared/internal-auth.ts";

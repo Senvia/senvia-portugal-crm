@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { buildExportCsv } from './export-csv';
 import { format as formatDate } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Lead } from '@/types';
@@ -237,8 +238,7 @@ function downloadFile(content: string | ArrayBuffer, filename: string, type: str
 
 // Export to CSV
 export function exportToCsv(data: Record<string, unknown>[], filename: string) {
-  const ws = XLSX.utils.json_to_sheet(data);
-  const csv = XLSX.utils.sheet_to_csv(ws);
+  const csv = buildExportCsv(data);
   downloadFile(csv, `${filename}.csv`, 'text/csv');
 }
 

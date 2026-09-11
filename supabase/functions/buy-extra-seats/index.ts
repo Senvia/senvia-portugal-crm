@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
@@ -41,6 +42,8 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     // If organization_id is provided and user is super admin, use that org
     const body: RequestBody = await req.json();

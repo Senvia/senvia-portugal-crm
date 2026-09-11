@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { useRecurringSales, useRenewSale, useCancelRecurrence } from "@/hooks/useRecurringSales";
 import { useState } from "react";
+import { formatOperationalUnits, sumOperationalSaleUnits } from "@/lib/sale-units";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,19 +28,15 @@ export function RenewalAlertsWidget() {
   const [renewingId, setRenewingId] = useState<string | null>(null);
   const [renewConfirmSale, setRenewConfirmSale] = useState<typeof recurringSales[0] | null>(null);
 
-  const handleRenew = async (sale: typeof recurringSales[0]) => {
+  const handleRenew = (sale: typeof recurringSales[0]) => {
     setRenewingId(sale.id);
-    try {
-      await renewSale.mutateAsync({
-        saleId: sale.id,
-        organizationId: sale.organization_id,
-        amount: sale.recurring_value,
-      });
-    } finally {
-      // Always clear the loading state, even if the mutation rejects
-      // (the hook already surfaces the error toast).
-      setRenewingId(null);
-    }
+    renewSale.mutate({
+      saleId: sale.id,
+      organizationId: sale.organization_id,
+      amount: sale.recurring_value,
+    }, {
+      onSettled: () => setRenewingId(null),
+    });
   };
 
   const handleCancel = () => {
@@ -95,7 +92,7 @@ export function RenewalAlertsWidget() {
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             Renovações Pendentes
             <Badge variant="secondary" className="ml-auto">
-              {recurringSales.length}
+              {formatOperationalUnits(sumOperationalSaleUnits(recurringSales))}
             </Badge>
           </CardTitle>
           <CardDescription>Vendas com renovação próxima ou vencida</CardDescription>

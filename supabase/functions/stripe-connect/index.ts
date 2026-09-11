@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // Stripe Connect (OAuth Standard) por organização.
 //
 // Cada organização liga a SUA conta Stripe. O dinheiro dos clientes dela entra
@@ -74,6 +75,8 @@ async function authenticate(
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   const user = userData?.user;
   if (userError || !user) return json({ error: "Não autenticado" }, 401);
+  const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+  if (mfaResponse) return mfaResponse;
 
   const rpc = requireAdmin ? "is_org_admin" : "is_org_member";
   const { data: allowed, error: roleError } = await supabase.rpc(rpc, {

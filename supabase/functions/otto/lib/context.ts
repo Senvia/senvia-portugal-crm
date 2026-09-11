@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import type { ToolContext, OrgInfo } from "./types.ts";
 import { computeOnboardingState, resolveMode } from "./onboarding.ts";
+import { meetsMfaPolicy } from "../../_shared/user-authorization.ts";
 
 export interface LoadResult {
   ctx: ToolContext | null;   // null when the user has no data access
@@ -32,8 +33,15 @@ export async function loadContext(
     });
     try {
       const { data, error } = await supabaseAuth.auth.getUser(token);
-      if (!error && data?.user) userId = data.user.id;
-    } catch { /* unauthenticated */ }
+      if (!error && data?.user) {
+        userId = data.user.id;
+        if (!await meetsMfaPolicy(supabaseAuth, userId)) {
+          return { ctx: null, userId, hasDataAccess: false, blockedReason: 'MFA_REQUIRED' };
+        }
+      }
+    } catch {
+      return { ctx: null, userId: null, hasDataAccess: false, blockedReason: 'AUTH_UNAVAILABLE' };
+    }
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -48,16 +56,14 @@ export async function loadContext(
       .eq("organization_id", orgId)
       .eq("is_active", true)
       .maybeSingle();
-    if (!membership) {
-      const { data: superRole } = await admin
+    const { data: superRole } = await admin
         .from("user_roles")
         .select("id")
         .eq("user_id", userId)
         .eq("role", "super_admin")
         .maybeSingle();
-      if (superRole) isSuperAdmin = true;
-      else orgId = null; // not a member — disable data access
-    }
+    if (superRole) isSuperAdmin = true;
+    else if (!membership) orgId = null;
   }
 
   const hasDataAccess = !!userId && !!orgId;
@@ -69,12 +75,10 @@ export async function loadContext(
   let isAdmin = isSuperAdmin;
   let permissions: Record<string, any> | null = null;
   if (!isAdmin) {
-    const { data: adminRole } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId!)
-      .in("role", ["admin", "super_admin"]);
-    isAdmin = !!(adminRole && adminRole.length > 0);
+    const { data: adminRole, error } = await admin.rpc('is_org_admin', {
+      _user_id: userId, _org_id: orgId,
+    });
+    isAdmin = !error && adminRole === true;
   }
   if (!isAdmin) {
     const { data: member } = await admin
@@ -88,6 +92,7 @@ export async function loadContext(
         .from("organization_profiles")
         .select("module_permissions")
         .eq("id", member.profile_id)
+        .eq("organization_id", orgId!)
         .maybeSingle();
       permissions = profile?.module_permissions || null;
     }

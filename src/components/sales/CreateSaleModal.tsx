@@ -66,6 +66,7 @@ import { SellerSelect } from "@/components/sales/SellerSelect";
 import { DocumentsCheckboxField, ContractSignedCheckboxField } from "@/components/shared/DocumentsCheckboxField";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
+import { normalizeOperationalUnits } from "@/lib/sale-units";
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
@@ -675,7 +676,7 @@ export function CreateSaleModal({
   const handleUpdateQuantity = (itemId: string, delta: number) => {
     setItems(items.map(i => {
       if (i.id === itemId) {
-        const newQty = Math.max(1, i.quantity + delta);
+        const newQty = normalizeOperationalUnits(i.quantity + delta);
         return { ...i, quantity: newQty };
       }
       return i;
@@ -1466,11 +1467,11 @@ export function CreateSaleModal({
                                     {ixActive && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
                                   </div>
                                   <div className="flex items-center gap-2 mt-1">
-                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, -1)}>
+                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, -0.5)}>
                                       <Minus className="h-3 w-3" />
                                     </Button>
                                     <span className="text-sm w-8 text-center">{item.quantity}</span>
-                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, 1)}>
+                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, 0.5)}>
                                       <Plus className="h-3 w-3" />
                                     </Button>
                                     <span className="text-muted-foreground text-sm">×</span>

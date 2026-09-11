@@ -59,7 +59,7 @@ function ActivationBlock({
   unit: unitOverride,
 }: ActivationBlockProps) {
   const unit = unitOverride || (proposalType === "energia" ? "MWh" : "kWp");
-  const formatVal = (v: number) => v % 1 === 0 ? v.toString() : v.toFixed(1);
+  const formatVal = (v: number) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 2 }).format(v);
 
   const rows = filteredMembers.map((m) => {
     const target = getTarget(m.user_id, periodType, proposalType);

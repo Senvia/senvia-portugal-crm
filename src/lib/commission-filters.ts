@@ -106,7 +106,9 @@ export function buildSaleTypeIds(catalog: CatalogProduct[]): SaleTypeIdsResolver
     const ids = names.flatMap((name) => {
       const product = find(name, details[name]?.operator_id);
       const typeIds = product?.type_ids ?? [];
-      return typeIds.length > 0 ? typeIds : [NO_TYPE];
+      const technology = details[name]?.tecnologia;
+      if (!technology) return typeIds.length > 0 ? typeIds : [NO_TYPE];
+      return [...typeIds.filter((id) => id !== 'fibra' && id !== 'satelite'), technology];
     });
     return [...new Set(ids)];
   };

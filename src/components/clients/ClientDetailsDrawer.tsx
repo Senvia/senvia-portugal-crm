@@ -52,6 +52,7 @@ import { AddCommunicationModal } from "./AddCommunicationModal";
 import { CpeList } from "./CpeList";
 import type { CrmClient } from "@/types/clients";
 import type { CommunicationType, CommunicationDirection } from "@/types/communications";
+import { formatOperationalUnits, sumOperationalSaleUnits } from "@/lib/sale-units";
 
 interface ClientDetailsDrawerProps {
   client: CrmClient | null;
@@ -330,7 +331,7 @@ export function ClientDetailsDrawer({
                           <p className="text-xs text-muted-foreground">Propostas</p>
                         </div>
                         <div className="text-center p-3 bg-muted/50 rounded-lg">
-                          <p className="text-xl font-bold text-success">{client.total_sales}</p>
+                          <p className="text-xl font-bold text-success">{formatOperationalUnits(client.total_sales)}</p>
                           <p className="text-xs text-muted-foreground">Vendas</p>
                         </div>
                         {isTelecom && (
@@ -485,7 +486,7 @@ export function ClientDetailsDrawer({
                         <CardTitle className="text-base flex items-center justify-between gap-2">
                           <span>Vendas</span>
                           <span className="text-xs font-normal text-muted-foreground">
-                            {sales.length} no total · todos os estados
+                            {formatOperationalUnits(sumOperationalSaleUnits(sales))} no total · todos os estados
                           </span>
                         </CardTitle>
                       </CardHeader>

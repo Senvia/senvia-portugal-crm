@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES, CLIENT_SOURCE_LABELS } from "@/types/clients";
 import { formatDate, formatDateTime, getInboxUrl, formatCurrency } from "@/lib/format";
+import { formatOperationalUnits } from "@/lib/sale-units";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { LeadAttachments } from "@/components/leads/LeadAttachments";
@@ -152,7 +153,7 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
                 <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
                   <ShoppingBag className="h-3 w-3" />
                 </div>
-                <p className="text-lg font-semibold">{client.total_sales}</p>
+                <p className="text-lg font-semibold">{formatOperationalUnits(client.total_sales)}</p>
                 <p className="text-xs text-muted-foreground">Vendas</p>
               </div>
               

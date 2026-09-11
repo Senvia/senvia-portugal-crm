@@ -15,50 +15,52 @@ const CLAIM = `
   WHERE id = (SELECT id FROM email_commands WHERE status='pending' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
   RETURNING *`;
 
-async function getMsg(messageId) {
+async function getMsg(messageId, caixa) {
   const [m] = await q(
-    `SELECT m.id, m.uid, m.folder_id, m.channel_id, f.path
+    `SELECT m.id, m.uid, m.folder_id, m.channel_id, m.organization_id, f.path
        FROM email_messages m JOIN email_folders f ON f.id = m.folder_id
-      WHERE m.id=$1`, [messageId],
+      WHERE m.id=$1 AND m.channel_id=$2 AND m.organization_id=$3
+        AND f.channel_id=m.channel_id AND f.organization_id=m.organization_id`,
+    [messageId, caixa.id, caixa.organization_id],
   );
   return m;
 }
-async function folderByRole(channelId, role) {
-  const [f] = await q(`SELECT id, path FROM email_folders WHERE channel_id=$1 AND role=$2 LIMIT 1`, [channelId, role]);
+async function folderByRole(caixa, role) {
+  const [f] = await q(`SELECT id, path FROM email_folders WHERE channel_id=$1 AND role=$2 AND organization_id=$3 LIMIT 1`, [caixa.id, role, caixa.organization_id]);
   return f;
 }
-async function folderById(id) {
-  const [f] = await q(`SELECT id, path FROM email_folders WHERE id=$1`, [id]);
+async function folderById(id, caixa) {
+  const [f] = await q(`SELECT id, path FROM email_folders WHERE id=$1 AND channel_id=$2 AND organization_id=$3`, [id, caixa.id, caixa.organization_id]);
   return f;
 }
-async function updateCounts(client, folderId) {
-  const [f] = await q(`SELECT id, path FROM email_folders WHERE id=$1`, [folderId]);
+async function updateCounts(client, folderId, caixa) {
+  const f = await folderById(folderId, caixa);
   if (!f) return;
   try {
     const st = await client.status(f.path, { messages: true, unseen: true });
-    await q(`UPDATE email_folders SET total_count=$2, unread_count=$3, updated_at=now() WHERE id=$1`,
-      [folderId, st.messages || 0, st.unseen || 0]);
+    await q(`UPDATE email_folders SET total_count=$2, unread_count=$3, updated_at=now() WHERE id=$1 AND channel_id=$4 AND organization_id=$5`,
+      [folderId, st.messages || 0, st.unseen || 0, caixa.id, caixa.organization_id]);
   } catch { /* ignore */ }
 }
 
-async function setFlag(client, msg, flag, add, col, val) {
+async function setFlag(client, msg, flag, add, col, val, caixa) {
   const lock = await client.getMailboxLock(msg.path);
   try {
     if (add) await client.messageFlagsAdd(String(msg.uid), [flag], { uid: true });
     else await client.messageFlagsRemove(String(msg.uid), [flag], { uid: true });
   } finally { lock.release(); }
-  await q(`UPDATE email_messages SET ${col}=$2, updated_at=now() WHERE id=$1`, [msg.id, val]);
-  await updateCounts(client, msg.folder_id);
+  await q(`UPDATE email_messages SET ${col}=$2, updated_at=now() WHERE id=$1 AND channel_id=$3 AND organization_id=$4`, [msg.id, val, caixa.id, caixa.organization_id]);
+  await updateCounts(client, msg.folder_id, caixa);
 }
 
 async function doMove(client, caixa, msg, target) {
   const lock = await client.getMailboxLock(msg.path);
   try { await client.messageMove(String(msg.uid), target.path, { uid: true }); }
   finally { lock.release(); }
-  await q(`DELETE FROM email_messages WHERE id=$1`, [msg.id]);
+  await q(`DELETE FROM email_messages WHERE id=$1 AND channel_id=$2 AND organization_id=$3`, [msg.id, caixa.id, caixa.organization_id]);
   await syncFolderMessages(client, caixa, target, 15);
-  await updateCounts(client, msg.folder_id);
-  await updateCounts(client, target.id);
+  await updateCounts(client, msg.folder_id, caixa);
+  await updateCounts(client, target.id, caixa);
 }
 
 function toAddr(list) {
@@ -120,13 +122,16 @@ function applySignature(caixa, p) {
 // Download one attachment's bytes from IMAP and cache them (base64) in the DB,
 // so the browser can download it. Re-parses the message source via mailparser
 // (reliable across providers).
-async function fetchAttachment(client, attachmentId) {
+async function fetchAttachment(client, attachmentId, caixa) {
   const [att] = await q(
     `SELECT a.id, a.filename, a.content_id, m.uid, f.path
        FROM email_attachments a
        JOIN email_messages m ON m.id = a.message_id
        JOIN email_folders f ON f.id = m.folder_id
-      WHERE a.id=$1`, [attachmentId],
+      WHERE a.id=$1 AND m.channel_id=$2 AND m.organization_id=$3
+        AND a.organization_id=m.organization_id
+        AND f.channel_id=m.channel_id AND f.organization_id=m.organization_id`,
+    [attachmentId, caixa.id, caixa.organization_id],
   );
   if (!att) throw new Error('anexo inexistente');
   const lock = await client.getMailboxLock(att.path);
@@ -140,12 +145,17 @@ async function fetchAttachment(client, attachmentId) {
   const match = list.find((a) => (att.content_id && a.cid === att.content_id) || a.filename === att.filename)
     || list.find((a) => !!a.content);
   if (!match?.content) throw new Error('anexo não encontrado na mensagem');
-  await q(`UPDATE email_attachments SET data_b64=$2 WHERE id=$1`, [att.id, match.content.toString('base64')]);
+  await q(`UPDATE email_attachments a SET data_b64=$2 FROM email_messages m
+    WHERE a.id=$1 AND a.message_id=m.id AND a.organization_id=$3
+      AND m.organization_id=$3 AND m.channel_id=$4`,
+    [att.id, match.content.toString('base64'), caixa.organization_id, caixa.id]);
 }
 
 async function sendMail(caixa, p) {
   const from = { name: caixa.label || '', address: caixa.meta.email_address };
   const opts = {
+    disableFileAccess: true,
+    disableUrlAccess: true,
     from,
     to: toAddr(p.to),
     cc: toAddr(p.cc),
@@ -162,47 +172,59 @@ async function sendMail(caixa, p) {
   // Build raw MIME once (for the Sent copy), then send via SMTP.
   const raw = await new Promise((res, rej) =>
     new MailComposer(opts).compile().build((e, m) => (e ? rej(e) : res(m))));
-  await smtpTransport(caixa).sendMail(opts);
+  await (await smtpTransport(caixa)).sendMail(opts);
 
   // Save a copy to the Sent folder (best-effort).
-  const sent = await folderByRole(caixa.id, 'sent');
+  const sent = await folderByRole(caixa, 'sent');
   const client = getManager(caixa.id)?.client;
   if (sent && client?.usable) {
     try {
       await client.append(sent.path, raw, ['\\Seen']);
       await syncFolderMessages(client, caixa, sent, 10);
-      await updateCounts(client, sent.id);
+      await updateCounts(client, sent.id, caixa);
     } catch (e) { log(`[${caixa.label}] aviso ao gravar em Enviados: ${e.message}`); }
   }
 }
 
 async function execute(cmd) {
+  if (!cmd.created_by) throw new Error('comando não autorizado');
   const caixa = await getEmailCaixa(cmd.channel_id);
   if (!caixa) throw new Error('caixa não encontrada');
+  if (caixa.organization_id !== cmd.organization_id) throw new Error('comando não autorizado');
+  const [access] = await q(`SELECT EXISTS (
+    SELECT 1 FROM messaging_channels c
+      JOIN organization_members om ON om.organization_id=c.organization_id
+      LEFT JOIN organization_profiles op ON op.id=om.profile_id AND op.organization_id=om.organization_id
+    WHERE c.id=$1 AND c.organization_id=$2 AND c.channel_type='email'
+      AND om.user_id=$3 AND om.is_active=true
+      AND (coalesce(cardinality(c.assigned_user_ids),0)=0
+        OR $3=ANY(c.assigned_user_ids) OR om.role='admin' OR op.base_role='admin')
+  ) AS allowed`, [caixa.id, caixa.organization_id, cmd.created_by]);
+  if (access?.allowed !== true) throw new Error('comando não autorizado');
   const client = getManager(cmd.channel_id)?.client;
   if (!client?.usable) throw new Error('caixa desligada');
   const p = cmd.payload || {};
 
   switch (cmd.type) {
-    case 'mark_read': { const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Seen', true, 'seen', true); }
-    case 'mark_unread': { const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Seen', false, 'seen', false); }
-    case 'flag': { const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Flagged', true, 'flagged', true); }
-    case 'unflag': { const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Flagged', false, 'flagged', false); }
+    case 'mark_read': { const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Seen', true, 'seen', true, caixa); }
+    case 'mark_unread': { const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Seen', false, 'seen', false, caixa); }
+    case 'flag': { const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Flagged', true, 'flagged', true, caixa); }
+    case 'unflag': { const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente'); return setFlag(client, m, '\\Flagged', false, 'flagged', false, caixa); }
     case 'delete': case 'spam': case 'archive': {
-      const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente');
+      const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente');
       const role = cmd.type === 'delete' ? 'trash' : cmd.type === 'spam' ? 'junk' : 'archive';
-      const target = await folderByRole(caixa.id, role);
+      const target = await folderByRole(caixa, role);
       if (!target) throw new Error(`pasta "${role}" não existe nesta conta`);
       return doMove(client, caixa, m, target);
     }
     case 'move': {
-      const m = await getMsg(p.messageId); if (!m) throw new Error('mensagem inexistente');
-      const target = await folderById(p.targetFolderId);
+      const m = await getMsg(p.messageId, caixa); if (!m) throw new Error('mensagem inexistente');
+      const target = await folderById(p.targetFolderId, caixa);
       if (!target) throw new Error('pasta destino inexistente');
       return doMove(client, caixa, m, target);
     }
     case 'mark_folder_read': {
-      const target = await folderById(p.folderId);
+      const target = await folderById(p.folderId, caixa);
       if (!target) throw new Error('pasta inexistente');
       const lock = await client.getMailboxLock(target.path);
       try {
@@ -210,28 +232,28 @@ async function execute(cmd) {
         const unseen = await client.search({ seen: false }, { uid: true });
         if (unseen.length) await client.messageFlagsAdd(unseen, ['\\Seen'], { uid: true });
       } finally { lock.release(); }
-      await q(`UPDATE email_messages SET seen=true, updated_at=now() WHERE folder_id=$1 AND seen=false`, [target.id]);
-      return updateCounts(client, target.id);
+      await q(`UPDATE email_messages SET seen=true, updated_at=now() WHERE folder_id=$1 AND seen=false AND channel_id=$2 AND organization_id=$3`, [target.id, caixa.id, caixa.organization_id]);
+      return updateCounts(client, target.id, caixa);
     }
     case 'load_older': {
-      const target = await folderById(p.folderId);
+      const target = await folderById(p.folderId, caixa);
       if (!target) throw new Error('pasta inexistente');
       const n = await syncOlderMessages(client, caixa, target, p.batch || 40);
       if (n) await backfillBodies(client, caixa, p.batch || 40, target.id);
-      await updateCounts(client, target.id);
+      await updateCounts(client, target.id, caixa);
       log(`load_older: +${n} em ${target.path}`);
       return;
     }
     case 'sync_unread': {
-      const target = await folderById(p.folderId);
+      const target = await folderById(p.folderId, caixa);
       if (!target) throw new Error('pasta inexistente');
       const n = await syncUnreadMessages(client, caixa, target, 200);
       if (n) await backfillBodies(client, caixa, 80, target.id);
-      await updateCounts(client, target.id);
+      await updateCounts(client, target.id, caixa);
       log(`sync_unread: +${n} em ${target.path}`);
       return;
     }
-    case 'fetch_attachment': return fetchAttachment(client, p.attachmentId);
+    case 'fetch_attachment': return fetchAttachment(client, p.attachmentId, caixa);
     case 'send': return sendMail(caixa, applySignature(caixa, p));
     default: throw new Error(`tipo desconhecido: ${cmd.type}`);
   }

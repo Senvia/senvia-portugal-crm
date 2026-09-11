@@ -8,6 +8,8 @@
 // Runs ALONGSIDE the legacy otto-chat (which still serves production) until the
 // frontend is cut over. See agent_docs and OTTO_2_TESTING.md.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { paidQuota } from "../_shared/paid-quota.ts";
+import { boundedJson, ottoInput } from "../_shared/paid-input.ts";
 import { corsHeaders, jsonError, streamText } from "./lib/cors.ts";
 import { loadContext } from "./lib/context.ts";
 import { buildSystemPrompt } from "./lib/prompts.ts";
@@ -104,7 +106,9 @@ serve(async (req) => {
   if (req.method !== "POST") return jsonError("Método não permitido", 405);
 
   try {
-    const { messages, organization_id, attachment_paths } = await req.json();
+    const parsed = ottoInput.safeParse(await boundedJson(req));
+    if (!parsed.success) return jsonError("Pedido inválido ou demasiado grande", 400);
+    const { messages, organization_id, attachment_paths } = parsed.data;
 
     let aiConfigs;
     try {
@@ -115,6 +119,11 @@ serve(async (req) => {
 
     // ── Load context (auth, org, permissions, onboarding, mode) ──
     const { ctx, hasDataAccess } = await loadContext(req, organization_id || null, attachment_paths);
+    if (!hasDataAccess || !ctx || !ctx.userId) return jsonError("Sem acesso a esta organização", 403);
+    if (!await paidQuota(ctx.supabaseAdmin, `otto:user:${ctx.userId}`, 20, 60)
+      || !await paidQuota(ctx.supabaseAdmin, `otto:org:${ctx.orgId}`, 300, 86400)) {
+      return jsonError("Limite de utilização atingido ou indisponível", 429);
+    }
 
     // Tools available to this user.
     const toolsForModel = (hasDataAccess && ctx)
@@ -153,8 +162,8 @@ serve(async (req) => {
         const status = resp.status;
         if (status === 429) return jsonError("O Otto está com muitos pedidos. Tenta novamente em alguns segundos.", 429);
         if (status === 402) return jsonError("Créditos de IA esgotados. Contacta o administrador.", 402);
-        const errorText = await resp.text();
-        console.error("AI gateway error:", status, errorText);
+        await resp.body?.cancel();
+        console.error("AI gateway error:", { status });
         // Transient gateway/model overload (already retried in chatCompletionResilient):
         // surface a soft "try again" instead of a scary 500.
         if (status >= 500) return jsonError("O Otto está com muita procura neste momento. Tenta novamente em alguns segundos.", 503);
@@ -184,7 +193,7 @@ serve(async (req) => {
           if (!hasDataAccess || !ctx) {
             toolResult = JSON.stringify({ error: "Sem acesso a dados", _instruction: "O utilizador não está autenticado. Informa-o." });
           } else {
-            console.log(`[otto] tool: ${fnName}`, JSON.stringify(fnArgs).slice(0, 200));
+            console.log("otto_tool", { tool: fnName });
             toolResult = await runTool(fnName, fnArgs, ctx);
           }
           conversationMessages.push({ role: "tool", tool_call_id: toolCall.id, content: toolResult });
@@ -205,7 +214,7 @@ serve(async (req) => {
 
     return streamText("Peço desculpa, não consegui processar o pedido. Tenta reformular a tua pergunta.");
   } catch (e) {
-    console.error("otto error:", e);
-    return jsonError(e instanceof Error ? e.message : "Erro desconhecido", 500);
+    console.error("otto error", { kind: e instanceof Error ? e.name : "unknown" });
+    return jsonError("Erro ao processar o pedido", 500);
   }
 });

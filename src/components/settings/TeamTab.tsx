@@ -47,7 +47,7 @@ export function TeamTab() {
   const { data: orgData } = useOrganization();
   const { subscriptionStatus, checkSubscription } = useStripeSubscription();
   const queryClient = useQueryClient();
-  const { data: members, isLoading: loadingMembers } = useTeamMembers();
+  const { data: members, isLoading: loadingMembers } = useTeamMembers(true);
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const { profiles } = useOrganizationProfiles();
   const cancelInvite = useCancelInvite();
@@ -116,9 +116,6 @@ export function TeamTab() {
   // Change password modal state
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
-  const [memberNewPassword, setMemberNewPassword] = useState('');
-  const [memberConfirmPassword, setMemberConfirmPassword] = useState('');
-  const [showMemberPassword, setShowMemberPassword] = useState(false);
 
   // Change role modal state
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
@@ -239,9 +236,6 @@ export function TeamTab() {
   // Member management handlers
   const openChangePasswordModal = (member: TeamMember) => {
     setSelectedMember(member);
-    setMemberNewPassword('');
-    setMemberConfirmPassword('');
-    setShowMemberPassword(false);
     setChangePasswordOpen(true);
   };
 
@@ -254,37 +248,6 @@ export function TeamTab() {
       : profiles.find(p => p.base_role === member.role);
     setNewRole(matchedProfile?.id || member.role);
     setChangeRoleOpen(true);
-  };
-
-  const handleChangePassword = () => {
-    if (!selectedMember) return;
-    
-    if (!memberNewPassword || !memberConfirmPassword) {
-      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
-      return;
-    }
-
-    if (memberNewPassword.length < 6) {
-      toast({ title: 'A palavra-passe deve ter pelo menos 6 caracteres', variant: 'destructive' });
-      return;
-    }
-
-    if (memberNewPassword !== memberConfirmPassword) {
-      toast({ title: 'As palavras-passe não coincidem', variant: 'destructive' });
-      return;
-    }
-
-    manageTeamMember.mutate(
-      { action: 'change_password', user_id: selectedMember.user_id, new_password: memberNewPassword },
-      {
-        onSuccess: () => {
-          setChangePasswordOpen(false);
-          setSelectedMember(null);
-          setMemberNewPassword('');
-          setMemberConfirmPassword('');
-        },
-      }
-    );
   };
 
   const handleChangeRole = () => {
@@ -773,13 +736,13 @@ export function TeamTab() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditProfileModal(member)}>
+                          {isCurrentUser(member) && <DropdownMenuItem onClick={() => openEditProfileModal(member)}>
                             <Pencil className="mr-2 h-4 w-4" />
                             Editar Dados
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>}
                           <DropdownMenuItem onClick={() => openChangePasswordModal(member)}>
                             <Key className="mr-2 h-4 w-4" />
-                            Redefinir Palavra-passe
+                            Recuperar acesso
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openSendAccessModal(member)}>
                             <Mail className="mr-2 h-4 w-4" />
@@ -837,62 +800,17 @@ export function TeamTab() {
         </CardContent>
       </Card>
 
-      {/* Change Password Modal */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              Redefinir Palavra-passe
-            </DialogTitle>
+            <DialogTitle>Recuperar acesso</DialogTitle>
             <DialogDescription>
-              Defina uma nova palavra-passe para {selectedMember?.full_name}.
+              O próprio colaborador deve usar “Esqueceu a palavra-passe?” na página de entrada.
+              O link de recuperação será enviado para o email da conta.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="member-new-password">Nova Palavra-passe</Label>
-              <div className="relative">
-                <Input
-                  id="member-new-password"
-                  type={showMemberPassword ? 'text' : 'password'}
-                  placeholder="Mínimo 6 caracteres"
-                  value={memberNewPassword}
-                  onChange={(e) => setMemberNewPassword(e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowMemberPassword(!showMemberPassword)}
-                >
-                  {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="member-confirm-password">Confirmar Palavra-passe</Label>
-              <Input
-                id="member-confirm-password"
-                type={showMemberPassword ? 'text' : 'password'}
-                placeholder="Repetir palavra-passe"
-                value={memberConfirmPassword}
-                onChange={(e) => setMemberConfirmPassword(e.target.value)}
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleChangePassword}
-              disabled={!memberNewPassword || !memberConfirmPassword || manageTeamMember.isPending}
-            >
-              {manageTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={() => setChangePasswordOpen(false)}>Entendido</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

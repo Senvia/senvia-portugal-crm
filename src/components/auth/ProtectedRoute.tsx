@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
 import { CompleteOrganizationSetup } from './CompleteOrganizationSetup';
-import { ChallengeMFA } from './ChallengeMFA';
+import { MfaAccessGate } from './MfaAccessGate';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
 import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
@@ -17,12 +17,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization } = useAuth();
+  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus } = useAuth();
   const location = useLocation();
-  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
-  const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
-  const { isAdmin } = usePermissions();
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   if (isLoading) {
     return (
@@ -37,8 +33,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // MFA challenge required
-  if (mfaStatus === 'pending') {
-    return <ChallengeMFA onSuccess={completeMfaChallenge} />;
+  if (mfaStatus !== 'none' && mfaStatus !== 'verified') {
+    return <MfaAccessGate />;
   }
 
   // Show organization selector if user needs to choose
@@ -56,6 +52,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (organizations.length === 0) {
     return <CompleteOrganizationSetup />;
   }
+
+  return <ProtectedRouteContent>{children}</ProtectedRouteContent>;
+}
+
+function ProtectedRouteContent({ children }: ProtectedRouteProps) {
+  const { organization } = useAuth();
+  const location = useLocation();
+  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
+  const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
+  const { isAdmin } = usePermissions();
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   // Onboarding wizard: show if admin, org exists, no pipeline stages, not already completed
   if (

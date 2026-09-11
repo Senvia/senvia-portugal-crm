@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { startOfMonth, startOfYear, format } from "date-fns";
 import { toast } from "sonner";
+import { sumOperationalSaleUnits } from "@/lib/sale-units";
 
 export interface ActivationObjective {
   id: string;
@@ -62,7 +63,7 @@ export function useActivationObjectives(referenceDate?: Date) {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from("sales")
-        .select("created_by, proposal_type, activation_date, proposal_id")
+        .select("created_by, proposal_type, activation_date, proposal_id, operational_units")
         .eq("organization_id", orgId)
         .not("activation_date", "is", null)
         .gte("activation_date", currentMonthStart)
@@ -81,7 +82,7 @@ export function useActivationObjectives(referenceDate?: Date) {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from("sales")
-        .select("created_by, proposal_type, activation_date, proposal_id")
+        .select("created_by, proposal_type, activation_date, proposal_id, operational_units")
         .eq("organization_id", orgId)
         .not("activation_date", "is", null)
         .gte("activation_date", currentYearStart)
@@ -197,7 +198,7 @@ export function useActivationObjectives(referenceDate?: Date) {
     });
 
     if (countMode === "count") {
-      return filtered.length;
+      return sumOperationalSaleUnits(filtered);
     }
 
     if (proposalType === "energia") {

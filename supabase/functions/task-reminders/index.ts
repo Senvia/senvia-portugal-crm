@@ -2,6 +2,7 @@
 // due inbox tasks to the assigned user (or the creator when unassigned).
 // Clicking the notification deep-links into the conversation (/inbox?phone=...).
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { internalJobGuard } from '../_shared/internal-auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,17 +17,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 Deno.serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
-  // Cron guard: this function runs with verify_jwt = false. When CRON_SECRET is
-  // configured, require it (header or ?key=) so it can't be invoked publicly to
-  // spam push notifications. Left permissive until the secret is set so the
-  // existing pg_cron job keeps working during rollout.
-  const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret) {
-    const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
-    if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
-  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

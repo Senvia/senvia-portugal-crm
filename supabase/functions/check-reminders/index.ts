@@ -6,6 +6,8 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
+  const denied = await internalJobGuard(req);
+  if (denied) return denied;
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -72,7 +74,7 @@ Deno.serve(async (req) => {
           url: '/calendar'
         };
 
-        console.log(`Sending reminder for event ${event.id}:`, notificationPayload);
+        console.log('Sending reminder', { eventId: event.id });
 
         // Call send-push-notification function
         const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
@@ -125,3 +127,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+import { internalJobGuard } from "../_shared/internal-auth.ts";

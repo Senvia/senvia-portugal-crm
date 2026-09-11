@@ -1,3 +1,4 @@
+import { requestMfaResponse } from "../_shared/user-authorization.ts";
 // meta-media — serve um ficheiro recebido pelo WhatsApp.
 //
 // PORQUE É QUE ISTO TEM DE EXISTIR
@@ -54,6 +55,8 @@ Deno.serve(async (req) => {
 
     const { data: { user } } = await admin.auth.getUser(bearer);
     if (!user) return json({ error: "Sessão inválida" }, 401);
+    const mfaResponse = await requestMfaResponse(req, user.id, corsHeaders);
+    if (mfaResponse) return mfaResponse;
 
     const { message_id, media_id } = await req.json().catch(() => ({}));
     if (!message_id || !media_id) {

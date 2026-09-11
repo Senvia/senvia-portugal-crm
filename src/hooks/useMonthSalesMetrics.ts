@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { startOfMonth, endOfMonth, format } from "date-fns";
+import { operationalUnitsForSale } from "@/lib/sale-units";
 
 export interface UserSalesMetrics {
   userId: string;
@@ -32,7 +33,7 @@ export function useMonthSalesMetrics(referenceDate?: Date, from?: Date | null, t
       // 1. Fetch fulfilled sales
       const { data: sales, error } = await supabase
         .from("sales")
-        .select("id, created_by, proposal_id")
+        .select("id, created_by, proposal_id, operational_units")
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
         .lte("sale_date", monthEnd)
@@ -44,7 +45,7 @@ export function useMonthSalesMetrics(referenceDate?: Date, from?: Date | null, t
       // 2. Get proposal_ids and fetch proposal_cpes
       const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
 
-      let cpesByProposal = new Map<string, { consumo: number; comissao: number }>();
+      const cpesByProposal = new Map<string, { consumo: number; comissao: number }>();
       if (proposalIds.length > 0) {
         const { data: cpes } = await supabase
           .from("proposal_cpes")
@@ -112,7 +113,7 @@ export function useMonthSalesMetrics(referenceDate?: Date, from?: Date | null, t
           proposalMetrics?.proposalType === "energia" &&
           eligibleEnergyNegotiationTypes.has(proposalMetrics.negotiationType || "");
 
-        g.contracts += 1;
+        g.contracts += operationalUnitsForSale(sale);
         g.energia += countsForEnergyMetrics ? (cpeData?.consumo ?? 0) / 1000 : 0; // kWh → MWh
         g.solar += countsForEnergyMetrics ? proposalMetrics?.solar || 0 : 0;
         g.comissao += countsForEnergyMetrics ? cpeData?.comissao ?? 0 : 0;

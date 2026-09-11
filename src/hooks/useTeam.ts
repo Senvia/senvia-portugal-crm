@@ -62,11 +62,11 @@ export function useProfileNames(ids: (string | null | undefined)[]) {
   });
 }
 
-export function useTeamMembers() {
+export function useTeamMembers(includeInactive = false) {
   const { organization } = useAuth();
 
   return useQuery({
-    queryKey: ['team-members', organization?.id],
+    queryKey: ['team-members', organization?.id, includeInactive],
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organization?.id) return [];
 
@@ -75,7 +75,8 @@ export function useTeamMembers() {
       });
 
       if (error) throw error;
-      return (data || []) as TeamMember[];
+      const members: TeamMember[] = data || [];
+      return includeInactive ? members : members.filter(member => !member.is_banned);
     },
     enabled: !!organization?.id,
   });
@@ -220,13 +221,16 @@ export function useResendInvite() {
 }
 
 export function useCreateTeamMember() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async ({ email, password, fullName, role, profileId }: CreateTeamMemberParams) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
       const { data, error } = await supabase.functions.invoke('create-team-member', {
         body: { 
+          organization_id: organization.id,
           email: email.toLowerCase().trim(), 
           password, 
           full_name: fullName.trim(), 

@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 8080,
   },
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   plugins: [
     react(),
     // HTTPS em desenvolvimento. Nao e capricho: o SDK do Facebook recusa-se a
@@ -27,6 +30,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['react', 'react-dom'],
   },
   build: {
     rollupOptions: {
